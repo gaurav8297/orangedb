@@ -24,8 +24,8 @@ find_package(OpenMP REQUIRED)
 set(OpenMP_C_FLAGS "-fopenmp")
 set(OpenMP_CXX_FLAGS "-fopenmp")
 
-set(CMAKE_C_FLAGS "${OpenMP_C_FLAGS} -g")
-set(CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} -g")
+set(CMAKE_C_FLAGS "${OpenMP_C_FLAGS} -g -O2 -march=native")
+set(CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} -g -O2 -march=native")
 
 # Add include path
 include_directories(${PROJECT_SOURCE_DIR}/src/include)

@@ -56,7 +56,38 @@ void exp_hnsw() {
     std::cout << "Building time: " << duration << " ms" << std::endl;
 }
 
+inline void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
+    float res = 0;
+    for (size_t i = 0; i < d; i++) {
+        float tmp = x[i] - y[i];
+        res += tmp * tmp;
+    }
+    result = res;
+}
+
+void exp_l2_sqr_dist() {
+    auto basePath = "/home/gaurav/vector_index_experiments/vector_index/data/gist_50k";
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
+    printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
+
+    auto start = std::chrono::high_resolution_clock::now();
+    float res = 0;
+    for (size_t i = 0; i < baseNumVectors - 1; i++) {
+        float result;
+        l2_sqr_dist(baseVecs + (i * baseDimension), baseVecs + ((i + 1) * baseDimension), baseDimension, result);
+        res += result;
+    }
+    printf("Result: %f\n", res);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "l2_sqr_dist time: " << duration << " ms" << std::endl;
+}
+
 int main() {
-    exp_hnsw();
+    exp_l2_sqr_dist();
+//    exp_hnsw();
     return 0;
 }
