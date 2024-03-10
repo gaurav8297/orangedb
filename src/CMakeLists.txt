@@ -1,7 +1,9 @@
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 add_library(orangedb
         OBJECT
-        aux_ds.cpp)
+        aux_ds.cpp
+        hnsw.cpp
+        utils.cpp)
 
 set(ALL_OBJECT_FILES
         ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:orangedb>

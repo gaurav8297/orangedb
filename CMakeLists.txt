@@ -19,12 +19,23 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
+find_package(OpenMP REQUIRED)
+
+set(OpenMP_C_FLAGS "-fopenmp")
+set(OpenMP_CXX_FLAGS "-fopenmp")
+
+set(CMAKE_C_FLAGS "${OpenMP_C_FLAGS} -g")
+set(CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} -g")
+
 # Add include path
 include_directories(${PROJECT_SOURCE_DIR}/src/include)
+include_directories(${PROJECT_SOURCE_DIR}/third_party/spdlog)
 # Add source path
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
 # Add executable path
 add_executable(orangedb_main ${PROJECT_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(orangedb_main PUBLIC orangedb)
-target_include_directories(orangedb_main PUBLIC ${PROJECT_SOURCE_DIR}/src/include)
+target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX)
+target_include_directories(orangedb_main PUBLIC
+        ${PROJECT_SOURCE_DIR}/src/include
+        ${PROJECT_SOURCE_DIR}/third_party/spdlog)
