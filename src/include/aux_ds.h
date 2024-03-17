@@ -56,6 +56,9 @@ namespace orangedb {
                 visited_id = 1;
             }
         }
+        inline uint8_t* data() {
+            return visited.data();
+        }
     private:
         std::vector<uint8_t> visited;
         uint8_t visited_id;
