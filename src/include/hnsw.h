@@ -19,7 +19,6 @@ namespace orangedb {
         explicit Stats(): totalDistComp(0), totalDistCompInShrink(0) {}
         atomic_int64_t totalDistComp;
         atomic_int64_t totalDistCompInShrink;
-        std::vector<int64_t> ;
     };
 
     class HNSW {
@@ -60,6 +59,14 @@ namespace orangedb {
                 storage_idx_t& nearest,
                 float& nearestDist);
         void search_neighbors(
+                DistanceComputer *dc,
+                level_t level,
+                std::priority_queue<NodeDistCloser>& results,
+                storage_idx_t entrypoint,
+                float entrypointDist,
+                VisitedTable& visited,
+                uint16_t ef);
+        void search_neighbors_optimized(
                 DistanceComputer *dc,
                 level_t level,
                 std::priority_queue<NodeDistCloser>& results,

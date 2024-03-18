@@ -2,7 +2,9 @@
 
 #include <unistd.h>
 #include <storage.h>
+#ifdef __AVX2__
 #include <x86intrin.h>
+#endif
 #include <macros.h>
 #include <unordered_set>
 

@@ -3,9 +3,11 @@
 #include <omp.h>
 #include <algorithm>
 #include "include/prefetch.h"
+#include "spdlog/spdlog.h"
 
 // Constants
-#define MORSEL_SIZE 1000
+#define MORSEL_SIZE 2000
+#define EXPLORE_FACTOR 0.3
 
 namespace orangedb {
     HNSW::HNSW(uint16_t M, uint16_t ef_construction, uint16_t ef_search, uint16_t dim) :
@@ -77,6 +79,55 @@ namespace orangedb {
             candidates.pop();
             size_t begin, end;
             storage->get_neighbors_offsets(candidate.id, level, begin, end);
+            auto search_improved = false;
+            int j = 0;
+            size_t max_j = (end - begin) * EXPLORE_FACTOR;
+            for (size_t i = begin; i < end; i++) {
+                storage_idx_t neighbor = neighbors[i];
+                if (neighbor < 0 || (j > max_j && search_improved)) {
+                    break;
+                }
+                j++;
+                if (visited.get(neighbor)) {
+                    continue;
+                }
+                visited.set(neighbor);
+                float dist;
+                dc->compute_distance(getActualId(level, neighbor), dist);
+                if (results.size() < ef || dist < results.top().dist) {
+                    candidates.emplace(neighbor, dist);
+                    results.emplace(neighbor, dist);
+                    search_improved = true;
+                    if (results.size() > ef) {
+                        results.pop();
+                    }
+                }
+            }
+        }
+        visited.reset();
+    }
+
+    void HNSW::search_neighbors_optimized(
+            DistanceComputer *dc,
+            level_t level,
+            std::priority_queue<NodeDistCloser> &results,
+            storage_idx_t entrypoint,
+            float entrypointDist,
+            VisitedTable &visited,
+            uint16_t ef) {
+        std::priority_queue<NodeDistFarther> candidates;
+        candidates.emplace(entrypoint, entrypointDist);
+        results.emplace(entrypoint, entrypointDist);
+        visited.set(entrypoint);
+        auto neighbors = storage->get_neighbors(level);
+        while (!candidates.empty()) {
+            auto candidate = candidates.top();
+            if (candidate.dist > results.top().dist) {
+                break;
+            }
+            candidates.pop();
+            size_t begin, end;
+            storage->get_neighbors_offsets(candidate.id, level, begin, end);
 
             // the following version processes 4 neighbors at a time
             size_t jmax = begin;
@@ -116,6 +167,22 @@ namespace orangedb {
                             if (results.size() > ef) {
                                 results.pop();
                             }
+                        }
+                    }
+                    counter = 0;
+                }
+            }
+
+            // For the left out nodes
+            if (counter > 0) {
+                for (int k = 0; k < counter; k++) {
+                    float dist;
+                    dc->compute_distance(getActualId(level, cached_ids[k]), dist);
+                    if (results.size() < ef || dist < results.top().dist) {
+                        candidates.emplace(cached_ids[k], dist);
+                        results.emplace(cached_ids[k], dist);
+                        if (results.size() > ef) {
+                            results.pop();
                         }
                     }
                 }
@@ -335,6 +402,10 @@ namespace orangedb {
             for (int i = 0; i < n; i++) {
                 dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
                 add_node(&dc, node_ids[i], levels[i], locks, visited);
+
+                if (i % 100000 == 0) {
+                    spdlog::warn("Done with 100000!!");
+                }
             }
         }
 
@@ -373,6 +444,6 @@ namespace orangedb {
             search_nearest_on_level(&dc, level, nearest_id, nearest_dist);
             nearest_id = storage->next_level_ids[level][nearest_id];
         }
-        search_neighbors(&dc, level, result, nearest_id, nearest_dist, visited, ef);
+        search_neighbors_optimized(&dc, level, result, nearest_id, nearest_dist, visited, ef);
     }
 } // namespace orangedb
