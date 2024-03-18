@@ -6,12 +6,11 @@
 #include "spdlog/spdlog.h"
 
 // Constants
-#define MORSEL_SIZE 2000
-#define EXPLORE_FACTOR 0.3
+#define MORSEL_SIZE 5000
 
 namespace orangedb {
-    HNSW::HNSW(uint16_t M, uint16_t ef_construction, uint16_t ef_search, uint16_t dim) :
-            mt(1026), M(M), ef_construction(ef_construction), ef_search(ef_search), stats(Stats()) {
+    HNSW::HNSW(uint16_t M, uint16_t ef_construction, uint16_t dim, int explore_factor) :
+            mt(1026), ef_construction(ef_construction), explore_factor(explore_factor), stats(Stats()) {
         // Initialize probabilities to save computation time later.
         init_probabs(M, 1.0 / log(M));
         storage = new Storage(dim, M, level_probabs.size());
@@ -27,7 +26,6 @@ namespace orangedb {
                 break;
             }
             level_probabs.push_back(prob);
-            max_neighbors_per_level.push_back(level == 0 ? M * 2 : M);
         }
     }
 
@@ -47,6 +45,7 @@ namespace orangedb {
                 }
                 float dist;
                 dc->compute_distance(getActualId(level, neighbor), dist);
+                stats.totalDistComp++;
                 if (dist < nearestDist) {
                     nearest = neighbor;
                     nearestDist = dist;
@@ -81,7 +80,7 @@ namespace orangedb {
             storage->get_neighbors_offsets(candidate.id, level, begin, end);
             auto search_improved = false;
             int j = 0;
-            size_t max_j = (end - begin) * EXPLORE_FACTOR;
+            size_t max_j = (end - begin) * explore_factor;
             for (size_t i = begin; i < end; i++) {
                 storage_idx_t neighbor = neighbors[i];
                 if (neighbor < 0 || (j > max_j && search_improved)) {
@@ -94,6 +93,7 @@ namespace orangedb {
                 visited.set(neighbor);
                 float dist;
                 dc->compute_distance(getActualId(level, neighbor), dist);
+                stats.totalDistComp++;
                 if (results.size() < ef || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
                     results.emplace(neighbor, dist);
@@ -213,6 +213,8 @@ namespace orangedb {
             for (NodeDistFarther &node_2: result) {
                 float dist_node_node_2;
                 dc->compute_distance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
+                stats.totalDistComp++;
+                stats.totalDistCompInShrink++;
                 if (dist_node_node_2 < dist_q_node) {
                     good = false;
                     break;
@@ -259,6 +261,9 @@ namespace orangedb {
             storage_idx_t neighbor = neighbors[i];
             float dist_src_nbr;
             dc->compute_distance(getActualId(level, src), getActualId(level, neighbor), dist_src_nbr);
+            stats.totalDistComp++;
+            stats.totalDistCompInShrink++;
+
             resultSet.emplace(neighbor, dist_src_nbr);
         }
         shrink_neighbors(dc, resultSet, storage->max_neighbors_per_level[level], level);
@@ -319,6 +324,7 @@ namespace orangedb {
         float nearest_dist;
         std::vector<std::vector<pair<storage_idx_t, float>>> neighbors(node_level + 1);
         dc->compute_distance(nearest_id, nearest_dist);
+        stats.totalDistComp++;
         int level = max_level;
 
         // Update the nearest node
@@ -361,14 +367,12 @@ namespace orangedb {
         for (int i = 0; i < n; i++) {
             omp_init_lock(&locks[i]);
         }
-        levels.resize(n);
         // Initialize ids
         std::vector<std::vector<storage_idx_t>> node_ids(n);
         uint8_t max_level = 0;
         for (int i = 0; i < n; i++) {
             uint8_t level = random_level();
             auto id = storage->getFastNextNodeId(level);
-            levels[id[0]] = level;
             node_ids[i] = id;
             max_level = std::max(max_level, level);
         }
@@ -401,7 +405,8 @@ namespace orangedb {
 #pragma omp for schedule(dynamic, MORSEL_SIZE)
             for (int i = 0; i < n; i++) {
                 dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
-                add_node(&dc, node_ids[i], levels[i], locks, visited);
+                auto node_id = node_ids[i];
+                add_node(&dc, node_id, node_id.size(), locks, visited);
 
                 if (i % 100000 == 0) {
                     spdlog::warn("Done with 100000!!");
@@ -424,6 +429,11 @@ namespace orangedb {
         }
         // happens with exponentially low probability
         return level_probabs.size() - 1;
+    }
+
+    void HNSW::print_stats() {
+        spdlog::warn("Total distance computations: {}", stats.totalDistComp);
+        spdlog::warn("Total distance computations in shrink: {}", stats.totalDistCompInShrink);
     }
 
     void HNSW::search_v1(

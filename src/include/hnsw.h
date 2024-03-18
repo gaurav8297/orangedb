@@ -41,7 +41,7 @@ namespace orangedb {
             }
         };
     public:
-        explicit HNSW(uint16_t m, uint16_t ef_construction, uint16_t ef_search, uint16_t dim);
+        explicit HNSW(uint16_t M, uint16_t ef_construction, uint16_t dim, int explore_factor);
         void build(const float* data, size_t n);
         void search_v1(
                 const float* query,
@@ -49,6 +49,7 @@ namespace orangedb {
                 uint16_t ef_search,
                 VisitedTable& visited,
                 std::priority_queue<NodeDistCloser>& resultSet);
+        void print_stats();
     private:
         void init_probabs(uint16_t M, double levelMult);
         uint8_t random_level();
@@ -98,13 +99,10 @@ namespace orangedb {
         }
 
     private:
-        uint16_t M;
+        int explore_factor;
         uint16_t ef_construction;
-        uint16_t ef_search;
         int64_t entry_point = -1;
         uint8_t max_level = 0;
-        std::vector<level_t> levels;
-        std::vector<int> max_neighbors_per_level;
         std::vector<double> level_probabs;
         Storage* storage;
         std::mt19937 mt;

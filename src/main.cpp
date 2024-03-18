@@ -20,6 +20,28 @@ using namespace orangedb;
     _Pragma("GCC pop_options")
 #endif
 
+class InputParser {
+public:
+    InputParser(int &argc, char **argv) {
+        for (int i = 1; i < argc; ++i) {
+            this->tokens.emplace_back(argv[i]);
+        }
+    }
+
+    const std::string &getCmdOption(const std::string &option) const {
+        std::vector<std::string>::const_iterator itr;
+        itr = std::find(this->tokens.begin(), this->tokens.end(), option);
+        if (itr != this->tokens.end() && ++itr != this->tokens.end()) {
+            return *itr;
+        }
+        static const std::string emptyString;
+        return emptyString;
+    }
+
+private:
+    std::vector<std::string> tokens;
+};
+
 void exp_omp_lock() {
     omp_set_num_threads(8);
     auto n = 1000000;
@@ -67,85 +89,18 @@ inline void l2_sqr_dist(const float* __restrict x, const float* __restrict y, si
     float unpack[8] __attribute__((aligned(32))) = {0, 0, 0, 0, 0, 0, 0, 0};
     sum = _mm256_loadu_ps(unpack);
 
-    for (unsigned i = 0; i < aligned_size; i += 480, l += 480, r += 480) {
+    for (unsigned i = 0; i < aligned_size; i += 32, l += 32, r += 32) {
         AVX_L2SQR(l, r, sum, l0, r0);
         AVX_L2SQR(l + 8, r + 8, sum, l1, r1);
-        AVX_L2SQR(l + 16, r + 16, sum, l0, r0);
+        AVX_L2SQR(l + 16, r + 16, sum, l1, r1);
         AVX_L2SQR(l + 24, r + 24, sum, l1, r1);
-
-        AVX_L2SQR(l + 32, r + 32, sum, l0, r0);
-        AVX_L2SQR(l + 40, r + 40, sum, l1, r1);
-        AVX_L2SQR(l + 48, r + 48, sum, l0, r0);
-        AVX_L2SQR(l + 56, r + 56, sum, l1, r1);
-
-        AVX_L2SQR(l + 64, r + 64, sum, l0, r0);
-        AVX_L2SQR(l + 72, r + 72, sum, l1, r1);
-        AVX_L2SQR(l + 80, r + 80, sum, l0, r0);
-        AVX_L2SQR(l + 88, r + 88, sum, l1, r1);
-
-        AVX_L2SQR(l + 96, r + 96, sum, l0, r0);
-        AVX_L2SQR(l + 104, r + 104, sum, l1, r1);
-        AVX_L2SQR(l + 112, r + 112, sum, l0, r0);
-        AVX_L2SQR(l + 120, r + 120, sum, l1, r1);
-
-        AVX_L2SQR(l + 128, r + 128, sum, l0, r0);
-        AVX_L2SQR(l + 136, r + 136, sum, l1, r1);
-        AVX_L2SQR(l + 144, r + 144, sum, l0, r0);
-        AVX_L2SQR(l + 152, r + 152, sum, l1, r1);
-
-        AVX_L2SQR(l + 160, r + 160, sum, l0, r0);
-        AVX_L2SQR(l + 168, r + 168, sum, l1, r1);
-        AVX_L2SQR(l + 176, r + 176, sum, l0, r0);
-        AVX_L2SQR(l + 184, r + 184, sum, l1, r1);
-
-        AVX_L2SQR(l + 192, r + 192, sum, l0, r0);
-        AVX_L2SQR(l + 200, r + 200, sum, l1, r1);
-        AVX_L2SQR(l + 208, r + 208, sum, l0, r0);
-        AVX_L2SQR(l + 216, r + 216, sum, l1, r1);
-
-        AVX_L2SQR(l + 224, r + 224, sum, l0, r0);
-        AVX_L2SQR(l + 232, r + 232, sum, l1, r1);
-        AVX_L2SQR(l + 240, r + 240, sum, l0, r0);
-        AVX_L2SQR(l + 248, r + 248, sum, l1, r1);
-
-        AVX_L2SQR(l + 256, r + 256, sum, l0, r0);
-        AVX_L2SQR(l + 264, r + 264, sum, l1, r1);
-        AVX_L2SQR(l + 272, r + 272, sum, l0, r0);
-        AVX_L2SQR(l + 280, r + 280, sum, l1, r1);
-
-        AVX_L2SQR(l + 288, r + 288, sum, l0, r0);
-        AVX_L2SQR(l + 296, r + 296, sum, l1, r1);
-        AVX_L2SQR(l + 304, r + 304, sum, l0, r0);
-        AVX_L2SQR(l + 312, r + 312, sum, l1, r1);
-
-        AVX_L2SQR(l + 320, r + 320, sum, l0, r0);
-        AVX_L2SQR(l + 328, r + 328, sum, l1, r1);
-        AVX_L2SQR(l + 336, r + 336, sum, l0, r0);
-        AVX_L2SQR(l + 344, r + 344, sum, l1, r1);
-
-        AVX_L2SQR(l + 352, r + 352, sum, l0, r0);
-        AVX_L2SQR(l + 360, r + 360, sum, l1, r1);
-        AVX_L2SQR(l + 368, r + 368, sum, l0, r0);
-        AVX_L2SQR(l + 376, r + 376, sum, l1, r1);
-
-        AVX_L2SQR(l + 384, r + 384, sum, l0, r0);
-        AVX_L2SQR(l + 392, r + 392, sum, l1, r1);
-        AVX_L2SQR(l + 400, r + 400, sum, l0, r0);
-        AVX_L2SQR(l + 408, r + 408, sum, l1, r1);
-
-        AVX_L2SQR(l + 416, r + 416, sum, l0, r0);
-        AVX_L2SQR(l + 424, r + 424, sum, l1, r1);
-        AVX_L2SQR(l + 432, r + 432, sum, l0, r0);
-        AVX_L2SQR(l + 440, r + 440, sum, l1, r1);
-
-        AVX_L2SQR(l + 448, r + 448, sum, l0, r0);
-        AVX_L2SQR(l + 456, r + 456, sum, l1, r1);
-        AVX_L2SQR(l + 464, r + 464, sum, l0, r0);
-        AVX_L2SQR(l + 472, r + 472, sum, l1, r1);
     }
-
     _mm256_storeu_ps(unpack, sum);
     result = unpack[0] + unpack[1] + unpack[2] + unpack[3] + unpack[4] + unpack[5] + unpack[6] + unpack[7];
+    for (unsigned i = aligned_size; i < d; ++i, ++l, ++r) {
+        float diff = *l - *r;
+        result += diff * diff;
+    }
 }
 
 inline void l1_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
@@ -176,9 +131,7 @@ inline void l1_dist(const float* __restrict x, const float* __restrict y, size_t
     result = unpack[0] + unpack[1] + unpack[2] + unpack[3] + unpack[4] + unpack[5] + unpack[6] + unpack[7];
 }
 #else
-#endif
-
-inline void l2_sqr_dist_2(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
+inline void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
     float res = 0;
     for (size_t i = 0; i < d; i++) {
         float tmp = x[i] - y[i];
@@ -186,6 +139,7 @@ inline void l2_sqr_dist_2(const float* __restrict x, const float* __restrict y, 
     }
     result = res;
 }
+#endif
 
 PRAGMA_IMPRECISE_FUNCTION_BEGIN
 inline void fvec_L2sqr_batch_4(
@@ -344,10 +298,10 @@ int64_t exp_l1_sqr_dist(const float* baseVecs, size_t baseDimension, size_t base
 //                res2,
 //                res3);
 
-        l2_sqr_dist_2(query, baseVecs + (i * baseDimension), baseDimension, res0);
-        l2_sqr_dist_2(query, baseVecs + ((i+1) * baseDimension), baseDimension, res1);
-        l2_sqr_dist_2(query, baseVecs + ((i+2) * baseDimension), baseDimension, res2);
-        l2_sqr_dist_2(query, baseVecs + ((i+3) * baseDimension), baseDimension, res3);
+        l2_sqr_dist(query, baseVecs + (i * baseDimension), baseDimension, res0);
+        l2_sqr_dist(query, baseVecs + ((i+1) * baseDimension), baseDimension, res1);
+        l2_sqr_dist(query, baseVecs + ((i+2) * baseDimension), baseDimension, res2);
+        l2_sqr_dist(query, baseVecs + ((i+3) * baseDimension), baseDimension, res3);
         res += (res0 + res1 + res2 + res3);
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -375,10 +329,10 @@ int64_t exp_l2_sqr_dist(const float* baseVecs, size_t baseDimension, size_t base
 //                res2,
 //                res3);
 
-        l2_sqr_dist_2(query, baseVecs + (i * baseDimension), baseDimension, res0);
-        l2_sqr_dist_2(query, baseVecs + ((i+1) * baseDimension), baseDimension, res1);
-        l2_sqr_dist_2(query, baseVecs + ((i+2) * baseDimension), baseDimension, res2);
-        l2_sqr_dist_2(query, baseVecs + ((i+3) * baseDimension), baseDimension, res3);
+        l2_sqr_dist(query, baseVecs + (i * baseDimension), baseDimension, res0);
+        l2_sqr_dist(query, baseVecs + ((i+1) * baseDimension), baseDimension, res1);
+        l2_sqr_dist(query, baseVecs + ((i+2) * baseDimension), baseDimension, res2);
+        l2_sqr_dist(query, baseVecs + ((i+3) * baseDimension), baseDimension, res3);
         res += (res0 + res1 + res2 + res3);
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -438,6 +392,33 @@ void benchmark_simd_distance() {
 //    }
 //    avg_dur = duration;
 //    printf("Avg furation: %ld ms\n", avg_dur / 100);
+}
+
+
+void gen_random_vector(int size, std::vector<float>& random_floats) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dis(0.0, 1.0);
+
+    for (int i = 0; i < size; ++i) {
+        random_floats[i] = dis(gen);
+    }
+}
+
+void benchmark_n_simd(int64_t n) {
+    std::vector<float> vec_1(960), vec_2(960);
+    gen_random_vector(960, vec_1);
+    gen_random_vector(960, vec_2);
+
+    auto start = std::chrono::high_resolution_clock::now();
+#pragma omp parallel for schedule(dynamic, 5000000)
+    for (int i = 0; i < n; i++) {
+        float res;
+        l2_sqr_dist(vec_1.data(), vec_2.data(), 960, res);
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    printf("Duration: %ld ms\n", duration);
 }
 
 void build_graph(HNSW& hnsw, const float* baseVecs, size_t baseNumVectors, size_t baseDimension) {
@@ -507,8 +488,14 @@ void disable_perf() {
     assert(strcmp(ack, "ack\n") == 0);
 }
 
-void benchmark_hnsw_queries() {
-    auto basePath = "/home/g3sehgal/vector_index_exp/gist";
+void benchmark_hnsw_queries(int argc, char **argv) {
+    InputParser input(argc, argv);
+    const std::string &basePath = input.getCmdOption("-basePath");
+    auto efConstruction = stoi(input.getCmdOption("-efConstruction"));
+    auto M = stoi(input.getCmdOption("-M"));
+    auto efSearch = stoi(input.getCmdOption("-efSearch"));
+    auto thread_count = stoi(input.getCmdOption("-nThreads"));
+    auto explore_factor = stoi(input.getCmdOption("-exploreFactor"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -521,17 +508,19 @@ void benchmark_hnsw_queries() {
     size_t gtDimension, gtNumVectors;
     int *gtVecs = Utils::ivecs_read(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
 
-    omp_set_num_threads(32);
-    HNSW hnsw(64, 200, 128, baseDimension);
+    omp_set_num_threads(thread_count);
+    HNSW hnsw(M, efConstruction, baseDimension, explore_factor);
     build_graph(hnsw, baseVecs, baseNumVectors, baseDimension);
+    hnsw.print_stats();
 
 //    enable_perf();
-    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, 150, baseNumVectors);
+    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 //    disable_perf();
 }
 
-int main() {
-    benchmark_hnsw_queries();
+int main(int argc, char **argv) {
+    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
+//    benchmark_n_simd(5087067004);
     return 0;
 }
