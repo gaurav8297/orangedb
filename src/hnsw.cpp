@@ -9,9 +9,10 @@
 #define MORSEL_SIZE 5000
 
 namespace orangedb {
-    HNSW::HNSW(uint16_t M, uint16_t ef_construction, uint16_t dim, int explore_factor) :
+    HNSW::HNSW(uint16_t M, uint16_t ef_construction, uint16_t dim, float explore_factor) :
             mt(1026), ef_construction(ef_construction), explore_factor(explore_factor), stats(Stats()) {
         // Initialize probabilities to save computation time later.
+        assert(explore_factor <= 1 && explore_factor >= 0);
         init_probabs(M, 1.0 / log(M));
         storage = new Storage(dim, M, level_probabs.size());
     }
@@ -431,11 +432,6 @@ namespace orangedb {
         return level_probabs.size() - 1;
     }
 
-    void HNSW::print_stats() {
-        spdlog::warn("Total distance computations: {}", stats.totalDistComp);
-        spdlog::warn("Total distance computations in shrink: {}", stats.totalDistCompInShrink);
-    }
-
     void HNSW::search_v1(
             const float* query,
             uint16_t k,
@@ -455,5 +451,10 @@ namespace orangedb {
             nearest_id = storage->next_level_ids[level][nearest_id];
         }
         search_neighbors_optimized(&dc, level, result, nearest_id, nearest_dist, visited, ef);
+    }
+
+    void HNSW::print_stats() {
+        spdlog::warn("Total distance computations: {}", stats.totalDistComp);
+        spdlog::warn("Total distance computations in shrink: {}", stats.totalDistCompInShrink);
     }
 } // namespace orangedb

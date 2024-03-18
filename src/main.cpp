@@ -421,7 +421,7 @@ void benchmark_n_simd(int64_t n) {
     printf("Duration: %ld ms\n", duration);
 }
 
-void build_graph(HNSW& hnsw, const float* baseVecs, size_t baseNumVectors, size_t baseDimension) {
+void build_graph(HNSW& hnsw, const float* baseVecs, size_t baseNumVectors) {
     auto start = std::chrono::high_resolution_clock::now();
     hnsw.build(baseVecs, baseNumVectors);
     auto end = std::chrono::high_resolution_clock::now();
@@ -510,12 +510,10 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 
     omp_set_num_threads(thread_count);
     HNSW hnsw(M, efConstruction, baseDimension, explore_factor);
-    build_graph(hnsw, baseVecs, baseNumVectors, baseDimension);
+    build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.print_stats();
-
-//    enable_perf();
+    // ./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -efConstruction 128 -M 64 -efSearch 150 -nThreads 32 -exploreFactor 1
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
-//    disable_perf();
 }
 
 int main(int argc, char **argv) {
