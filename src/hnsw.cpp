@@ -407,7 +407,7 @@ namespace orangedb {
             for (int i = 0; i < n; i++) {
                 dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
                 auto node_id = node_ids[i];
-                add_node(&dc, node_id, node_id.size(), locks, visited);
+                add_node(&dc, node_id, node_id.size() - 1, locks, visited);
 
                 if (i % 100000 == 0) {
                     spdlog::warn("Done with 100000!!");
