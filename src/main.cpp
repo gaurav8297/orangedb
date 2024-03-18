@@ -495,7 +495,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto M = stoi(input.getCmdOption("-M"));
     auto efSearch = stoi(input.getCmdOption("-efSearch"));
     auto thread_count = stoi(input.getCmdOption("-nThreads"));
-    auto explore_factor = stoi(input.getCmdOption("-exploreFactor"));
+    auto explore_factor = stof(input.getCmdOption("-exploreFactor"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
