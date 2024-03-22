@@ -184,10 +184,10 @@ namespace orangedb {
                 if (counter == 4) {
                     float dis[4];
                     dc->compute_distance_four_vecs(
-                            cached_ids[0],
-                            cached_ids[1],
-                            cached_ids[2],
-                            cached_ids[3],
+                            getActualId(level, cached_ids[0]),
+                            getActualId(level, cached_ids[1]),
+                            getActualId(level, cached_ids[2]),
+                            getActualId(level, cached_ids[3]),
                             dis[0],
                             dis[1],
                             dis[2],
