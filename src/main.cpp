@@ -8,6 +8,7 @@
 #endif
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
+#include <prefetch.h>
 
 using namespace orangedb;
 
@@ -70,7 +71,7 @@ void exp_omp_lock() {
 }
 
 #ifdef __AVX2__
-inline void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
+void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
 #define AVX_L2SQR(addr1, addr2, dest, tmp1, tmp2) \
   tmp1 = _mm256_loadu_ps(addr1);                  \
   tmp2 = _mm256_loadu_ps(addr2);                  \
@@ -88,11 +89,12 @@ inline void l2_sqr_dist(const float* __restrict x, const float* __restrict y, si
 
     float unpack[8] __attribute__((aligned(32))) = {0, 0, 0, 0, 0, 0, 0, 0};
     sum = _mm256_loadu_ps(unpack);
+    AVX_L2SQR(l, r, sum, l0, r0);
 
     for (unsigned i = 0; i < aligned_size; i += 32, l += 32, r += 32) {
         AVX_L2SQR(l, r, sum, l0, r0);
         AVX_L2SQR(l + 8, r + 8, sum, l1, r1);
-        AVX_L2SQR(l + 16, r + 16, sum, l1, r1);
+        AVX_L2SQR(l + 16, r + 16, sum, l0, l0);
         AVX_L2SQR(l + 24, r + 24, sum, l1, r1);
     }
     _mm256_storeu_ps(unpack, sum);
@@ -131,7 +133,7 @@ inline void l1_dist(const float* __restrict x, const float* __restrict y, size_t
     result = unpack[0] + unpack[1] + unpack[2] + unpack[3] + unpack[4] + unpack[5] + unpack[6] + unpack[7];
 }
 #else
-inline void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
+void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
     float res = 0;
     for (size_t i = 0; i < d; i++) {
         float tmp = x[i] - y[i];
@@ -371,6 +373,59 @@ int64_t exp_l2_sqr_dist_2(const float* baseVecs, size_t baseDimension, size_t ba
     return duration;
 }
 
+// Try beam search with SIMD (multiple vectors at the same time)
+// - Record the number of vector comparisons
+
+void random_vector_access_exp(const float* baseVecs, size_t baseDimension, size_t baseNumVectors, size_t nTimes) {
+    // Get random number between 0 and baseNumVectors
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<int> distribution(0, baseNumVectors);
+    std::vector<int> random_numbers(nTimes);
+    for (int i = 0; i < nTimes; i++) {
+        random_numbers[i] = distribution(gen);
+    }
+
+    const float* query = baseVecs;
+    auto start = std::chrono::high_resolution_clock::now();
+    float result = 0;
+    for (size_t i = 0; i < nTimes; i+=1) {
+//        float res0 = 0, res1 = 0, res2 = 0, res3 = 0;
+//        fvec_L2sqr_batch_4(
+//                query,
+//                baseVecs + (random_numbers[i] * baseDimension),
+//                baseVecs + (random_numbers[i+1] * baseDimension),
+//                baseVecs + (random_numbers[i+2] * baseDimension),
+//                baseVecs + (random_numbers[i+3] * baseDimension),
+//                baseDimension,
+//                res0,
+//                res1,
+//                res2,
+//                res3);
+
+//        result += res0 + res1 + res2 + res3;
+        float res;
+        l2_sqr_dist(query, baseVecs + (random_numbers[i] * baseDimension), baseDimension, res);
+        result += res;
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    printf("Result: %f\n", result);
+    printf("Duration: %lld ms\n", duration);
+    return;
+}
+
+void benchmark_random_dist_comp() {
+    auto basePath = "/home/g3sehgal/vector_index_exp/gist";
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
+    printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
+
+    random_vector_access_exp(baseVecs, baseDimension, baseNumVectors, 40000000);
+}
+
 void benchmark_simd_distance() {
     auto basePath = "/home/gaurav/vector_index_experiments/vector_index/data/gist_200k";
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
@@ -496,6 +551,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto efSearch = stoi(input.getCmdOption("-efSearch"));
     auto thread_count = stoi(input.getCmdOption("-nThreads"));
     auto explore_factor = stof(input.getCmdOption("-exploreFactor"));
+    auto num_vectors = stoi(input.getCmdOption("-numVectors"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -510,7 +566,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 
     omp_set_num_threads(thread_count);
     HNSW hnsw(M, efConstruction, baseDimension, explore_factor);
-    build_graph(hnsw, baseVecs, baseNumVectors);
+    build_graph(hnsw, baseVecs, num_vectors);
     hnsw.print_stats();
     // ./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -efConstruction 128 -M 64 -efSearch 150 -nThreads 32 -exploreFactor 1
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
@@ -520,5 +576,6 @@ int main(int argc, char **argv) {
     benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
+//    benchmark_random_dist_comp();
     return 0;
 }

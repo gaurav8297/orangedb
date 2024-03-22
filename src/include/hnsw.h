@@ -16,9 +16,13 @@ namespace orangedb {
     typedef uint8_t level_t;
 
     struct Stats {
-        explicit Stats(): totalDistComp(0), totalDistCompInShrink(0) {}
+        explicit Stats() : totalDistComp(0), totalDistCompInShrink(0), totalShrinkCalls1(0), totalShrinkCalls2(0) {}
+
         atomic_int64_t totalDistComp;
         atomic_int64_t totalDistCompInShrink;
+        atomic_int64_t totalShrinkCalls1;
+        atomic_int64_t totalShrinkCalls2;
+        atomic_int64_t totalShrinkNotReduce;
     };
 
     class HNSW {
@@ -67,6 +71,14 @@ namespace orangedb {
                 float entrypointDist,
                 VisitedTable& visited,
                 uint16_t ef);
+        void beam_search_neighbors(
+                DistanceComputer *dc,
+                level_t level,
+                std::priority_queue<NodeDistCloser> &results,
+                storage_idx_t entrypoint,
+                float entrypointDist,
+                VisitedTable &visited,
+                uint16_t ef);
         void search_neighbors_optimized(
                 DistanceComputer *dc,
                 level_t level,
@@ -75,7 +87,7 @@ namespace orangedb {
                 float entrypointDist,
                 VisitedTable& visited,
                 uint16_t ef);
-        void shrink_neighbors(DistanceComputer *dc, std::priority_queue<NodeDistCloser>& resultSet, int max_size, uint8_t level);
+        int shrink_neighbors(DistanceComputer *dc, std::priority_queue<NodeDistCloser>& resultSet, int max_size, uint8_t level);
         void make_connection(DistanceComputer *dc, storage_idx_t src, storage_idx_t dest, float dist_src_dest, level_t level);
         void add_node_on_level(
                 DistanceComputer *dc,
