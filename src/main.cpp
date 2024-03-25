@@ -440,7 +440,7 @@ void random_vector_access_exp(
         size_t baseNumVectors,
         size_t nTimes,
         size_t resetQueryAfter) {
-    auto nQueries = ceil(baseNumVectors / resetQueryAfter) + 50;
+    int nQueries = (baseNumVectors / resetQueryAfter) + 50;
 
     // Get random number between 0 and baseNumVectors
     std::random_device rd;
@@ -461,7 +461,7 @@ void random_vector_access_exp(
     int queryidx = 0;
     auto start = std::chrono::high_resolution_clock::now();
     float result = 0;
-    for (size_t i = 0; i < nTimes; i+=16) {
+    for (size_t i = 0; i < nTimes; i+=1) {
         if (i % resetQueryAfter == 0) {
             query = baseVecs + (random_query_ids[queryidx++] * baseDimension);
         }
