@@ -519,7 +519,7 @@ void random_vector_access_exp(
 }
 
 void benchmark_random_dist_comp() {
-    auto basePath = "/Users/gauravsehgal/work/orangedb/data/gist_50k";
+    auto basePath = "/home/g3sehgal/vector_index_exp/gist";
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
