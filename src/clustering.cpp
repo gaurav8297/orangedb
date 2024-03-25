@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include "include/clustering.h"
+#include <cstring>
 
 #define MAX_CENTROID_SIZE 256
 
