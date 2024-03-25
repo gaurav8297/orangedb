@@ -45,7 +45,7 @@ namespace orangedb {
             }
         };
     public:
-        explicit HNSW(uint16_t M, uint16_t ef_construction, uint16_t dim, float explore_factor);
+        explicit HNSW(uint16_t M, uint16_t ef_construction, uint16_t dim, float explore_factor, float alpha, int bucket_size);
         void build(const float* data, size_t n);
         void search_v1(
                 const float* query,
@@ -88,7 +88,9 @@ namespace orangedb {
                 VisitedTable& visited,
                 uint16_t ef);
         int shrink_neighbors(DistanceComputer *dc, std::priority_queue<NodeDistCloser>& resultSet, int max_size, uint8_t level);
+        int shrink_neighbors_2(DistanceComputer *dc, std::priority_queue<NodeDistCloser>& resultSet, int max_size, uint8_t level);
         void make_connection(DistanceComputer *dc, storage_idx_t src, storage_idx_t dest, float dist_src_dest, level_t level);
+        void shrink(DistanceComputer *dc, storage_idx_t src, level_t level);
         void add_node_on_level(
                 DistanceComputer *dc,
                 storage_idx_t id,
@@ -112,6 +114,8 @@ namespace orangedb {
 
     private:
         float explore_factor;
+        float alpha;
+        int bucket_size;
         uint16_t ef_construction;
         int64_t entry_point = -1;
         uint8_t max_level = 0;

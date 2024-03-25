@@ -214,6 +214,64 @@ inline void fvec_L1_batch_4(
 }
 PRAGMA_IMPRECISE_FUNCTION_END
 
+PRAGMA_IMPRECISE_FUNCTION_BEGIN
+inline void fvec_L2sqr_batch_8(
+        const float* __restrict x,
+        const float* __restrict y0,
+        const float* __restrict y1,
+        const float* __restrict y2,
+        const float* __restrict y3,
+        const float* __restrict y4,
+        const float* __restrict y5,
+        const float* __restrict y6,
+        const float* __restrict y7,
+        const size_t d,
+        float& dis0,
+        float& dis1,
+        float& dis2,
+        float& dis3,
+        float& dis4,
+        float& dis5,
+        float& dis6,
+        float& dis7) {
+    float d0 = 0;
+    float d1 = 0;
+    float d2 = 0;
+    float d3 = 0;
+    float d4 = 0;
+    float d5 = 0;
+    float d6 = 0;
+    float d7 = 0;
+    PRAGMA_IMPRECISE_LOOP
+    for (size_t i = 0; i < d; ++i) {
+        const float q0 = x[i] - y0[i];
+        const float q1 = x[i] - y1[i];
+        const float q2 = x[i] - y2[i];
+        const float q3 = x[i] - y3[i];
+        const float q4 = x[i] - y4[i];
+        const float q5 = x[i] - y5[i];
+        const float q6 = x[i] - y6[i];
+        const float q7 = x[i] - y7[i];
+        d0 += q0 * q0;
+        d1 += q1 * q1;
+        d2 += q2 * q2;
+        d3 += q3 * q3;
+        d4 += q4 * q4;
+        d5 += q5 * q5;
+        d6 += q6 * q6;
+        d7 += q7 * q7;
+    }
+    dis0 = d0;
+    dis1 = d1;
+    dis2 = d2;
+    dis3 = d3;
+    dis4 = d4;
+    dis5 = d5;
+    dis6 = d6;
+    dis7 = d7;
+}
+PRAGMA_IMPRECISE_FUNCTION_END
+
 #ifdef __AVX2__
 inline void fvec_L2sqr_batch_4_vec(
         const float* __restrict x,
@@ -389,24 +447,51 @@ void random_vector_access_exp(const float* baseVecs, size_t baseDimension, size_
     const float* query = baseVecs;
     auto start = std::chrono::high_resolution_clock::now();
     float result = 0;
-    for (size_t i = 0; i < nTimes; i+=1) {
-//        float res0 = 0, res1 = 0, res2 = 0, res3 = 0;
-//        fvec_L2sqr_batch_4(
-//                query,
-//                baseVecs + (random_numbers[i] * baseDimension),
-//                baseVecs + (random_numbers[i+1] * baseDimension),
-//                baseVecs + (random_numbers[i+2] * baseDimension),
-//                baseVecs + (random_numbers[i+3] * baseDimension),
-//                baseDimension,
-//                res0,
-//                res1,
-//                res2,
-//                res3);
-
-//        result += res0 + res1 + res2 + res3;
-        float res;
-        l2_sqr_dist(query, baseVecs + (random_numbers[i] * baseDimension), baseDimension, res);
-        result += res;
+    for (size_t i = 0; i < nTimes; i+=16) {
+        float res0 = 0, res1 = 0, res2 = 0, res3 = 0, res4 = 0, res5 = 0, res6 = 0, res7 = 0, res8 = 0,
+        res9 = 0, res10 = 0, res11 = 0, res12 = 0, res13 = 0, res14 = 0, res15 = 0;
+        fvec_L2sqr_batch_8(
+                query,
+                baseVecs + (random_numbers[i] * baseDimension),
+                baseVecs + (random_numbers[i+1] * baseDimension),
+                baseVecs + (random_numbers[i+2] * baseDimension),
+                baseVecs + (random_numbers[i+3] * baseDimension),
+                baseVecs + (random_numbers[i+4] * baseDimension),
+                baseVecs + (random_numbers[i+5] * baseDimension),
+                baseVecs + (random_numbers[i+6] * baseDimension),
+                baseVecs + (random_numbers[i+7] * baseDimension),
+                baseDimension,
+                res0,
+                res1,
+                res2,
+                res3,
+                res5,
+                res6,
+                res7,
+                res8);
+        fvec_L2sqr_batch_8(
+                query,
+                baseVecs + (random_numbers[i+8] * baseDimension),
+                baseVecs + (random_numbers[i+9] * baseDimension),
+                baseVecs + (random_numbers[i+10] * baseDimension),
+                baseVecs + (random_numbers[i+11] * baseDimension),
+                baseVecs + (random_numbers[i+12] * baseDimension),
+                baseVecs + (random_numbers[i+13] * baseDimension),
+                baseVecs + (random_numbers[i+14] * baseDimension),
+                baseVecs + (random_numbers[i+15] * baseDimension),
+                baseDimension,
+                res9,
+                res10,
+                res11,
+                res12,
+                res4,
+                res13,
+                res14,
+                res15);
+        result += res0 + res1 + res2 + res3 + res4 + res5 + res6 + res7 + res8 + res9 + res10 + res11 + res12 + res13 + res14 + res15;
+//        float res;
+//        l2_sqr_dist(query, baseVecs + (random_numbers[i] * baseDimension), baseDimension, res);
+//        result += res;
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -552,6 +637,8 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto thread_count = stoi(input.getCmdOption("-nThreads"));
     auto explore_factor = stof(input.getCmdOption("-exploreFactor"));
     auto num_vectors = stoi(input.getCmdOption("-numVectors"));
+    auto alpha = stof(input.getCmdOption("-alpha"));
+    auto bucket_size = stof(input.getCmdOption("-bucketSize"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -565,7 +652,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     int *gtVecs = Utils::ivecs_read(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
 
     omp_set_num_threads(thread_count);
-    HNSW hnsw(M, efConstruction, baseDimension, explore_factor);
+    HNSW hnsw(M, efConstruction, baseDimension, explore_factor, alpha, bucket_size);
     build_graph(hnsw, baseVecs, num_vectors);
     hnsw.print_stats();
     // ./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -efConstruction 128 -M 64 -efSearch 150 -nThreads 32 -exploreFactor 1
@@ -576,6 +663,6 @@ int main(int argc, char **argv) {
     benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
-//    benchmark_random_dist_comp();
+    benchmark_random_dist_comp();
     return 0;
 }
