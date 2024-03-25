@@ -440,7 +440,8 @@ void random_vector_access_exp(
         size_t baseNumVectors,
         size_t nTimes,
         size_t resetQueryAfter) {
-    int nQueries = (baseNumVectors / resetQueryAfter) + 50;
+    int nQueries = ceil(nTimes / resetQueryAfter) + 50;
+    printf("Number of queries: %d\n", nQueries);
 
     // Get random number between 0 and baseNumVectors
     std::random_device rd;
@@ -518,7 +519,7 @@ void random_vector_access_exp(
 }
 
 void benchmark_random_dist_comp() {
-    auto basePath = "/home/g3sehgal/vector_index_exp/gist";
+    auto basePath = "/Users/gauravsehgal/work/orangedb/data/gist_50k";
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
