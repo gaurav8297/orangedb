@@ -440,20 +440,20 @@ void random_vector_access_exp(
         size_t baseNumVectors,
         size_t nTimes,
         size_t resetQueryAfter) {
-    int nQueries = ceil(nTimes / resetQueryAfter) + 50;
-    printf("Number of queries: %d\n", nQueries);
+    size_t nQueries = ceil(nTimes / resetQueryAfter) + 50;
+    printf("Number of queries: %zu\n", nQueries);
 
     // Get random number between 0 and baseNumVectors
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<int> distribution(0, baseNumVectors);
+    std::uniform_int_distribution<size_t> distribution(0, (baseNumVectors - 1));
 
 //    std::vector<uint64_t> random_vector_ids(nTimes);
 //    for (int i = 0; i < nTimes; i++) {
 //        random_vector_ids[i] = distribution(gen);
 //    }
 
-    std::vector<int> random_query_ids(nQueries);
+    std::vector<size_t> random_query_ids(nQueries);
     for (int i = 0; i < nQueries; i++) {
         random_query_ids[i] = distribution(gen);
     }
@@ -466,7 +466,7 @@ void random_vector_access_exp(
         float result = 0;
 #pragma omp for schedule(static)
         for (size_t i = 0; i < nTimes; i+=4) {
-            int query_idx = i / resetQueryAfter;
+            size_t query_idx = i / resetQueryAfter;
             query = baseVecs + (random_query_ids[query_idx] * baseDimension);
             float res0, res1, res2, res3;
             fvec_L2sqr_batch_4(
