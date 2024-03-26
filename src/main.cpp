@@ -448,10 +448,10 @@ void random_vector_access_exp(
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> distribution(0, baseNumVectors);
 
-    std::vector<int> random_vector_ids(nTimes);
-    for (int i = 0; i < nTimes; i++) {
-        random_vector_ids[i] = distribution(gen);
-    }
+//    std::vector<uint64_t> random_vector_ids(nTimes);
+//    for (int i = 0; i < nTimes; i++) {
+//        random_vector_ids[i] = distribution(gen);
+//    }
 
     std::vector<int> random_query_ids(nQueries);
     for (int i = 0; i < nQueries; i++) {
@@ -471,10 +471,10 @@ void random_vector_access_exp(
             float res0, res1, res2, res3;
             fvec_L2sqr_batch_4(
                     query,
-                    baseVecs + (random_vector_ids[i] * baseDimension),
-                    baseVecs + (random_vector_ids[i+1] * baseDimension),
-                    baseVecs + (random_vector_ids[i+2] * baseDimension),
-                    baseVecs + (random_vector_ids[i+3] * baseDimension),
+                    baseVecs + (distribution(gen) * baseDimension),
+                    baseVecs + (distribution(gen) * baseDimension),
+                    baseVecs + (distribution(gen) * baseDimension),
+                    baseVecs + (distribution(gen) * baseDimension),
                     baseDimension,
                     res0,
                     res1,
