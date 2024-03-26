@@ -465,10 +465,10 @@ void random_vector_access_exp(
     {
         const float* query;
         float result = 0;
-#pragma omp for schedule(static)
+#pragma omp for schedule(dynamic, 1000000)
         for (size_t i = 0; i < nTimes; i+=4) {
             size_t query_idx = i / resetQueryAfter;
-//            spdlog::warn("Query idx: {}", query_idx);
+            spdlog::warn("Query idx: {}", query_idx);
             query = baseVecs + (random_query_ids[query_idx] * baseDimension);
             float res0, res1, res2, res3;
             fvec_L2sqr_batch_4(
@@ -556,7 +556,7 @@ void random_vector_access_exp(
 }
 
 void benchmark_random_dist_comp() {
-    auto basePath = "/home/g3sehgal/vector_index_exp/gist";
+    auto basePath = "/Users/gauravsehgal/work/orangedb/data/siftsmall";
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
