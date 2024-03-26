@@ -560,8 +560,9 @@ void benchmark_random_dist_comp() {
     size_t baseDimension, baseNumVectors;
     float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
+    omp_set_num_threads(32);
 
-    random_vector_access_exp(baseVecs, baseDimension, baseNumVectors, 3601522107, 3000);
+    random_vector_access_exp(baseVecs, baseDimension, baseNumVectors, 3700000000, 3000);
 }
 
 void benchmark_simd_distance() {
