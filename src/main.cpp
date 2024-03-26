@@ -447,7 +447,7 @@ void random_vector_access_exp(
     // Get random number between 0 and baseNumVectors
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<size_t> distribution(0, (baseNumVectors - 1));
+    std::uniform_int_distribution<size_t> distribution(0, (baseNumVectors - 3));
 
 //    std::vector<uint64_t> random_vector_ids(nTimes);
 //    for (int i = 0; i < nTimes; i++) {
@@ -468,7 +468,7 @@ void random_vector_access_exp(
 #pragma omp for schedule(dynamic, 1000000)
         for (size_t i = 0; i < nTimes; i+=4) {
             size_t query_idx = i / resetQueryAfter;
-            spdlog::warn("Query idx: {}", query_idx);
+//            spdlog::warn("Query idx: {}", query_idx);
             query = baseVecs + (random_query_ids[query_idx] * baseDimension);
             float res0, res1, res2, res3;
             fvec_L2sqr_batch_4(
