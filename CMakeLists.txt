@@ -30,8 +30,8 @@ set(CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} -g -O2 -march=native")
 option(ENABLE_ADDRESS_SANITIZER "Enable address sanitizer." FALSE)
 
 if(${ENABLE_ADDRESS_SANITIZER})
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 endif()
 
 # Add include path
