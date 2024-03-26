@@ -197,7 +197,7 @@ namespace orangedb {
                             dis[1],
                             dis[2],
                             dis[3]);
-                    stats.totalDistComp += 4;
+//                    stats.totalDistComp += 4;
                     for (int k = 0; k < 4; k++) {
                         if (results.size() < ef || dis[k] < results.top().dist) {
                             candidates.emplace(cached_ids[k], dis[k]);
@@ -439,7 +439,7 @@ namespace orangedb {
             std::vector<pair<storage_idx_t, float>> &neighbors) {
         // This is a blocking call.
         std::priority_queue<NodeDistCloser> link_targets;
-        stats.totalShrinkCalls2++;
+//        stats.totalShrinkCalls2++;
         search_neighbors_optimized(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
         shrink_neighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
 //        spdlog::warn("[add_node_on_level] Total distance computations in shrink: {}", totalDist);

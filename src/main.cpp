@@ -458,13 +458,37 @@ void random_vector_access_exp(
         random_query_ids[i] = distribution(gen);
     }
 
-    const float* query;
-    int queryidx = 0;
+    printf("Start benchmark !!!\n");
     auto start = std::chrono::high_resolution_clock::now();
-    float result = 0;
-    for (size_t i = 0; i < nTimes; i+=8) {
-        int query_idx = i / resetQueryAfter;
-        query = baseVecs + (random_query_ids[query_idx] * baseDimension);
+#pragma omp parallel
+    {
+        const float* query;
+        float result = 0;
+#pragma omp for schedule(static)
+        for (size_t i = 0; i < nTimes; i+=4) {
+            int query_idx = i / resetQueryAfter;
+            query = baseVecs + (random_query_ids[query_idx] * baseDimension);
+            float res0, res1, res2, res3;
+            fvec_L2sqr_batch_4(
+                    query,
+                    baseVecs + (random_vector_ids[i] * baseDimension),
+                    baseVecs + (random_vector_ids[i+1] * baseDimension),
+                    baseVecs + (random_vector_ids[i+2] * baseDimension),
+                    baseVecs + (random_vector_ids[i+3] * baseDimension),
+                    baseDimension,
+                    res0,
+                    res1,
+                    res2,
+                    res3);
+            result += res0 + res1 + res2 + res3;
+        }
+        printf("Result: %f\n", result);
+    }
+//
+//    float result = 0;
+//    for (size_t i = 0; i < nTimes; i+=8) {
+//        int query_idx = i / resetQueryAfter;
+//        query = baseVecs + (random_query_ids[query_idx] * baseDimension);
 //        float res0, res1, res2, res3;
 //        fvec_L2sqr_batch_4(
 //                query,
@@ -478,27 +502,27 @@ void random_vector_access_exp(
 //                res2,
 //                res3);
 //        result += res0 + res1 + res2 + res3;
-        float res0 = 0, res1 = 0, res2 = 0, res3 = 0, res4 = 0, res5 = 0, res6 = 0, res7 = 0, res8 = 0;
-        fvec_L2sqr_batch_8(
-                query,
-                baseVecs + (random_vector_ids[i] * baseDimension),
-                baseVecs + (random_vector_ids[i+1] * baseDimension),
-                baseVecs + (random_vector_ids[i+2] * baseDimension),
-                baseVecs + (random_vector_ids[i+3] * baseDimension),
-                baseVecs + (random_vector_ids[i+4] * baseDimension),
-                baseVecs + (random_vector_ids[i+5] * baseDimension),
-                baseVecs + (random_vector_ids[i+6] * baseDimension),
-                baseVecs + (random_vector_ids[i+7] * baseDimension),
-                baseDimension,
-                res0,
-                res1,
-                res2,
-                res3,
-                res5,
-                res6,
-                res7,
-                res8);
-        result += res0 + res1 + res2 + res3 + res5 + res6 + res7 + res8;
+//        float res0 = 0, res1 = 0, res2 = 0, res3 = 0, res4 = 0, res5 = 0, res6 = 0, res7 = 0;
+//        fvec_L2sqr_batch_8(
+//                query,
+//                baseVecs + (random_vector_ids[i] * baseDimension),
+//                baseVecs + (random_vector_ids[i+1] * baseDimension),
+//                baseVecs + (random_vector_ids[i+2] * baseDimension),
+//                baseVecs + (random_vector_ids[i+3] * baseDimension),
+//                baseVecs + (random_vector_ids[i+4] * baseDimension),
+//                baseVecs + (random_vector_ids[i+5] * baseDimension),
+//                baseVecs + (random_vector_ids[i+6] * baseDimension),
+//                baseVecs + (random_vector_ids[i+7] * baseDimension),
+//                baseDimension,
+//                res0,
+//                res1,
+//                res2,
+//                res3,
+//                res4,
+//                res5,
+//                res6,
+//                res7);
+//        result += res0 + res1 + res2 + res3 + res4 + res5 + res6 + res7;
 //        fvec_L2sqr_batch_8(
 //                query,
 //                baseVecs + (random_numbers[i+8] * baseDimension),
@@ -521,10 +545,10 @@ void random_vector_access_exp(
 //        float res;
 //        l2_sqr_dist(query, baseVecs + (random_vector_ids[i] * baseDimension), baseDimension, res);
 //        result += res;
-    }
+//    }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    printf("Result: %f\n", result);
+//    printf("Result: %f\n", result);
     printf("Duration: %lld ms\n", duration);
     return;
 }
@@ -537,7 +561,7 @@ void benchmark_random_dist_comp() {
     float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
 
-    random_vector_access_exp(baseVecs, baseDimension, baseNumVectors, 40000000, 3000);
+    random_vector_access_exp(baseVecs, baseDimension, baseNumVectors, 3601522107, 3000);
 }
 
 void benchmark_simd_distance() {
@@ -689,9 +713,9 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-    benchmark_hnsw_queries(argc, argv);
+//    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
-//    benchmark_random_dist_comp();
+    benchmark_random_dist_comp();
     return 0;
 }
