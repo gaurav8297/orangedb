@@ -9,6 +9,7 @@
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
 #include <prefetch.h>
+#include "spdlog/spdlog.h"
 
 using namespace orangedb;
 
@@ -440,7 +441,7 @@ void random_vector_access_exp(
         size_t baseNumVectors,
         size_t nTimes,
         size_t resetQueryAfter) {
-    size_t nQueries = ceil(nTimes / resetQueryAfter) + 50;
+    size_t nQueries = (nTimes / resetQueryAfter) + 50;
     printf("Number of queries: %zu\n", nQueries);
 
     // Get random number between 0 and baseNumVectors
@@ -467,6 +468,7 @@ void random_vector_access_exp(
 #pragma omp for schedule(static)
         for (size_t i = 0; i < nTimes; i+=4) {
             size_t query_idx = i / resetQueryAfter;
+            spdlog::warn("Query idx: {}", query_idx);
             query = baseVecs + (random_query_ids[query_idx] * baseDimension);
             float res0, res1, res2, res3;
             fvec_L2sqr_batch_4(
