@@ -462,7 +462,7 @@ void random_vector_access_exp(
     int queryidx = 0;
     auto start = std::chrono::high_resolution_clock::now();
     float result = 0;
-    for (size_t i = 0; i < nTimes; i+=1) {
+    for (size_t i = 0; i < nTimes; i+=4) {
         if (i % resetQueryAfter == 0) {
             query = baseVecs + (random_query_ids[queryidx++] * baseDimension);
         }
