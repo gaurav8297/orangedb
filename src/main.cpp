@@ -466,6 +466,19 @@ void random_vector_access_exp(
         if (i % resetQueryAfter == 0) {
             query = baseVecs + (random_query_ids[queryidx++] * baseDimension);
         }
+        float res0, res1, res2, res3;
+        fvec_L2sqr_batch_4(
+                query,
+                baseVecs + (random_vector_ids[i] * baseDimension),
+                baseVecs + (random_vector_ids[i+1] * baseDimension),
+                baseVecs + (random_vector_ids[i+2] * baseDimension),
+                baseVecs + (random_vector_ids[i+3] * baseDimension),
+                baseDimension,
+                res0,
+                res1,
+                res2,
+                res3);
+        result += res0 + res1 + res2 + res3;
 //        float res0 = 0, res1 = 0, res2 = 0, res3 = 0, res4 = 0, res5 = 0, res6 = 0, res7 = 0, res8 = 0,
 //        res9 = 0, res10 = 0, res11 = 0, res12 = 0, res13 = 0, res14 = 0, res15 = 0;
 //        fvec_L2sqr_batch_8(
@@ -506,10 +519,9 @@ void random_vector_access_exp(
 //                res13,
 //                res14,
 //                res15);
-//        result += res0 + res1 + res2 + res3 + res4 + res5 + res6 + res7 + res8 + res9 + res10 + res11 + res12 + res13 + res14 + res15;
-        float res;
-        l2_sqr_dist(query, baseVecs + (random_vector_ids[i] * baseDimension), baseDimension, res);
-        result += res;
+//        float res;
+//        l2_sqr_dist(query, baseVecs + (random_vector_ids[i] * baseDimension), baseDimension, res);
+//        result += res;
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
