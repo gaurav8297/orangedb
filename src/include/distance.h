@@ -166,17 +166,17 @@ namespace orangedb {
                 float& dis1,
                 float& dis2,
                 float& dis3) {
-            for (int i = 0; i < d; i += 32) {
-                prefetch_NTA(y0 + i);
-                prefetch_NTA(y1 + i);
-                prefetch_NTA(y2 + i);
-                prefetch_NTA(y3 + i);
-
-                prefetch_NTA(y0 + i + 16);
-                prefetch_NTA(y1 + i + 16);
-                prefetch_NTA(y2 + i + 16);
-                prefetch_NTA(y3 + i + 16);
-            }
+//            for (int i = 0; i < d; i += 32) {
+//                prefetch_NTA(y0 + i);
+//                prefetch_NTA(y1 + i);
+//                prefetch_NTA(y2 + i);
+//                prefetch_NTA(y3 + i);
+//
+//                prefetch_NTA(y0 + i + 16);
+//                prefetch_NTA(y1 + i + 16);
+//                prefetch_NTA(y2 + i + 16);
+//                prefetch_NTA(y3 + i + 16);
+//            }
             float d0 = 0;
             float d1 = 0;
             float d2 = 0;

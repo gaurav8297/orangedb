@@ -182,6 +182,7 @@ namespace orangedb {
                 if (v1 < 0)
                     break;
                 bool vget = visited.get(v1);
+                // TODO: Try to set visited in the end of loop
                 visited.set(v1);
                 cached_ids[counter] = v1;
                 counter += vget ? 0 : 1;
