@@ -436,7 +436,7 @@ int64_t exp_l2_sqr_dist_2(const float* baseVecs, size_t baseDimension, size_t ba
 // - Record the number of vector comparisons
 
 void random_vector_access_exp(
-        const float* baseVecs,
+        float* baseVecs,
         size_t baseDimension,
         size_t baseNumVectors,
         size_t nTimes,
@@ -447,29 +447,35 @@ void random_vector_access_exp(
     // Get random number between 0 and baseNumVectors
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<size_t> distribution(0, (baseNumVectors - 3));
+    std::uniform_int_distribution<size_t> distribution(0, (baseNumVectors - 1));
 
 //    std::vector<uint64_t> random_vector_ids(nTimes);
 //    for (int i = 0; i < nTimes; i++) {
 //        random_vector_ids[i] = distribution(gen);
 //    }
 
-    std::vector<size_t> random_query_ids(nQueries);
-    for (int i = 0; i < nQueries; i++) {
-        random_query_ids[i] = distribution(gen);
-    }
+//    std::vector<size_t> random_query_ids(nQueries);
+//    for (int i = 0; i < nQueries; i++) {
+//        random_query_ids[i] = distribution(gen);
+//    }
 
     printf("Start benchmark !!!\n");
     auto start = std::chrono::high_resolution_clock::now();
 #pragma omp parallel
     {
-        const float* query;
+        float* query = baseVecs + (distribution(gen) * baseDimension);
         float result = 0;
+        int j = 0;
 #pragma omp for schedule(dynamic, 1000000)
         for (size_t i = 0; i < nTimes; i+=4) {
-            size_t query_idx = i / resetQueryAfter;
+            if (j == resetQueryAfter) {
+                j = 0;
+                query = baseVecs + (distribution(gen) * baseDimension);
+            }
+            j++;
+//            size_t query_idx = i / resetQueryAfter;
 //            spdlog::warn("Query idx: {}", query_idx);
-            query = baseVecs + (random_query_ids[query_idx] * baseDimension);
+//            query = baseVecs + (random_query_ids[query_idx] * baseDimension);
             float res0, res1, res2, res3;
             fvec_L2sqr_batch_4(
                     query,
