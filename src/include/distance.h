@@ -99,7 +99,7 @@ namespace orangedb {
             for (unsigned i = 0; i < aligned_size; i += 32, l += 32, r += 32) {
                 AVX_L2SQR(l, r, sum, l0, r0);
                 AVX_L2SQR(l + 8, r + 8, sum, l1, r1);
-                AVX_L2SQR(l + 16, r + 16, sum, l1, r1);
+                AVX_L2SQR(l + 16, r + 16, sum, l0, r0);
                 AVX_L2SQR(l + 24, r + 24, sum, l1, r1);
             }
             _mm256_storeu_ps(unpack, sum);

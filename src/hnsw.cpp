@@ -87,8 +87,8 @@ namespace orangedb {
                 int neighbor = neighbors[i];
                 if (neighbor < 0)
                     break;
-                prefetch_L2(visited.data() + neighbor);
-                prefetch_L3(storage->data + (getActualId(level, neighbor) * storage->dim));
+                prefetch_L3(visited.data() + neighbor);
+//                prefetch_L3(storage->data + (getActualId(level, neighbor) * storage->dim));
                 jmax += 1;
             }
 
@@ -107,7 +107,7 @@ namespace orangedb {
                 visited.set(neighbor);
                 float dist;
                 dc->compute_distance(getActualId(level, neighbor), dist);
-                stats.totalDistComp++;
+//                stats.totalDistComp++;
                 if (results.size() < ef || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
                     results.emplace(neighbor, dist);
@@ -384,7 +384,7 @@ namespace orangedb {
             resultSet.emplace(neighbor, dist_src_nbr);
         }
         shrink_neighbors(dc, resultSet, storage->max_neighbors_per_level[level], level);
-        stats.totalShrinkCalls1++;
+//        stats.totalShrinkCalls1++;
 //        spdlog::warn("[make_connection] Total distance computations in shrink: {}", totalDist);
         size_t i = begin;
         while (!resultSet.empty()) {
@@ -439,7 +439,7 @@ namespace orangedb {
         // This is a blocking call.
         std::priority_queue<NodeDistCloser> link_targets;
         stats.totalShrinkCalls2++;
-        search_neighbors_optimized(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
+        search_neighbors(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
         shrink_neighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
 //        spdlog::warn("[add_node_on_level] Total distance computations in shrink: {}", totalDist);
 
@@ -548,33 +548,47 @@ namespace orangedb {
         }
 
         printf("Building the graph %d\n", max_level);
-
-        // Create buckets of n with bucket_size
-        for (size_t j = 0; j < n; j += bucket_size) {
-            auto start = j;
-            auto end = std::min(j + bucket_size, n);
 #pragma omp parallel
-            {
-                VisitedTable visited(n);
-                L2DistanceComputer dc(storage);
-#pragma omp for schedule(static) nowait
-                for (int i = start; i < end; i++) {
-                    dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
-                    add_node(&dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
+        {
+            VisitedTable visited(n);
+            L2DistanceComputer dc(storage);
+#pragma omp for schedule(dynamic, MORSEL_SIZE)
+            for (int i = 0; i < n; i++) {
+                dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
+                add_node(&dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
 
-                    if (i % 100000 == 0) {
-                        spdlog::warn("Done with 100000!!");
-                    }
-                }
-#pragma omp for schedule(static) nowait
-                for (int i = 0; i < n; i++) {
-                    omp_set_lock(&locks[node_ids[i][0]]);
-                    dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
-                    shrink(&dc, node_ids[i][0], 0);
-                    omp_unset_lock(&locks[node_ids[i][0]]);
+                if (i % 100000 == 0) {
+                    spdlog::warn("Done with 100000!!");
                 }
             }
         }
+
+        // Create buckets of n with bucket_size
+//        for (size_t j = 0; j < n; j += bucket_size) {
+//            auto start = j;
+//            auto end = std::min(j + bucket_size, n);
+//#pragma omp parallel
+//            {
+//                VisitedTable visited(n);
+//                L2DistanceComputer dc(storage);
+//#pragma omp for schedule(static) nowait
+//                for (int i = start; i < end; i++) {
+//                    dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
+//                    add_node(&dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
+//
+//                    if (i % 100000 == 0) {
+//                        spdlog::warn("Done with 100000!!");
+//                    }
+//                }
+//#pragma omp for schedule(static) nowait
+//                for (int i = 0; i < n; i++) {
+//                    omp_set_lock(&locks[node_ids[i][0]]);
+//                    dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
+//                    shrink(&dc, node_ids[i][0], 0);
+//                    omp_unset_lock(&locks[node_ids[i][0]]);
+//                }
+//            }
+//        }
 
         for (int i = 0; i < n; i++) {
             omp_destroy_lock(&locks[i]);
