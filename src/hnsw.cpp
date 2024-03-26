@@ -163,7 +163,7 @@ namespace orangedb {
                 if (v1 < 0)
                     break;
 
-                prefetch_L2(visited.data() + v1);
+                prefetch_L3(visited.data() + v1);
                 jmax += 1;
             }
 
@@ -439,7 +439,7 @@ namespace orangedb {
         // This is a blocking call.
         std::priority_queue<NodeDistCloser> link_targets;
         stats.totalShrinkCalls2++;
-        search_neighbors(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
+        search_neighbors_optimized(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
         shrink_neighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
 //        spdlog::warn("[add_node_on_level] Total distance computations in shrink: {}", totalDist);
 
