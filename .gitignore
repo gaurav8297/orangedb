@@ -18,8 +18,8 @@ compile_commands.json
 __pycache__/
 *.py[cod]
 *$py.class
-cmake-build-debug/
-cmake-build-release/
+cmake-build-debug*/
+cmake-build-release*/
 test/unittest_temp_*
 
 # macOS
