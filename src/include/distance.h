@@ -100,10 +100,10 @@ namespace orangedb {
             for (unsigned i = 0; i < aligned_size; i += 16, l += 16, r += 16) {
                 if (i + 16 < aligned_size)
                 {
-                    prefetch_L1(l + 16 * (j + 1));
-                    prefetch_L1(r + 16 * (j + 1));
-                    prefetch_L1(l + 24 * (j + 1));
-                    prefetch_L1(r + 24 * (j + 1));
+                    prefetch_NTA(l + 16 * (j + 1));
+                    prefetch_NTA(r + 16 * (j + 1));
+                    prefetch_NTA(l + 24 * (j + 1));
+                    prefetch_NTA(r + 24 * (j + 1));
                 }
                 AVX_L2SQR(l, r, sum, l0, r0);
                 AVX_L2SQR(l + 8, r + 8, sum, l1, r1);

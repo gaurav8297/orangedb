@@ -269,7 +269,7 @@ namespace orangedb {
                 }
             }
 
-            stats.totalLoops++;
+//            stats.totalLoops++;
 
             // caclulate distances in batch of 4
             std::vector<float> dists(nbrs_not_visited.size());
@@ -292,7 +292,7 @@ namespace orangedb {
             // calculate the remaining distances
             for (int j = 0; j < nbrs_not_visited.size(); j++) {
                 dc->compute_distance(getActualId(level, nbrs_not_visited[j]), dists[j]);
-                stats.totalDistComp++;
+//                stats.totalDistComp++;
             }
 
             // add the neighbors to the results
