@@ -55,7 +55,7 @@ namespace orangedb {
                 }
                 float dist;
                 dc->compute_distance(getActualId(level, neighbor), dist);
-                stats.totalDistComp++;
+//                stats.totalDistComp++;
                 if (dist < nearestDist) {
                     nearest = neighbor;
                     nearestDist = dist;
@@ -115,7 +115,7 @@ namespace orangedb {
                 visited.set(neighbor);
                 float dist;
                 dc->compute_distance(getActualId(level, neighbor), dist);
-                stats.totalDistComp++;
+//                stats.totalDistComp++;
                 if (results.size() < ef || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
                     results.emplace(neighbor, dist);
@@ -335,7 +335,7 @@ namespace orangedb {
                 float dist_node_node_2;
                 dc->compute_distance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
 //                total_dist_comp++;
-                stats.totalDistComp++;
+//                stats.totalDistComp++;
 //                stats.totalDistCompInShrink++;
 //                dist_comp++;
                 if (dist_node_node_2 < dist_q_node) {
