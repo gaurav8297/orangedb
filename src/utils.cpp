@@ -7,13 +7,13 @@
 #include <sys/fcntl.h>
 #include <unistd.h>
 
-#if defined(__GNUC__)
-#define CACHE_ALIGNED __attribute__((aligned(4))) // clang and GCC
-#elif defined(_MSC_VER)
-#define CACHE_ALIGNED __declspec(align(64))        // MSVC
-#endif
-
-typedef CACHE_ALIGNED float float_aligned_t;
+//#if defined(__GNUC__)
+//#define CACHE_ALIGNED __attribute__((aligned(4))) // clang and GCC
+//#elif defined(_MSC_VER)
+//#define CACHE_ALIGNED __declspec(align(64))        // MSVC
+//#endif
+//
+//typedef CACHE_ALIGNED float float_aligned_t;
 
 namespace orangedb {
     float *Utils::fvecs_read(const char *fname, size_t *d_out, size_t *n_out) {
@@ -35,7 +35,7 @@ namespace orangedb {
 
         *d_out = d;
         *n_out = n;
-        float_aligned_t *x = new float_aligned_t [n * (d + 1)];
+        float* x = new float[n * (d + 1)];
         printf("x: %p\n", x);
         size_t nr = fread(x, sizeof(float), n * (d + 1), f);
         assert(nr == n * (d + 1) || !"could not read whole file");
