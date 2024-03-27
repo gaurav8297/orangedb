@@ -55,7 +55,7 @@ namespace orangedb {
                 }
                 float dist;
                 dc->compute_distance(getActualId(level, neighbor), dist);
-//                stats.totalDistComp++;
+                stats.totalDistComp++;
                 if (dist < nearestDist) {
                     nearest = neighbor;
                     nearestDist = dist;
@@ -335,7 +335,7 @@ namespace orangedb {
                 float dist_node_node_2;
                 dc->compute_distance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
 //                total_dist_comp++;
-//                stats.totalDistComp++;
+                stats.totalDistComp++;
 //                stats.totalDistCompInShrink++;
 //                dist_comp++;
                 if (dist_node_node_2 < dist_q_node) {
@@ -518,7 +518,7 @@ namespace orangedb {
         // This is a blocking call.
         std::priority_queue<NodeDistCloser> link_targets;
 //        stats.totalShrinkCalls2++;
-        search_neighbors_more_optimized(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
+        search_neighbors_optimized(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
         shrink_neighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
 //        spdlog::warn("[add_node_on_level] Total distance computations in shrink: {}", totalDist);
 
