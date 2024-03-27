@@ -53,7 +53,8 @@ namespace orangedb {
                 uint16_t dim,
                 float explore_factor,
                 float alpha,
-                int beam_size);
+                int beam_size,
+                int beam_thrsh);
         void build(const float* data, size_t n);
         void search_v1(
                 const float* query,
@@ -124,6 +125,7 @@ namespace orangedb {
         float explore_factor;
         float alpha;
         int beam_size;
+        int beam_thrsh;
         uint16_t ef_construction;
         int64_t entry_point = -1;
         uint8_t max_level = 0;

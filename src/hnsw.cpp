@@ -16,9 +16,10 @@ namespace orangedb {
             uint16_t dim,
             float explore_factor,
             float alpha,
-            int beam_size):
+            int beam_size,
+            int beam_thrsh):
             mt(1026), ef_construction(ef_construction), explore_factor(explore_factor), alpha(alpha),
-            beam_size(beam_size), stats(Stats()) {
+            beam_size(beam_size), beam_thrsh(beam_thrsh), stats(Stats()) {
         // Initialize probabilities to save computation time later.
         assert(explore_factor <= 1 && explore_factor >= 0);
         init_probabs(M, 1.0 / log(M));
@@ -246,7 +247,7 @@ namespace orangedb {
             candidates.pop();
             std::vector<NodeDistFarther> cds;
             cds.push_back(candidate);
-            if (candidates.size() > beam_size) {
+            if (candidates.size() > beam_thrsh) {
                 for (int i = 0; i < beam_size; i++) {
                     auto c = candidates.top();
                     candidates.pop();

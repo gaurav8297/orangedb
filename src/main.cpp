@@ -700,7 +700,8 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto explore_factor = stof(input.getCmdOption("-exploreFactor"));
     auto num_vectors = stoi(input.getCmdOption("-numVectors"));
     auto alpha = stof(input.getCmdOption("-alpha"));
-    auto bucket_size = stof(input.getCmdOption("-bucketSize"));
+    auto beam_size = stoi(input.getCmdOption("-beamSize"));
+    auto beam_thrsh = stoi(input.getCmdOption("-beamThrsh"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -714,7 +715,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     int *gtVecs = Utils::ivecs_read(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
 
     omp_set_num_threads(thread_count);
-    HNSW hnsw(M, efConstruction, baseDimension, explore_factor, alpha, bucket_size);
+    HNSW hnsw(M, efConstruction, baseDimension, explore_factor, alpha, beam_size, beam_thrsh);
     build_graph(hnsw, baseVecs, num_vectors);
     hnsw.print_stats();
     // ./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -efConstruction 128 -M 64 -efSearch 150 -nThreads 32 -exploreFactor 1
