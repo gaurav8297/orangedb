@@ -71,7 +71,7 @@ namespace orangedb {
                 float entrypointDist,
                 VisitedTable& visited,
                 uint16_t ef);
-        void beam_search_neighbors(
+        void search_neighbors_more_optimized(
                 DistanceComputer *dc,
                 level_t level,
                 std::priority_queue<NodeDistCloser> &results,

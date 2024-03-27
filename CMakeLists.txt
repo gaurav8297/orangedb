@@ -24,15 +24,15 @@ find_package(OpenMP REQUIRED)
 set(OpenMP_C_FLAGS "-fopenmp")
 set(OpenMP_CXX_FLAGS "-fopenmp")
 
-set(CMAKE_C_FLAGS "${OpenMP_C_FLAGS} -g -O2 -march=native -fsanitize=address")
-set(CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} -g -O2 -march=native -fsanitize=address")
+set(CMAKE_C_FLAGS "${OpenMP_C_FLAGS} -g -O2 -march=native")
+set(CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} -g -O2 -march=native")
 
 option(ENABLE_ADDRESS_SANITIZER "Enable address sanitizer." FALSE)
 
-#if(${ENABLE_ADDRESS_SANITIZER})
-#    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-#endif()
+if(${ENABLE_ADDRESS_SANITIZER})
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+endif()
 
 # Add include path
 include_directories(${PROJECT_SOURCE_DIR}/src/include)

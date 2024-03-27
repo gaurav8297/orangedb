@@ -121,19 +121,6 @@ namespace orangedb {
         visited.reset();
     }
 
-    void HNSW::beam_search_neighbors(
-            DistanceComputer *dc,
-            level_t level,
-            std::priority_queue<NodeDistCloser> &results,
-            storage_idx_t entrypoint,
-            float entrypointDist,
-            VisitedTable &visited,
-            uint16_t ef) {
-
-
-
-    }
-
     void HNSW::search_neighbors_optimized(
             DistanceComputer *dc,
             level_t level,
@@ -227,6 +214,74 @@ namespace orangedb {
 //                    }
 //                }
 //            }
+        }
+        visited.reset();
+    }
+
+    void HNSW::search_neighbors_more_optimized(
+            DistanceComputer *dc,
+            level_t level,
+            std::priority_queue<NodeDistCloser> &results,
+            storage_idx_t entrypoint,
+            float entrypointDist,
+            VisitedTable &visited,
+            uint16_t ef) {
+        std::priority_queue<NodeDistFarther> candidates;
+        candidates.emplace(entrypoint, entrypointDist);
+        results.emplace(entrypoint, entrypointDist);
+        visited.set(entrypoint);
+        auto neighbors = storage->get_neighbors(level);
+        while (!candidates.empty()) {
+            auto candidate = candidates.top();
+            if (candidate.dist > results.top().dist) {
+                break;
+            }
+            candidates.pop();
+            size_t begin, end;
+            storage->get_neighbors_offsets(candidate.id, level, begin, end);
+
+            // the following version processes 4 neighbors at a time
+            std::vector<storage_idx_t> nbrs_not_visited;
+            for (size_t j = begin; j < end; j++) {
+                int v1 = neighbors[j];
+                if (v1 < 0)
+                    break;
+                bool vget = visited.get(v1);
+                visited.set(v1);
+                nbrs_not_visited.push_back(v1);
+            }
+
+            // caclulate distances in batch of 4
+            std::vector<float> dists(nbrs_not_visited.size());
+            int jMax = nbrs_not_visited.size() >> 2;
+            jMax = jMax << 2;
+            for (int j = 0; j < jMax; j += 4) {
+                dc->compute_distance_four_vecs(
+                        getActualId(level, nbrs_not_visited[j]),
+                        getActualId(level, nbrs_not_visited[j + 1]),
+                        getActualId(level, nbrs_not_visited[j + 2]),
+                        getActualId(level, nbrs_not_visited[j + 3]),
+                        dists[j],
+                        dists[j + 1],
+                        dists[j + 2],
+                        dists[j + 3]);
+            }
+
+            // calculate the remaining distances
+            for (int j = jMax; j < nbrs_not_visited.size(); j++) {
+                dc->compute_distance(getActualId(level, nbrs_not_visited[j]), dists[j]);
+            }
+
+            // add the neighbors to the results
+            for (int j = 0; j < nbrs_not_visited.size(); j++) {
+                if (results.size() < ef || dists[j] < results.top().dist) {
+                    candidates.emplace(nbrs_not_visited[j], dists[j]);
+                    results.emplace(nbrs_not_visited[j], dists[j]);
+                    if (results.size() > ef) {
+                        results.pop();
+                    }
+                }
+            }
         }
         visited.reset();
     }
@@ -440,7 +495,7 @@ namespace orangedb {
         // This is a blocking call.
         std::priority_queue<NodeDistCloser> link_targets;
 //        stats.totalShrinkCalls2++;
-        search_neighbors_optimized(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
+        search_neighbors_more_optimized(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
         shrink_neighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
 //        spdlog::warn("[add_node_on_level] Total distance computations in shrink: {}", totalDist);
 

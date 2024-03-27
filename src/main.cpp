@@ -466,7 +466,7 @@ void random_vector_access_exp(
         float* query = baseVecs + (distribution(gen) * baseDimension);
         float result = 0;
         int j = 0;
-#pragma omp for schedule(dynamic, 1000000)
+#pragma omp for
         for (size_t i = 0; i < nTimes; i+=4) {
             if (j == resetQueryAfter) {
                 j = 0;
@@ -722,9 +722,9 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-//    benchmark_hnsw_queries(argc, argv);
+    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
-    benchmark_random_dist_comp();
+//    benchmark_random_dist_comp();
     return 0;
 }
