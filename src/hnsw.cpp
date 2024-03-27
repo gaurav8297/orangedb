@@ -107,7 +107,7 @@ namespace orangedb {
                 visited.set(neighbor);
                 float dist;
                 dc->compute_distance(getActualId(level, neighbor), dist);
-//                stats.totalDistComp++;
+                stats.totalDistComp++;
                 if (results.size() < ef || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
                     results.emplace(neighbor, dist);
@@ -184,7 +184,7 @@ namespace orangedb {
                             dis[1],
                             dis[2],
                             dis[3]);
-//                    stats.totalDistComp += 4;
+                    stats.totalDistComp += 4;
                     for (int k = 0; k < 4; k++) {
                         if (results.size() < ef || dis[k] < results.top().dist) {
                             candidates.emplace(cached_ids[k], dis[k]);
@@ -266,11 +266,13 @@ namespace orangedb {
                         dists[j + 1],
                         dists[j + 2],
                         dists[j + 3]);
+                stats.totalDistComp += 4;
             }
 
             // calculate the remaining distances
             for (int j = jMax; j < nbrs_not_visited.size(); j++) {
                 dc->compute_distance(getActualId(level, nbrs_not_visited[j]), dists[j]);
+                stats.totalDistComp++;
             }
 
             // add the neighbors to the results
