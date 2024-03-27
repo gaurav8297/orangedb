@@ -84,7 +84,7 @@ namespace orangedb {
           tmp1 = _mm256_sub_ps(tmp1, tmp2);               \
           tmp1 = _mm256_mul_ps(tmp1, tmp1);               \
           dest = _mm256_add_ps(dest, tmp1);
-
+            printf("some shit!!");
             __m256 sum;
             __m256 l0, l1;
             __m256 r0, r1;
@@ -98,8 +98,7 @@ namespace orangedb {
 
             int j = 0;
             for (unsigned i = 0; i < aligned_size; i += 16, l += 16, r += 16) {
-                if (i + 16 < aligned_size)
-                {
+                if (i + 16 < aligned_size) {
                     prefetch_NTA(l + 16 * (j + 1));
                     prefetch_NTA(r + 16 * (j + 1));
                     prefetch_NTA(l + 24 * (j + 1));
@@ -173,12 +172,12 @@ namespace orangedb {
                 float& dis1,
                 float& dis2,
                 float& dis3) {
-            for (int i = 0; i < (d - 1); i += 8) {
-                prefetch_L1(y0 + 8 * (i + 1));
-                prefetch_L1(y1 + 8 * (i + 1));
-                prefetch_L1(y2 + 8 * (i + 1));
-                prefetch_L1(y3 + 8 * (i + 1));
-            }
+//            for (int i = 0; i < (d - 1); i += 8) {
+//                prefetch_L1(y0 + 8 * (i + 1));
+//                prefetch_L1(y1 + 8 * (i + 1));
+//                prefetch_L1(y2 + 8 * (i + 1));
+//                prefetch_L1(y3 + 8 * (i + 1));
+//            }
             float d0 = 0;
             float d1 = 0;
             float d2 = 0;
