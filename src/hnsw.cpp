@@ -246,7 +246,7 @@ namespace orangedb {
                 int v1 = neighbors[j];
                 if (v1 < 0)
                     break;
-                if (visited.get(v1)) {
+                if (!visited.get(v1)) {
                     visited.set(v1);
                     nbrs_not_visited.push_back(v1);
                 }
