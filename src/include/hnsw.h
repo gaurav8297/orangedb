@@ -47,7 +47,13 @@ namespace orangedb {
             }
         };
     public:
-        explicit HNSW(uint16_t M, uint16_t ef_construction, uint16_t dim, float explore_factor, float alpha, int bucket_size);
+        explicit HNSW(
+                uint16_t M,
+                uint16_t ef_construction,
+                uint16_t dim,
+                float explore_factor,
+                float alpha,
+                int beam_size);
         void build(const float* data, size_t n);
         void search_v1(
                 const float* query,
@@ -117,7 +123,7 @@ namespace orangedb {
     private:
         float explore_factor;
         float alpha;
-        int bucket_size;
+        int beam_size;
         uint16_t ef_construction;
         int64_t entry_point = -1;
         uint8_t max_level = 0;

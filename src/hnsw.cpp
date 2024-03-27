@@ -10,8 +10,15 @@
 #define BEAM_SIZE 8
 
 namespace orangedb {
-    HNSW::HNSW(uint16_t M, uint16_t ef_construction, uint16_t dim, float explore_factor, float alpha, int bucket_size):
-            mt(1026), ef_construction(ef_construction), explore_factor(explore_factor), alpha(alpha), bucket_size(bucket_size), stats(Stats()) {
+    HNSW::HNSW(
+            uint16_t M,
+            uint16_t ef_construction,
+            uint16_t dim,
+            float explore_factor,
+            float alpha,
+            int beam_size):
+            mt(1026), ef_construction(ef_construction), explore_factor(explore_factor), alpha(alpha),
+            beam_size(beam_size), stats(Stats()) {
         // Initialize probabilities to save computation time later.
         assert(explore_factor <= 1 && explore_factor >= 0);
         init_probabs(M, 1.0 / log(M));
@@ -237,20 +244,30 @@ namespace orangedb {
                 break;
             }
             candidates.pop();
-            size_t begin, end;
-            storage->get_neighbors_offsets(candidate.id, level, begin, end);
-
-            // the following version processes 4 neighbors at a time
-            std::vector<storage_idx_t> nbrs_not_visited;
-            for (size_t j = begin; j < end; j++) {
-                int v1 = neighbors[j];
-                if (v1 < 0)
-                    break;
-                if (!visited.get(v1)) {
-                    visited.set(v1);
-                    nbrs_not_visited.push_back(v1);
+            std::vector<NodeDistFarther> cds;
+            cds.push_back(candidate);
+            if (candidates.size() > beam_size) {
+                for (int i = 0; i < beam_size; i++) {
+                    auto c = candidates.top();
+                    candidates.pop();
+                    cds.push_back(c);
                 }
             }
+            std::vector<storage_idx_t> nbrs_not_visited;
+            for (auto c: cds) {
+                size_t begin, end;
+                storage->get_neighbors_offsets(c.id, level, begin, end);
+                for (size_t j = begin; j < end; j++) {
+                    int v1 = neighbors[j];
+                    if (v1 < 0)
+                        break;
+                    if (!visited.get(v1)) {
+                        visited.set(v1);
+                        nbrs_not_visited.push_back(v1);
+                    }
+                }
+            }
+
             stats.totalLoops++;
 
             // caclulate distances in batch of 4
