@@ -96,11 +96,18 @@ namespace orangedb {
             float unpack[8] __attribute__((aligned(32))) = {0, 0, 0, 0, 0, 0, 0, 0};
             sum = _mm256_loadu_ps(unpack);
 
-            for (unsigned i = 0; i < aligned_size; i += 32, l += 32, r += 32) {
+            int j = 0;
+            for (unsigned i = 0; i < aligned_size; i += 16, l += 16, r += 16) {
+                if (i + 16 < aligned_size)
+                {
+                    prefetch_L1(l + 16 * (j + 1));
+                    prefetch_L1(r + 16 * (j + 1));
+                    prefetch_L1(l + 24 * (j + 1));
+                    prefetch_L1(r + 24 * (j + 1));
+                }
                 AVX_L2SQR(l, r, sum, l0, r0);
                 AVX_L2SQR(l + 8, r + 8, sum, l1, r1);
-                AVX_L2SQR(l + 16, r + 16, sum, l0, r0);
-                AVX_L2SQR(l + 24, r + 24, sum, l1, r1);
+                j++;
             }
             _mm256_storeu_ps(unpack, sum);
             result = unpack[0] + unpack[1] + unpack[2] + unpack[3] + unpack[4] + unpack[5] + unpack[6] + unpack[7];
@@ -166,17 +173,12 @@ namespace orangedb {
                 float& dis1,
                 float& dis2,
                 float& dis3) {
-//            for (int i = 0; i < d; i += 32) {
-//                prefetch_NTA(y0 + i);
-//                prefetch_NTA(y1 + i);
-//                prefetch_NTA(y2 + i);
-//                prefetch_NTA(y3 + i);
-//
-//                prefetch_NTA(y0 + i + 16);
-//                prefetch_NTA(y1 + i + 16);
-//                prefetch_NTA(y2 + i + 16);
-//                prefetch_NTA(y3 + i + 16);
-//            }
+            for (int i = 0; i < (d - 1); i += 8) {
+                prefetch_L1(y0 + 8 * (i + 1));
+                prefetch_L1(y1 + 8 * (i + 1));
+                prefetch_L1(y2 + 8 * (i + 1));
+                prefetch_L1(y3 + 8 * (i + 1));
+            }
             float d0 = 0;
             float d1 = 0;
             float d2 = 0;

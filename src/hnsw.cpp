@@ -273,24 +273,24 @@ namespace orangedb {
 
             // caclulate distances in batch of 4
             std::vector<float> dists(nbrs_not_visited.size());
-            int jMax = nbrs_not_visited.size() >> 2;
-            jMax = jMax << 2;
-            for (int j = 0; j < jMax; j += 4) {
-                dc->compute_distance_four_vecs(
-                        getActualId(level, nbrs_not_visited[j]),
-                        getActualId(level, nbrs_not_visited[j + 1]),
-                        getActualId(level, nbrs_not_visited[j + 2]),
-                        getActualId(level, nbrs_not_visited[j + 3]),
-                        dists[j],
-                        dists[j + 1],
-                        dists[j + 2],
-                        dists[j + 3]);
-//                stats.totalDistComp += 4;
-                stats.total4mul++;
-            }
+//            int jMax = nbrs_not_visited.size() >> 2;
+//            jMax = jMax << 2;
+//            for (int j = 0; j < jMax; j += 4) {
+//                dc->compute_distance_four_vecs(
+//                        getActualId(level, nbrs_not_visited[j]),
+//                        getActualId(level, nbrs_not_visited[j + 1]),
+//                        getActualId(level, nbrs_not_visited[j + 2]),
+//                        getActualId(level, nbrs_not_visited[j + 3]),
+//                        dists[j],
+//                        dists[j + 1],
+//                        dists[j + 2],
+//                        dists[j + 3]);
+////                stats.totalDistComp += 4;
+//                stats.total4mul++;
+//            }
 
             // calculate the remaining distances
-            for (int j = jMax; j < nbrs_not_visited.size(); j++) {
+            for (int j = 0; j < nbrs_not_visited.size(); j++) {
                 dc->compute_distance(getActualId(level, nbrs_not_visited[j]), dists[j]);
                 stats.totalDistComp++;
             }
