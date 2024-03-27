@@ -266,7 +266,8 @@ namespace orangedb {
                         dists[j + 1],
                         dists[j + 2],
                         dists[j + 3]);
-                stats.totalDistComp += 4;
+//                stats.totalDistComp += 4;
+                stats.total4mul++;
             }
 
             // calculate the remaining distances
@@ -693,6 +694,7 @@ namespace orangedb {
         spdlog::warn("Total shrink calls 1: {}", stats.totalShrinkCalls1);
         spdlog::warn("Total shrink calls 2: {}", stats.totalShrinkCalls2);
         spdlog::warn("Total shrink not reduce: {}", stats.totalShrinkNotReduce);
+        spdlog::warn("Total 4 multiplications: {}", stats.total4mul);
 
         // Print avg number of nodes in last layer
         auto nbrs = storage->get_neighbors(0);

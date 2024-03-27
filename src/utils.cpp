@@ -32,11 +32,9 @@ namespace orangedb {
         size_t sz = st.st_size;
         assert(sz % ((d + 1) * 4) == 0 || !"weird file size");
         size_t n = sz / ((d + 1) * 4);
-
         *d_out = d;
         *n_out = n;
         float* x = new float[n * (d + 1)];
-        printf("x: %p\n", x);
         size_t nr = fread(x, sizeof(float), n * (d + 1), f);
         assert(nr == n * (d + 1) || !"could not read whole file");
 

@@ -23,6 +23,7 @@ namespace orangedb {
         atomic_int64_t totalShrinkCalls1;
         atomic_int64_t totalShrinkCalls2;
         atomic_int64_t totalShrinkNotReduce;
+        atomic_int64_t total4mul;
     };
 
     class HNSW {
