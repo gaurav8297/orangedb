@@ -251,6 +251,7 @@ namespace orangedb {
                     nbrs_not_visited.push_back(v1);
                 }
             }
+            stats.totalLoops++;
 
             // caclulate distances in batch of 4
             std::vector<float> dists(nbrs_not_visited.size());
@@ -695,6 +696,7 @@ namespace orangedb {
         spdlog::warn("Total shrink calls 2: {}", stats.totalShrinkCalls2);
         spdlog::warn("Total shrink not reduce: {}", stats.totalShrinkNotReduce);
         spdlog::warn("Total 4 multiplications: {}", stats.total4mul);
+        spdlog::warn("Total loops: {}", stats.totalLoops);
 
         // Print avg number of nodes in last layer
         auto nbrs = storage->get_neighbors(0);
