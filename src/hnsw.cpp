@@ -208,20 +208,18 @@ namespace orangedb {
             }
 
             // For the left out nodes
-//            if (counter > 0) {
-//                for (int k = 0; k < counter; k++) {
-//                    float dist;
-//                    dc->compute_distance(getActualId(level, cached_ids[k]), dist);
-//                    stats.totalDistComp++;
-//                    if (results.size() < ef || dist < results.top().dist) {
-//                        candidates.emplace(cached_ids[k], dist);
-//                        results.emplace(cached_ids[k], dist);
-//                        if (results.size() > ef) {
-//                            results.pop();
-//                        }
-//                    }
-//                }
-//            }
+            for (int k = 0; k < counter; k++) {
+                float dist;
+                dc->compute_distance(getActualId(level, cached_ids[k]), dist);
+                stats.totalDistComp++;
+                if (results.size() < ef || dist < results.top().dist) {
+                    candidates.emplace(cached_ids[k], dist);
+                    results.emplace(cached_ids[k], dist);
+                    if (results.size() > ef) {
+                        results.pop();
+                    }
+                }
+            }
         }
         visited.reset();
     }
