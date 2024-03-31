@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <atomic>
+#include <vector>
 
 #define MAX_LEVELS 10
 
@@ -41,6 +42,9 @@ namespace orangedb {
                 next_level_ids[level].resize(n);
                 actual_ids[level].resize(n);
             }
+            if (level == 0) {
+                num_points = n;
+            }
         }
 
         inline storage_idx_t* get_neighbors(uint8_t level) {
@@ -73,6 +77,7 @@ namespace orangedb {
         // TODO: Serialize to disk
         const float* data;
         const uint16_t dim;
+        uint64_t num_points;
         std::vector<uint16_t> max_neighbors_per_level;
         std::vector<GraphCSR> graphs;
         std::vector<storage_idx_t> next_level_ids[MAX_LEVELS];
