@@ -724,7 +724,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 }
 
 void benchmark_scalar_quantizer() {
-    auto basePath = "/Users/gauravsehgal/work/vector_index/data/gist_50k";
+    auto basePath = "/home/gaurav/vector_index_experiments/vector_index/data/gist_50k";
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
@@ -732,19 +732,41 @@ void benchmark_scalar_quantizer() {
     uint8_t* codes;
     Utils::alloc_aligned((void**)&codes, baseNumVectors * baseDimension, 64);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
-    ScalarQuantizer sq(baseDimension);
+    float* vmin;
+    float* vdiff;
+    ScalarQuantizer sq(baseDimension, vmin, vdiff);
     sq.train(baseNumVectors, baseVecs);
     sq.compute_codes(baseVecs, codes, baseNumVectors);
-    float *decoded;
-    Utils::alloc_aligned((void**)&decoded, baseNumVectors * baseDimension * sizeof(float), 64);
-    sq.decode(codes, decoded, baseNumVectors);
+//    float *decoded;
+//    Utils::alloc_aligned((void**)&decoded, baseNumVectors * baseDimension * sizeof(float), 64);
+//    sq.decode(codes, decoded, baseNumVectors);
+    Storage storage(baseDimension, 64, 2);
+    storage.data = baseVecs;
+    storage.codes = codes;
+    storage.vmin = sq.vmin;
+    storage.vdiff = sq.vdiff;
 
     // Print 0 dimension for first 10 vectors
+//    auto error = 0.0;
+//    for (int i = 0; i < baseNumVectors; i++) {
+//        printf("Actual 0th location %f\n", baseVecs[i * 960]);
+//        printf("Decoded 0th location %f\n", decoded[i * 960]);
+//        error += baseVecs[i * 960] - decoded[i * 960];
+//    }
+//    printf("Error: %f\n", (error / baseNumVectors));
+
+    L2DistanceComputer normaldc(&storage);
+    SQDistanceComputer sqdc(&storage);
+    normaldc.set_query(baseVecs, 0);
+    sqdc.set_query(baseVecs, 0);
+
     auto error = 0.0;
-    for (int i = 0; i < baseNumVectors; i++) {
-        printf("Actual 0th location %f\n", baseVecs[i * 960]);
-        printf("Decoded 0th location %f\n", decoded[i * 960]);
-        error += baseVecs[i * 960] - decoded[i * 960];
+    for (int i = 1; i < baseNumVectors; i++) {
+        float actual, fake;
+        normaldc.compute_distance(4, i, actual);
+        sqdc.compute_distance(4, i, fake);
+        printf("Actual: %f, Fake: %f\n", actual, fake);
+        error += fake - actual;
     }
     printf("Error: %f\n", (error / baseNumVectors));
 
@@ -763,11 +785,11 @@ void benchmark_quantizer() {
 }
 
 int main(int argc, char **argv) {
-//    benchmark_hnsw_queries(argc, argv);
+    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();
-    benchmark_scalar_quantizer();
+//    benchmark_scalar_quantizer();
 //    benchmark_quantizer();
     return 0;
 }

@@ -24,6 +24,7 @@ namespace orangedb {
         assert(explore_factor <= 1 && explore_factor >= 0);
         init_probabs(M, 1.0 / log(M));
         storage = new Storage(dim, M, level_probabs.size());
+        sq = new ScalarQuantizer(dim, storage->vmin, storage->vdiff);
     }
 
     void HNSW::init_probabs(uint16_t M, double levelMult) {
@@ -516,7 +517,7 @@ namespace orangedb {
         // This is a blocking call.
         std::priority_queue<NodeDistCloser> link_targets;
 //        stats.totalShrinkCalls2++;
-        search_neighbors_optimized(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
+        search_neighbors(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
         shrink_neighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
 //        spdlog::warn("[add_node_on_level] Total distance computations in shrink: {}", totalDist);
 
@@ -609,6 +610,27 @@ namespace orangedb {
         // Set data to storage
         // Todo: Copy data to storage
         storage->data = data;
+        // print vmin and vdiff
+        for (int i = 0; i < 2; i++) {
+            spdlog::warn("vmin[{}]: {}", i, storage->vmin[i]);
+            spdlog::warn("vdiff[{}]: {}", i, storage->vdiff[i]);
+        }
+        sq->train(n, storage->data);
+        storage->vmin = sq->vmin;
+        storage->vdiff = sq->vdiff;
+        Utils::alloc_aligned((void**)&storage->codes, storage->dim * n, 64);
+        sq->compute_codes(storage->data, storage->codes, n);
+
+//        // Print first 10 codes
+//        for (int i = 0; i < 1000; i++) {
+//            spdlog::warn("Code for {}: {}", i, storage->codes[i]);
+//        }
+
+        // print vmin and vdiff
+        for (int i = 0; i < 2; i++) {
+            spdlog::warn("vmin[{}]: {}", i, storage->vmin[i]);
+            spdlog::warn("vdiff[{}]: {}", i, storage->vdiff[i]);
+        }
 
         // Set the size for storage
         // Todo: Figure out if ordering is important!! Basically we are adding vectors from highest to lowest level.
@@ -628,7 +650,7 @@ namespace orangedb {
 #pragma omp parallel
         {
             VisitedTable visited(n);
-            L2DistanceComputer dc(storage);
+            SQDistanceComputer dc(storage);
 #pragma omp for schedule(dynamic, MORSEL_SIZE)
             for (int i = 0; i < n; i++) {
                 dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);

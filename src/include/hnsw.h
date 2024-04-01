@@ -133,5 +133,8 @@ namespace orangedb {
         Storage* storage;
         std::mt19937 mt;
         Stats stats;
+
+        // Scalar Quantizer Option
+        ScalarQuantizer* sq;
     };
 }

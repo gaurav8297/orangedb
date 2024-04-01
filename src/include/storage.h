@@ -76,6 +76,9 @@ namespace orangedb {
         // Right now everything is in memory.
         // TODO: Serialize to disk
         const float* data;
+        uint8_t* codes;
+        float* vmin;
+        float* vdiff;
         const uint16_t dim;
         uint64_t num_points;
         std::vector<uint16_t> max_neighbors_per_level;
