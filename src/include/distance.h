@@ -320,6 +320,37 @@ namespace orangedb {
                     _mm256_loadu_ps(vdiff + i),
                     _mm256_loadu_ps(vmin + i));
         }
+#else
+        PRAGMA_IMPRECISE_FUNCTION_BEGIN
+         inline void l2_sqr_dist(const uint8_t* codes, size_t d, float& result) {
+            float res = 0;
+            float* vmin = storage->vmin;
+            float* vdiff = storage->vdiff;
+            PRAGMA_IMPRECISE_LOOP
+            for (size_t i = 0; i < d; i++) {
+                float decoded_val = vmin[i] + (codes[i] + 0.5f) / 255.0f * vdiff[i];
+                float diff = query[i] - decoded_val;
+                res += diff * diff;
+            }
+            result = res;
+        }
+        PRAGMA_IMPRECISE_FUNCTION_END
+
+        PRAGMA_IMPRECISE_FUNCTION_BEGIN
+        inline void l2_sqr_dist_2(const uint8_t* xcodes, const uint8_t* ycodes, size_t d, float& result) {
+            float res = 0;
+            float* vmin = storage->vmin;
+            float* vdiff = storage->vdiff;
+            PRAGMA_IMPRECISE_LOOP
+            for (size_t i = 0; i < d; i++) {
+                float decoded_val_x = vmin[i] + (xcodes[i] + 0.5f) / 255.0f * vdiff[i];
+                float decoded_val_y = vmin[i] + (ycodes[i] + 0.5f) / 255.0f * vmin[i];
+                float diff = decoded_val_x - decoded_val_y;
+                res += diff * diff;
+            }
+            result = res;
+        }
+        PRAGMA_IMPRECISE_FUNCTION_END
 #endif
 
     private:
