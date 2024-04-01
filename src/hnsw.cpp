@@ -17,9 +17,10 @@ namespace orangedb {
             float explore_factor,
             float alpha,
             int beam_size,
-            int beam_thrsh):
+            int beam_thrsh,
+            bool use_scalar_quantizer):
             mt(1026), ef_construction(ef_construction), explore_factor(explore_factor), alpha(alpha),
-            beam_size(beam_size), beam_thrsh(beam_thrsh), stats(Stats()) {
+            beam_size(beam_size), beam_thrsh(beam_thrsh), stats(Stats()), use_scalar_quantizer(use_scalar_quantizer) {
         // Initialize probabilities to save computation time later.
         assert(explore_factor <= 1 && explore_factor >= 0);
         init_probabs(M, 1.0 / log(M));
@@ -610,26 +611,22 @@ namespace orangedb {
         // Set data to storage
         // Todo: Copy data to storage
         storage->data = data;
-        // print vmin and vdiff
-        for (int i = 0; i < 2; i++) {
-            spdlog::warn("vmin[{}]: {}", i, storage->vmin[i]);
-            spdlog::warn("vdiff[{}]: {}", i, storage->vdiff[i]);
-        }
-        sq->train(n, storage->data);
-        storage->vmin = sq->vmin;
-        storage->vdiff = sq->vdiff;
-        Utils::alloc_aligned((void**)&storage->codes, storage->dim * n, 64);
-        sq->compute_codes(storage->data, storage->codes, n);
-
-//        // Print first 10 codes
-//        for (int i = 0; i < 1000; i++) {
-//            spdlog::warn("Code for {}: {}", i, storage->codes[i]);
-//        }
-
-        // print vmin and vdiff
-        for (int i = 0; i < 2; i++) {
-            spdlog::warn("vmin[{}]: {}", i, storage->vmin[i]);
-            spdlog::warn("vdiff[{}]: {}", i, storage->vdiff[i]);
+        if (use_scalar_quantizer) {
+            // print vmin and vdiff
+            for (int i = 0; i < 2; i++) {
+                spdlog::warn("vmin[{}]: {}", i, storage->vmin[i]);
+                spdlog::warn("vdiff[{}]: {}", i, storage->vdiff[i]);
+            }
+            sq->train(n, storage->data);
+            storage->vmin = sq->vmin;
+            storage->vdiff = sq->vdiff;
+            Utils::alloc_aligned((void **) &storage->codes, storage->dim * n, 64);
+            sq->compute_codes(storage->data, storage->codes, n);
+            // print vmin and vdiff
+            for (int i = 0; i < 2; i++) {
+                spdlog::warn("vmin[{}]: {}", i, storage->vmin[i]);
+                spdlog::warn("vdiff[{}]: {}", i, storage->vdiff[i]);
+            }
         }
 
         // Set the size for storage
@@ -650,12 +647,16 @@ namespace orangedb {
 #pragma omp parallel
         {
             VisitedTable visited(n);
-            SQDistanceComputer dc(storage);
+            DistanceComputer* dc;
+            if (use_scalar_quantizer) {
+                dc = new SQDistanceComputer(storage);
+            } else {
+                dc = new L2DistanceComputer(storage);
+            }
 #pragma omp for schedule(dynamic, MORSEL_SIZE)
             for (int i = 0; i < n; i++) {
-                dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
-                add_node(&dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
-
+                dc->set_query(storage->data + (i * storage->dim), node_ids[i][0]);
+                add_node(dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
                 if (i % 100000 == 0) {
                     spdlog::warn("Done with 100000!!");
                 }

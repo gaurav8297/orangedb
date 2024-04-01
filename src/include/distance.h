@@ -26,6 +26,7 @@ namespace orangedb {
                 float& res2,
                 float& res3) = 0;
         virtual void compute_approx_dist(storage_idx_t src, storage_idx_t dest, float& result) = 0;
+        virtual void set_query(const float* query, const storage_idx_t query_id) = 0;
         virtual storage_idx_t get_query_id() = 0;
         virtual ~DistanceComputer() = default;
     };
@@ -321,6 +322,7 @@ namespace orangedb {
                     _mm256_loadu_ps(vmin + i));
         }
 #else
+        // Auto vectorization doesn't work for this function. Maybe simplify the function to make it work
         PRAGMA_IMPRECISE_FUNCTION_BEGIN
          inline void l2_sqr_dist(const uint8_t* codes, size_t d, float& result) {
             float res = 0;
@@ -336,6 +338,7 @@ namespace orangedb {
         }
         PRAGMA_IMPRECISE_FUNCTION_END
 
+        // Auto vectorization doesn't work for this function. Maybe simplify the function to make it work
         PRAGMA_IMPRECISE_FUNCTION_BEGIN
         inline void l2_sqr_dist_2(const uint8_t* xcodes, const uint8_t* ycodes, size_t d, float& result) {
             float res = 0;

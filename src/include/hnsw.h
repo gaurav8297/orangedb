@@ -54,7 +54,8 @@ namespace orangedb {
                 float explore_factor,
                 float alpha,
                 int beam_size,
-                int beam_thrsh);
+                int beam_thrsh,
+                bool use_scalar_quantizer);
         void build(const float* data, size_t n);
         void search_v1(
                 const float* query,
@@ -127,6 +128,7 @@ namespace orangedb {
         int beam_size;
         int beam_thrsh;
         uint16_t ef_construction;
+        bool use_scalar_quantizer;
         int64_t entry_point = -1;
         uint8_t max_level = 0;
         std::vector<double> level_probabs;
