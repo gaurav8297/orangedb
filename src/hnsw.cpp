@@ -690,6 +690,31 @@ namespace orangedb {
 //            }
 //        }
 
+
+        auto max_neighbors = storage->max_neighbors_per_level[0];
+        // Print the distribution of neighbors
+        auto size = ceil(max_neighbors / 5.0);
+        std::vector<int> distribution(size);
+        auto neighbors = storage->get_neighbors(0);
+        auto total_nbrs = 0;
+        // Print empty percentage of neighbours
+        for (int i = 0; i < n; i++) {
+            auto node_nbrs = 0;
+            for (int j = 0; j < max_neighbors; j++) {
+                if (neighbors[i * max_neighbors + j] != -1) {
+                    node_nbrs++;
+                }
+            }
+            total_nbrs += node_nbrs;
+            distribution[node_nbrs / 5]++;
+        }
+        for (int i = 0; i < size; i++) {
+            spdlog::warn("Number of nodes within range {}-{}: {}", i * 5, (i * 5 + 5), distribution[i]);
+        }
+        // add logs for total number of neighbors
+        spdlog::warn("Total number of neighbors: {}", total_nbrs);
+
+        // Destroy locks
         for (int i = 0; i < n; i++) {
             omp_destroy_lock(&locks[i]);
         }

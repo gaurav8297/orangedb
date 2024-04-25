@@ -278,7 +278,6 @@ namespace orangedb {
           dest = _mm256_fmadd_ps(tmp1, tmp1, dest);
             __m256 sum;
             __m256 l0, l1;
-            __m256 r0, r1;
             size_t qty16 = d >> 4;
             size_t aligned_size = qty16 << 4;
             const float *l = query;
