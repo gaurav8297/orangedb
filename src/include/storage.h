@@ -43,7 +43,7 @@ namespace orangedb {
                 actual_ids[level].resize(n);
             }
             if (level == 0) {
-                num_points = n;
+                numPoints = n;
             }
         }
 
@@ -80,7 +80,7 @@ namespace orangedb {
         float* vmin;
         float* vdiff;
         const uint16_t dim;
-        uint64_t num_points;
+        uint64_t numPoints;
         std::vector<uint16_t> max_neighbors_per_level;
         std::vector<GraphCSR> graphs;
         std::vector<storage_idx_t> next_level_ids[MAX_LEVELS];

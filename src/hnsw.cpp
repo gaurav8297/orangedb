@@ -18,17 +18,17 @@ namespace orangedb {
             float alpha,
             int beam_size,
             int beam_thrsh,
-            bool use_scalar_quantizer):
+            bool use_scalar_quantizer) :
             mt(1026), ef_construction(ef_construction), explore_factor(explore_factor), alpha(alpha),
             beam_size(beam_size), beam_thrsh(beam_thrsh), stats(Stats()), use_scalar_quantizer(use_scalar_quantizer) {
         // Initialize probabilities to save computation time later.
         assert(explore_factor <= 1 && explore_factor >= 0);
-        init_probabs(M, 1.0 / log(M));
+        initProbabs(M, 1.0 / log(M));
         storage = new Storage(dim, M, level_probabs.size());
         sq = new ScalarQuantizer(dim, storage->vmin, storage->vdiff);
     }
 
-    void HNSW::init_probabs(uint16_t M, double levelMult) {
+    void HNSW::initProbabs(uint16_t M, double levelMult) {
         for (int level = 0;; level++) {
             // levelMult helps to control how many level there are going to be. Higher levelMult means more levels.
             // This is just reverse of [-ln(uniform(0, 1)) * levelMult] which is a random variable with
@@ -41,7 +41,7 @@ namespace orangedb {
         }
     }
 
-    void HNSW::search_nearest_on_level(
+    void HNSW::searchNearestOnLevel(
             DistanceComputer *dc, level_t level, storage_idx_t &nearest, float &nearestDist) {
         assert(level > 0);
         auto neighbors = storage->get_neighbors(level);
@@ -56,7 +56,7 @@ namespace orangedb {
                     break;
                 }
                 float dist;
-                dc->compute_distance(getActualId(level, neighbor), dist);
+                dc->computeDistance(getActualId(level, neighbor), dist);
 //                stats.totalDistComp++;
                 if (dist < nearestDist) {
                     nearest = neighbor;
@@ -69,7 +69,7 @@ namespace orangedb {
         }
     }
 
-    void HNSW::search_neighbors(
+    void HNSW::searchNeighbors(
             DistanceComputer *dc,
             level_t level,
             std::priority_queue<NodeDistCloser> &results,
@@ -102,26 +102,21 @@ namespace orangedb {
                 jmax += 1;
             }
 
-            bool search_improved = false;
-            int j = 0;
-            size_t max_j = (end - begin) * 1;
             for (size_t i = begin; i < jmax; i++) {
                 storage_idx_t neighbor = neighbors[i];
-                if (neighbor < 0 || (j > max_j && search_improved)) {
+                if (neighbor < 0) {
                     break;
                 }
-                j++;
                 if (visited.get(neighbor)) {
                     continue;
                 }
                 visited.set(neighbor);
                 float dist;
-                dc->compute_distance(getActualId(level, neighbor), dist);
+                dc->computeDistance(getActualId(level, neighbor), dist);
 //                stats.totalDistComp++;
                 if (results.size() < ef || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
                     results.emplace(neighbor, dist);
-                    search_improved = true;
                     if (results.size() > ef) {
                         results.pop();
                     }
@@ -131,7 +126,7 @@ namespace orangedb {
         visited.reset();
     }
 
-    void HNSW::search_neighbors_optimized(
+    void HNSW::searchNeighborsOptimized(
             DistanceComputer *dc,
             level_t level,
             std::priority_queue<NodeDistCloser> &results,
@@ -185,7 +180,7 @@ namespace orangedb {
                 counter += vget ? 0 : 1;
                 if (counter == 4) {
                     float dis[4];
-                    dc->compute_distance_four_vecs(
+                    dc->computeDistanceFourVecs(
                             getActualId(level, cached_ids[0]),
                             getActualId(level, cached_ids[1]),
                             getActualId(level, cached_ids[2]),
@@ -212,7 +207,7 @@ namespace orangedb {
             // For the left out nodes
             for (int k = 0; k < counter; k++) {
                 float dist;
-                dc->compute_distance(getActualId(level, cached_ids[k]), dist);
+                dc->computeDistance(getActualId(level, cached_ids[k]), dist);
                 stats.totalDistComp++;
                 if (results.size() < ef || dist < results.top().dist) {
                     candidates.emplace(cached_ids[k], dist);
@@ -226,7 +221,7 @@ namespace orangedb {
         visited.reset();
     }
 
-    void HNSW::search_neighbors_more_optimized(
+    void HNSW::searchNeighborsMoreOptimized(
             DistanceComputer *dc,
             level_t level,
             std::priority_queue<NodeDistCloser> &results,
@@ -291,7 +286,7 @@ namespace orangedb {
 
             // calculate the remaining distances
             for (int j = 0; j < nbrs_not_visited.size(); j++) {
-                dc->compute_distance(getActualId(level, nbrs_not_visited[j]), dists[j]);
+                dc->computeDistance(getActualId(level, nbrs_not_visited[j]), dists[j]);
 //                stats.totalDistComp++;
             }
 
@@ -309,7 +304,7 @@ namespace orangedb {
         visited.reset();
     }
 
-    int HNSW::shrink_neighbors(
+    int HNSW::shrinkNeighbors(
             DistanceComputer *dc, std::priority_queue<NodeDistCloser> &resultSet, int max_size, uint8_t level) {
         if (resultSet.size() <= max_size) {
             return 0;
@@ -333,7 +328,7 @@ namespace orangedb {
 //            auto dist_comp = 0;
             for (NodeDistFarther &node_2: result) {
                 float dist_node_node_2;
-                dc->compute_distance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
+                dc->computeDistance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
 //                total_dist_comp++;
 //                stats.totalDistComp++;
 //                stats.totalDistCompInShrink++;
@@ -370,7 +365,7 @@ namespace orangedb {
         return total_dist_comp;
     }
 
-    int HNSW::shrink_neighbors_2(
+    int HNSW::shrinkNeighbors2(
             DistanceComputer *dc, std::priority_queue<NodeDistCloser> &resultSet, int max_size, uint8_t level) {
         int total_dist_comp = 0;
         std::priority_queue<NodeDistFarther> temp;
@@ -393,7 +388,7 @@ namespace orangedb {
 //            auto dist_comp = 0;
             for (NodeDistFarther &node_2: result) {
                 float dist_node_node_2;
-                dc->compute_distance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
+                dc->computeDistance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
 //                total_dist_comp++;
 //                stats.totalDistComp++;
 //                stats.totalDistCompInShrink++;
@@ -431,7 +426,7 @@ namespace orangedb {
     }
 
     // It is assumed that the node is already locked.
-    void HNSW::make_connection(
+    void HNSW::makeConnection(
             DistanceComputer *dc, storage_idx_t src, storage_idx_t dest, float dist_src_dest, level_t level) {
         auto neighbors = storage->get_neighbors(level);
         size_t begin, end;
@@ -456,13 +451,13 @@ namespace orangedb {
         for (size_t i = begin; i < end; i++) {
             storage_idx_t neighbor = neighbors[i];
             float dist_src_nbr;
-            dc->compute_distance(getActualId(level, src), getActualId(level, neighbor), dist_src_nbr);
+            dc->computeDistance(getActualId(level, src), getActualId(level, neighbor), dist_src_nbr);
 //            stats.totalDistComp++;
 //            stats.totalDistCompInShrink++;
 
             resultSet.emplace(neighbor, dist_src_nbr);
         }
-        shrink_neighbors(dc, resultSet, storage->max_neighbors_per_level[level], level);
+        shrinkNeighbors(dc, resultSet, storage->max_neighbors_per_level[level], level);
 //        stats.totalShrinkCalls1++;
 //        spdlog::warn("[make_connection] Total distance computations in shrink: {}", totalDist);
         size_t i = begin;
@@ -487,14 +482,14 @@ namespace orangedb {
                 continue;
             }
             float dist_src_nbr;
-            dc->compute_distance(getActualId(level, src), getActualId(level, neighbor), dist_src_nbr);
+            dc->computeDistance(getActualId(level, src), getActualId(level, neighbor), dist_src_nbr);
 //            stats.totalDistComp++;
 //            stats.totalDistCompInShrink++;
 
             resultSet.emplace(neighbor, dist_src_nbr);
         }
 
-        shrink_neighbors_2(dc, resultSet, storage->max_neighbors_per_level[level], level);
+        shrinkNeighbors2(dc, resultSet, storage->max_neighbors_per_level[level], level);
 //        spdlog::warn("[shrink] Shrinked neighbors for node {}: {}", src, resultSet.size());
         size_t i = begin;
         while (!resultSet.empty()) {
@@ -507,7 +502,7 @@ namespace orangedb {
         }
     }
 
-    void HNSW::add_node_on_level(
+    void HNSW::addNodeOnLevel(
             orangedb::DistanceComputer *dc,
             orangedb::storage_idx_t id,
             orangedb::level_t level,
@@ -518,8 +513,8 @@ namespace orangedb {
         // This is a blocking call.
         std::priority_queue<NodeDistCloser> link_targets;
 //        stats.totalShrinkCalls2++;
-        search_neighbors(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
-        shrink_neighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
+        searchNeighbors(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
+        shrinkNeighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
 //        spdlog::warn("[add_node_on_level] Total distance computations in shrink: {}", totalDist);
 
         neighbors.reserve(link_targets.size());
@@ -530,12 +525,12 @@ namespace orangedb {
             if (neighbor_node.id == id) {
                 continue;
             }
-            make_connection(dc, id, neighbor_node.id, neighbor_node.dist, level);
+            makeConnection(dc, id, neighbor_node.id, neighbor_node.dist, level);
             neighbors.emplace_back(neighbor_node.id, neighbor_node.dist);
         }
     }
 
-    void HNSW::add_node(
+    void HNSW::addNode(
             orangedb::DistanceComputer *dc,
             std::vector<storage_idx_t> node_id,
             orangedb::level_t node_level,
@@ -554,20 +549,20 @@ namespace orangedb {
         storage_idx_t nearest_id = entry_point;
         float nearest_dist;
         std::vector<std::vector<pair<storage_idx_t, float>>> neighbors(node_level + 1);
-        dc->compute_distance(nearest_id, nearest_dist);
+        dc->computeDistance(nearest_id, nearest_dist);
 //        stats.totalDistComp++;
         int level = max_level;
 
         // Update the nearest node
         for (; level > node_level; level--) {
-            search_nearest_on_level(dc, level, nearest_id, nearest_dist);
+            searchNearestOnLevel(dc, level, nearest_id, nearest_dist);
             nearest_id = storage->next_level_ids[level][nearest_id];
         }
 
         // Add the node to the graph
         for (; level >= 0; level--) {
             auto node_level_id = node_id[level];
-            add_node_on_level(dc, node_level_id, level, nearest_id, nearest_dist, visited, neighbors[level]);
+            addNodeOnLevel(dc, node_level_id, level, nearest_id, nearest_dist, visited, neighbors[level]);
             if (level != 0) {
                 nearest_id = storage->next_level_ids[level][nearest_id];
             }
@@ -577,7 +572,7 @@ namespace orangedb {
         for (int i = 0; i < neighbors.size(); i++) {
             for (auto neighbor: neighbors[i]) {
                 omp_set_lock(&locks[getActualId(i, neighbor.first)]);
-                make_connection(dc, neighbor.first, node_id[i], neighbor.second, i);
+                makeConnection(dc, neighbor.first, node_id[i], neighbor.second, i);
                 omp_unset_lock(&locks[getActualId(i, neighbor.first)]);
             }
         }
@@ -602,7 +597,7 @@ namespace orangedb {
         std::vector<std::vector<storage_idx_t>> node_ids(n);
         uint8_t max_level = 0;
         for (int i = 0; i < n; i++) {
-            uint8_t level = random_level();
+            uint8_t level = randomLevel();
             auto id = storage->getFastNextNodeId(level);
             node_ids[i] = id;
             max_level = std::max(max_level, level);
@@ -647,16 +642,17 @@ namespace orangedb {
 #pragma omp parallel
         {
             VisitedTable visited(n);
-            DistanceComputer* dc;
+            DistanceComputer *dc;
             if (use_scalar_quantizer) {
-                dc = new SQDistanceComputer(storage);
+                dc = new SQDistanceComputer(storage->codes, storage->dim, storage->numPoints, storage->vmin,
+                                            storage->vdiff);
             } else {
-                dc = new L2DistanceComputer(storage);
+                dc = new L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
             }
 #pragma omp for schedule(dynamic, MORSEL_SIZE)
             for (int i = 0; i < n; i++) {
-                dc->set_query(storage->data + (i * storage->dim), node_ids[i][0]);
-                add_node(dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
+                dc->setQuery(storage->data + (i * storage->dim));
+                addNode(dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
                 if (i % 100000 == 0) {
                     spdlog::warn("Done with 100000!!");
                 }
@@ -691,28 +687,28 @@ namespace orangedb {
 //        }
 
 
-        auto max_neighbors = storage->max_neighbors_per_level[0];
-        // Print the distribution of neighbors
-        auto size = ceil(max_neighbors / 5.0);
-        std::vector<int> distribution(size);
-        auto neighbors = storage->get_neighbors(0);
-        auto total_nbrs = 0;
-        // Print empty percentage of neighbours
-        for (int i = 0; i < n; i++) {
-            auto node_nbrs = 0;
-            for (int j = 0; j < max_neighbors; j++) {
-                if (neighbors[i * max_neighbors + j] != -1) {
-                    node_nbrs++;
-                }
-            }
-            total_nbrs += node_nbrs;
-            distribution[node_nbrs / 5]++;
-        }
-        for (int i = 0; i < size; i++) {
-            spdlog::warn("Number of nodes within range {}-{}: {}", i * 5, (i * 5 + 5), distribution[i]);
-        }
-        // add logs for total number of neighbors
-        spdlog::warn("Total number of neighbors: {}", total_nbrs);
+//        auto max_neighbors = storage->max_neighbors_per_level[0];
+//        // Print the distribution of neighbors
+//        auto size = ceil(max_neighbors / 5.0);
+//        std::vector<int> distribution(size);
+//        auto neighbors = storage->get_neighbors(0);
+//        auto total_nbrs = 0;
+//        // Print empty percentage of neighbours
+//        for (int i = 0; i < n; i++) {
+//            auto node_nbrs = 0;
+//            for (int j = 0; j < max_neighbors; j++) {
+//                if (neighbors[i * max_neighbors + j] != -1) {
+//                    node_nbrs++;
+//                }
+//            }
+//            total_nbrs += node_nbrs;
+//            distribution[node_nbrs / 5]++;
+//        }
+//        for (int i = 0; i < size; i++) {
+//            spdlog::warn("Number of nodes within range {}-{}: {}", i * 5, (i * 5 + 5), distribution[i]);
+//        }
+//        // add logs for total number of neighbors
+//        spdlog::warn("Total number of neighbors: {}", total_nbrs);
 
         // Destroy locks
         for (int i = 0; i < n; i++) {
@@ -720,8 +716,8 @@ namespace orangedb {
         }
     }
 
-    uint8_t HNSW::random_level() {
-        double f = rand_float();
+    uint8_t HNSW::randomLevel() {
+        double f = randFloat();
         for (int level = 0; level < level_probabs.size(); level++) {
             if (f < level_probabs[level]) {
                 return level;
@@ -732,28 +728,28 @@ namespace orangedb {
         return level_probabs.size() - 1;
     }
 
-    void HNSW::search_v1(
-            const float* query,
+    void HNSW::searchV1(
+            const float *query,
             uint16_t k,
             uint16_t ef_search,
-            VisitedTable& visited,
-            std::priority_queue<NodeDistCloser>& result) {
-        L2DistanceComputer dc(storage);
-        dc.set_query(query, 0);
+            VisitedTable &visited,
+            std::priority_queue<NodeDistCloser> &result) {
+        L2DistanceComputer dc(storage->data, storage->dim, storage->numPoints);
+        dc.setQuery(query);
         int ef = std::max(k, ef_search);
         storage_idx_t nearest_id = entry_point;
         float nearest_dist;
-        dc.compute_distance(nearest_id, nearest_dist);
+        dc.computeDistance(nearest_id, nearest_dist);
         int level = max_level;
         // Update the nearest node
         for (; level > 0; level--) {
-            search_nearest_on_level(&dc, level, nearest_id, nearest_dist);
+            searchNearestOnLevel(&dc, level, nearest_id, nearest_dist);
             nearest_id = storage->next_level_ids[level][nearest_id];
         }
-        search_neighbors(&dc, level, result, nearest_id, nearest_dist, visited, ef);
+        searchNeighbors(&dc, level, result, nearest_id, nearest_dist, visited, ef);
     }
 
-    void HNSW::print_stats() {
+    void HNSW::printStats() {
         spdlog::warn("Total distance computations: {}", stats.totalDistComp);
         spdlog::warn("Total distance computations in shrink: {}", stats.totalDistCompInShrink);
         spdlog::warn("Total shrink calls 1: {}", stats.totalShrinkCalls1);

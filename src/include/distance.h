@@ -2,79 +2,81 @@
 
 #include <unistd.h>
 #include <storage.h>
+
 #ifdef __AVX2__
 #include <x86intrin.h>
 #endif
+
 #include <macros.h>
 #include <unordered_set>
 #include <prefetch.h>
 #include <scalar_quantizer.h>
+#include <assert.h>
 
 using namespace std;
 
 namespace orangedb {
     struct DistanceComputer {
-        virtual void compute_distance(storage_idx_t id, float& result) = 0;
-        virtual void compute_distance(storage_idx_t src, storage_idx_t dest, float& result) = 0;
-        virtual void compute_distance_four_vecs(
-                const storage_idx_t y0,
-                const storage_idx_t y1,
-                const storage_idx_t y2,
-                const storage_idx_t y3,
-                float& res0,
-                float& res1,
-                float& res2,
-                float& res3) = 0;
-        virtual void compute_approx_dist(storage_idx_t src, storage_idx_t dest, float& result) = 0;
-        virtual void set_query(const float* query, const storage_idx_t query_id) = 0;
-        virtual storage_idx_t get_query_id() = 0;
+        virtual void computeDistance(storage_idx_t id, float &result) = 0;
+
+        virtual void computeDistance(storage_idx_t src, storage_idx_t dest, float &result) = 0;
+
+        virtual void computeDistanceFourVecs(
+                storage_idx_t y0,
+                storage_idx_t y1,
+                storage_idx_t y2,
+                storage_idx_t y3,
+                float &res0,
+                float &res1,
+                float &res2,
+                float &res3) = 0;
+
+        virtual void setQuery(const float *query) = 0;
+
+        virtual std::unique_ptr<DistanceComputer> clone() = 0;
+
         virtual ~DistanceComputer() = default;
     };
 
     struct L2DistanceComputer : public DistanceComputer {
-        explicit L2DistanceComputer(const Storage* storage): storage(storage), query(nullptr), query_id(-1) {
+        explicit L2DistanceComputer(const float *data, int dim, int n) : data(data), dim(dim), n(n), query(nullptr) {}
+
+        inline void computeDistance(storage_idx_t id, float &result) override {
+            assert(id < n);
+            const float *y = data + (id * dim);
+            l2_sqr_dist(query, y, dim, result);
         }
 
-        void compute_distance(storage_idx_t id, float& result) override {
-            const float* y = storage->data + (id * storage->dim);
-            l2_sqr_dist(query, y, storage->dim, result);
+        inline void computeDistance(storage_idx_t src, storage_idx_t dest, float &result) override {
+            assert(src < n && dest < n);
+            const float *x = data + (src * dim);
+            const float *y = data + (dest * dim);
+            l2_sqr_dist(x, y, dim, result);
         }
 
-        void compute_distance(storage_idx_t src, storage_idx_t dest, float& result) override {
-            const float *x = storage->data + (src * storage->dim);
-            const float *y = storage->data + (dest * storage->dim);
-            l2_sqr_dist(x, y, storage->dim, result);
-        }
-
-        void compute_distance_four_vecs(
+        inline void computeDistanceFourVecs(
                 const storage_idx_t y0,
                 const storage_idx_t y1,
                 const storage_idx_t y2,
                 const storage_idx_t y3,
-                float& res0,
-                float& res1,
-                float& res2,
-                float& res3) override {
-            const float *y0_ = storage->data + (y0 * storage->dim);
-            const float *y1_ = storage->data + (y1 * storage->dim);
-            const float *y2_ = storage->data + (y2 * storage->dim);
-            const float *y3_ = storage->data + (y3 * storage->dim);
-            fvec_L2sqr_batch_4(query, y0_, y1_, y2_, y3_, storage->dim, res0, res1, res2, res3);
+                float &res0,
+                float &res1,
+                float &res2,
+                float &res3) override {
+            assert(y0 < n && y1 < n && y2 < n && y3 < n);
+            const float *y0_ = data + (y0 * dim);
+            const float *y1_ = data + (y1 * dim);
+            const float *y2_ = data + (y2 * dim);
+            const float *y3_ = data + (y3 * dim);
+            fvec_L2sqr_batch_4(query, y0_, y1_, y2_, y3_, dim, res0, res1, res2, res3);
         }
 
-        void compute_approx_dist(storage_idx_t src, storage_idx_t dest, float& result) override {
-            const float *x = storage->data + (src * storage->dim);
-            const float *y = storage->data + (dest * storage->dim);
-            l1_dist(x, y, storage->dim, result);
-        }
-
-        void set_query(const float* query, const storage_idx_t query_id) {
+        inline void setQuery(const float *query) override {
             this->query = query;
-            this->query_id = query_id;
         }
 
-        storage_idx_t get_query_id() override {
-            return query_id;
+        inline std::unique_ptr<DistanceComputer> clone() override {
+            return std::make_unique<L2DistanceComputer>(data, dim, n);
         }
 
     private:
@@ -145,7 +147,7 @@ namespace orangedb {
         }
 #else
         PRAGMA_IMPRECISE_FUNCTION_BEGIN
-        inline void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
+        inline void l2_sqr_dist(const float *__restrict x, const float *__restrict y, size_t d, float &result) {
             float res = 0;
             PRAGMA_IMPRECISE_LOOP
             for (size_t i = 0; i < d; i++) {
@@ -154,31 +156,27 @@ namespace orangedb {
             }
             result = res;
         }
+
         PRAGMA_IMPRECISE_FUNCTION_END
 
-        inline void l1_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
+        inline void l1_dist(const float *__restrict x, const float *__restrict y, size_t d, float &result) {
             // If AVX2 is not available, the cost of l1 distance is higher than l2 distance
             l2_sqr_dist(x, y, d, result);
         }
+
 #endif
         PRAGMA_IMPRECISE_FUNCTION_BEGIN
         inline void fvec_L2sqr_batch_4(
-                const float* __restrict x,
-                const float* __restrict y0,
-                const float* __restrict y1,
-                const float* __restrict y2,
-                const float* __restrict y3,
+                const float *__restrict x,
+                const float *__restrict y0,
+                const float *__restrict y1,
+                const float *__restrict y2,
+                const float *__restrict y3,
                 const size_t d,
-                float& dis0,
-                float& dis1,
-                float& dis2,
-                float& dis3) {
-//            for (int i = 0; i < (d - 1); i += 8) {
-//                prefetch_L1(y0 + 8 * (i + 1));
-//                prefetch_L1(y1 + 8 * (i + 1));
-//                prefetch_L1(y2 + 8 * (i + 1));
-//                prefetch_L1(y3 + 8 * (i + 1));
-//            }
+                float &dis0,
+                float &dis1,
+                float &dis2,
+                float &dis3) {
             float d0 = 0;
             float d1 = 0;
             float d2 = 0;
@@ -200,47 +198,52 @@ namespace orangedb {
             dis2 = d2;
             dis3 = d3;
         }
+
         PRAGMA_IMPRECISE_FUNCTION_END
 
-// TODO: add more distance functions with simd support
     private:
-        const float* query;
-        int64_t query_id;
-        const Storage* storage;
+        const float *data;
+        int dim;
+        int n;
+
+        const float *query;
     };
 
     struct SQDistanceComputer : public DistanceComputer {
-        explicit SQDistanceComputer(const Storage* storage) : storage(storage), query(nullptr), query_id(-1) {};
-        void set_query(const float* query, const storage_idx_t query_id) {
-            this->query = query;
-            this->query_id = query_id;
-        }
-        storage_idx_t get_query_id() override {
-            return query_id;
-        }
-        void compute_distance(storage_idx_t id, float& result) override {
-            const uint8_t* y = storage->codes + (id * storage->dim);
-            l2_sqr_dist(y, storage->dim, result);
+        explicit SQDistanceComputer(const uint8_t *data, int dim, int n, const float *vmin, const float *vdiff)
+                : data(data), dim(dim), n(n), vmin(vmin), vdiff(vdiff),
+                  query(nullptr) {};
+
+        void computeDistance(storage_idx_t id, float &result) override {
+            const uint8_t *y = data + (id * dim);
+            l2_sqr_dist(y, dim, result);
         }
 
-        void compute_distance(storage_idx_t src, storage_idx_t dest, float& result) override {
-            const uint8_t* x = storage->codes + (src * storage->dim);
-            const uint8_t* y = storage->codes + (dest * storage->dim);
-            l2_sqr_dist_2(x, y, storage->dim, result);
+        void computeDistance(storage_idx_t src, storage_idx_t dest, float &result) override {
+            const uint8_t *x = data + (src * dim);
+            const uint8_t *y = data + (dest * dim);
+            l2_sqr_dist_2(x, y, dim, result);
         }
 
-        void compute_distance_four_vecs(
+        void computeDistanceFourVecs(
                 const storage_idx_t y0,
                 const storage_idx_t y1,
                 const storage_idx_t y2,
                 const storage_idx_t y3,
-                float& res0,
-                float& res1,
-                float& res2,
-                float& res3) override {
+                float &res0,
+                float &res1,
+                float &res2,
+                float &res3) override {
+            // throw error
+            std::runtime_error("Not implemented");
         }
 
-        void compute_approx_dist(storage_idx_t src, storage_idx_t dest, float& result) override {
+        void setQuery(const float *query) override {
+            this->query = query;
+        }
+
+        std::unique_ptr<DistanceComputer> clone() override {
+            return std::make_unique<SQDistanceComputer>(data, dim, n, vmin, vdiff);
         }
 
 #ifdef __AVX2__
@@ -259,9 +262,9 @@ namespace orangedb {
             sum = _mm256_loadu_ps(unpack);
 
             for (unsigned i = 0; i < aligned_size; i += 16, l += 16) {
-                auto yvec = reconstruct_8_components(codes, i, storage->vmin, storage->vdiff);
+                auto yvec = reconstruct_8_components(codes, i, vmin, vdiff);
                 AVX_L2SQR_1(l, yvec, sum, l0);
-                auto yvec_next_8 = reconstruct_8_components(codes, i + 8, storage->vmin, storage->vdiff);
+                auto yvec_next_8 = reconstruct_8_components(codes, i + 8, vmin, vdiff);
                 AVX_L2SQR_1(l + 8, yvec_next_8, sum, l1);
             }
             _mm256_storeu_ps(unpack, sum);
@@ -286,11 +289,11 @@ namespace orangedb {
             sum = _mm256_loadu_ps(unpack);
 
             for (unsigned i = 0; i < aligned_size; i += 16, l += 16) {
-                auto xvec = reconstruct_8_components(xcodes, i, storage->vmin, storage->vdiff);
-                auto yvec = reconstruct_8_components(ycodes, i, storage->vmin, storage->vdiff);
+                auto xvec = reconstruct_8_components(xcodes, i, vmin, vdiff);
+                auto yvec = reconstruct_8_components(ycodes, i, vmin, vdiff);
                 AVX_L2SQR_2(xvec, yvec, sum, l0);
-                auto xvec_next_8 = reconstruct_8_components(xcodes, i + 8, storage->vmin, storage->vdiff);
-                auto yvec_next_8 = reconstruct_8_components(ycodes, i + 8, storage->vmin, storage->vdiff);
+                auto xvec_next_8 = reconstruct_8_components(xcodes, i + 8, vmin, vdiff);
+                auto yvec_next_8 = reconstruct_8_components(ycodes, i + 8, vmin, vdiff);
                 AVX_L2SQR_2(xvec_next_8, yvec_next_8, sum, l1);
             }
             _mm256_storeu_ps(unpack, sum);
@@ -323,10 +326,8 @@ namespace orangedb {
 #else
         // Auto vectorization doesn't work for this function. Maybe simplify the function to make it work
         PRAGMA_IMPRECISE_FUNCTION_BEGIN
-         inline void l2_sqr_dist(const uint8_t* codes, size_t d, float& result) {
+        inline void l2_sqr_dist(const uint8_t *codes, size_t d, float &result) {
             float res = 0;
-            float* vmin = storage->vmin;
-            float* vdiff = storage->vdiff;
             PRAGMA_IMPRECISE_LOOP
             for (size_t i = 0; i < d; i++) {
                 float decoded_val = vmin[i] + (codes[i] + 0.5f) / 255.0f * vdiff[i];
@@ -335,14 +336,13 @@ namespace orangedb {
             }
             result = res;
         }
+
         PRAGMA_IMPRECISE_FUNCTION_END
 
         // Auto vectorization doesn't work for this function. Maybe simplify the function to make it work
         PRAGMA_IMPRECISE_FUNCTION_BEGIN
-        inline void l2_sqr_dist_2(const uint8_t* xcodes, const uint8_t* ycodes, size_t d, float& result) {
+        inline void l2_sqr_dist_2(const uint8_t *xcodes, const uint8_t *ycodes, size_t d, float &result) {
             float res = 0;
-            float* vmin = storage->vmin;
-            float* vdiff = storage->vdiff;
             PRAGMA_IMPRECISE_LOOP
             for (size_t i = 0; i < d; i++) {
                 float decoded_val_x = vmin[i] + (xcodes[i] + 0.5f) / 255.0f * vdiff[i];
@@ -352,12 +352,17 @@ namespace orangedb {
             }
             result = res;
         }
+
         PRAGMA_IMPRECISE_FUNCTION_END
 #endif
 
     private:
-        const Storage* storage;
-        const float* query;
-        int64_t query_id;
+        const uint8_t *data;
+        int dim;
+        int n;
+        const float *vmin;
+        const float *vdiff;
+
+        const float *query;
     };
 } // namespace orangedb

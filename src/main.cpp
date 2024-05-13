@@ -11,6 +11,8 @@
 #include <assert.h>    // assert
 #include <prefetch.h>
 #include "spdlog/spdlog.h"
+#include "include/clustering.h"
+#include <set>
 
 using namespace orangedb;
 
@@ -646,7 +648,7 @@ void query_graph(
     auto recall = 0.0;
     for (size_t i = 0; i < queryNumVectors; i++) {
         std::priority_queue<HNSW::NodeDistCloser> resultSet;
-        hnsw.search_v1(queryVecs + (i * queryDimension), k, ef_search, visited, resultSet);
+        hnsw.searchV1(queryVecs + (i * queryDimension), k, ef_search, visited, resultSet);
         auto gt = gtVecs + i * 100;
         std::vector<HNSW::NodeDistCloser> res;
         while (!resultSet.empty()) {
@@ -719,7 +721,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     omp_set_num_threads(thread_count);
     HNSW hnsw(M, efConstruction, baseDimension, explore_factor, alpha, beam_size, beam_thrsh, use_scalar_quantizer);
     build_graph(hnsw, baseVecs, num_vectors);
-    hnsw.print_stats();
+    hnsw.printStats();
     // ./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -efConstruction 128 -M 64 -efSearch 150 -nThreads 32 -exploreFactor 1
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 }
@@ -756,16 +758,16 @@ void benchmark_scalar_quantizer() {
 //    }
 //    printf("Error: %f\n", (error / baseNumVectors));
 
-    L2DistanceComputer normaldc(&storage);
-    SQDistanceComputer sqdc(&storage);
-    normaldc.set_query(baseVecs, 0);
-    sqdc.set_query(baseVecs, 0);
+    L2DistanceComputer normaldc(storage.data, baseDimension, baseNumVectors);
+    SQDistanceComputer sqdc(storage.codes, baseDimension, baseNumVectors, storage.vmin, storage.vdiff);
+    normaldc.setQuery(baseVecs);
+    sqdc.setQuery(baseVecs);
 
     auto error = 0.0;
     for (int i = 1; i < baseNumVectors; i++) {
         float actual, fake;
-        normaldc.compute_distance(4, i, actual);
-        sqdc.compute_distance(4, i, fake);
+        normaldc.computeDistance(4, i, actual);
+        sqdc.computeDistance(4, i, fake);
         printf("Actual: %f, Fake: %f\n", actual, fake);
         error += fake - actual;
     }
@@ -785,12 +787,137 @@ void benchmark_quantizer() {
     printf("Dequantized: %f\n", dequantized_v2);
 }
 
+void benchmark_explore_data() {
+    FILE *f = fopen("/Users/gauravsehgal/work/orangedb/data/contest-data-release-1m.bin", "r");
+    int d = 102;
+    int n = 1000000;
+    float *data = new float[d * n];
+    fread(data, sizeof(float), d * n, f);
+    fclose(f);
+
+    // print vectors top 10
+    for (int i = 0; i < 10; i++) {
+        for (int j = 0; j < d; j++) {
+            printf("%f ", data[i * d + j]);
+        }
+        printf("\n");
+    }
+}
+
+// Benchmark clustering
+void benchmarkClustering() {
+    auto basePath = "/Users/gauravsehgal/work/orangedb/data/gist_50k";
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    auto groundTruthPath = fmt::format("{}/groundtruth.ivecs", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = Utils::fvecs_read(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    size_t gtDimension, gtNumVectors;
+    int *gtVecs = Utils::ivecs_read(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
+
+    auto numCentroids = 10;
+    auto nIter = 30;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    Clustering clustering(baseDimension, numCentroids, nIter, 3000, 5000);
+    clustering.initCentroids(baseNumVectors, baseVecs);
+    clustering.train(baseNumVectors, baseVecs);
+    auto end = std::chrono::high_resolution_clock::now();
+
+    int32_t *assign = new int32_t[baseNumVectors];
+    clustering.assignCentroids(baseVecs, baseNumVectors, assign);
+
+    // Build hassign for each centroid
+    int *hassign = new int[numCentroids];
+    memset(hassign, 0, numCentroids * sizeof(int));
+    for (int i = 0; i < baseNumVectors; i++) {
+        hassign[assign[i]]++;
+    }
+    for (int i = 0; i < numCentroids; i++) {
+        printf("Centroid %d: %d\n", i, hassign[i]);
+    }
+
+    std::vector<std::unique_ptr<HNSW>> indexes;
+    std::vector<float*> datePerCentroid;
+    std::vector<int> idx;
+    for (int i = 0; i < numCentroids; i++) {
+        auto hnsw = std::make_unique<HNSW>(64, 200, baseDimension, 1.0, 1.0, 0, 0, false);
+        indexes.push_back(std::move(hnsw));
+        datePerCentroid.push_back(new float[hassign[i] * baseDimension]);
+        idx.push_back(0);
+    }
+
+    std::vector<std::vector<int>> actualIds = std::vector<std::vector<int>>(numCentroids);
+    for (int i = 0; i < baseNumVectors; i++) {
+        actualIds[assign[i]].push_back(i);
+    }
+
+    // Assign data to each centroid
+    for (int i = 0; i < baseNumVectors; i++) {
+        auto centroid = assign[i];
+        memcpy(datePerCentroid[centroid] + (idx[centroid]++ * baseDimension), baseVecs + (i * baseDimension),
+               baseDimension * sizeof(float));
+    }
+
+    // Build index for each centroid
+    for (int i = 0; i < numCentroids; i++) {
+        indexes[i]->build(datePerCentroid[i], hassign[i]);
+    }
+
+    // search
+    // First find top 3 centroids for each query
+    auto efSearch = 150;
+    auto k = 100;
+    // TODO: Do search only in the assigned centroid
+    auto recall = 0;
+    int closeC = 5;
+    // q
+    // c0, c1, c2, c3, c4, c5
+    // [c2, c4]
+    // <q.c2> ~= <q.c4>
+
+    auto visited = VisitedTable(baseNumVectors);
+    L2DistanceComputer dc(clustering.centroids.data(), baseDimension, numCentroids);
+    std::vector<int> closestCentroids(closeC);
+    IndexOneNN indexOne(&dc, baseDimension, numCentroids);
+    auto startTime = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < queryNumVectors; i++) {
+        std::vector<int> results;
+        indexOne.knn(closeC, queryVecs + (i * queryDimension), closestCentroids.data());
+        // TODO: Choose between all five or not using some heuristics
+        for (auto j : closestCentroids) {
+            std::priority_queue<HNSW::NodeDistCloser> resultSet;
+            indexes[j]->searchV1(queryVecs + (i * queryDimension), k, efSearch, visited, resultSet);
+            while (!resultSet.empty()) {
+                results.push_back(actualIds[j][resultSet.top().id]);
+                resultSet.pop();
+            }
+        }
+        auto gt = gtVecs + i * gtDimension;
+        for (auto res: results) {
+            if (std::find(gt, gt + gtDimension, res) != (gt + gtDimension)) {
+                recall++;
+            }
+        }
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    std::cout << "Query time: " << duration << " ms" << std::endl;
+    std::cout << "Recall: " << recall / queryNumVectors << std::endl;
+}
+
 int main(int argc, char **argv) {
-    benchmark_hnsw_queries(argc, argv);
+//    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();
 //    benchmark_scalar_quantizer();
 //    benchmark_quantizer();
+//    benchmark_explore_data();
+    benchmarkClustering();
     return 0;
 }

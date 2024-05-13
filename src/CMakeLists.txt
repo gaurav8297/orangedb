@@ -5,7 +5,6 @@ add_library(orangedb
         hnsw.cpp
         utils.cpp
         clustering.cpp
-        index_knn.cpp
         scalar_quantizer.cpp)
 
 set(ALL_OBJECT_FILES
