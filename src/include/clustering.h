@@ -24,7 +24,7 @@ namespace orangedb {
 
         inline void search(int n, const float *queries, float *distances, int32_t *resultIds);
 
-        void knn(int k, const float *queries, int *resultIds);
+        void knn(int k, const float *queries, float *distances, int *resultIds);
 
     private:
         DistanceComputer *dc;

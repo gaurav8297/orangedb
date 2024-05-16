@@ -3,16 +3,14 @@
 #include "utils.h"
 #include "scalar_quantizer.h"
 #include "spdlog/fmt/fmt.h"
-#include <chrono>
+
 #ifdef __AVX2__
 #include <x86intrin.h>
 #endif
+
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
-#include <prefetch.h>
-#include "spdlog/spdlog.h"
 #include "include/clustering.h"
-#include <set>
 
 using namespace orangedb;
 
@@ -137,7 +135,8 @@ inline void l1_dist(const float* __restrict x, const float* __restrict y, size_t
     result = unpack[0] + unpack[1] + unpack[2] + unpack[3] + unpack[4] + unpack[5] + unpack[6] + unpack[7];
 }
 #else
-void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d, float& result) {
+
+void l2_sqr_dist(const float *__restrict x, const float *__restrict y, size_t d, float &result) {
     float res = 0;
     for (size_t i = 0; i < d; i++) {
         float tmp = x[i] - y[i];
@@ -145,20 +144,22 @@ void l2_sqr_dist(const float* __restrict x, const float* __restrict y, size_t d,
     }
     result = res;
 }
+
 #endif
 
 PRAGMA_IMPRECISE_FUNCTION_BEGIN
+
 inline void fvec_L2sqr_batch_4(
-        const float* __restrict x,
-        const float* __restrict y0,
-        const float* __restrict y1,
-        const float* __restrict y2,
-        const float* __restrict y3,
+        const float *__restrict x,
+        const float *__restrict y0,
+        const float *__restrict y1,
+        const float *__restrict y2,
+        const float *__restrict y3,
         const size_t d,
-        float& dis0,
-        float& dis1,
-        float& dis2,
-        float& dis3) {
+        float &dis0,
+        float &dis1,
+        float &dis2,
+        float &dis3) {
     float d0 = 0;
     float d1 = 0;
     float d2 = 0;
@@ -180,21 +181,23 @@ inline void fvec_L2sqr_batch_4(
     dis2 = d2;
     dis3 = d3;
 }
+
 PRAGMA_IMPRECISE_FUNCTION_END
 
 
 PRAGMA_IMPRECISE_FUNCTION_BEGIN
+
 inline void fvec_L1_batch_4(
-        const float* __restrict x,
-        const float* __restrict y0,
-        const float* __restrict y1,
-        const float* __restrict y2,
-        const float* __restrict y3,
+        const float *__restrict x,
+        const float *__restrict y0,
+        const float *__restrict y1,
+        const float *__restrict y2,
+        const float *__restrict y3,
         const size_t d,
-        float& dis0,
-        float& dis1,
-        float& dis2,
-        float& dis3) {
+        float &dis0,
+        float &dis1,
+        float &dis2,
+        float &dis3) {
     float d0 = 0;
     float d1 = 0;
     float d2 = 0;
@@ -216,28 +219,30 @@ inline void fvec_L1_batch_4(
     dis2 = d2;
     dis3 = d3;
 }
+
 PRAGMA_IMPRECISE_FUNCTION_END
 
 PRAGMA_IMPRECISE_FUNCTION_BEGIN
+
 inline void fvec_L2sqr_batch_8(
-        const float* __restrict x,
-        const float* __restrict y0,
-        const float* __restrict y1,
-        const float* __restrict y2,
-        const float* __restrict y3,
-        const float* __restrict y4,
-        const float* __restrict y5,
-        const float* __restrict y6,
-        const float* __restrict y7,
+        const float *__restrict x,
+        const float *__restrict y0,
+        const float *__restrict y1,
+        const float *__restrict y2,
+        const float *__restrict y3,
+        const float *__restrict y4,
+        const float *__restrict y5,
+        const float *__restrict y6,
+        const float *__restrict y7,
         const size_t d,
-        float& dis0,
-        float& dis1,
-        float& dis2,
-        float& dis3,
-        float& dis4,
-        float& dis5,
-        float& dis6,
-        float& dis7) {
+        float &dis0,
+        float &dis1,
+        float &dis2,
+        float &dis3,
+        float &dis4,
+        float &dis5,
+        float &dis6,
+        float &dis7) {
     float d0 = 0;
     float d1 = 0;
     float d2 = 0;
@@ -274,6 +279,7 @@ inline void fvec_L2sqr_batch_8(
     dis6 = d6;
     dis7 = d7;
 }
+
 PRAGMA_IMPRECISE_FUNCTION_END
 
 #ifdef __AVX2__
@@ -344,10 +350,10 @@ inline void fvec_L2sqr_batch_4_vec(
 #endif
 
 
-int64_t exp_l1_sqr_dist(const float* baseVecs, size_t baseDimension, size_t baseNumVectors) {
+int64_t exp_l1_sqr_dist(const float *baseVecs, size_t baseDimension, size_t baseNumVectors) {
     auto start = std::chrono::high_resolution_clock::now();
     float res = 0;
-    const float* query = baseVecs;
+    const float *query = baseVecs;
     for (size_t i = 1; i < baseNumVectors - 4; i += 4) {
         float res0, res1, res2, res3;
 //        fvec_L2sqr_batch_4_vec(
@@ -363,9 +369,9 @@ int64_t exp_l1_sqr_dist(const float* baseVecs, size_t baseDimension, size_t base
 //                res3);
 
         l2_sqr_dist(query, baseVecs + (i * baseDimension), baseDimension, res0);
-        l2_sqr_dist(query, baseVecs + ((i+1) * baseDimension), baseDimension, res1);
-        l2_sqr_dist(query, baseVecs + ((i+2) * baseDimension), baseDimension, res2);
-        l2_sqr_dist(query, baseVecs + ((i+3) * baseDimension), baseDimension, res3);
+        l2_sqr_dist(query, baseVecs + ((i + 1) * baseDimension), baseDimension, res1);
+        l2_sqr_dist(query, baseVecs + ((i + 2) * baseDimension), baseDimension, res2);
+        l2_sqr_dist(query, baseVecs + ((i + 3) * baseDimension), baseDimension, res3);
         res += (res0 + res1 + res2 + res3);
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -375,10 +381,10 @@ int64_t exp_l1_sqr_dist(const float* baseVecs, size_t baseDimension, size_t base
 }
 
 
-int64_t exp_l2_sqr_dist(const float* baseVecs, size_t baseDimension, size_t baseNumVectors) {
+int64_t exp_l2_sqr_dist(const float *baseVecs, size_t baseDimension, size_t baseNumVectors) {
     auto start = std::chrono::high_resolution_clock::now();
     float res = 0;
-    const float* query = baseVecs;
+    const float *query = baseVecs;
     for (size_t i = 1; i < 200000 - 4; i += 4) {
         float res0, res1, res2, res3;
 //        fvec_L2sqr_batch_4_vec(
@@ -394,9 +400,9 @@ int64_t exp_l2_sqr_dist(const float* baseVecs, size_t baseDimension, size_t base
 //                res3);
 
         l2_sqr_dist(query, baseVecs + (i * baseDimension), baseDimension, res0);
-        l2_sqr_dist(query, baseVecs + ((i+1) * baseDimension), baseDimension, res1);
-        l2_sqr_dist(query, baseVecs + ((i+2) * baseDimension), baseDimension, res2);
-        l2_sqr_dist(query, baseVecs + ((i+3) * baseDimension), baseDimension, res3);
+        l2_sqr_dist(query, baseVecs + ((i + 1) * baseDimension), baseDimension, res1);
+        l2_sqr_dist(query, baseVecs + ((i + 2) * baseDimension), baseDimension, res2);
+        l2_sqr_dist(query, baseVecs + ((i + 3) * baseDimension), baseDimension, res3);
         res += (res0 + res1 + res2 + res3);
     }
     auto end = std::chrono::high_resolution_clock::now();
@@ -405,18 +411,18 @@ int64_t exp_l2_sqr_dist(const float* baseVecs, size_t baseDimension, size_t base
     return duration;
 }
 
-int64_t exp_l2_sqr_dist_2(const float* baseVecs, size_t baseDimension, size_t baseNumVectors) {
+int64_t exp_l2_sqr_dist_2(const float *baseVecs, size_t baseDimension, size_t baseNumVectors) {
     auto start = std::chrono::high_resolution_clock::now();
     float res = 0;
-    const float* query = baseVecs;
+    const float *query = baseVecs;
     for (size_t i = 1; i < baseNumVectors - 4; i += 4) {
         float res0, res1, res2, res3;
         fvec_L2sqr_batch_4(
                 query,
                 baseVecs + (i * baseDimension),
-                baseVecs + ((i+1) * baseDimension),
-                baseVecs + ((i+2) * baseDimension),
-                baseVecs + ((i+3) * baseDimension),
+                baseVecs + ((i + 1) * baseDimension),
+                baseVecs + ((i + 2) * baseDimension),
+                baseVecs + ((i + 3) * baseDimension),
                 baseDimension,
                 res0,
                 res1,
@@ -439,7 +445,7 @@ int64_t exp_l2_sqr_dist_2(const float* baseVecs, size_t baseDimension, size_t ba
 // - Record the number of vector comparisons
 
 void random_vector_access_exp(
-        float* baseVecs,
+        float *baseVecs,
         size_t baseDimension,
         size_t baseNumVectors,
         size_t nTimes,
@@ -466,11 +472,11 @@ void random_vector_access_exp(
     auto start = std::chrono::high_resolution_clock::now();
 #pragma omp parallel
     {
-        float* query = baseVecs + (distribution(gen) * baseDimension);
+        float *query = baseVecs + (distribution(gen) * baseDimension);
         float result = 0;
         int j = 0;
 #pragma omp for
-        for (size_t i = 0; i < nTimes; i+=4) {
+        for (size_t i = 0; i < nTimes; i += 4) {
             if (j == resetQueryAfter) {
                 j = 0;
                 query = baseVecs + (distribution(gen) * baseDimension);
@@ -569,7 +575,7 @@ void benchmark_random_dist_comp() {
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
+    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
     omp_set_num_threads(32);
 
@@ -581,11 +587,11 @@ void benchmark_simd_distance() {
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
+    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
 
     int64_t duration = 0;
-    for (int i =0; i < 100; i++) {
+    for (int i = 0; i < 100; i++) {
         duration += exp_l1_sqr_dist(baseVecs, baseDimension, baseNumVectors);
     }
     int64_t avg_dur = duration;
@@ -600,7 +606,7 @@ void benchmark_simd_distance() {
 }
 
 
-void gen_random_vector(int size, std::vector<float>& random_floats) {
+void gen_random_vector(int size, std::vector<float> &random_floats) {
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_real_distribution<float> dis(0.0, 1.0);
@@ -626,7 +632,7 @@ void benchmark_n_simd(int64_t n) {
     printf("Duration: %ld ms\n", duration);
 }
 
-void build_graph(HNSW& hnsw, const float* baseVecs, size_t baseNumVectors) {
+void build_graph(HNSW &hnsw, const float *baseVecs, size_t baseNumVectors) {
     auto start = std::chrono::high_resolution_clock::now();
     hnsw.build(baseVecs, baseNumVectors);
     auto end = std::chrono::high_resolution_clock::now();
@@ -635,11 +641,11 @@ void build_graph(HNSW& hnsw, const float* baseVecs, size_t baseNumVectors) {
 }
 
 void query_graph(
-        HNSW& hnsw,
-        const float* queryVecs,
+        HNSW &hnsw,
+        const float *queryVecs,
         size_t queryNumVectors,
         size_t queryDimension,
-        const int* gtVecs,
+        const int *gtVecs,
         size_t k,
         size_t ef_search,
         size_t baseNumVectors) {
@@ -712,7 +718,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto groundTruthPath = fmt::format("{}/groundtruth.ivecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
+    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = Utils::fvecs_read(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     size_t gtDimension, gtNumVectors;
@@ -731,12 +737,12 @@ void benchmark_scalar_quantizer() {
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
-    uint8_t* codes;
-    Utils::alloc_aligned((void**)&codes, baseNumVectors * baseDimension, 64);
+    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    uint8_t *codes;
+    Utils::alloc_aligned((void **) &codes, baseNumVectors * baseDimension, 64);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
-    float* vmin;
-    float* vdiff;
+    float *vmin;
+    float *vdiff;
     ScalarQuantizer sq(baseDimension, vmin, vdiff);
     sq.train(baseNumVectors, baseVecs);
     sq.compute_codes(baseVecs, codes, baseNumVectors);
@@ -804,25 +810,52 @@ void benchmark_explore_data() {
     }
 }
 
+int findCloseCentroids(float *distances, int *centroids, int size, int *closeCentroids, float threshold) {
+    float closestDist = distances[0];
+    closeCentroids[0] = centroids[0];
+//    printf("Closest centroid: %d, Distance 1: %f, Distance 2: %f, Distance 3: %f\n", closeCentroids[0],
+//           distances[1] - closestDist, distances[2] - closestDist, distances[3] - closestDist);
+
+    // Find the closest centroid
+    int n = 1;
+    for (int i = 1; i < size; i++) {
+        if (distances[i] - closestDist < threshold) {
+            closeCentroids[n++] = centroids[i];
+        }
+    }
+    return n;
+}
+
 // Benchmark clustering
-void benchmarkClustering() {
-    auto basePath = "/Users/gauravsehgal/work/orangedb/data/gist_50k";
+void benchmarkClustering(int argc, char **argv) {
+    InputParser input(argc, argv);
+    const std::string &basePath = input.getCmdOption("-basePath");
+    auto nCentroids = stoi(input.getCmdOption("-nCentroids"));
+    auto nIter = stoi(input.getCmdOption("-nIter"));
+    auto minCentroidSize = stoi(input.getCmdOption("-minCentroidSize"));
+    auto maxCentroidSize = stoi(input.getCmdOption("-maxCentroidSize"));
+    auto M = stoi(input.getCmdOption("-M"));
+    auto K = stoi(input.getCmdOption("-K"));
+    auto efConstruction = stoi(input.getCmdOption("-efConstruction"));
+    auto efSearch = stoi(input.getCmdOption("-efSearch"));
+    auto nThreads = stoi(input.getCmdOption("-nThreads"));
+    auto minCentroids = stoi(input.getCmdOption("-minCentroids"));
+    auto centroidThreshold = stof(input.getCmdOption("-centroidThreshold"));
+    omp_set_num_threads(nThreads);
+
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
     auto groundTruthPath = fmt::format("{}/groundtruth.ivecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float* baseVecs = Utils::fvecs_read(baseVectorPath.c_str(),&baseDimension,&baseNumVectors);
+    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = Utils::fvecs_read(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     size_t gtDimension, gtNumVectors;
     int *gtVecs = Utils::ivecs_read(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
 
-    auto numCentroids = 10;
-    auto nIter = 30;
-
     auto start = std::chrono::high_resolution_clock::now();
-    Clustering clustering(baseDimension, numCentroids, nIter, 3000, 5000);
+    Clustering clustering(baseDimension, nCentroids, nIter, minCentroidSize, maxCentroidSize);
     clustering.initCentroids(baseNumVectors, baseVecs);
     clustering.train(baseNumVectors, baseVecs);
     auto end = std::chrono::high_resolution_clock::now();
@@ -831,26 +864,26 @@ void benchmarkClustering() {
     clustering.assignCentroids(baseVecs, baseNumVectors, assign);
 
     // Build hassign for each centroid
-    int *hassign = new int[numCentroids];
-    memset(hassign, 0, numCentroids * sizeof(int));
+    int *hassign = new int[nCentroids];
+    memset(hassign, 0, nCentroids * sizeof(int));
     for (int i = 0; i < baseNumVectors; i++) {
         hassign[assign[i]]++;
     }
-    for (int i = 0; i < numCentroids; i++) {
+    for (int i = 0; i < nCentroids; i++) {
         printf("Centroid %d: %d\n", i, hassign[i]);
     }
 
     std::vector<std::unique_ptr<HNSW>> indexes;
-    std::vector<float*> datePerCentroid;
+    std::vector<float *> datePerCentroid;
     std::vector<int> idx;
-    for (int i = 0; i < numCentroids; i++) {
-        auto hnsw = std::make_unique<HNSW>(64, 200, baseDimension, 1.0, 1.0, 0, 0, false);
+    for (int i = 0; i < nCentroids; i++) {
+        auto hnsw = std::make_unique<HNSW>(M, efConstruction, baseDimension, 1.0, 1.0, 0, 0, false);
         indexes.push_back(std::move(hnsw));
         datePerCentroid.push_back(new float[hassign[i] * baseDimension]);
         idx.push_back(0);
     }
 
-    std::vector<std::vector<int>> actualIds = std::vector<std::vector<int>>(numCentroids);
+    std::vector<std::vector<int>> actualIds = std::vector<std::vector<int>>(nCentroids);
     for (int i = 0; i < baseNumVectors; i++) {
         actualIds[assign[i]].push_back(i);
     }
@@ -863,36 +896,32 @@ void benchmarkClustering() {
     }
 
     // Build index for each centroid
-    for (int i = 0; i < numCentroids; i++) {
+    for (int i = 0; i < nCentroids; i++) {
         indexes[i]->build(datePerCentroid[i], hassign[i]);
     }
 
     // search
     // First find top 3 centroids for each query
-    auto efSearch = 150;
-    auto k = 100;
     // TODO: Do search only in the assigned centroid
     auto recall = 0;
-    int closeC = 5;
-    // q
-    // c0, c1, c2, c3, c4, c5
-    // [c2, c4]
-    // <q.c2> ~= <q.c4>
-
     auto visited = VisitedTable(baseNumVectors);
-    L2DistanceComputer dc(clustering.centroids.data(), baseDimension, numCentroids);
-    std::vector<int> closestCentroids(closeC);
-    IndexOneNN indexOne(&dc, baseDimension, numCentroids);
+    L2DistanceComputer dc(clustering.centroids.data(), baseDimension, nCentroids);
+    std::vector<int> closestCentroids(minCentroids);
+    std::vector<float> centroidDist(minCentroids);
+    std::vector<int> closeCentroids(minCentroids);
+    IndexOneNN indexOne(&dc, baseDimension, nCentroids);
     auto startTime = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < queryNumVectors; i++) {
         std::vector<int> results;
-        indexOne.knn(closeC, queryVecs + (i * queryDimension), closestCentroids.data());
+        indexOne.knn(minCentroids, queryVecs + (i * queryDimension), centroidDist.data(), closestCentroids.data());
+        int n = findCloseCentroids(centroidDist.data(), closestCentroids.data(), minCentroids, closeCentroids.data(), centroidThreshold);
         // TODO: Choose between all five or not using some heuristics
-        for (auto j : closestCentroids) {
+        for (auto j = 0; j < n; j++) {
+            auto closeCentroid = closeCentroids[j];
             std::priority_queue<HNSW::NodeDistCloser> resultSet;
-            indexes[j]->searchV1(queryVecs + (i * queryDimension), k, efSearch, visited, resultSet);
+            indexes[closeCentroid]->searchV1(queryVecs + (i * queryDimension), K, efSearch, visited, resultSet);
             while (!resultSet.empty()) {
-                results.push_back(actualIds[j][resultSet.top().id]);
+                results.push_back(actualIds[closeCentroid][resultSet.top().id]);
                 resultSet.pop();
             }
         }
@@ -918,6 +947,6 @@ int main(int argc, char **argv) {
 //    benchmark_scalar_quantizer();
 //    benchmark_quantizer();
 //    benchmark_explore_data();
-    benchmarkClustering();
+    benchmarkClustering(argc, argv);
     return 0;
 }

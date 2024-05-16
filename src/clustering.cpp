@@ -225,7 +225,7 @@ namespace orangedb {
         }
     }
 
-    void IndexOneNN::knn(int k, const float *queries, int *resultIds) {
+    void IndexOneNN::knn(int k, const float *queries, float *distance, int *resultIds) {
         // Single threaded implementation
         auto localDc = dc->clone();
         // Find the k nearest neighbors
@@ -238,6 +238,7 @@ namespace orangedb {
         }
         for (int i = 0; i < k; i++) {
             resultIds[i] = res.top().id;
+            distance[i] = res.top().dist;
             res.pop();
         }
     }
