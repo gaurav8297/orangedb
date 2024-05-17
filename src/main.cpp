@@ -11,6 +11,7 @@
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
 #include "include/clustering.h"
+#include <chrono>
 
 using namespace orangedb;
 
