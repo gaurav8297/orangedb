@@ -12,6 +12,7 @@
 #include <prefetch.h>
 #include <scalar_quantizer.h>
 #include <assert.h>
+#include <memory>
 
 using namespace std;
 
