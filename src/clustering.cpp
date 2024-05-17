@@ -7,6 +7,7 @@
 #include <omp.h>
 #include <random>
 #include <queue>
+#include <cstring>
 
 // a bit above machine epsilon for float16
 #define EPS (1 / 1024.)

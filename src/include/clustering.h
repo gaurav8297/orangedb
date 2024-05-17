@@ -2,6 +2,7 @@
 
 #include "distance.h"
 #include <random>
+#include <cstring>
 
 namespace orangedb {
     // Perform 1-NN search on the given data in parallel using OpenMP
