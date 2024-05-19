@@ -1,7 +1,7 @@
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 add_library(orangedb
         OBJECT
-        aux_ds.cpp
+        helper_ds.cpp
         hnsw.cpp
         utils.cpp
         clustering.cpp

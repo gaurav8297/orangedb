@@ -21,28 +21,24 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
 find_package(OpenMP REQUIRED)
 
-set(OpenMP_C_FLAGS "-fopenmp")
-set(OpenMP_CXX_FLAGS "-fopenmp")
-
-set(CMAKE_C_FLAGS "${OpenMP_C_FLAGS} -g -O2 -march=native")
-set(CMAKE_CXX_FLAGS "${OpenMP_CXX_FLAGS} -g -O2 -march=native")
-
-option(ENABLE_ADDRESS_SANITIZER "Enable address sanitizer." FALSE)
-
-if(${ENABLE_ADDRESS_SANITIZER})
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-endif()
+# Global compiler flags for debug and release
+set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_RELEASE "-fopenmp -O3")
+set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_C_FLAGS_RELEASE "-fopenmp -O3")
 
 # Add include path
 include_directories(${PROJECT_SOURCE_DIR}/src/include)
 include_directories(${PROJECT_SOURCE_DIR}/third_party/spdlog)
+include_directories(${PROJECT_SOURCE_DIR}/third_party/simsimd/include)
 # Add source path
+add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/simsimd)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
 # Add executable path
 add_executable(orangedb_main ${PROJECT_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX)
+target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX simsimd)
 target_include_directories(orangedb_main PUBLIC
         ${PROJECT_SOURCE_DIR}/src/include
-        ${PROJECT_SOURCE_DIR}/third_party/spdlog)
+        ${PROJECT_SOURCE_DIR}/third_party/spdlog
+        ${PROJECT_SOURCE_DIR}/third_party/simsimd/include)

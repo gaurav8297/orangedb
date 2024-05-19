@@ -8,17 +8,6 @@ namespace orangedb {
     // Perform 1-NN search on the given data in parallel using OpenMP
     class IndexOneNN {
     public:
-        struct Node {
-            explicit Node(storage_idx_t id, float dist) : id(id), dist(dist) {}
-
-            storage_idx_t id;
-            float dist;
-
-            bool operator<(const Node &other) const {
-                return dist > other.dist;
-            }
-        };
-
         explicit IndexOneNN(DistanceComputer *dc, int dim, int numEntries)
                 : dc(dc), dim(dim),
                   numEntries(numEntries) {};

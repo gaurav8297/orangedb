@@ -20,7 +20,7 @@ namespace orangedb {
             }
         }
         for (size_t j = 0; j < d; j++) {
-            float vexp = (vdiff[j] - vmin[j]) * rangestat_arg;
+            float vexp = (vdiff[j] - vmin[j]) * rangestatArg;
             // Expand the range by a factor rangestat_arg
             vmin[j] -= vexp;
             vdiff[j] += vexp;
@@ -28,7 +28,7 @@ namespace orangedb {
         }
     }
 
-    void ScalarQuantizer::compute_codes(const float *x, uint8_t *codes, size_t n) const {
+    void ScalarQuantizer::computeCodes(const float *x, uint8_t *codes, size_t n) const {
         for (size_t i = 0; i < n; i++) {
             const float *xi = x + i * d;
             uint8_t *ci = codes + i * d;
@@ -56,7 +56,7 @@ namespace orangedb {
         }
     }
 
-    void ScalarQuantizer::print_stats() {
+    void ScalarQuantizer::printStats() {
         for (size_t i = 0; i < d; i++) {
             printf("vmin[%ld] = %f, vmax[%ld] = %f\n", i, vmin[i], i, vdiff[i]);
         }

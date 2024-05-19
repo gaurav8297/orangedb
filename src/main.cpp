@@ -12,6 +12,7 @@
 #include <assert.h>    // assert
 #include "include/clustering.h"
 #include <chrono>
+#include <simsimd/simsimd.h>
 
 using namespace orangedb;
 
@@ -654,16 +655,12 @@ void query_graph(
     auto visited = VisitedTable(baseNumVectors);
     auto recall = 0.0;
     for (size_t i = 0; i < queryNumVectors; i++) {
-        std::priority_queue<HNSW::NodeDistCloser> resultSet;
-        hnsw.searchV1(queryVecs + (i * queryDimension), k, ef_search, visited, resultSet);
+        std::vector<NodeDistCloser> results;
+        Stats stats{};
+        hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
         auto gt = gtVecs + i * 100;
-        std::vector<HNSW::NodeDistCloser> res;
-        while (!resultSet.empty()) {
-            res.push_back(resultSet.top());
-            resultSet.pop();
-        }
-        for (int j = 0; j < res.size(); j++) {
-            if (std::find(gt, gt + 100, res[j].id) != (gt + 100)) {
+        for (auto &result: results) {
+            if (std::find(gt, gt + 100, result.id) != (gt + 100)) {
                 recall++;
             }
         }
@@ -707,12 +704,8 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto M = stoi(input.getCmdOption("-M"));
     auto efSearch = stoi(input.getCmdOption("-efSearch"));
     auto thread_count = stoi(input.getCmdOption("-nThreads"));
-    auto explore_factor = stof(input.getCmdOption("-exploreFactor"));
     auto num_vectors = stoi(input.getCmdOption("-numVectors"));
     auto alpha = stof(input.getCmdOption("-alpha"));
-    auto beam_size = stoi(input.getCmdOption("-beamSize"));
-    auto beam_thrsh = stoi(input.getCmdOption("-beamThrsh"));
-    auto use_scalar_quantizer = stoi(input.getCmdOption("-useScalarQuantizer"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -726,64 +719,66 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     int *gtVecs = Utils::ivecs_read(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
 
     omp_set_num_threads(thread_count);
-    HNSW hnsw(M, efConstruction, baseDimension, explore_factor, alpha, beam_size, beam_thrsh, use_scalar_quantizer);
+    RandomGenerator rng(1234);
+    HNSWConfig config(M, efConstruction, efSearch, alpha);
+    HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, num_vectors);
-    hnsw.printStats();
+    hnsw.logStats();
     // ./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -efConstruction 128 -M 64 -efSearch 150 -nThreads 32 -exploreFactor 1
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 }
 
-void benchmark_scalar_quantizer() {
-    auto basePath = "/home/gaurav/vector_index_experiments/vector_index/data/gist_50k";
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-
-    size_t baseDimension, baseNumVectors;
-    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
-    uint8_t *codes;
-    Utils::alloc_aligned((void **) &codes, baseNumVectors * baseDimension, 64);
-    printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
-    float *vmin;
-    float *vdiff;
-    ScalarQuantizer sq(baseDimension, vmin, vdiff);
-    sq.train(baseNumVectors, baseVecs);
-    sq.compute_codes(baseVecs, codes, baseNumVectors);
-//    float *decoded;
-//    Utils::alloc_aligned((void**)&decoded, baseNumVectors * baseDimension * sizeof(float), 64);
-//    sq.decode(codes, decoded, baseNumVectors);
-    Storage storage(baseDimension, 64, 2);
-    storage.data = baseVecs;
-    storage.codes = codes;
-    storage.vmin = sq.vmin;
-    storage.vdiff = sq.vdiff;
-
-    // Print 0 dimension for first 10 vectors
+//void benchmark_scalar_quantizer() {
+//    auto basePath = "/home/gaurav/vector_index_experiments/vector_index/data/gist_50k";
+//    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+//
+//    size_t baseDimension, baseNumVectors;
+//    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+//    uint8_t *codes;
+//    Utils::alloc_aligned((void **) &codes, baseNumVectors * baseDimension, 64);
+//    printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
+//    float *vmin;
+//    float *vdiff;
+//    ScalarQuantizer sq(baseDimension, vmin, vdiff);
+//    sq.train(baseNumVectors, baseVecs);
+//    sq.compute_codes(baseVecs, codes, baseNumVectors);
+////    float *decoded;
+////    Utils::alloc_aligned((void**)&decoded, baseNumVectors * baseDimension * sizeof(float), 64);
+////    sq.decode(codes, decoded, baseNumVectors);
+//    Storage storage(baseDimension, 64, 2);
+//    storage.data = baseVecs;
+//    storage.codes = codes;
+//    storage.vmin = sq.vmin;
+//    storage.vdiff = sq.vdiff;
+//
+//    // Print 0 dimension for first 10 vectors
+////    auto error = 0.0;
+////    for (int i = 0; i < baseNumVectors; i++) {
+////        printf("Actual 0th location %f\n", baseVecs[i * 960]);
+////        printf("Decoded 0th location %f\n", decoded[i * 960]);
+////        error += baseVecs[i * 960] - decoded[i * 960];
+////    }
+////    printf("Error: %f\n", (error / baseNumVectors));
+//
+//    L2DistanceComputer normaldc(storage.data, baseDimension, baseNumVectors);
+//    SQDistanceComputer sqdc(storage.codes, baseDimension, baseNumVectors, storage.vmin, storage.vdiff);
+//    normaldc.setQuery(baseVecs);
+//    sqdc.setQuery(baseVecs);
+//
 //    auto error = 0.0;
-//    for (int i = 0; i < baseNumVectors; i++) {
-//        printf("Actual 0th location %f\n", baseVecs[i * 960]);
-//        printf("Decoded 0th location %f\n", decoded[i * 960]);
-//        error += baseVecs[i * 960] - decoded[i * 960];
+//    for (int i = 1; i < baseNumVectors; i++) {
+//        float actual, fake;
+//        normaldc.computeDistance(4, i, actual);
+//        sqdc.computeDistance(4, i, fake);
+//        printf("Actual: %f, Fake: %f\n", actual, fake);
+//        error += fake - actual;
 //    }
 //    printf("Error: %f\n", (error / baseNumVectors));
-
-    L2DistanceComputer normaldc(storage.data, baseDimension, baseNumVectors);
-    SQDistanceComputer sqdc(storage.codes, baseDimension, baseNumVectors, storage.vmin, storage.vdiff);
-    normaldc.setQuery(baseVecs);
-    sqdc.setQuery(baseVecs);
-
-    auto error = 0.0;
-    for (int i = 1; i < baseNumVectors; i++) {
-        float actual, fake;
-        normaldc.computeDistance(4, i, actual);
-        sqdc.computeDistance(4, i, fake);
-        printf("Actual: %f, Fake: %f\n", actual, fake);
-        error += fake - actual;
-    }
-    printf("Error: %f\n", (error / baseNumVectors));
-
-    // TODO - Calculate distance between two vectors. First convert to float and then calc distances.
-    // TODO - Try other way where normalize the equation and precompute some values to reduce computation/
-//    sq.print_stats();
-}
+//
+//    // TODO - Calculate distance between two vectors. First convert to float and then calc distances.
+//    // TODO - Try other way where normalize the equation and precompute some values to reduce computation/
+////    sq.print_stats();
+//}
 
 void benchmark_quantizer() {
     auto val = 0.5645566777f;
@@ -792,23 +787,6 @@ void benchmark_quantizer() {
     printf("Quantized: %d, Dequantized: %f\n", quantized, dequantized_v1);
     float dequantized_v2 = (quantized + 0.5f) / 255.0f;
     printf("Dequantized: %f\n", dequantized_v2);
-}
-
-void benchmark_explore_data() {
-    FILE *f = fopen("/Users/gauravsehgal/work/orangedb/data/contest-data-release-1m.bin", "r");
-    int d = 102;
-    int n = 1000000;
-    float *data = new float[d * n];
-    fread(data, sizeof(float), d * n, f);
-    fclose(f);
-
-    // print vectors top 10
-    for (int i = 0; i < 10; i++) {
-        for (int j = 0; j < d; j++) {
-            printf("%f ", data[i * d + j]);
-        }
-        printf("\n");
-    }
 }
 
 int findCloseCentroids(float *distances, int *centroids, int size, int *closeCentroids, float threshold) {
@@ -948,6 +926,7 @@ int main(int argc, char **argv) {
 //    benchmark_scalar_quantizer();
 //    benchmark_quantizer();
 //    benchmark_explore_data();
-    benchmarkClustering(argc, argv);
+//    benchmarkClustering(argc, argv);
+//    benchmarkSimSimd();
     return 0;
 }

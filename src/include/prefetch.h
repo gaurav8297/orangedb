@@ -34,20 +34,23 @@ inline void prefetch_L3(const void* address) {}
 inline void prefetch_NTA(const void* address) {}
 
 #else
-// arm on non-MSVC
 
-inline void prefetch_L1(const void* address) {
+inline void prefetch_L1(const void *address) {
     __builtin_prefetch(address, 0, 3);
 }
-inline void prefetch_L2(const void* address) {
+
+inline void prefetch_L2(const void *address) {
     __builtin_prefetch(address, 0, 2);
 }
-inline void prefetch_L3(const void* address) {
+
+inline void prefetch_L3(const void *address) {
     __builtin_prefetch(address, 0, 1);
 }
-inline void prefetch_NTA(const void* address) {
+
+inline void prefetch_NTA(const void *address) {
     __builtin_prefetch(address, 0, 1);
 }
+
 #endif
 
 #else

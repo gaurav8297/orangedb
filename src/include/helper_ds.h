@@ -2,18 +2,40 @@
 
 #include <unistd.h>
 #include <vector>
-#include "storage.h"
+#include <common.h>
 
 using namespace std;
 
 namespace orangedb {
+    struct NodeDistCloser {
+        explicit NodeDistCloser(vector_idx_t id, double dist) : id(id), dist(dist) {}
+
+        vector_idx_t id;
+        double dist;
+
+        bool operator<(const NodeDistCloser &other) const {
+            return dist < other.dist;
+        }
+    };
+
+    struct NodeDistFarther {
+        explicit NodeDistFarther(vector_idx_t id, double dist) : id(id), dist(dist) {}
+
+        vector_idx_t id;
+        double dist;
+
+        bool operator<(const NodeDistFarther &other) const {
+            return dist > other.dist;
+        }
+    };
+
     class MaxHeap {
     public:
         explicit MaxHeap(int capacity);
 
-        void push(storage_idx_t id, float val);
+        void push(vector_idx_t id, float val);
 
-        storage_idx_t pop_min(float *val);
+        storage_idx_t popMin(float *val);
 
         inline int size() const {
             return logical_size;
@@ -25,37 +47,28 @@ namespace orangedb {
         }
 
     private:
-        void push_to_heap(storage_idx_t id, float val);
+        void pushToHeap(vector_idx_t id, float val);
 
-        void pop_from_heap();
+        void popFromHeap();
 
     private:
         int capacity;
         int physical_size;
         int logical_size;
-        std::vector<storage_idx_t> ids;
+        std::vector<vector_idx_t> ids;
         std::vector<float> values;
     };
 
-    // TODO: Maybe replace it with a bitset or better bloom filters which will take less space and much faster since
-    //  it can fit in L3 cache.
+    // TODO: Use bitset instead of vector<uint8_t>
     class VisitedTable {
     public:
-        // [0, 0, 0, 0, 0... 100M]
-        // T1: 5, 9, 1000, 122, 56
-
-        // Visited: [0, 0, 0, 0, 0... 100M]
-        // Inserting 5
-        // Ngh: 0, 4, 7...
-        // Visited: [1, 0, 0, 1, 0... 100M]
-        // Reset: []
         explicit VisitedTable(size_t size) : visited(size, 0), visited_id(1) {};
 
-        inline void set(storage_idx_t id) {
+        inline void set(vector_idx_t id) {
             visited[id] = visited_id;
         }
 
-        inline bool get(storage_idx_t id) {
+        inline bool get(vector_idx_t id) {
             return visited[id] == visited_id;
         }
 

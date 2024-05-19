@@ -5,27 +5,13 @@
 #include "include/prefetch.h"
 #include "spdlog/spdlog.h"
 
-// Constants
-#define MORSEL_SIZE 1000
-#define BEAM_SIZE 8
-
 namespace orangedb {
-    HNSW::HNSW(
-            uint16_t M,
-            uint16_t ef_construction,
-            uint16_t dim,
-            float explore_factor,
-            float alpha,
-            int beam_size,
-            int beam_thrsh,
-            bool use_scalar_quantizer) :
-            mt(1026), ef_construction(ef_construction), explore_factor(explore_factor), alpha(alpha),
-            beam_size(beam_size), beam_thrsh(beam_thrsh), stats(Stats()), use_scalar_quantizer(use_scalar_quantizer) {
+    HNSW::HNSW(HNSWConfig config, RandomGenerator *rg, uint16_t dim) : config(config), entryPoint(INVALID_VECTOR_ID),
+                                                                       maxLevel(0),
+                                                                       rg(rg), stats(Stats()) {
         // Initialize probabilities to save computation time later.
-        assert(explore_factor <= 1 && explore_factor >= 0);
-        initProbabs(M, 1.0 / log(M));
-        storage = new Storage(dim, M, level_probabs.size());
-        sq = new ScalarQuantizer(dim, storage->vmin, storage->vdiff);
+        initProbabs(config.M, 1.0 / log(config.M));
+        storage = new Storage(dim, config.M, levelProbabs.size());
     }
 
     void HNSW::initProbabs(uint16_t M, double levelMult) {
@@ -37,27 +23,31 @@ namespace orangedb {
             if (prob < 1e-9) {
                 break;
             }
-            level_probabs.push_back(prob);
+            levelProbabs.push_back(prob);
         }
     }
 
     void HNSW::searchNearestOnLevel(
-            DistanceComputer *dc, level_t level, storage_idx_t &nearest, float &nearestDist) {
-        assert(level > 0);
+            DistanceComputer *dc,
+            level_t level,
+            vector_idx_t &nearest,
+            double &nearestDist,
+            Stats &stats) {
+        CHECK_ARGUMENT(level > 0, "Level should be greater than 0");
         auto neighbors = storage->get_neighbors(level);
         // Can we do distance computation on 4 vectors at a time?
         while (true) {
-            storage_idx_t prev_nearest = nearest;
+            vector_idx_t prev_nearest = nearest;
             size_t begin, end;
             storage->get_neighbors_offsets(nearest, level, begin, end);
             for (size_t i = begin; i < end; i++) {
-                storage_idx_t neighbor = neighbors[i];
-                if (neighbor < 0) {
+                vector_idx_t neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID) {
                     break;
                 }
-                float dist;
-                dc->computeDistance(getActualId(level, neighbor), dist);
-//                stats.totalDistComp++;
+                double dist;
+                stats.totalDistCompDuringSearch++;
+                dc->computeDistance(getActualId(level, neighbor), &dist);
                 if (dist < nearestDist) {
                     nearest = neighbor;
                     nearestDist = dist;
@@ -73,10 +63,11 @@ namespace orangedb {
             DistanceComputer *dc,
             level_t level,
             std::priority_queue<NodeDistCloser> &results,
-            storage_idx_t entrypoint,
-            float entrypointDist,
+            vector_idx_t entrypoint,
+            double entrypointDist,
             VisitedTable &visited,
-            uint16_t ef) {
+            uint16_t efSearch,
+            Stats &stats) {
         std::priority_queue<NodeDistFarther> candidates;
         candidates.emplace(entrypoint, entrypointDist);
         results.emplace(entrypoint, entrypointDist);
@@ -95,50 +86,51 @@ namespace orangedb {
             size_t jmax = begin;
             for (size_t i = begin; i < end; i++) {
                 int neighbor = neighbors[i];
-                if (neighbor < 0)
+                if (neighbor == INVALID_VECTOR_ID)
                     break;
                 prefetch_L3(visited.data() + neighbor);
-//                prefetch_L3(storage->data + (getActualId(level, neighbor) * storage->dim));
                 jmax += 1;
             }
 
             for (size_t i = begin; i < jmax; i++) {
-                storage_idx_t neighbor = neighbors[i];
-                if (neighbor < 0) {
+                vector_idx_t neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID) {
                     break;
                 }
                 if (visited.get(neighbor)) {
                     continue;
                 }
                 visited.set(neighbor);
-                float dist;
-                dc->computeDistance(getActualId(level, neighbor), dist);
-//                stats.totalDistComp++;
-                if (results.size() < ef || dist < results.top().dist) {
+                double dist;
+                dc->computeDistance(getActualId(level, neighbor), &dist);
+                stats.totalDistCompDuringSearch++;
+                if (results.size() < efSearch || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
                     results.emplace(neighbor, dist);
-                    if (results.size() > ef) {
+                    if (results.size() > efSearch) {
                         results.pop();
                     }
                 }
             }
         }
+        // Reset the visited table
         visited.reset();
     }
 
-    void HNSW::searchNeighborsOptimized(
+    void HNSW::searchNeighborsOnLastLevel(
             DistanceComputer *dc,
-            level_t level,
             std::priority_queue<NodeDistCloser> &results,
-            storage_idx_t entrypoint,
-            float entrypointDist,
+            vector_idx_t entrypoint,
+            double entrypointDist,
             VisitedTable &visited,
-            uint16_t ef) {
+            uint16_t efSearch,
+            int distCompBatchSize,
+            Stats &stats) {
         std::priority_queue<NodeDistFarther> candidates;
         candidates.emplace(entrypoint, entrypointDist);
         results.emplace(entrypoint, entrypointDist);
         visited.set(entrypoint);
-        auto neighbors = storage->get_neighbors(level);
+        auto neighbors = storage->get_neighbors(0);
         while (!candidates.empty()) {
             auto candidate = candidates.top();
             if (candidate.dist > results.top().dist) {
@@ -146,7 +138,7 @@ namespace orangedb {
             }
             candidates.pop();
             size_t begin, end;
-            storage->get_neighbors_offsets(candidate.id, level, begin, end);
+            storage->get_neighbors_offsets(candidate.id, 0, begin, end);
 
             // the following version processes 4 neighbors at a time
             size_t jmax = begin;
@@ -159,43 +151,27 @@ namespace orangedb {
                 jmax += 1;
             }
 
+            // Perform distance computation on 4 vectors at a time
             int counter = 0;
-            size_t cached_ids[4];
-            bool search_improved = false;
-            int u = 0;
-            size_t max_u = (jmax - begin) * explore_factor;
-
+            vector_idx_t vectorIds[distCompBatchSize];
             for (size_t j = begin; j < jmax; j++) {
-                u++;
-                if (u > max_u && search_improved) {
-                    break;
-                }
                 int v1 = neighbors[j];
                 if (v1 < 0)
                     break;
                 bool vget = visited.get(v1);
                 // TODO: Try to set visited in the end of loop
                 visited.set(v1);
-                cached_ids[counter] = v1;
+                vectorIds[counter] = v1;
                 counter += vget ? 0 : 1;
-                if (counter == 4) {
-                    float dis[4];
-                    dc->computeDistanceFourVecs(
-                            getActualId(level, cached_ids[0]),
-                            getActualId(level, cached_ids[1]),
-                            getActualId(level, cached_ids[2]),
-                            getActualId(level, cached_ids[3]),
-                            dis[0],
-                            dis[1],
-                            dis[2],
-                            dis[3]);
-                    stats.totalDistComp += 4;
-                    for (int k = 0; k < 4; k++) {
-                        if (results.size() < ef || dis[k] < results.top().dist) {
-                            candidates.emplace(cached_ids[k], dis[k]);
-                            results.emplace(cached_ids[k], dis[k]);
-                            search_improved = true;
-                            if (results.size() > ef) {
+                if (counter == distCompBatchSize) {
+                    double distances[distCompBatchSize];
+                    dc->batchComputeDistances(vectorIds, distances, distCompBatchSize);
+                    stats.totalDistCompDuringSearch += 4;
+                    for (int k = 0; k < distCompBatchSize; k++) {
+                        if (results.size() < efSearch || distances[k] < results.top().dist) {
+                            candidates.emplace(vectorIds[k], distances[k]);
+                            results.emplace(vectorIds[k], distances[k]);
+                            if (results.size() > efSearch) {
                                 results.pop();
                             }
                         }
@@ -206,13 +182,13 @@ namespace orangedb {
 
             // For the left out nodes
             for (int k = 0; k < counter; k++) {
-                float dist;
-                dc->computeDistance(getActualId(level, cached_ids[k]), dist);
-                stats.totalDistComp++;
-                if (results.size() < ef || dist < results.top().dist) {
-                    candidates.emplace(cached_ids[k], dist);
-                    results.emplace(cached_ids[k], dist);
-                    if (results.size() > ef) {
+                double dist;
+                dc->computeDistance(vectorIds[k], &dist);
+                stats.totalDistCompDuringSearch++;
+                if (results.size() < efSearch || dist < results.top().dist) {
+                    candidates.emplace(vectorIds[k], dist);
+                    results.emplace(vectorIds[k], dist);
+                    if (results.size() > efSearch) {
                         results.pop();
                     }
                 }
@@ -221,224 +197,72 @@ namespace orangedb {
         visited.reset();
     }
 
-    void HNSW::searchNeighborsMoreOptimized(
+    void HNSW::shrinkNeighbors(
             DistanceComputer *dc,
-            level_t level,
             std::priority_queue<NodeDistCloser> &results,
-            storage_idx_t entrypoint,
-            float entrypointDist,
-            VisitedTable &visited,
-            uint16_t ef) {
-        std::priority_queue<NodeDistFarther> candidates;
-        candidates.emplace(entrypoint, entrypointDist);
-        results.emplace(entrypoint, entrypointDist);
-        visited.set(entrypoint);
-        auto neighbors = storage->get_neighbors(level);
-        while (!candidates.empty()) {
-            auto candidate = candidates.top();
-            if (candidate.dist > results.top().dist) {
-                break;
-            }
-            candidates.pop();
-            std::vector<NodeDistFarther> cds;
-            cds.push_back(candidate);
-            if (candidates.size() > beam_thrsh) {
-                for (int i = 0; i < beam_size; i++) {
-                    auto c = candidates.top();
-                    candidates.pop();
-                    cds.push_back(c);
-                }
-            }
-            std::vector<storage_idx_t> nbrs_not_visited;
-            for (auto c: cds) {
-                size_t begin, end;
-                storage->get_neighbors_offsets(c.id, level, begin, end);
-                for (size_t j = begin; j < end; j++) {
-                    int v1 = neighbors[j];
-                    if (v1 < 0)
-                        break;
-                    if (!visited.get(v1)) {
-                        visited.set(v1);
-                        nbrs_not_visited.push_back(v1);
-                    }
-                }
-            }
-
-//            stats.totalLoops++;
-
-            // caclulate distances in batch of 4
-            std::vector<float> dists(nbrs_not_visited.size());
-//            int jMax = nbrs_not_visited.size() >> 2;
-//            jMax = jMax << 2;
-//            for (int j = 0; j < jMax; j += 4) {
-//                dc->compute_distance_four_vecs(
-//                        getActualId(level, nbrs_not_visited[j]),
-//                        getActualId(level, nbrs_not_visited[j + 1]),
-//                        getActualId(level, nbrs_not_visited[j + 2]),
-//                        getActualId(level, nbrs_not_visited[j + 3]),
-//                        dists[j],
-//                        dists[j + 1],
-//                        dists[j + 2],
-//                        dists[j + 3]);
-////                stats.totalDistComp += 4;
-//                stats.total4mul++;
-//            }
-
-            // calculate the remaining distances
-            for (int j = 0; j < nbrs_not_visited.size(); j++) {
-                dc->computeDistance(getActualId(level, nbrs_not_visited[j]), dists[j]);
-//                stats.totalDistComp++;
-            }
-
-            // add the neighbors to the results
-            for (int j = 0; j < nbrs_not_visited.size(); j++) {
-                if (results.size() < ef || dists[j] < results.top().dist) {
-                    candidates.emplace(nbrs_not_visited[j], dists[j]);
-                    results.emplace(nbrs_not_visited[j], dists[j]);
-                    if (results.size() > ef) {
-                        results.pop();
-                    }
-                }
-            }
+            int maxSize,
+            level_t level,
+            Stats &stats) {
+        if (results.size() <= maxSize) {
+            return;
         }
-        visited.reset();
-    }
-
-    int HNSW::shrinkNeighbors(
-            DistanceComputer *dc, std::priority_queue<NodeDistCloser> &resultSet, int max_size, uint8_t level) {
-        if (resultSet.size() <= max_size) {
-            return 0;
-        }
-        int total_dist_comp = 0;
         std::priority_queue<NodeDistFarther> temp;
         std::vector<NodeDistFarther> result;
-        while (!resultSet.empty()) {
-            temp.emplace(resultSet.top().id, resultSet.top().dist);
-            resultSet.pop();
+        while (!results.empty()) {
+            temp.emplace(results.top().id, results.top().dist);
+            results.pop();
         }
-//        std::vector<int> distComp;
 
         // Push nodes to result based on a heuristic that distance to the query node is smallest against all other nodes
         // in the neighbors list. We add it in decreasing order of distance such that farthest nodes are always added.
         while (!temp.empty()) {
-            auto node = temp.top();
+            auto nodeA = temp.top();
             temp.pop();
-            auto dist_q_node = node.dist;
+            auto distNodeAQ = nodeA.dist;
             bool good = true;
-//            auto dist_comp = 0;
-            for (NodeDistFarther &node_2: result) {
-                float dist_node_node_2;
-                dc->computeDistance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
-//                total_dist_comp++;
-//                stats.totalDistComp++;
-//                stats.totalDistCompInShrink++;
-//                dist_comp++;
-                if (dist_node_node_2 < dist_q_node) {
+            for (NodeDistFarther &nodeB: result) {
+                double distNodeAB;
+                dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), &distNodeAB);
+                stats.totalDistCompDuringShrink++;
+                if ((config.alpha * distNodeAB) < distNodeAQ) {
                     good = false;
                     break;
                 }
             }
-//            distComp.push_back(dist_comp);
             if (good) {
-                result.push_back(node);
-                if (result.size() >= max_size) {
-                    stats.totalShrinkNotReduce++;
+                result.push_back(nodeA);
+                if (result.size() >= maxSize) {
                     break;
                 }
             }
         }
-
-//        if (total_dist_comp > 400) {
-//#pragma omp critical
-//            {
-//                int i = 0;
-//                for (auto dist: distComp) {
-//                    spdlog::warn("[{}] Distance computations: {}", i, dist);
-//                    i++;
-//                }
-//            }
-//        }
-
         for (auto &node: result) {
-            resultSet.emplace(node.id, node.dist);
+            results.emplace(node.id, node.dist);
         }
-        return total_dist_comp;
-    }
-
-    int HNSW::shrinkNeighbors2(
-            DistanceComputer *dc, std::priority_queue<NodeDistCloser> &resultSet, int max_size, uint8_t level) {
-        int total_dist_comp = 0;
-        std::priority_queue<NodeDistFarther> temp;
-        std::vector<NodeDistFarther> result;
-        while (!resultSet.empty()) {
-            temp.emplace(resultSet.top().id, resultSet.top().dist);
-            resultSet.pop();
-        }
-        max_size = max_size / 2;
-
-//        std::vector<int> distComp;
-
-        // Push nodes to result based on a heuristic that distance to the query node is smallest against all other nodes
-        // in the neighbors list. We add it in decreasing order of distance such that farthest nodes are always added.
-        while (!temp.empty()) {
-            auto node = temp.top();
-            temp.pop();
-            auto dist_q_node = node.dist;
-            bool good = true;
-//            auto dist_comp = 0;
-            for (NodeDistFarther &node_2: result) {
-                float dist_node_node_2;
-                dc->computeDistance(getActualId(level, node.id), getActualId(level, node_2.id), dist_node_node_2);
-//                total_dist_comp++;
-//                stats.totalDistComp++;
-//                stats.totalDistCompInShrink++;
-//                dist_comp++;
-                if (alpha * dist_node_node_2 < dist_q_node) {
-                    good = false;
-                    break;
-                }
-            }
-//            distComp.push_back(dist_comp);
-            if (good) {
-                result.push_back(node);
-                if (result.size() >= max_size) {
-                    stats.totalShrinkNotReduce++;
-                    break;
-                }
-            }
-        }
-
-//        if (total_dist_comp > 400) {
-//#pragma omp critical
-//            {
-//                int i = 0;
-//                for (auto dist: distComp) {
-//                    spdlog::warn("[{}] Distance computations: {}", i, dist);
-//                    i++;
-//                }
-//            }
-//        }
-
-        for (auto &node: result) {
-            resultSet.emplace(node.id, node.dist);
-        }
-        return total_dist_comp;
+        return;
     }
 
     // It is assumed that the node is already locked.
     void HNSW::makeConnection(
-            DistanceComputer *dc, storage_idx_t src, storage_idx_t dest, float dist_src_dest, level_t level) {
+            DistanceComputer *dc,
+            vector_idx_t src,
+            vector_idx_t dest,
+            double distSrcDest,
+            level_t level,
+            Stats &stats) {
         auto neighbors = storage->get_neighbors(level);
         size_t begin, end;
         storage->get_neighbors_offsets(src, level, begin, end);
-        if (neighbors[end - 1] == -1) {
-            if (neighbors[begin] == -1) {
+        // TODO: Optimize this code using bulk shrink. Basically accumulate the neighbors in a vector and then shrink
+        //  in a single go.
+        if (neighbors[end - 1] == INVALID_VECTOR_ID) {
+            if (neighbors[begin] == INVALID_VECTOR_ID) {
                 neighbors[begin] = dest;
                 return;
             }
             // do loop in reverse order, it could yield faster results
             for (size_t i = end; i > begin; i--) {
-                if (neighbors[i - 1] != -1) {
+                if (neighbors[i - 1] != INVALID_VECTOR_ID) {
                     neighbors[i] = dest;
                     return;
                 }
@@ -446,143 +270,104 @@ namespace orangedb {
         }
 
         // Otherwise we need to shrink the neighbors list
-        std::priority_queue<NodeDistCloser> resultSet;
-        resultSet.emplace(dest, dist_src_dest);
+        std::priority_queue<NodeDistCloser> results;
+        results.emplace(dest, distSrcDest);
         for (size_t i = begin; i < end; i++) {
-            storage_idx_t neighbor = neighbors[i];
-            float dist_src_nbr;
-            dc->computeDistance(getActualId(level, src), getActualId(level, neighbor), dist_src_nbr);
-//            stats.totalDistComp++;
-//            stats.totalDistCompInShrink++;
-
-            resultSet.emplace(neighbor, dist_src_nbr);
+            auto neighbor = neighbors[i];
+            double distSrcNbr;
+            dc->computeDistance(getActualId(level, src), getActualId(level, neighbor), &distSrcNbr);
+            stats.totalDistCompDuringMakeConnection++;
+            results.emplace(neighbor, distSrcNbr);
         }
-        shrinkNeighbors(dc, resultSet, storage->max_neighbors_per_level[level], level);
-//        stats.totalShrinkCalls1++;
-//        spdlog::warn("[make_connection] Total distance computations in shrink: {}", totalDist);
+        shrinkNeighbors(dc, results, storage->max_neighbors_per_level[level], level, stats);
         size_t i = begin;
-        while (!resultSet.empty()) {
-            auto top_id = resultSet.top().id;
-            neighbors[i++] = top_id;
-            resultSet.pop();
+        while (!results.empty()) {
+            neighbors[i++] = results.top().id;
+            results.pop();
         }
         while (i < end) {
-            neighbors[i++] = -1;
-        }
-    }
-
-    void HNSW::shrink(orangedb::DistanceComputer *dc, orangedb::storage_idx_t src, orangedb::level_t level) {
-        auto neighbors = storage->get_neighbors(level);
-        size_t begin, end;
-        storage->get_neighbors_offsets(src, level, begin, end);
-        std::priority_queue<NodeDistCloser> resultSet;
-        for (size_t i = begin; i < end; i++) {
-            storage_idx_t neighbor = neighbors[i];
-            if (neighbor == -1) {
-                continue;
-            }
-            float dist_src_nbr;
-            dc->computeDistance(getActualId(level, src), getActualId(level, neighbor), dist_src_nbr);
-//            stats.totalDistComp++;
-//            stats.totalDistCompInShrink++;
-
-            resultSet.emplace(neighbor, dist_src_nbr);
-        }
-
-        shrinkNeighbors2(dc, resultSet, storage->max_neighbors_per_level[level], level);
-//        spdlog::warn("[shrink] Shrinked neighbors for node {}: {}", src, resultSet.size());
-        size_t i = begin;
-        while (!resultSet.empty()) {
-            auto top_id = resultSet.top().id;
-            neighbors[i++] = top_id;
-            resultSet.pop();
-        }
-        while (i < end) {
-            neighbors[i++] = -1;
+            neighbors[i++] = INVALID_VECTOR_ID;
         }
     }
 
     void HNSW::addNodeOnLevel(
-            orangedb::DistanceComputer *dc,
-            orangedb::storage_idx_t id,
-            orangedb::level_t level,
-            orangedb::storage_idx_t entrypoint,
-            float entrypoint_dist,
+            DistanceComputer *dc,
+            vector_idx_t id,
+            level_t level,
+            vector_idx_t entrypoint,
+            double entrypointDist,
             VisitedTable &visited,
-            std::vector<pair<storage_idx_t, float>> &neighbors) {
-        // This is a blocking call.
-        std::priority_queue<NodeDistCloser> link_targets;
-//        stats.totalShrinkCalls2++;
-        searchNeighbors(dc, level, link_targets, entrypoint, entrypoint_dist, visited, ef_construction);
-        shrinkNeighbors(dc, link_targets, storage->max_neighbors_per_level[level], level);
-//        spdlog::warn("[add_node_on_level] Total distance computations in shrink: {}", totalDist);
+            std::vector<NodeDistCloser> &neighbors,
+            Stats &stats) {
+        std::priority_queue<NodeDistCloser> linkTargets;
+        searchNeighbors(dc, level, linkTargets, entrypoint, entrypointDist, visited, config.efConstruction, stats);
+        shrinkNeighbors(dc, linkTargets, storage->max_neighbors_per_level[level], level, stats);
 
-        neighbors.reserve(link_targets.size());
-
-        while (!link_targets.empty()) {
-            auto neighbor_node = link_targets.top();
-            link_targets.pop();
-            if (neighbor_node.id == id) {
+        neighbors.reserve(linkTargets.size());
+        while (!linkTargets.empty()) {
+            auto neighborNode = linkTargets.top();
+            linkTargets.pop();
+            if (neighborNode.id == id) {
                 continue;
             }
-            makeConnection(dc, id, neighbor_node.id, neighbor_node.dist, level);
-            neighbors.emplace_back(neighbor_node.id, neighbor_node.dist);
+            makeConnection(dc, id, neighborNode.id, neighborNode.dist, level, stats);
+            neighbors.emplace_back(neighborNode.id, neighborNode.dist);
         }
     }
 
     void HNSW::addNode(
-            orangedb::DistanceComputer *dc,
-            std::vector<storage_idx_t> node_id,
-            orangedb::level_t node_level,
+            DistanceComputer *dc,
+            std::vector<vector_idx_t> node_id,
+            level_t node_level,
             std::vector<omp_lock_t> &locks,
-            VisitedTable &visited) {
+            VisitedTable &visited,
+            Stats &stats) {
 #pragma omp critical
         {
-            if (entry_point == -1) {
-                max_level = node_level;
+            if (entryPoint == -1) {
+                maxLevel = node_level;
                 // Fix this maybe
-                entry_point = node_id[node_level];
+                entryPoint = node_id[node_level];
             }
         }
 
         omp_set_lock(&locks[node_id[0]]);
-        storage_idx_t nearest_id = entry_point;
-        float nearest_dist;
-        std::vector<std::vector<pair<storage_idx_t, float>>> neighbors(node_level + 1);
-        dc->computeDistance(nearest_id, nearest_dist);
-//        stats.totalDistComp++;
-        int level = max_level;
+        vector_idx_t nearestId = entryPoint;
+        double nearestDist;
+        std::vector<std::vector<NodeDistCloser>> neighbors(node_level + 1);
+        dc->computeDistance(nearestId, &nearestDist);
+        int level = maxLevel;
 
         // Update the nearest node
         for (; level > node_level; level--) {
-            searchNearestOnLevel(dc, level, nearest_id, nearest_dist);
-            nearest_id = storage->next_level_ids[level][nearest_id];
+            searchNearestOnLevel(dc, level, nearestId, nearestDist, stats);
+            nearestId = storage->next_level_ids[level][nearestId];
         }
 
         // Add the node to the graph
         for (; level >= 0; level--) {
             auto node_level_id = node_id[level];
-            addNodeOnLevel(dc, node_level_id, level, nearest_id, nearest_dist, visited, neighbors[level]);
+            addNodeOnLevel(dc, node_level_id, level, nearestId, nearestDist, visited, neighbors[level], stats);
             if (level != 0) {
-                nearest_id = storage->next_level_ids[level][nearest_id];
+                nearestId = storage->next_level_ids[level][nearestId];
             }
         }
         omp_unset_lock(&locks[node_id[0]]);
 
         for (int i = 0; i < neighbors.size(); i++) {
             for (auto neighbor: neighbors[i]) {
-                omp_set_lock(&locks[getActualId(i, neighbor.first)]);
-                makeConnection(dc, neighbor.first, node_id[i], neighbor.second, i);
-                omp_unset_lock(&locks[getActualId(i, neighbor.first)]);
+                omp_set_lock(&locks[getActualId(i, neighbor.id)]);
+                makeConnection(dc, neighbor.id, node_id[i], neighbor.dist, i, stats);
+                omp_unset_lock(&locks[getActualId(i, neighbor.id)]);
             }
         }
 
 #pragma omp critical
         {
             // Update the entry point
-            if (node_level > max_level) {
-                max_level = node_level;
-                entry_point = node_id[node_level];
+            if (node_level > maxLevel) {
+                maxLevel = node_level;
+                entryPoint = node_id[node_level];
             }
         }
     }
@@ -594,7 +379,7 @@ namespace orangedb {
             omp_init_lock(&locks[i]);
         }
         // Initialize ids
-        std::vector<std::vector<storage_idx_t>> node_ids(n);
+        std::vector<std::vector<vector_idx_t>> node_ids(n);
         uint8_t max_level = 0;
         for (int i = 0; i < n; i++) {
             uint8_t level = randomLevel();
@@ -606,23 +391,6 @@ namespace orangedb {
         // Set data to storage
         // Todo: Copy data to storage
         storage->data = data;
-        if (use_scalar_quantizer) {
-            // print vmin and vdiff
-            for (int i = 0; i < 2; i++) {
-                spdlog::warn("vmin[{}]: {}", i, storage->vmin[i]);
-                spdlog::warn("vdiff[{}]: {}", i, storage->vdiff[i]);
-            }
-            sq->train(n, storage->data);
-            storage->vmin = sq->vmin;
-            storage->vdiff = sq->vdiff;
-            Utils::alloc_aligned((void **) &storage->codes, storage->dim * n, 64);
-            sq->compute_codes(storage->data, storage->codes, n);
-            // print vmin and vdiff
-            for (int i = 0; i < 2; i++) {
-                spdlog::warn("vmin[{}]: {}", i, storage->vmin[i]);
-                spdlog::warn("vdiff[{}]: {}", i, storage->vdiff[i]);
-            }
-        }
 
         // Set the size for storage
         // Todo: Figure out if ordering is important!! Basically we are adding vectors from highest to lowest level.
@@ -641,74 +409,20 @@ namespace orangedb {
         printf("Building the graph %d\n", max_level);
 #pragma omp parallel
         {
+            DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
             VisitedTable visited(n);
-            DistanceComputer *dc;
-            if (use_scalar_quantizer) {
-                dc = new SQDistanceComputer(storage->codes, storage->dim, storage->numPoints, storage->vmin,
-                                            storage->vdiff);
-            } else {
-                dc = new L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
-            }
-#pragma omp for schedule(dynamic, MORSEL_SIZE)
+            Stats localStats = Stats();
+#pragma omp for schedule(static)
             for (int i = 0; i < n; i++) {
-                dc->setQuery(storage->data + (i * storage->dim));
-                addNode(dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
+                localDc->setQuery(storage->data + (i * storage->dim));
+                addNode(localDc, node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
                 if (i % 100000 == 0) {
                     spdlog::warn("Done with 100000!!");
                 }
             }
+            // Merge stats
+            stats.merge(localStats);
         }
-
-        // Create buckets of n with bucket_size
-//        for (size_t j = 0; j < n; j += bucket_size) {
-//            auto start = j;
-//            auto end = std::min(j + bucket_size, n);
-//#pragma omp parallel
-//            {
-//                VisitedTable visited(n);
-//                L2DistanceComputer dc(storage);
-//#pragma omp for schedule(static) nowait
-//                for (int i = start; i < end; i++) {
-//                    dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
-//                    add_node(&dc, node_ids[i], node_ids[i].size() - 1, locks, visited);
-//
-//                    if (i % 100000 == 0) {
-//                        spdlog::warn("Done with 100000!!");
-//                    }
-//                }
-//#pragma omp for schedule(static) nowait
-//                for (int i = 0; i < n; i++) {
-//                    omp_set_lock(&locks[node_ids[i][0]]);
-//                    dc.set_query(storage->data + (i * storage->dim), node_ids[i][0]);
-//                    shrink(&dc, node_ids[i][0], 0);
-//                    omp_unset_lock(&locks[node_ids[i][0]]);
-//                }
-//            }
-//        }
-
-
-//        auto max_neighbors = storage->max_neighbors_per_level[0];
-//        // Print the distribution of neighbors
-//        auto size = ceil(max_neighbors / 5.0);
-//        std::vector<int> distribution(size);
-//        auto neighbors = storage->get_neighbors(0);
-//        auto total_nbrs = 0;
-//        // Print empty percentage of neighbours
-//        for (int i = 0; i < n; i++) {
-//            auto node_nbrs = 0;
-//            for (int j = 0; j < max_neighbors; j++) {
-//                if (neighbors[i * max_neighbors + j] != -1) {
-//                    node_nbrs++;
-//                }
-//            }
-//            total_nbrs += node_nbrs;
-//            distribution[node_nbrs / 5]++;
-//        }
-//        for (int i = 0; i < size; i++) {
-//            spdlog::warn("Number of nodes within range {}-{}: {}", i * 5, (i * 5 + 5), distribution[i]);
-//        }
-//        // add logs for total number of neighbors
-//        spdlog::warn("Total number of neighbors: {}", total_nbrs);
 
         // Destroy locks
         for (int i = 0; i < n; i++) {
@@ -717,53 +431,53 @@ namespace orangedb {
     }
 
     uint8_t HNSW::randomLevel() {
-        double f = randFloat();
-        for (int level = 0; level < level_probabs.size(); level++) {
-            if (f < level_probabs[level]) {
+        double f = rg->randFloat();
+        for (int level = 0; level < levelProbabs.size(); level++) {
+            if (f < levelProbabs[level]) {
                 return level;
             }
-            f -= level_probabs[level];
+            f -= levelProbabs[level];
         }
         // happens with exponentially low probability
-        return level_probabs.size() - 1;
+        return levelProbabs.size() - 1;
     }
 
-    void HNSW::searchV1(
+    void HNSW::search(
             const float *query,
             uint16_t k,
-            uint16_t ef_search,
+            uint16_t efSearch,
             VisitedTable &visited,
-            std::priority_queue<NodeDistCloser> &result) {
-        L2DistanceComputer dc(storage->data, storage->dim, storage->numPoints);
+            std::vector<NodeDistCloser> &results,
+            Stats &stats) {
+        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
         dc.setQuery(query);
-        int ef = std::max(k, ef_search);
-        storage_idx_t nearest_id = entry_point;
-        float nearest_dist;
-        dc.computeDistance(nearest_id, nearest_dist);
-        int level = max_level;
+        int newEfSearch = std::max(k, efSearch);
+        vector_idx_t nearestID = entryPoint;
+        double nearestDist;
+        dc.computeDistance(nearestID, &nearestDist);
+        int level = maxLevel;
         // Update the nearest node
         for (; level > 0; level--) {
-            searchNearestOnLevel(&dc, level, nearest_id, nearest_dist);
-            nearest_id = storage->next_level_ids[level][nearest_id];
+            searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
+            nearestID = storage->next_level_ids[level][nearestID];
         }
-        searchNeighbors(&dc, level, result, nearest_id, nearest_dist, visited, ef);
+        std::priority_queue<NodeDistCloser> result;
+        searchNeighborsOnLastLevel(&dc, result, nearestID, nearestDist, visited, newEfSearch, 4, stats);
+        // copy the result to the output
+        while (!result.empty()) {
+            results.push_back(result.top());
+            result.pop();
+        }
     }
 
-    void HNSW::printStats() {
-        spdlog::warn("Total distance computations: {}", stats.totalDistComp);
-        spdlog::warn("Total distance computations in shrink: {}", stats.totalDistCompInShrink);
-        spdlog::warn("Total shrink calls 1: {}", stats.totalShrinkCalls1);
-        spdlog::warn("Total shrink calls 2: {}", stats.totalShrinkCalls2);
-        spdlog::warn("Total shrink not reduce: {}", stats.totalShrinkNotReduce);
-        spdlog::warn("Total 4 multiplications: {}", stats.total4mul);
-        spdlog::warn("Total loops: {}", stats.totalLoops);
-
+    void HNSW::logStats() {
+        stats.logStats();
         // Print avg number of nodes in last layer
         auto nbrs = storage->get_neighbors(0);
         int count = 0;
         for (int i = 0; i < storage->fast_level_counters[0]; i++) {
             for (int j = 0; j < storage->max_neighbors_per_level[0]; j++) {
-                if (nbrs[i * storage->max_neighbors_per_level[0] + j] != -1) {
+                if (nbrs[i * storage->max_neighbors_per_level[0] + j] != INVALID_VECTOR_ID) {
                     count++;
                 }
             }

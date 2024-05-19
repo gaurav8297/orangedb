@@ -6,72 +6,74 @@
 #include <random>
 #include <distance.h>
 #include <storage.h>
-#include <aux_ds.h>
+#include <helper_ds.h>
 #include <queue>
+#include <spdlog/spdlog.h>
 
 using namespace std;
 
-// TODO: Work on optimizations later on
 namespace orangedb {
-    typedef uint8_t level_t;
-
     struct Stats {
-        explicit Stats() : totalDistComp(0), totalDistCompInShrink(0), totalShrinkCalls1(0), totalShrinkCalls2(0) {}
+        uint64_t totalDistCompDuringSearch = 0;
+        uint64_t totalDistCompDuringShrink = 0;
+        uint64_t totalDistCompDuringMakeConnection = 0;
+        uint64_t totalShrinkCalls = 0;
 
-        atomic_int64_t totalDistComp;
-        atomic_int64_t totalDistCompInShrink;
-        atomic_int64_t totalShrinkCalls1;
-        atomic_int64_t totalShrinkCalls2;
-        atomic_int64_t totalShrinkNotReduce;
-        atomic_int64_t total4mul;
-        atomic_int64_t totalLoops;
+
+        void logStats() {
+            spdlog::info("Total Distance Computations in search: {}", totalDistCompDuringSearch);
+            spdlog::info("Total Distance Computations in Shrink: {}", totalDistCompDuringShrink);
+            spdlog::info("Total Distance Computations in MakeConnection: {}", totalDistCompDuringMakeConnection);
+            spdlog::info("Total Shrink Calls: {}", totalShrinkCalls);
+        }
+
+        void reset() {
+            totalDistCompDuringSearch = 0;
+            totalDistCompDuringShrink = 0;
+            totalDistCompDuringMakeConnection = 0;
+            totalShrinkCalls = 0;
+        }
+
+        void merge(Stats &other) {
+#pragma omp critical
+            {
+                totalDistCompDuringSearch += other.totalDistCompDuringSearch;
+                totalDistCompDuringShrink += other.totalDistCompDuringShrink;
+                totalDistCompDuringMakeConnection += other.totalDistCompDuringMakeConnection;
+                totalShrinkCalls += other.totalShrinkCalls;
+            }
+        }
+    };
+
+    struct HNSWConfig {
+        // The number of neighbors to keep for each node
+        uint16_t M = 16;
+        // The number of neighbors to explore during index construction
+        uint16_t efConstruction = 200;
+        // The number of neighbors to explore during search
+        uint16_t efSearch = 50;
+        // RNG alpha parameter
+        float alpha = 1.0;
+
+        HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float alpha)
+                : M(M), efConstruction(efConstruction), efSearch(efSearch), alpha(alpha) {}
     };
 
     class HNSW {
     public:
-        struct NodeDistCloser {
-            explicit NodeDistCloser(storage_idx_t id, float dist) : id(id), dist(dist) {}
-
-            storage_idx_t id;
-            float dist;
-
-            bool operator<(const NodeDistCloser &other) const {
-                return dist < other.dist;
-            }
-        };
-
-        struct NodeDistFarther {
-            explicit NodeDistFarther(storage_idx_t id, float dist) : id(id), dist(dist) {}
-
-            storage_idx_t id;
-            float dist;
-
-            bool operator<(const NodeDistFarther &other) const {
-                return dist > other.dist;
-            }
-        };
-
-    public:
-        explicit HNSW(
-                uint16_t M,
-                uint16_t ef_construction,
-                uint16_t dim,
-                float explore_factor,
-                float alpha,
-                int beam_size,
-                int beam_thrsh,
-                bool use_scalar_quantizer);
+        explicit HNSW(HNSWConfig config, RandomGenerator *rg, uint16_t dim);
 
         void build(const float *data, size_t n);
 
-        void searchV1(
+        void search(
                 const float *query,
                 uint16_t k,
-                uint16_t ef_search,
-                VisitedTable &visited,
-                std::priority_queue<NodeDistCloser> &resultSet);
+                uint16_t efSearch,
+                orangedb::VisitedTable &visited,
+                std::vector<NodeDistCloser> &results,
+                Stats &stats);
 
-        void printStats();
+        void logStats();
 
     private:
         void initProbabs(uint16_t M, double levelMult);
@@ -82,86 +84,75 @@ namespace orangedb {
         void searchNearestOnLevel(
                 DistanceComputer *dc,
                 level_t level,
-                storage_idx_t &nearest,
-                float &nearestDist);
+                vector_idx_t &nearest,
+                double &nearestDist,
+                Stats &stats);
 
         void searchNeighbors(
                 DistanceComputer *dc,
                 level_t level,
                 std::priority_queue<NodeDistCloser> &results,
-                storage_idx_t entrypoint,
-                float entrypointDist,
+                vector_idx_t entrypoint,
+                double entrypointDist,
                 VisitedTable &visited,
-                uint16_t ef);
+                uint16_t efSearch,
+                Stats &stats);
 
-        void searchNeighborsMoreOptimized(
+        void searchNeighborsOnLastLevel(
                 DistanceComputer *dc,
-                level_t level,
                 std::priority_queue<NodeDistCloser> &results,
-                storage_idx_t entrypoint,
-                float entrypointDist,
+                vector_idx_t entrypoint,
+                double entrypointDist,
                 VisitedTable &visited,
-                uint16_t ef);
+                uint16_t efSearch,
+                int distCompBatchSize,
+                Stats &stats);
 
-        void searchNeighborsOptimized(
+        void shrinkNeighbors(
                 DistanceComputer *dc,
-                level_t level,
                 std::priority_queue<NodeDistCloser> &results,
-                storage_idx_t entrypoint,
-                float entrypointDist,
-                VisitedTable &visited,
-                uint16_t ef);
+                int maxSize,
+                level_t level,
+                Stats &stats);
 
-        int shrinkNeighbors(DistanceComputer *dc, std::priority_queue<NodeDistCloser> &resultSet, int max_size,
-                            uint8_t level);
-
-        int shrinkNeighbors2(DistanceComputer *dc, std::priority_queue<NodeDistCloser> &resultSet, int max_size,
-                             uint8_t level);
-
-        void makeConnection(DistanceComputer *dc, storage_idx_t src, storage_idx_t dest, float dist_src_dest,
-                            level_t level);
-
-        void shrink(DistanceComputer *dc, storage_idx_t src, level_t level);
+        void makeConnection(
+                DistanceComputer *dc,
+                vector_idx_t src,
+                vector_idx_t dest,
+                double distSrcDest,
+                level_t level,
+                Stats &stats);
 
         void addNodeOnLevel(
                 DistanceComputer *dc,
-                storage_idx_t id,
+                vector_idx_t id,
                 level_t level,
-                storage_idx_t entrypoint,
-                float entrypoint_dist,
+                vector_idx_t entrypoint,
+                double entrypointDist,
                 VisitedTable &visited,
-                std::vector<pair<storage_idx_t, float>> &neighbors);
+                std::vector<NodeDistCloser> &neighbors,
+                Stats &stats);
 
         void addNode(
                 DistanceComputer *dc,
-                std::vector<storage_idx_t> node_id,
+                std::vector<vector_idx_t> node_id,
                 level_t level,
                 std::vector<omp_lock_t> &locks,
-                VisitedTable &visited);
+                VisitedTable &visited,
+                Stats &stats);
 
-        inline float randFloat() {
-            return mt() / float(mt.max());
-        }
-
-        inline storage_idx_t getActualId(uint8_t level, storage_idx_t id) {
+        inline vector_idx_t getActualId(level_t level, vector_idx_t id) {
             return level != 0 ? storage->actual_ids[level][id] : id;
         }
 
     private:
-        float explore_factor;
-        float alpha;
-        int beam_size;
-        int beam_thrsh;
-        uint16_t ef_construction;
-        bool use_scalar_quantizer;
-        int64_t entry_point = -1;
-        uint8_t max_level = 0;
-        std::vector<double> level_probabs;
-        Storage *storage;
-        std::mt19937 mt;
-        Stats stats;
+        HNSWConfig config;
+        vector_idx_t entryPoint;
+        level_t maxLevel;
+        std::vector<double> levelProbabs;
 
-        // Scalar Quantizer Option
-        ScalarQuantizer *sq;
+        Storage *storage;
+        RandomGenerator *rg;
+        Stats stats;
     };
 }

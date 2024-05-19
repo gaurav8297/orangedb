@@ -7,7 +7,7 @@
 #include <omp.h>
 #include <random>
 #include <queue>
-#include <cstring>
+#include <helper_ds.h>
 
 // a bit above machine epsilon for float16
 #define EPS (1 / 1024.)
@@ -198,23 +198,24 @@ namespace orangedb {
 #pragma omp for
             for (int i = 0; i < n; i++) {
                 localDc->setQuery(queries + i * dim);
-                float minDistance = MAXFLOAT;
-                auto j = 0, minId = 0;
+                double minDistance = MAXFLOAT;
+                vector_idx_t j = 0, minId = 0;
                 while (j + 4 < numEntries) {
-                    float d[4];
-                    localDc->computeDistanceFourVecs(j, j + 1, j + 2, j + 3, d[0], d[1], d[2], d[3]);
+                    double dists[4];
+                    vector_idx_t idx[4] = {j, j + 1, j + 2, j + 3};
+                    localDc->batchComputeDistances(idx, dists, 4);
                     for (int l = 0; l < 4; l++) {
-                        if (d[l] < minDistance) {
-                            minDistance = d[l];
+                        if (dists[l] < minDistance) {
+                            minDistance = dists[l];
                             minId = j + l;
                         }
                     }
                     j += 4;
                 }
 
-                for (int l = j; l < numEntries; l++) {
-                    float d;
-                    localDc->computeDistance(l, d);
+                for (vector_idx_t l = j; l < numEntries; l++) {
+                    double d;
+                    localDc->computeDistance(l, &d);
                     if (d < minDistance) {
                         minDistance = d;
                         minId = l;
@@ -231,10 +232,10 @@ namespace orangedb {
         auto localDc = dc->clone();
         // Find the k nearest neighbors
         localDc->setQuery(queries);
-        std::priority_queue<Node> res;
+        std::priority_queue<NodeDistCloser> res;
         for (int i = 0; i < numEntries; i++) {
-            float d;
-            localDc->computeDistance(i, d);
+            double d;
+            localDc->computeDistance(i, &d);
             res.emplace(i, d);
         }
         for (int i = 0; i < k; i++) {
