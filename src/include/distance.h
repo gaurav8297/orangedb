@@ -41,7 +41,7 @@ namespace orangedb {
 
         inline void batchComputeDistances(vector_idx_t *ids, double *results, int size) override {
             for (int i = 0; i < size; i++) {
-                computeDistance(ids[i], dim, &results[i]);
+                computeDistance(ids[i], &results[i]);
             }
         }
 

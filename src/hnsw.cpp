@@ -116,6 +116,7 @@ namespace orangedb {
         visited.reset();
     }
 
+    // TODO: Figure out why this is not working!!
     void HNSW::searchNeighborsOnLastLevel(
             DistanceComputer *dc,
             std::priority_queue<NodeDistCloser> &results,
@@ -141,11 +142,11 @@ namespace orangedb {
 
             // the following version processes 4 neighbors at a time
             size_t jmax = begin;
-            for (size_t j = begin; j < end; j++) {
-                int v1 = neighbors[j];
-                if (v1 == INVALID_VECTOR_ID)
+            for (size_t i = begin; i < end; i++) {
+                vector_idx_t neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID)
                     break;
-                prefetch_L3(visited.data() + v1);
+                prefetch_L3(visited.data() + neighbor);
                 jmax += 1;
             }
 
@@ -153,18 +154,18 @@ namespace orangedb {
             int counter = 0;
             vector_idx_t vectorIds[distCompBatchSize];
             for (size_t j = begin; j < jmax; j++) {
-                int v1 = neighbors[j];
-                if (v1 == INVALID_VECTOR_ID)
+                vector_idx_t neighbor = neighbors[j];
+                if (neighbor == INVALID_VECTOR_ID)
                     break;
-                bool vget = visited.get(v1);
+                bool vget = visited.get(neighbor);
                 // TODO: Try to set visited in the end of loop
-                visited.set(v1);
-                vectorIds[counter] = v1;
+                visited.set(neighbor);
+                vectorIds[counter] = neighbor;
                 counter += vget ? 0 : 1;
                 if (counter == distCompBatchSize) {
                     double distances[distCompBatchSize];
                     dc->batchComputeDistances(vectorIds, distances, distCompBatchSize);
-                    stats.totalDistCompDuringSearch += 4;
+                    stats.totalDistCompDuringSearch += distCompBatchSize;
                     for (int k = 0; k < distCompBatchSize; k++) {
                         if (results.size() < efSearch || distances[k] < results.top().dist) {
                             candidates.emplace(vectorIds[k], distances[k]);
@@ -192,6 +193,7 @@ namespace orangedb {
                 }
             }
         }
+        // Reset the visited table
         visited.reset();
     }
 
@@ -466,7 +468,7 @@ namespace orangedb {
                 nearestDist,
                 visited,
                 newEfSearch,
-                4 /* distCompBatchSize */,
+                4,
                 stats);
     }
 
