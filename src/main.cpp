@@ -657,12 +657,10 @@ void query_graph(
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
         hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
-        int s = 0;
-        while (!results.empty() && s < k) {
+        while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
             results.pop();
-            s++;
         }
         auto gt = gtVecs + i * 100;
         for (auto &result: res) {
@@ -672,6 +670,7 @@ void query_graph(
         }
     }
     stats.logStats();
+    std::cout << "Total Vectors: " << baseNumVectors << std::endl;
     std::cout << "Recall: " << recall / queryNumVectors << std::endl;
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
