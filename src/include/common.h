@@ -2,7 +2,6 @@
 
 #include <sys/stat.h>
 #include <iostream>
-#include <format>
 #include <sys/fcntl.h>
 #include <random>
 #include "spdlog/fmt/fmt.h"
