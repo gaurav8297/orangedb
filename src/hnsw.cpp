@@ -143,9 +143,8 @@ namespace orangedb {
             size_t jmax = begin;
             for (size_t j = begin; j < end; j++) {
                 int v1 = neighbors[j];
-                if (v1 < 0)
+                if (v1 == INVALID_VECTOR_ID)
                     break;
-
                 prefetch_L3(visited.data() + v1);
                 jmax += 1;
             }
@@ -155,7 +154,7 @@ namespace orangedb {
             vector_idx_t vectorIds[distCompBatchSize];
             for (size_t j = begin; j < jmax; j++) {
                 int v1 = neighbors[j];
-                if (v1 < 0)
+                if (v1 == INVALID_VECTOR_ID)
                     break;
                 bool vget = visited.get(v1);
                 // TODO: Try to set visited in the end of loop
@@ -323,7 +322,7 @@ namespace orangedb {
             Stats &stats) {
 #pragma omp critical
         {
-            if (entryPoint == -1) {
+            if (entryPoint == INVALID_VECTOR_ID) {
                 maxLevel = node_level;
                 // Fix this maybe
                 entryPoint = node_id[node_level];

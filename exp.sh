@@ -4,5 +4,5 @@
 
 ./orangedb_main -basePath /Users/gauravsehgal/work/vector_index/data/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 16 -numVectors 1000000 -alpha 1.0
 
-./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 16 -numVectors 1000000 -alpha 1.0
+./orangedb_main -basePath /home/g3sehgal/vector_index/vector_index/data/siftsmall -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 16 -numVectors 10000 -alpha 1.0
 
