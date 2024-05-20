@@ -4,6 +4,8 @@
 #include <iostream>
 #include <format>
 #include <sys/fcntl.h>
+#include <random>
+#include "spdlog/fmt/fmt.h"
 
 #define IS_ALIGNED(X, Y) ((uint64_t)(X) % (uint64_t)(Y) == 0)
 #define IS_512_ALIGNED(X) IS_ALIGNED(X, 512)
@@ -15,7 +17,7 @@ namespace orangedb {
 
     [[noreturn]] inline void failCheckArgument(
             const char *condition_name, const char *file, int linenr, const char *comment) {
-        throw std::invalid_argument(std::format(
+        throw std::invalid_argument(fmt::format(
                 "Assertion failed in file \"{}\" on line {}: {} with comment: {}", file, linenr, condition_name,
                 comment));
     }

@@ -1,4 +1,3 @@
-#include <cassert>
 #include <memory>
 #include <vector>
 #include "include/clustering.h"
@@ -8,6 +7,7 @@
 #include <random>
 #include <queue>
 #include <helper_ds.h>
+#include <common.h>
 
 // a bit above machine epsilon for float16
 #define EPS (1 / 1024.)
@@ -24,7 +24,7 @@ namespace orangedb {
     void Clustering::initCentroids(int n, const float *data) {
         // TODO: Implement divide and conquer k-means++ initialization
         // For now choose the random centroids
-        assert(n > numCentroids);
+        CHECK_ARGUMENT(n > numCentroids, "Number of vectors should be greater than number of centroids");
         auto c = centroids.data();
         std::vector<int> perm(numCentroids);
         randomPerm(n, perm.data(), numCentroids, seed + 15486557L);
@@ -170,7 +170,7 @@ namespace orangedb {
     }
 
     void Clustering::randomPerm(int n, int *perm, int nPerm, int64_t seed) {
-        assert(nPerm <= n);
+        CHECK_ARGUMENT(nPerm <= n, "Number of permutations should be less than the number of elements");
         unordered_map<int, int> m;
         std::mt19937 mt(seed);
         for (int i = 0; i < nPerm - 1; i++) {
@@ -227,7 +227,7 @@ namespace orangedb {
         }
     }
 
-    void IndexOneNN::knn(int k, const float *queries, float *distance, int *resultIds) {
+    void IndexOneNN::knn(int k, const float *queries, double *distance, int *resultIds) {
         // Single threaded implementation
         auto localDc = dc->clone();
         // Find the k nearest neighbors

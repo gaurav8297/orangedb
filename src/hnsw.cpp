@@ -1,4 +1,3 @@
-#include <cassert>
 #include "include/hnsw.h"
 #include <omp.h>
 #include <algorithm>
@@ -447,7 +446,7 @@ namespace orangedb {
             uint16_t k,
             uint16_t efSearch,
             VisitedTable &visited,
-            std::vector<NodeDistCloser> &results,
+            std::priority_queue<NodeDistCloser> &results,
             Stats &stats) {
         L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
         dc.setQuery(query);
@@ -461,13 +460,15 @@ namespace orangedb {
             searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
-        std::priority_queue<NodeDistCloser> result;
-        searchNeighborsOnLastLevel(&dc, result, nearestID, nearestDist, visited, newEfSearch, 4, stats);
-        // copy the result to the output
-        while (!result.empty()) {
-            results.push_back(result.top());
-            result.pop();
-        }
+        searchNeighborsOnLastLevel(
+                &dc,
+                results,
+                nearestID,
+                nearestDist,
+                visited,
+                newEfSearch,
+                4 /* distCompBatchSize */,
+                stats);
     }
 
     void HNSW::logStats() {

@@ -3,6 +3,7 @@
 #include "distance.h"
 #include <random>
 #include <cstring>
+#include <common.h>
 
 namespace orangedb {
     // Perform 1-NN search on the given data in parallel using OpenMP
@@ -14,7 +15,7 @@ namespace orangedb {
 
         inline void search(int n, const float *queries, float *distances, int32_t *resultIds);
 
-        void knn(int k, const float *queries, float *distances, int *resultIds);
+        void knn(int k, const float *queries, double *distances, int *resultIds);
 
     private:
         DistanceComputer *dc;
@@ -40,7 +41,7 @@ namespace orangedb {
         void assignCentroids(const float *data, int n, int32_t *assign);
 
         inline int getCentroid(int i, float *centroid) {
-            assert(i < numCentroids);
+            CHECK_ARGUMENT(i < numCentroids, "Invalid centroid index");
             centroid = new float[dim];
             memcpy(centroid, centroids.data() + i * dim, dim * sizeof(float));
             return dim;

@@ -35,13 +35,13 @@ namespace orangedb {
 
         void push(vector_idx_t id, float val);
 
-        storage_idx_t popMin(float *val);
+        vector_idx_t popMin(float *val);
 
         inline int size() const {
             return logical_size;
         };
 
-        inline storage_idx_t max(float *val) {
+        inline vector_idx_t max(float *val) {
             *val = values[1];
             return ids[1];
         }

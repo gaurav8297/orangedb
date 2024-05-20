@@ -1,6 +1,5 @@
 #include <iostream>
 #include "hnsw.h"
-#include "utils.h"
 #include "scalar_quantizer.h"
 #include "spdlog/fmt/fmt.h"
 
@@ -10,9 +9,8 @@
 
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
-#include "include/clustering.h"
-#include <chrono>
 #include <simsimd/simsimd.h>
+#include "include/partitioned_index.h"
 
 using namespace orangedb;
 
@@ -577,7 +575,7 @@ void benchmark_random_dist_comp() {
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
     omp_set_num_threads(32);
 
@@ -589,7 +587,7 @@ void benchmark_simd_distance() {
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
 
     int64_t duration = 0;
@@ -654,17 +652,26 @@ void query_graph(
     auto start = std::chrono::high_resolution_clock::now();
     auto visited = VisitedTable(baseNumVectors);
     auto recall = 0.0;
+    Stats stats{};
     for (size_t i = 0; i < queryNumVectors; i++) {
-        std::vector<NodeDistCloser> results;
-        Stats stats{};
+        std::priority_queue<NodeDistCloser> results;
+        std::vector<NodeDistFarther> res;
         hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
+        int s = 0;
+        while (!results.empty() && s < k) {
+            auto top = results.top();
+            res.emplace_back(top.id, top.dist);
+            results.pop();
+            s++;
+        }
         auto gt = gtVecs + i * 100;
-        for (auto &result: results) {
+        for (auto &result: res) {
             if (std::find(gt, gt + 100, result.id) != (gt + 100)) {
                 recall++;
             }
         }
     }
+    stats.logStats();
     std::cout << "Recall: " << recall / queryNumVectors << std::endl;
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -712,11 +719,11 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto groundTruthPath = fmt::format("{}/groundtruth.ivecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = Utils::fvecs_read(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     size_t gtDimension, gtNumVectors;
-    int *gtVecs = Utils::ivecs_read(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
+    int *gtVecs = readIvecFile(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
@@ -789,22 +796,6 @@ void benchmark_quantizer() {
     printf("Dequantized: %f\n", dequantized_v2);
 }
 
-int findCloseCentroids(float *distances, int *centroids, int size, int *closeCentroids, float threshold) {
-    float closestDist = distances[0];
-    closeCentroids[0] = centroids[0];
-//    printf("Closest centroid: %d, Distance 1: %f, Distance 2: %f, Distance 3: %f\n", closeCentroids[0],
-//           distances[1] - closestDist, distances[2] - closestDist, distances[3] - closestDist);
-
-    // Find the closest centroid
-    int n = 1;
-    for (int i = 1; i < size; i++) {
-        if (distances[i] - closestDist < threshold) {
-            closeCentroids[n++] = centroids[i];
-        }
-    }
-    return n;
-}
-
 // Benchmark clustering
 void benchmarkClustering(int argc, char **argv) {
     InputParser input(argc, argv);
@@ -818,8 +809,8 @@ void benchmarkClustering(int argc, char **argv) {
     auto efConstruction = stoi(input.getCmdOption("-efConstruction"));
     auto efSearch = stoi(input.getCmdOption("-efSearch"));
     auto nThreads = stoi(input.getCmdOption("-nThreads"));
-    auto minCentroids = stoi(input.getCmdOption("-minCentroids"));
-    auto centroidThreshold = stof(input.getCmdOption("-centroidThreshold"));
+    auto maxSearchCentroids = stoi(input.getCmdOption("-maxSearchCentroids"));
+    auto searchThreshold = stof(input.getCmdOption("-searchThreshold"));
     omp_set_num_threads(nThreads);
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
@@ -827,99 +818,42 @@ void benchmarkClustering(int argc, char **argv) {
     auto groundTruthPath = fmt::format("{}/groundtruth.ivecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = Utils::fvecs_read(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     size_t gtDimension, gtNumVectors;
-    int *gtVecs = Utils::ivecs_read(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
+    int *gtVecs = readIvecFile(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
 
+    PartitionedIndexConfig config(M, efConstruction, efSearch, 1.0, nCentroids, nIter, minCentroidSize, maxCentroidSize,
+                                  maxSearchCentroids, searchThreshold);
+    RandomGenerator rng(1234);
+    PartitionedIndex partitionedIndex(baseDimension, config, &rng);
+
+    // Build index
     auto start = std::chrono::high_resolution_clock::now();
-    Clustering clustering(baseDimension, nCentroids, nIter, minCentroidSize, maxCentroidSize);
-    clustering.initCentroids(baseNumVectors, baseVecs);
-    clustering.train(baseNumVectors, baseVecs);
+    partitionedIndex.build(baseVecs, baseNumVectors);
     auto end = std::chrono::high_resolution_clock::now();
-
-    int32_t *assign = new int32_t[baseNumVectors];
-    clustering.assignCentroids(baseVecs, baseNumVectors, assign);
-
-    // Build hassign for each centroid
-    int *hassign = new int[nCentroids];
-    memset(hassign, 0, nCentroids * sizeof(int));
-    for (int i = 0; i < baseNumVectors; i++) {
-        hassign[assign[i]]++;
-    }
-    for (int i = 0; i < nCentroids; i++) {
-        printf("Centroid %d: %d\n", i, hassign[i]);
-    }
-
-    std::vector<std::unique_ptr<HNSW>> indexes;
-    std::vector<float *> datePerCentroid;
-    std::vector<int> idx;
-    for (int i = 0; i < nCentroids; i++) {
-        auto hnsw = std::make_unique<HNSW>(M, efConstruction, baseDimension, 1.0, 1.0, 0, 0, false);
-        indexes.push_back(std::move(hnsw));
-        datePerCentroid.push_back(new float[hassign[i] * baseDimension]);
-        idx.push_back(0);
-    }
-
-    std::vector<std::vector<int>> actualIds = std::vector<std::vector<int>>(nCentroids);
-    for (int i = 0; i < baseNumVectors; i++) {
-        actualIds[assign[i]].push_back(i);
-    }
-
-    // Assign data to each centroid
-    for (int i = 0; i < baseNumVectors; i++) {
-        auto centroid = assign[i];
-        memcpy(datePerCentroid[centroid] + (idx[centroid]++ * baseDimension), baseVecs + (i * baseDimension),
-               baseDimension * sizeof(float));
-    }
-
-    // Build index for each centroid
-    for (int i = 0; i < nCentroids; i++) {
-        indexes[i]->build(datePerCentroid[i], hassign[i]);
-    }
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "Building time: " << duration << " ms" << std::endl;
 
     // search
-    // First find top 3 centroids for each query
-    // TODO: Do search only in the assigned centroid
     auto recall = 0;
-    auto visited = VisitedTable(baseNumVectors);
-    L2DistanceComputer dc(clustering.centroids.data(), baseDimension, nCentroids);
-    std::vector<int> closestCentroids(minCentroids);
-    std::vector<float> centroidDist(minCentroids);
-    std::vector<int> closeCentroids(minCentroids);
-    IndexOneNN indexOne(&dc, baseDimension, nCentroids);
-    auto startTime = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < queryNumVectors; i++) {
-        std::vector<int> results;
-        indexOne.knn(minCentroids, queryVecs + (i * queryDimension), centroidDist.data(), closestCentroids.data());
-        int n = findCloseCentroids(centroidDist.data(), closestCentroids.data(), minCentroids, closeCentroids.data(), centroidThreshold);
-        // TODO: Choose between all five or not using some heuristics
-        for (auto j = 0; j < n; j++) {
-            auto closeCentroid = closeCentroids[j];
-            std::priority_queue<HNSW::NodeDistCloser> resultSet;
-            indexes[closeCentroid]->searchV1(queryVecs + (i * queryDimension), K, efSearch, visited, resultSet);
-            while (!resultSet.empty()) {
-                results.push_back(actualIds[closeCentroid][resultSet.top().id]);
-                resultSet.pop();
-            }
-        }
+        std::vector<NodeDistFarther> results;
+        Stats stats{};
+        partitionedIndex.search(queryVecs + i * queryDimension, K, results, stats);
         auto gt = gtVecs + i * gtDimension;
         for (auto res: results) {
-            if (std::find(gt, gt + gtDimension, res) != (gt + gtDimension)) {
+            if (std::find(gt, gt + gtDimension, res.id) != (gt + gtDimension)) {
                 recall++;
             }
         }
     }
-
-    auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    std::cout << "Query time: " << duration << " ms" << std::endl;
     std::cout << "Recall: " << recall / queryNumVectors << std::endl;
 }
 
 int main(int argc, char **argv) {
-//    benchmark_hnsw_queries(argc, argv);
+    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();

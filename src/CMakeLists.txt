@@ -3,9 +3,9 @@ add_library(orangedb
         OBJECT
         helper_ds.cpp
         hnsw.cpp
-        utils.cpp
         clustering.cpp
-        scalar_quantizer.cpp)
+        scalar_quantizer.cpp
+        partitioned_index.cpp)
 
 set(ALL_OBJECT_FILES
         ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:orangedb>

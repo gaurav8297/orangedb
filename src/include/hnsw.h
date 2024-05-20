@@ -70,7 +70,7 @@ namespace orangedb {
                 uint16_t k,
                 uint16_t efSearch,
                 orangedb::VisitedTable &visited,
-                std::vector<NodeDistCloser> &results,
+                std::priority_queue<NodeDistCloser> &results,
                 Stats &stats);
 
         void logStats();
