@@ -46,7 +46,13 @@ namespace orangedb {
                 }
                 double dist;
                 stats.totalDistCompDuringSearch++;
-                dc->computeDistance(getActualId(level, neighbor), &dist);
+                vector_idx_t neighborId = getActualId(level, neighbor);
+                if (neighborId > 200000) {
+                    printf("searchNearestOnLevel id: %d\n", neighborId);
+                    printf("searchNearestOnLevel level: %d\n", level);
+                    printf("searchNearestOnLevel neigbor: %d\n", neighbor);
+                }
+                dc->computeDistance(neighborId, &dist);
                 if (dist < nearestDist) {
                     nearest = neighbor;
                     nearestDist = dist;
@@ -101,7 +107,13 @@ namespace orangedb {
                 }
                 visited.set(neighbor);
                 double dist;
-                dc->computeDistance(getActualId(level, neighbor), &dist);
+                vector_idx_t neighborId = getActualId(level, neighbor);
+                if (neighborId > 200000) {
+                    printf("searchNeighbors id: %d\n", neighborId);
+                    printf("searchNeighbors level: %d\n", level);
+                    printf("searchNeighbors neigbor: %d\n", neighbor);
+                }
+                dc->computeDistance(neighborId, &dist);
                 stats.totalDistCompDuringSearch++;
                 if (results.size() < efSearch || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
@@ -335,7 +347,13 @@ namespace orangedb {
         vector_idx_t nearestId = entryPoint;
         double nearestDist;
         std::vector<std::vector<NodeDistCloser>> neighbors(node_level + 1);
-        dc->computeDistance(getActualId(node_level, nearestId), &nearestDist);
+        vector_idx_t neighborId = getActualId(node_level, nearestId);
+        if (neighborId > 200000) {
+            printf("addNode id: %d\n", neighborId);
+            printf("addNode level: %d\n", node_level);
+            printf("addNode neigbor: %d\n", nearestId);
+        }
+        dc->computeDistance(neighborId, &nearestDist);
         int level = maxLevel;
 
         // Update the nearest node
@@ -454,8 +472,8 @@ namespace orangedb {
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = entryPoint;
         double nearestDist;
-        dc.computeDistance(nearestID, &nearestDist);
         int level = maxLevel;
+        dc.computeDistance(getActualId(level, nearestID), &nearestDist);
         // Update the nearest node
         for (; level > 0; level--) {
             searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
