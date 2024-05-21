@@ -335,7 +335,7 @@ namespace orangedb {
         vector_idx_t nearestId = entryPoint;
         double nearestDist;
         std::vector<std::vector<NodeDistCloser>> neighbors(node_level + 1);
-        dc->computeDistance(nearestId, &nearestDist);
+        dc->computeDistance(getActualId(node_level, nearestId), &nearestDist);
         int level = maxLevel;
 
         // Update the nearest node
