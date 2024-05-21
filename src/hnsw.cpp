@@ -46,13 +46,7 @@ namespace orangedb {
                 }
                 double dist;
                 stats.totalDistCompDuringSearch++;
-                vector_idx_t neighborId = getActualId(level, neighbor);
-                if (neighborId > 200000) {
-                    printf("searchNearestOnLevel id: %d\n", neighborId);
-                    printf("searchNearestOnLevel level: %d\n", level);
-                    printf("searchNearestOnLevel neigbor: %d\n", neighbor);
-                }
-                dc->computeDistance(neighborId, &dist);
+                dc->computeDistance(getActualId(level, neighbor), &dist);
                 if (dist < nearestDist) {
                     nearest = neighbor;
                     nearestDist = dist;
@@ -107,13 +101,7 @@ namespace orangedb {
                 }
                 visited.set(neighbor);
                 double dist;
-                vector_idx_t neighborId = getActualId(level, neighbor);
-                if (neighborId > 200000) {
-                    printf("searchNeighbors id: %d\n", neighborId);
-                    printf("searchNeighbors level: %d\n", level);
-                    printf("searchNeighbors neigbor: %d\n", neighbor);
-                }
-                dc->computeDistance(neighborId, &dist);
+                dc->computeDistance(getActualId(level, neighbor), &dist);
                 stats.totalDistCompDuringSearch++;
                 if (results.size() < efSearch || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
@@ -347,13 +335,7 @@ namespace orangedb {
         vector_idx_t nearestId = entryPoint;
         double nearestDist;
         std::vector<std::vector<NodeDistCloser>> neighbors(node_level + 1);
-        vector_idx_t neighborId = getActualId(maxLevel, nearestId);
-        if (neighborId > 200000) {
-            printf("addNode id: %d\n", neighborId);
-            printf("addNode level: %d\n", node_level);
-            printf("addNode neigbor: %d\n", nearestId);
-        }
-        dc->computeDistance(neighborId, &nearestDist);
+        dc->computeDistance(getActualId(maxLevel, nearestId), &nearestDist);
         int level = maxLevel;
 
         // Update the nearest node
