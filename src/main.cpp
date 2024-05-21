@@ -858,14 +858,14 @@ void benchmarkClustering(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-//    benchmark_hnsw_queries(argc, argv);
+    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();
 //    benchmark_scalar_quantizer();
 //    benchmark_quantizer();
 //    benchmark_explore_data();
-    benchmarkClustering(argc, argv);
+//    benchmarkClustering(argc, argv);
 //    benchmarkSimSimd();
     return 0;
 }
