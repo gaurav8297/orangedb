@@ -347,7 +347,7 @@ namespace orangedb {
         vector_idx_t nearestId = entryPoint;
         double nearestDist;
         std::vector<std::vector<NodeDistCloser>> neighbors(node_level + 1);
-        vector_idx_t neighborId = getActualId(node_level, nearestId);
+        vector_idx_t neighborId = getActualId(maxLevel, nearestId);
         if (neighborId > 200000) {
             printf("addNode id: %d\n", neighborId);
             printf("addNode level: %d\n", node_level);
