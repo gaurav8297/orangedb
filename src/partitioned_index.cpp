@@ -30,6 +30,11 @@ namespace orangedb {
             hassign[assign[i]]++;
         }
 
+        // Print the number of vectors assigned to each centroid
+        for (int i = 0; i < config.numCentroids; i++) {
+            spdlog::info("Centroid {} has {} vectors", i, hassign[i]);
+        }
+
         std::vector<float *> datePerCentroid;
         std::vector<int> idx;
         for (int i = 0; i < config.numCentroids; i++) {
@@ -55,16 +60,16 @@ namespace orangedb {
         this->numVectors = n;
     }
 
-    void PartitionedIndex::search(const float *query, uint16_t k, std::vector<NodeDistFarther> &results, Stats &stats) {
+    void PartitionedIndex::search(const float *query, uint16_t k, VisitedTable &visited, std::vector<NodeDistFarther> &results, Stats &stats) {
         double *centroidDistances = new double[config.numCentroids];
         int *centroidIndices = new int[config.numCentroids];
         centroidIndex->knn(config.maxSearchCentroids, query, centroidDistances, centroidIndices);
-        VisitedTable visited = VisitedTable(numVectors);
         std::priority_queue<NodeDistFarther> finalResult;
         for (int i = 0; i < config.maxSearchCentroids; i++) {
-            if (centroidDistances[i] - centroidDistances[0] > config.searchThreshold) {
-                break;
-            }
+            printf("centroidDistances[%d] = %f\n", i, centroidDistances[i] - centroidDistances[0]);
+//            if (centroidDistances[i] - centroidDistances[0] > config.searchThreshold) {
+//                break;
+//            }
             auto centroidId = centroidIndices[i];
             std::priority_queue<NodeDistCloser> resultQueue;
             indexes[centroidId]->search(query, k, config.efSearch, visited, resultQueue, stats);

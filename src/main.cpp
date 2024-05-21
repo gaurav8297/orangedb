@@ -837,10 +837,12 @@ void benchmarkClustering(int argc, char **argv) {
 
     // search
     auto recall = 0;
+    Stats stats{};
+    VisitedTable visited(baseNumVectors);
+    start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < queryNumVectors; i++) {
         std::vector<NodeDistFarther> results;
-        Stats stats{};
-        partitionedIndex.search(queryVecs + i * queryDimension, K, results, stats);
+        partitionedIndex.search(queryVecs + i * queryDimension, K, visited, results, stats);
         auto gt = gtVecs + i * gtDimension;
         for (auto res: results) {
             if (std::find(gt, gt + gtDimension, res.id) != (gt + gtDimension)) {
@@ -848,18 +850,22 @@ void benchmarkClustering(int argc, char **argv) {
             }
         }
     }
+    stats.logStats();
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "Query time: " << duration << " ms" << std::endl;
     std::cout << "Recall: " << recall / queryNumVectors << std::endl;
 }
 
 int main(int argc, char **argv) {
-    benchmark_hnsw_queries(argc, argv);
+//    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();
 //    benchmark_scalar_quantizer();
 //    benchmark_quantizer();
 //    benchmark_explore_data();
-//    benchmarkClustering(argc, argv);
+    benchmarkClustering(argc, argv);
 //    benchmarkSimSimd();
     return 0;
 }

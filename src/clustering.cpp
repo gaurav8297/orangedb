@@ -232,7 +232,7 @@ namespace orangedb {
         auto localDc = dc->clone();
         // Find the k nearest neighbors
         localDc->setQuery(queries);
-        std::priority_queue<NodeDistCloser> res;
+        std::priority_queue<NodeDistFarther> res;
         for (int i = 0; i < numEntries; i++) {
             double d;
             localDc->computeDistance(i, &d);
