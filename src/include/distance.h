@@ -28,6 +28,9 @@ namespace orangedb {
 
         inline void computeDistance(vector_idx_t id, double *result) override {
             CHECK_ARGUMENT(id < n, "Index out of bounds");
+            if (id >= n) {
+                printf("id: %d, n: %d\n", id, n);
+            }
             const float *y = data + (id * dim);
             simsimd_l2sq_f32(query, y, dim, result);
         }
