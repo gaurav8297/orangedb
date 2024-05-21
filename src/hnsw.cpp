@@ -322,6 +322,8 @@ namespace orangedb {
             std::vector<omp_lock_t> &locks,
             VisitedTable &visited,
             Stats &stats) {
+        vector_idx_t nearestId;
+        int level;
 #pragma omp critical
         {
             if (entryPoint == INVALID_VECTOR_ID) {
@@ -329,14 +331,14 @@ namespace orangedb {
                 // Fix this maybe
                 entryPoint = node_id[node_level];
             }
+            nearestId = entryPoint;
+            level = maxLevel;
         }
 
         omp_set_lock(&locks[node_id[0]]);
-        vector_idx_t nearestId = entryPoint;
         double nearestDist;
         std::vector<std::vector<NodeDistCloser>> neighbors(node_level + 1);
-        dc->computeDistance(getActualId(maxLevel, nearestId), &nearestDist);
-        int level = maxLevel;
+        dc->computeDistance(getActualId(level, nearestId), &nearestDist);
 
         // Update the nearest node
         for (; level > node_level; level--) {
