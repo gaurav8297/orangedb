@@ -42,7 +42,7 @@ namespace orangedb {
 
         void build(const float *data, size_t n);
 
-        void search(const float *query, uint16_t k, VisitedTable &visited, std::vector<NodeDistFarther> &results, Stats &stats);
+        int search(const float *query, uint16_t k, VisitedTable &visited, std::vector<NodeDistFarther> &results, Stats &stats);
 
     private:
         std::unique_ptr<Clustering> clustering;

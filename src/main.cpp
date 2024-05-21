@@ -837,12 +837,13 @@ void benchmarkClustering(int argc, char **argv) {
 
     // search
     auto recall = 0;
+    auto avgCentroid = 0;
     Stats stats{};
     VisitedTable visited(baseNumVectors);
     start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < queryNumVectors; i++) {
         std::vector<NodeDistFarther> results;
-        partitionedIndex.search(queryVecs + i * queryDimension, K, visited, results, stats);
+        avgCentroid += partitionedIndex.search(queryVecs + i * queryDimension, K, visited, results, stats);
         auto gt = gtVecs + i * gtDimension;
         for (auto res: results) {
             if (std::find(gt, gt + gtDimension, res.id) != (gt + gtDimension)) {
@@ -855,6 +856,7 @@ void benchmarkClustering(int argc, char **argv) {
     duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     std::cout << "Query time: " << duration << " ms" << std::endl;
     std::cout << "Recall: " << recall / queryNumVectors << std::endl;
+    std::cout << "Avg Centroid: " << avgCentroid / queryNumVectors << std::endl;
 }
 
 int main(int argc, char **argv) {
