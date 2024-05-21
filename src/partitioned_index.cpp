@@ -66,10 +66,9 @@ namespace orangedb {
         centroidIndex->knn(config.maxSearchCentroids, query, centroidDistances, centroidIndices);
         std::priority_queue<NodeDistFarther> finalResult;
         for (int i = 0; i < config.maxSearchCentroids; i++) {
-            printf("centroidDistances[%d] = %f\n", i, centroidDistances[i] - centroidDistances[0]);
-//            if (centroidDistances[i] - centroidDistances[0] > config.searchThreshold) {
-//                break;
-//            }
+            if (centroidDistances[i] - centroidDistances[0] > config.searchThreshold) {
+                break;
+            }
             auto centroidId = centroidIndices[i];
             std::priority_queue<NodeDistCloser> resultQueue;
             indexes[centroidId]->search(query, k, config.efSearch, visited, resultQueue, stats);
