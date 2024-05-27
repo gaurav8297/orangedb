@@ -5,6 +5,7 @@
 #include <sys/fcntl.h>
 #include <random>
 #include "spdlog/fmt/fmt.h"
+#include <unordered_map>
 
 #define IS_ALIGNED(X, Y) ((uint64_t)(X) % (uint64_t)(Y) == 0)
 #define IS_512_ALIGNED(X) IS_ALIGNED(X, 512)
