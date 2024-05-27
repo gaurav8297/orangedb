@@ -15,7 +15,7 @@ namespace orangedb {
 
         inline void search(int n, const float *queries, float *distances, int32_t *resultIds);
 
-        void knn(int k, const float *queries, double *distances, int *resultIds);
+        void knn(int k, const float *queries, double *distances, vector_idx_t *resultIds);
 
     private:
         DistanceComputer *dc;
@@ -53,12 +53,6 @@ namespace orangedb {
         inline void splitClusters(int *hist, float *newCentroids);
 
         inline int sampleData(int n, const float *data, float **sampleData);
-
-        inline void randomPerm(int n, int *perm, int nPerm, int64_t seed);
-
-        inline int randomInt(std::mt19937 &mt, int maxVal) {
-            return mt() % maxVal;
-        }
 
     public:
         std::vector<float> centroids; // centroids (k * d)

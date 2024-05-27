@@ -97,6 +97,31 @@ namespace orangedb {
             return mt() / float(mt.max());
         }
 
+        inline int randInt(int max) {
+            return mt() % max;
+        }
+
+        inline void randomPerm(int n, int *perm, int nPerm) {
+            CHECK_ARGUMENT(nPerm <= n, "Number of permutations should be less than the number of elements");
+            std::unordered_map<int, int> m;
+            for (int i = 0; i < nPerm - 1; i++) {
+                auto i2 = i + randInt(n - i);
+                if (m.contains(i2)) {
+                    perm[i] = m[i2];
+                } else {
+                    perm[i] = i2;
+                }
+                m[i2] = i;
+            }
+
+            // last element
+            if (m.contains(nPerm - 1)) {
+                perm[nPerm - 1] = m[nPerm - 1];
+            } else {
+                perm[nPerm - 1] = nPerm - 1;
+            }
+        }
+
         std::mt19937 mt;
     };
 } // namespace orange

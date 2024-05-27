@@ -17,6 +17,8 @@ namespace orangedb {
         uint64_t totalDistCompDuringSearch = 0;
         uint64_t totalDistCompDuringShrink = 0;
         uint64_t totalDistCompDuringMakeConnection = 0;
+        uint64_t totalDistCompDuringDelete = 0;
+        uint64_t totalNodesShrinkDuringDelete = 0;
         uint64_t totalShrinkCalls = 0;
 
 
@@ -24,6 +26,8 @@ namespace orangedb {
             spdlog::info("Total Distance Computations in search: {}", totalDistCompDuringSearch);
             spdlog::info("Total Distance Computations in Shrink: {}", totalDistCompDuringShrink);
             spdlog::info("Total Distance Computations in MakeConnection: {}", totalDistCompDuringMakeConnection);
+            spdlog::info("Total Distance Computations in Delete: {}", totalDistCompDuringDelete);
+            spdlog::info("Total Nodes Shrink During Delete: {}", totalNodesShrinkDuringDelete);
             spdlog::info("Total Shrink Calls: {}", totalShrinkCalls);
         }
 
@@ -31,6 +35,8 @@ namespace orangedb {
             totalDistCompDuringSearch = 0;
             totalDistCompDuringShrink = 0;
             totalDistCompDuringMakeConnection = 0;
+            totalDistCompDuringDelete = 0;
+            totalNodesShrinkDuringDelete = 0;
             totalShrinkCalls = 0;
         }
 
@@ -40,6 +46,8 @@ namespace orangedb {
                 totalDistCompDuringSearch += other.totalDistCompDuringSearch;
                 totalDistCompDuringShrink += other.totalDistCompDuringShrink;
                 totalDistCompDuringMakeConnection += other.totalDistCompDuringMakeConnection;
+                totalDistCompDuringDelete += other.totalDistCompDuringDelete;
+                totalNodesShrinkDuringDelete += other.totalNodesShrinkDuringDelete;
                 totalShrinkCalls += other.totalShrinkCalls;
             }
         }
@@ -72,6 +80,8 @@ namespace orangedb {
                 orangedb::VisitedTable &visited,
                 std::priority_queue<NodeDistCloser> &results,
                 Stats &stats);
+
+        void deleteNode(vector_idx_t deletedId, Stats &stats);
 
         void logStats();
 

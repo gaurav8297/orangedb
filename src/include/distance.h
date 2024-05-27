@@ -27,7 +27,7 @@ namespace orangedb {
         explicit L2DistanceComputer(const float *data, int dim, int n) : data(data), dim(dim), n(n), query(nullptr) {}
 
         inline void computeDistance(vector_idx_t id, double *result) override {
-            CHECK_ARGUMENT(id < n, "Index out of bounds");
+            CHECK_ARGUMENT(id < n, fmt::format("Index out of bounds {} < {}", id, n).data());
             const float *y = data + (id * dim);
             simsimd_l2sq_f32(query, y, dim, result);
         }

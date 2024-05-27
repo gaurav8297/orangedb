@@ -3,6 +3,8 @@
 #include <algorithm>
 #include "include/prefetch.h"
 #include "spdlog/spdlog.h"
+#include <memory>
+#include <unistd.h>
 
 namespace orangedb {
     HNSW::HNSW(HNSWConfig config, RandomGenerator *rg, uint16_t dim) : config(config), entryPoint(INVALID_VECTOR_ID),
@@ -472,6 +474,93 @@ namespace orangedb {
                 newEfSearch,
                 4,
                 stats);
+    }
+
+    void HNSW::deleteNode(orangedb::vector_idx_t deletedId, Stats &stats) {
+        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
+        // Set the vector to be deleted as infinity
+        float *newVector = new float[storage->dim];
+        for (int i = 0; i < storage->dim; i++) {
+            newVector[i] = MAXFLOAT;
+        }
+        // Update the vector in the storage.data at id position
+        memcpy((void *) (storage->data + (deletedId * storage->dim)), newVector, storage->dim * sizeof(float));
+        auto neigbours = storage->get_neighbors(0);
+        size_t begin, end;
+        storage->get_neighbors_offsets(deletedId, 0, begin, end);
+        for (size_t i = begin; i < end; i++) {
+            auto nbr = neigbours[i];
+            if (nbr == INVALID_VECTOR_ID) {
+                break;
+            }
+            // Shrink the neighbors list of the neighbor
+            std::priority_queue<NodeDistCloser> shrinkNodes;
+
+            // Add the neighbors of the neighbor to the shrinkNodes
+            size_t beginNbr, endNbr;
+            storage->get_neighbors_offsets(nbr, 0, beginNbr, endNbr);
+            for (size_t j = beginNbr; j < endNbr; j++) {
+                auto nbrNbr = neigbours[j];
+                if (nbrNbr == INVALID_VECTOR_ID) {
+                    break;
+                }
+                if (nbrNbr == deletedId) {
+                    continue;
+                }
+                double dist;
+                dc.computeDistance(nbr, nbrNbr, &dist);
+                stats.totalDistCompDuringDelete++;
+                shrinkNodes.emplace(nbrNbr, dist);
+            }
+
+            // Add the neighbours of deleted node
+            for (size_t j = begin; j < end; j++) {
+                auto nbrNbr = neigbours[j];
+                if (nbrNbr == INVALID_VECTOR_ID) {
+                    break;
+                }
+                if (nbrNbr == nbr) {
+                    continue;
+                }
+                double dist;
+                dc.computeDistance(nbr, nbrNbr, &dist);
+                stats.totalDistCompDuringDelete++;
+                shrinkNodes.emplace(nbrNbr, dist);
+            }
+
+            shrinkNeighbors(&dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, stats);
+            size_t j = beginNbr;
+            while (!shrinkNodes.empty()) {
+                neigbours[j++] = shrinkNodes.top().id;
+                shrinkNodes.pop();
+            }
+            while (j < endNbr) {
+                neigbours[j++] = INVALID_VECTOR_ID;
+            }
+            stats.totalNodesShrinkDuringDelete++;
+        }
+
+        auto replacementNode = neigbours[begin];
+        // Reset neighbour of deleted node
+        for (size_t i = begin; i < end; i++) {
+            neigbours[i] = INVALID_VECTOR_ID;
+        }
+
+        // update next_level_ids for level 1
+        for (int i = 0; i < storage->fast_level_counters[1]; i++) {
+            if (storage->next_level_ids[1][i] == deletedId) {
+                storage->next_level_ids[1][i] = replacementNode;
+            }
+        }
+
+        // update actual_ids for all level
+        for (int level = 0; level < maxLevel; level++) {
+            for (auto &actualId: storage->actual_ids[level]) {
+                if (actualId == deletedId) {
+                    actualId = replacementNode;
+                }
+            }
+        }
     }
 
     void HNSW::logStats() {

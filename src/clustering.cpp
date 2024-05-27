@@ -2,9 +2,7 @@
 #include <vector>
 #include "include/clustering.h"
 #include <cstring>
-#include <unordered_map>
 #include <omp.h>
-#include <random>
 #include <queue>
 #include <helper_ds.h>
 #include <common.h>
@@ -27,7 +25,8 @@ namespace orangedb {
         CHECK_ARGUMENT(n > numCentroids, "Number of vectors should be greater than number of centroids");
         auto c = centroids.data();
         std::vector<int> perm(numCentroids);
-        randomPerm(n, perm.data(), numCentroids, seed + 15486557L);
+        RandomGenerator rg(seed + 15486557L);
+        rg.randomPerm(n, perm.data(), numCentroids);
         for (int i = 0; i < numCentroids; i++) {
             memcpy(c + i * dim, data + perm[i] * dim, dim * sizeof(float));
         }
@@ -162,33 +161,12 @@ namespace orangedb {
         int nSample = std::min(maxCentroidSize * numCentroids, n);
         *sampleData = new float[nSample * dim];
         std::vector<int> perm(nSample);
-        randomPerm(n, perm.data(), nSample, seed);
+        RandomGenerator rg(seed);
+        rg.randomPerm(n, perm.data(), nSample);
         for (int i = 0; i < nSample; i++) {
             memcpy(*sampleData + i * dim, data + perm[i] * dim, dim * sizeof(float));
         }
         return nSample;
-    }
-
-    void Clustering::randomPerm(int n, int *perm, int nPerm, int64_t seed) {
-        CHECK_ARGUMENT(nPerm <= n, "Number of permutations should be less than the number of elements");
-        unordered_map<int, int> m;
-        std::mt19937 mt(seed);
-        for (int i = 0; i < nPerm - 1; i++) {
-            auto i2 = i + randomInt(mt, n - i);
-            if (m.contains(i2)) {
-                perm[i] = m[i2];
-            } else {
-                perm[i] = i2;
-            }
-            m[i2] = i;
-        }
-
-        // last element
-        if (m.contains(nPerm - 1)) {
-            perm[nPerm - 1] = m[nPerm - 1];
-        } else {
-            perm[nPerm - 1] = nPerm - 1;
-        }
     }
 
     void IndexOneNN::search(int n, const float *queries, float *distances, int32_t *resultIds) {
@@ -227,7 +205,7 @@ namespace orangedb {
         }
     }
 
-    void IndexOneNN::knn(int k, const float *queries, double *distance, int *resultIds) {
+    void IndexOneNN::knn(int k, const float *queries, double *distance, vector_idx_t *resultIds) {
         // Single threaded implementation
         auto localDc = dc->clone();
         // Find the k nearest neighbors

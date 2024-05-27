@@ -645,7 +645,7 @@ void query_graph(
         const float *queryVecs,
         size_t queryNumVectors,
         size_t queryDimension,
-        const int *gtVecs,
+        const vector_idx_t *gtVecs,
         size_t k,
         size_t ef_search,
         size_t baseNumVectors) {
@@ -703,6 +703,22 @@ void disable_perf() {
     assert(strcmp(ack, "ack\n") == 0);
 }
 
+void generateGroundTruth(
+        const float* vectors,
+        size_t dim,
+        size_t numVectors,
+        float *queryVecs,
+        size_t queryNumVectors,
+        int k,
+        vector_idx_t *gtVecs) {
+    L2DistanceComputer dc(vectors, dim, numVectors);
+    IndexOneNN index(&dc, dim, numVectors);
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        double dists[k];
+        index.knn(k, queryVecs + i * dim, dists, gtVecs + i * k);
+    }
+}
+
 void benchmark_hnsw_queries(int argc, char **argv) {
     InputParser input(argc, argv);
     const std::string &basePath = input.getCmdOption("-basePath");
@@ -712,6 +728,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto thread_count = stoi(input.getCmdOption("-nThreads"));
     auto num_vectors = stoi(input.getCmdOption("-numVectors"));
     auto alpha = stof(input.getCmdOption("-alpha"));
+    auto deletePercent = stof(input.getCmdOption("-deletePercent"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -722,7 +739,15 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     size_t gtDimension, gtNumVectors;
-    int *gtVecs = readIvecFile(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
+    int *gtVecsInt = readIvecFile(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    CHECK_ARGUMENT(queryNumVectors == gtNumVectors, "Query and ground truth numbers are not same");
+    auto *gtVecs = new vector_idx_t[gtNumVectors * gtDimension];
+    for (int i = 0; i < gtNumVectors; i++) {
+        for (int j = 0; j < gtDimension; j++) {
+            gtVecs[i * gtDimension + j] = gtVecsInt[i * gtDimension + j];
+        }
+    }
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
@@ -730,7 +755,18 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, num_vectors);
     hnsw.logStats();
-    // ./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -efConstruction 128 -M 64 -efSearch 150 -nThreads 32 -exploreFactor 1
+    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
+
+    auto numVecToDelete = baseNumVectors * deletePercent;
+    std::vector<int> vecsToDelete(numVecToDelete);
+    rng.randomPerm(baseNumVectors, vecsToDelete.data(), numVecToDelete);
+    Stats stats;
+    spdlog::info("Deleting {} vectors", numVecToDelete);
+    for (auto &vecId: vecsToDelete) {
+        hnsw.deleteNode(vecId, stats);
+    }
+    stats.logStats();
+    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, 100, gtVecs);
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 }
 
@@ -860,14 +896,14 @@ void benchmarkClustering(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-//    benchmark_hnsw_queries(argc, argv);
+    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();
 //    benchmark_scalar_quantizer();
 //    benchmark_quantizer();
 //    benchmark_explore_data();
-    benchmarkClustering(argc, argv);
+//    benchmarkClustering(argc, argv);
 //    benchmarkSimSimd();
     return 0;
 }

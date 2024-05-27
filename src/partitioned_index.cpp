@@ -62,7 +62,7 @@ namespace orangedb {
 
     int PartitionedIndex::search(const float *query, uint16_t k, VisitedTable &visited, std::vector<NodeDistFarther> &results, Stats &stats) {
         double *centroidDistances = new double[config.numCentroids];
-        int *centroidIndices = new int[config.numCentroids];
+        vector_idx_t *centroidIndices = new vector_idx_t[config.numCentroids];
         centroidIndex->knn(config.maxSearchCentroids, query, centroidDistances, centroidIndices);
         std::priority_queue<NodeDistFarther> finalResult;
         int qCentroid = 0;
