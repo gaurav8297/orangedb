@@ -102,9 +102,9 @@ namespace orangedb {
             return mt() % max;
         }
 
-        inline void randomPerm(int n, int *perm, int nPerm) {
+        inline void randomPerm(uint64_t n, uint64_t *perm, uint64_t nPerm) {
             CHECK_ARGUMENT(nPerm <= n, "Number of permutations should be less than the number of elements");
-            std::unordered_map<int, int> m;
+            std::unordered_map<uint64_t, uint64_t> m;
             for (int i = 0; i < nPerm - 1; i++) {
                 auto i2 = i + randInt(n - i);
                 if (m.contains(i2)) {

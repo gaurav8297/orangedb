@@ -24,7 +24,7 @@ namespace orangedb {
         // For now choose the random centroids
         CHECK_ARGUMENT(n > numCentroids, "Number of vectors should be greater than number of centroids");
         auto c = centroids.data();
-        std::vector<int> perm(numCentroids);
+        std::vector<vector_idx_t> perm(numCentroids);
         RandomGenerator rg(seed + 15486557L);
         rg.randomPerm(n, perm.data(), numCentroids);
         for (int i = 0; i < numCentroids; i++) {
@@ -160,7 +160,7 @@ namespace orangedb {
         // We will return the sampled data and the number of vectors sampled
         int nSample = std::min(maxCentroidSize * numCentroids, n);
         *sampleData = new float[nSample * dim];
-        std::vector<int> perm(nSample);
+        std::vector<vector_idx_t> perm(nSample);
         RandomGenerator rg(seed);
         rg.randomPerm(n, perm.data(), nSample);
         for (int i = 0; i < nSample; i++) {

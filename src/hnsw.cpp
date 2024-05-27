@@ -421,7 +421,7 @@ namespace orangedb {
                 localDc->setQuery(storage->data + (i * storage->dim));
                 addNode(localDc, node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
                 if (i % 100000 == 0) {
-                    spdlog::warn("Done with 100000!!");
+                    spdlog::warn("Inserted 100000!!");
                 }
             }
             // Merge stats
@@ -476,15 +476,46 @@ namespace orangedb {
                 stats);
     }
 
-    void HNSW::deleteNode(orangedb::vector_idx_t deletedId, Stats &stats) {
+    void HNSW::deleteNodes(const vector_idx_t *deletedIds, size_t n, Stats &stats) {
         L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
-        // Set the vector to be deleted as infinity
-        float *newVector = new float[storage->dim];
-        for (int i = 0; i < storage->dim; i++) {
-            newVector[i] = MAXFLOAT;
+        std::vector<omp_lock_t> locks(storage->numPoints);
+        for (int i = 0; i < storage->numPoints; i++) {
+            omp_init_lock(&locks[i]);
         }
+
+#pragma omp parallel
+        {
+            Stats localStats = Stats();
+            auto *infVector = new float[storage->dim];
+            for (int i = 0; i < storage->dim; i++) {
+                infVector[i] = MAXFLOAT;
+            }
+
+#pragma omp for schedule(static)
+            for (int i = 0; i < n; i++) {
+                deleteNode(&dc, deletedIds[i], locks, infVector, localStats);
+                if (i % 10000 == 0) {
+                    spdlog::warn("Deleted 10000!!");
+                }
+            }
+
+            delete[] infVector;
+            stats.merge(localStats);
+        }
+
+        // Destroy the locks
+        for (int i = 0; i < storage->numPoints; i++) {
+            omp_destroy_lock(&locks[i]);
+        }
+    }
+
+    void HNSW::deleteNode(
+            DistanceComputer* dc,
+            orangedb::vector_idx_t deletedId,
+            std::vector<omp_lock_t> &locks,
+            const float *infVector,
+            Stats &stats) {
         // Update the vector in the storage.data at id position
-        memcpy((void *) (storage->data + (deletedId * storage->dim)), newVector, storage->dim * sizeof(float));
         auto neigbours = storage->get_neighbors(0);
         size_t begin, end;
         storage->get_neighbors_offsets(deletedId, 0, begin, end);
@@ -508,7 +539,7 @@ namespace orangedb {
                     continue;
                 }
                 double dist;
-                dc.computeDistance(nbr, nbrNbr, &dist);
+                dc->computeDistance(nbr, nbrNbr, &dist);
                 stats.totalDistCompDuringDelete++;
                 shrinkNodes.emplace(nbrNbr, dist);
             }
@@ -523,12 +554,13 @@ namespace orangedb {
                     continue;
                 }
                 double dist;
-                dc.computeDistance(nbr, nbrNbr, &dist);
+                dc->computeDistance(nbr, nbrNbr, &dist);
                 stats.totalDistCompDuringDelete++;
                 shrinkNodes.emplace(nbrNbr, dist);
             }
 
-            shrinkNeighbors(&dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, stats);
+            shrinkNeighbors(dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, stats);
+            omp_set_lock(&locks[nbr]);
             size_t j = beginNbr;
             while (!shrinkNodes.empty()) {
                 neigbours[j++] = shrinkNodes.top().id;
@@ -537,14 +569,17 @@ namespace orangedb {
             while (j < endNbr) {
                 neigbours[j++] = INVALID_VECTOR_ID;
             }
+            omp_unset_lock(&locks[nbr]);
             stats.totalNodesShrinkDuringDelete++;
         }
 
+        omp_set_lock(&locks[deletedId]);
         auto replacementNode = neigbours[begin];
         // Reset neighbour of deleted node
         for (size_t i = begin; i < end; i++) {
             neigbours[i] = INVALID_VECTOR_ID;
         }
+        memcpy((void *) (storage->data + (deletedId * storage->dim)), infVector, storage->dim * sizeof(float));
 
         // update next_level_ids for level 1
         for (int i = 0; i < storage->fast_level_counters[1]; i++) {
@@ -561,6 +596,7 @@ namespace orangedb {
                 }
             }
         }
+        omp_unset_lock(&locks[deletedId]);
     }
 
     void HNSW::logStats() {

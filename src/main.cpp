@@ -712,10 +712,15 @@ void generateGroundTruth(
         int k,
         vector_idx_t *gtVecs) {
     L2DistanceComputer dc(vectors, dim, numVectors);
-    IndexOneNN index(&dc, dim, numVectors);
-    for (size_t i = 0; i < queryNumVectors; i++) {
-        double dists[k];
-        index.knn(k, queryVecs + i * dim, dists, gtVecs + i * k);
+#pragma omp parallel
+    {
+        auto localDc = dc.clone();
+        IndexOneNN index(localDc.get(), dim, numVectors);
+#pragma omp for schedule(dynamic, 100)
+        for (size_t i = 0; i < queryNumVectors; i++) {
+            double dists[k];
+            index.knn(k, queryVecs + i * dim, dists, gtVecs + i * k);
+        }
     }
 }
 
@@ -758,13 +763,11 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 
     auto numVecToDelete = baseNumVectors * deletePercent;
-    std::vector<int> vecsToDelete(numVecToDelete);
+    std::vector<vector_idx_t> vecsToDelete(numVecToDelete);
     rng.randomPerm(baseNumVectors, vecsToDelete.data(), numVecToDelete);
     Stats stats;
     spdlog::info("Deleting {} vectors", numVecToDelete);
-    for (auto &vecId: vecsToDelete) {
-        hnsw.deleteNode(vecId, stats);
-    }
+    hnsw.deleteNodes(vecsToDelete.data(), numVecToDelete, stats);
     stats.logStats();
     generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, 100, gtVecs);
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);

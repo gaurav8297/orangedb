@@ -81,7 +81,7 @@ namespace orangedb {
                 std::priority_queue<NodeDistCloser> &results,
                 Stats &stats);
 
-        void deleteNode(vector_idx_t deletedId, Stats &stats);
+        void deleteNodes(const vector_idx_t *deletedIds, size_t n, Stats &stats);
 
         void logStats();
 
@@ -149,6 +149,13 @@ namespace orangedb {
                 level_t level,
                 std::vector<omp_lock_t> &locks,
                 VisitedTable &visited,
+                Stats &stats);
+
+        void deleteNode(
+                DistanceComputer* dc,
+                orangedb::vector_idx_t deletedId,
+                std::vector<omp_lock_t> &locks,
+                const float *infVector,
                 Stats &stats);
 
         inline vector_idx_t getActualId(level_t level, vector_idx_t id) {
