@@ -50,6 +50,10 @@ namespace orangedb {
             return graphs[level].neighbors.data();
         }
 
+        inline size_t get_num_neighbors(uint8_t level) {
+            return graphs[level].neighbors.size();
+        }
+
         inline void get_neighbors_offsets(vector_idx_t id, level_t level, size_t &begin, size_t &end) {
             begin = id * max_neighbors_per_level[level];
             end = begin + max_neighbors_per_level[level];

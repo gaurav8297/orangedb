@@ -199,6 +199,9 @@ namespace orangedb {
         visited.reset();
     }
 
+    // TODO: Run shrink with approx distance (compressed vectors)
+    //       Another idea: Run shrink with smaller alpha, if the nodes reduced significantly, use it with higher alpha
+    //       Another idea: Use centroids to check the equality condition
     void HNSW::shrinkNeighbors(
             DistanceComputer *dc,
             std::priority_queue<NodeDistCloser> &results,
@@ -490,10 +493,11 @@ namespace orangedb {
             for (int i = 0; i < storage->dim; i++) {
                 infVector[i] = MAXFLOAT;
             }
+            VisitedTable visited(storage->numPoints);
 
 #pragma omp for schedule(static)
             for (int i = 0; i < n; i++) {
-                deleteNode(&dc, deletedIds[i], locks, infVector, localStats);
+                deleteNodeV2(&dc, deletedIds[i], locks, infVector, visited, localStats);
                 if (i % 10000 == 0) {
                     spdlog::warn("Deleted 10000!!");
                 }
@@ -597,6 +601,29 @@ namespace orangedb {
             }
         }
         omp_unset_lock(&locks[deletedId]);
+    }
+
+    void HNSW::deleteNodeV2(
+            DistanceComputer *dc,
+            vector_idx_t deletedId,
+            std::vector<omp_lock_t> &locks,
+            const float *infVector,
+            VisitedTable &visited,
+            Stats &stats) {
+        // Simply set the value to inf without changing graph
+        memcpy((void *) (storage->data + (deletedId * storage->dim)), infVector, storage->dim * sizeof(float));
+    }
+
+    // IDEA2: Maintain array of list of nodes for each changed neighbour
+    //        Delete vector
+    //        Run shrink in the end & update
+    void HNSW::deleteNodeV3(
+            DistanceComputer *dc,
+            vector_idx_t deletedId,
+            std::vector<omp_lock_t> &locks,
+            const float *infVector,
+            orangedb::Stats &stats) {
+
     }
 
     void HNSW::logStats() {

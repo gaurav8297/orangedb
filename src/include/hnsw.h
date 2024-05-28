@@ -158,12 +158,29 @@ namespace orangedb {
                 const float *infVector,
                 Stats &stats);
 
+        void deleteNodeV2(
+                DistanceComputer* dc,
+                orangedb::vector_idx_t deletedId,
+                std::vector<omp_lock_t> &locks,
+                const float *infVector,
+                VisitedTable &visited,
+                Stats &stats);
+
+        void deleteNodeV3(
+                DistanceComputer* dc,
+                orangedb::vector_idx_t deletedId,
+                std::vector<omp_lock_t> &locks,
+                const float *infVector,
+                Stats &stats);
+
         inline vector_idx_t getActualId(level_t level, vector_idx_t id) {
             return level != 0 ? storage->actual_ids[level][id] : id;
         }
 
-    private:
+    public:
         HNSWConfig config;
+
+    private:
         vector_idx_t entryPoint;
         level_t maxLevel;
         std::vector<double> levelProbabs;
