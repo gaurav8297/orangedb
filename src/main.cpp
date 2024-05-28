@@ -734,6 +734,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto num_vectors = stoi(input.getCmdOption("-numVectors"));
     auto alpha = stof(input.getCmdOption("-alpha"));
     auto deletePercent = stof(input.getCmdOption("-deletePercent"));
+    auto deleteAlpha = stof(input.getCmdOption("-deleteAlpha"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -762,6 +763,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     hnsw.logStats();
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 
+    hnsw.config.alpha = deleteAlpha;
     auto numVecToDelete = baseNumVectors * deletePercent;
     std::vector<vector_idx_t> vecsToDelete(numVecToDelete);
     rng.randomPerm(baseNumVectors, vecsToDelete.data(), numVecToDelete);
