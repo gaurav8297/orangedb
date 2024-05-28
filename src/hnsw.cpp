@@ -493,11 +493,11 @@ namespace orangedb {
             for (int i = 0; i < storage->dim; i++) {
                 infVector[i] = MAXFLOAT;
             }
-            VisitedTable visited(storage->numPoints);
+//            VisitedTable visited(storage->numPoints);
 
 #pragma omp for schedule(static)
             for (int i = 0; i < n; i++) {
-                deleteNodeV2(&dc, deletedIds[i], locks, infVector, visited, localStats);
+                deleteNode(&dc, deletedIds[i], locks, infVector, localStats);
                 if (i % 10000 == 0) {
                     spdlog::warn("Deleted 10000!!");
                 }
@@ -529,8 +529,7 @@ namespace orangedb {
                 break;
             }
             // Shrink the neighbors list of the neighbor
-            std::priority_queue<NodeDistCloser> shrinkNodes;
-
+            std::unordered_set<vector_idx_t> unionNodes;
             // Add the neighbors of the neighbor to the shrinkNodes
             size_t beginNbr, endNbr;
             storage->get_neighbors_offsets(nbr, 0, beginNbr, endNbr);
@@ -542,10 +541,7 @@ namespace orangedb {
                 if (nbrNbr == deletedId) {
                     continue;
                 }
-                double dist;
-                dc->computeDistance(nbr, nbrNbr, &dist);
-                stats.totalDistCompDuringDelete++;
-                shrinkNodes.emplace(nbrNbr, dist);
+                unionNodes.insert(nbrNbr);
             }
 
             // Add the neighbours of deleted node
@@ -557,18 +553,31 @@ namespace orangedb {
                 if (nbrNbr == nbr) {
                     continue;
                 }
-                double dist;
-                dc->computeDistance(nbr, nbrNbr, &dist);
-                stats.totalDistCompDuringDelete++;
-                shrinkNodes.emplace(nbrNbr, dist);
+                unionNodes.insert(nbrNbr);
             }
 
-            shrinkNeighbors(dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, stats);
+            if (unionNodes.size() > storage->max_neighbors_per_level[0]) {
+                std::priority_queue<NodeDistCloser> shrinkNodes;
+                for (auto &node: unionNodes) {
+                    double dist;
+                    dc->computeDistance(getActualId(0, nbr), getActualId(0, node), &dist);
+                    stats.totalDistCompDuringShrink++;
+                    shrinkNodes.emplace(node, dist);
+                }
+                shrinkNeighbors(dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, stats);
+
+                // Push result into union nodes
+                unionNodes.clear();
+                while (!shrinkNodes.empty()) {
+                    unionNodes.insert(shrinkNodes.top().id);
+                    shrinkNodes.pop();
+                }
+            }
+
             omp_set_lock(&locks[nbr]);
             size_t j = beginNbr;
-            while (!shrinkNodes.empty()) {
-                neigbours[j++] = shrinkNodes.top().id;
-                shrinkNodes.pop();
+            for (auto &node: unionNodes) {
+                neigbours[j++] = node;
             }
             while (j < endNbr) {
                 neigbours[j++] = INVALID_VECTOR_ID;

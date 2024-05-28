@@ -767,8 +767,13 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     rng.randomPerm(baseNumVectors, vecsToDelete.data(), numVecToDelete);
     Stats stats;
     spdlog::info("Deleting {} vectors", numVecToDelete);
+    auto start = std::chrono::high_resolution_clock::now();
     hnsw.deleteNodes(vecsToDelete.data(), numVecToDelete, stats);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    spdlog::info("Deletion time: {} ms", duration);
     stats.logStats();
+    spdlog::info("Generating ground truth after deleting vectors!!");
     generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, 100, gtVecs);
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 }
