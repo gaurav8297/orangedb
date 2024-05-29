@@ -14,6 +14,8 @@ namespace orangedb {
 
         virtual void computeDistance(vector_idx_t src, vector_idx_t dest, double *result) = 0;
 
+        virtual void computeDistance(vector_idx_t src, vector_idx_t dest, int dim, double *result) = 0;
+
         virtual void batchComputeDistances(vector_idx_t *ids, double *results, int size) = 0;
 
         virtual void setQuery(const float *query) = 0;
@@ -34,6 +36,14 @@ namespace orangedb {
 
         inline void computeDistance(vector_idx_t src, vector_idx_t dest, double *result) override {
             CHECK_ARGUMENT(src < n && dest < n, "Index out of bounds");
+            const float *x = data + (src * dim);
+            const float *y = data + (dest * dim);
+            simsimd_l2sq_f32(x, y, dim, result);
+        }
+
+        inline void computeDistance(vector_idx_t src, vector_idx_t dest, int dim, double *result) override {
+            CHECK_ARGUMENT(src < n && dest < n, "Index out of bounds");
+            CHECK_ARGUMENT(dim > 0 && dim <= this->dim, "Invalid dimension");
             const float *x = data + (src * dim);
             const float *y = data + (dest * dim);
             simsimd_l2sq_f32(x, y, dim, result);

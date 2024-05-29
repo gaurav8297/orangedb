@@ -207,6 +207,7 @@ namespace orangedb {
             std::priority_queue<NodeDistCloser> &results,
             int maxSize,
             level_t level,
+            int dim,
             Stats &stats) {
         if (results.size() <= maxSize) {
             return;
@@ -227,7 +228,7 @@ namespace orangedb {
             bool good = true;
             for (NodeDistFarther &nodeB: result) {
                 double distNodeAB;
-                dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), &distNodeAB);
+                dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), dim, &distNodeAB);
                 stats.totalDistCompDuringShrink++;
                 if ((config.alpha * distNodeAB) < distNodeAQ) {
                     good = false;
@@ -284,7 +285,7 @@ namespace orangedb {
             stats.totalDistCompDuringMakeConnection++;
             results.emplace(neighbor, distSrcNbr);
         }
-        shrinkNeighbors(dc, results, storage->max_neighbors_per_level[level], level, stats);
+        shrinkNeighbors(dc, results, storage->max_neighbors_per_level[level], level, storage->dim, stats);
         size_t i = begin;
         while (!results.empty()) {
             neighbors[i++] = results.top().id;
@@ -306,7 +307,7 @@ namespace orangedb {
             Stats &stats) {
         std::priority_queue<NodeDistCloser> linkTargets;
         searchNeighbors(dc, level, linkTargets, entrypoint, entrypointDist, visited, config.efConstruction, stats);
-        shrinkNeighbors(dc, linkTargets, storage->max_neighbors_per_level[level], level, stats);
+        shrinkNeighbors(dc, linkTargets, storage->max_neighbors_per_level[level], level, storage->dim, stats);
 
         neighbors.reserve(linkTargets.size());
         while (!linkTargets.empty()) {
@@ -564,7 +565,7 @@ namespace orangedb {
                     stats.totalDistCompDuringShrink++;
                     shrinkNodes.emplace(node, dist);
                 }
-                shrinkNeighbors(dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, stats);
+                shrinkNeighbors(dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, 100, stats);
 
                 // Push result into union nodes
                 unionNodes.clear();

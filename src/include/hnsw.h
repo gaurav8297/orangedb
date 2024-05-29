@@ -123,6 +123,7 @@ namespace orangedb {
                 std::priority_queue<NodeDistCloser> &results,
                 int maxSize,
                 level_t level,
+                int dim,
                 Stats &stats);
 
         void makeConnection(
