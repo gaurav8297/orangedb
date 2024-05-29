@@ -486,6 +486,10 @@ namespace orangedb {
         for (int i = 0; i < storage->numPoints; i++) {
             omp_init_lock(&locks[i]);
         }
+        VisitedTable visited(storage->numPoints);
+        for (int i = 0; i < n; i++) {
+            visited.set(deletedIds[i]);
+        }
 
 #pragma omp parallel
         {
@@ -494,11 +498,10 @@ namespace orangedb {
             for (int i = 0; i < storage->dim; i++) {
                 infVector[i] = MAXFLOAT;
             }
-//            VisitedTable visited(storage->numPoints);
 
 #pragma omp for schedule(static)
             for (int i = 0; i < n; i++) {
-                deleteNode(&dc, deletedIds[i], locks, infVector, dim, localStats);
+                deleteNode(&dc, deletedIds[i], locks, infVector, dim, visited, localStats);
                 if (i % 10000 == 0) {
                     spdlog::warn("Deleted 10000!!");
                 }
@@ -520,6 +523,7 @@ namespace orangedb {
             std::vector<omp_lock_t> &locks,
             const float *infVector,
             int dim,
+            VisitedTable &visited,
             Stats &stats) {
         // Update the vector in the storage.data at id position
         auto neigbours = storage->get_neighbors(0);
@@ -529,6 +533,9 @@ namespace orangedb {
             auto nbr = neigbours[i];
             if (nbr == INVALID_VECTOR_ID) {
                 break;
+            }
+            if (visited.get(nbr)) {
+                continue;
             }
             // Shrink the neighbors list of the neighbor
             std::unordered_set<vector_idx_t> unionNodes;

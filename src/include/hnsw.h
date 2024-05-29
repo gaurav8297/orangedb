@@ -158,6 +158,7 @@ namespace orangedb {
                 std::vector<omp_lock_t> &locks,
                 const float *infVector,
                 int dim,
+                VisitedTable &visited,
                 Stats &stats);
 
         void deleteNodeV2(
