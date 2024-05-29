@@ -81,7 +81,7 @@ namespace orangedb {
                 std::priority_queue<NodeDistCloser> &results,
                 Stats &stats);
 
-        void deleteNodes(const vector_idx_t *deletedIds, size_t n, Stats &stats);
+        void deleteNodes(const vector_idx_t *deletedIds, size_t n, int dim, Stats &stats);
 
         void logStats();
 
@@ -157,6 +157,7 @@ namespace orangedb {
                 orangedb::vector_idx_t deletedId,
                 std::vector<omp_lock_t> &locks,
                 const float *infVector,
+                int dim,
                 Stats &stats);
 
         void deleteNodeV2(

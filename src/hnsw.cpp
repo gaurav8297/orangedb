@@ -480,7 +480,7 @@ namespace orangedb {
                 stats);
     }
 
-    void HNSW::deleteNodes(const vector_idx_t *deletedIds, size_t n, Stats &stats) {
+    void HNSW::deleteNodes(const vector_idx_t *deletedIds, size_t n, int dim, Stats &stats) {
         L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
         std::vector<omp_lock_t> locks(storage->numPoints);
         for (int i = 0; i < storage->numPoints; i++) {
@@ -498,7 +498,7 @@ namespace orangedb {
 
 #pragma omp for schedule(static)
             for (int i = 0; i < n; i++) {
-                deleteNode(&dc, deletedIds[i], locks, infVector, localStats);
+                deleteNode(&dc, deletedIds[i], locks, infVector, dim, localStats);
                 if (i % 10000 == 0) {
                     spdlog::warn("Deleted 10000!!");
                 }
@@ -519,6 +519,7 @@ namespace orangedb {
             orangedb::vector_idx_t deletedId,
             std::vector<omp_lock_t> &locks,
             const float *infVector,
+            int dim,
             Stats &stats) {
         // Update the vector in the storage.data at id position
         auto neigbours = storage->get_neighbors(0);
@@ -565,7 +566,7 @@ namespace orangedb {
                     stats.totalDistCompDuringShrink++;
                     shrinkNodes.emplace(node, dist);
                 }
-                shrinkNeighbors(dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, 100, stats);
+                shrinkNeighbors(dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, dim, stats);
 
                 // Push result into union nodes
                 unionNodes.clear();

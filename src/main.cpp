@@ -735,6 +735,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto alpha = stof(input.getCmdOption("-alpha"));
     auto deletePercent = stof(input.getCmdOption("-deletePercent"));
     auto deleteAlpha = stof(input.getCmdOption("-deleteAlpha"));
+    auto deleteDim = stoi(input.getCmdOption("-deleteDim"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -770,7 +771,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     Stats stats;
     spdlog::info("Deleting {} vectors", numVecToDelete);
     auto start = std::chrono::high_resolution_clock::now();
-    hnsw.deleteNodes(vecsToDelete.data(), numVecToDelete, stats);
+    hnsw.deleteNodes(vecsToDelete.data(), numVecToDelete, deleteDim, stats);
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     spdlog::info("Deletion time: {} ms", duration);
