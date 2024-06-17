@@ -36,11 +36,15 @@ namespace orangedb {
                         [](const std::pair<vector_idx_t, uint64_t> &a, const std::pair<vector_idx_t, uint64_t> &b) {
                             return a.second > b.second;
                         });
-            // Print top 100 nodes
-            for (int i = 0; i < std::min(100, (int) sortedShrinkCallsPerNode.size()); i++) {
-                spdlog::info("Node: {}, Shrink Calls: {}", sortedShrinkCallsPerNode[i].first,
-                             sortedShrinkCallsPerNode[i].second);
+
+            // Print top 5% of the nodes
+            auto top5Percent = sortedShrinkCallsPerNode.size() * 0.05;
+            // Sum of all shrink calls
+            uint64_t totalShrinkCalls5Percent = 0;
+            for (size_t i = 0; i < top5Percent; i++) {
+                totalShrinkCalls5Percent += sortedShrinkCallsPerNode[i].second;
             }
+            spdlog::info("Total Shrink Calls in Top 5% of the nodes: {}", totalShrinkCalls5Percent);
             spdlog::info("Total Shrink Calls: {}", totalShrinkCalls);
         }
 
