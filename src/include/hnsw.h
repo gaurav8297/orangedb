@@ -38,6 +38,9 @@ namespace orangedb {
                       });
 
             // Print top 5% of the nodes
+            if (sortedShrinkCallsPerNode.empty()) {
+                return;
+            }
             size_t size5Percent = sortedShrinkCallsPerNode.size() * 0.05;
             size_t start = 0;
             size_t end = size5Percent;
