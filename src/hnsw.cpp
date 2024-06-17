@@ -224,7 +224,7 @@ namespace orangedb {
         auto tempAlpha = config.alpha;
 
         // Switch to max alpha if the number of shrink calls is greater than the threshold
-        if (currentVal > config.adaptiveAlphaThreshold) {
+        if (currentVal + 1 <= config.adaptiveAlphaThreshold) {
             tempAlpha = config.maxAlpha;
         }
 
