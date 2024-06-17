@@ -105,11 +105,14 @@ namespace orangedb {
         int adaptiveAlphaThreshold = 2;
         // [Experimental] max alpha value
         float maxAlpha = 1.1;
+        // [Experimental] distance multiplier
+        float distanceMultiplier = 2.0;
 
         HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float alpha, int adaptiveAlphaThreshold,
-                   float maxAlpha)
+                   float maxAlpha, float distanceMultiplier)
                 : M(M), efConstruction(efConstruction), efSearch(efSearch), alpha(alpha),
-                  adaptiveAlphaThreshold(adaptiveAlphaThreshold), maxAlpha(maxAlpha) {}
+                  adaptiveAlphaThreshold(adaptiveAlphaThreshold), maxAlpha(maxAlpha),
+                  distanceMultiplier(distanceMultiplier) {}
     };
 
     class HNSW {

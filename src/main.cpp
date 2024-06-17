@@ -735,6 +735,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto alpha = stof(input.getCmdOption("-alpha"));
     auto adaptiveAlphaThreshold = stoi(input.getCmdOption("-adaptiveAlphaThreshold"));
     auto maxAlpha = stof(input.getCmdOption("-maxAlpha"));
+    auto distanceMultiplier = stof(input.getCmdOption("-distanceMultiplier"));
 //    auto deletePercent = stof(input.getCmdOption("-deletePercent"));
 //    auto deleteAlpha = stof(input.getCmdOption("-deleteAlpha"));
 //    auto deleteDim = stoi(input.getCmdOption("-deleteDim"));
@@ -760,7 +761,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
-    HNSWConfig config(M, efConstruction, efSearch, alpha, adaptiveAlphaThreshold, maxAlpha);
+    HNSWConfig config(M, efConstruction, efSearch, alpha, adaptiveAlphaThreshold, maxAlpha, distanceMultiplier);
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, num_vectors);
     hnsw.logStats();

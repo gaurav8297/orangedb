@@ -243,6 +243,11 @@ namespace orangedb {
             auto distNodeAQ = nodeA.dist;
             bool good = true;
             for (NodeDistFarther &nodeB: result) {
+                // if distAQ >>> distBQ, then we can safely add nodeA to the result
+                if (distNodeAQ > (nodeB.dist * config.distanceMultiplier)) {
+                    continue;
+                }
+
                 double distNodeAB;
                 dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), dim, &distNodeAB);
                 stats.totalDistCompDuringShrink++;
