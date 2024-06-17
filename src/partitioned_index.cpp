@@ -8,7 +8,7 @@ namespace orangedb {
         for (int i = 0; i < config.numCentroids; i++) {
             indexes.push_back(
                     std::make_unique<HNSW>(
-                            HNSWConfig(config.M, config.efConstruction, config.efSearch, config.alpha),
+                            HNSWConfig(config.M, config.efConstruction, config.efSearch, config.alpha, 1, 1.1),
                             rg,
                             dim));
         }

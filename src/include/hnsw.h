@@ -31,11 +31,11 @@ namespace orangedb {
             spdlog::info("Total Nodes Shrink During Delete: {}", totalNodesShrinkDuringDelete);
             // Sort shrinkCallsPerNode in descending order and print
             std::vector<std::pair<vector_idx_t, uint64_t>> sortedShrinkCallsPerNode(shrinkCallsPerNode.begin(),
-                                                                                     shrinkCallsPerNode.end());
+                                                                                    shrinkCallsPerNode.end());
             std::sort(sortedShrinkCallsPerNode.begin(), sortedShrinkCallsPerNode.end(),
-                        [](const std::pair<vector_idx_t, uint64_t> &a, const std::pair<vector_idx_t, uint64_t> &b) {
-                            return a.second > b.second;
-                        });
+                      [](const std::pair<vector_idx_t, uint64_t> &a, const std::pair<vector_idx_t, uint64_t> &b) {
+                          return a.second > b.second;
+                      });
 
             // Print top 5% of the nodes
             size_t size5Percent = sortedShrinkCallsPerNode.size() * 0.05;
@@ -49,7 +49,8 @@ namespace orangedb {
                     totalShrinkCalls5Percent += sortedShrinkCallsPerNode[i].second;
                 }
                 spdlog::info("Total Shrink Calls {}%-{}% of nodes: {}", init, init + 5, totalShrinkCalls5Percent);
-                spdlog::info("Avg Shrink Calls {}%-{}% of nodes: {}", init, init + 5, totalShrinkCalls5Percent / size5Percent);
+                spdlog::info("Avg Shrink Calls {}%-{}% of nodes: {}", init, init + 5,
+                             totalShrinkCalls5Percent / size5Percent);
 
                 if (end == sortedShrinkCallsPerNode.size()) {
                     break;
@@ -81,7 +82,7 @@ namespace orangedb {
                 totalDistCompDuringDelete += other.totalDistCompDuringDelete;
                 totalNodesShrinkDuringDelete += other.totalNodesShrinkDuringDelete;
                 totalShrinkCalls += other.totalShrinkCalls;
-                for (auto &it : other.shrinkCallsPerNode) {
+                for (auto &it: other.shrinkCallsPerNode) {
                     shrinkCallsPerNode[it.first] += it.second;
                 }
             }
@@ -97,9 +98,15 @@ namespace orangedb {
         uint16_t efSearch = 50;
         // RNG alpha parameter
         float alpha = 1.0;
+        // [Experimental] adaptive alpha threshold
+        int adaptiveAlphaThreshold = 2;
+        // [Experimental] max alpha value
+        float maxAlpha = 1.1;
 
-        HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float alpha)
-                : M(M), efConstruction(efConstruction), efSearch(efSearch), alpha(alpha) {}
+        HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float alpha, int adaptiveAlphaThreshold,
+                   float maxAlpha)
+                : M(M), efConstruction(efConstruction), efSearch(efSearch), alpha(alpha),
+                  adaptiveAlphaThreshold(adaptiveAlphaThreshold), maxAlpha(maxAlpha) {}
     };
 
     class HNSW {
@@ -189,7 +196,7 @@ namespace orangedb {
                 Stats &stats);
 
         void deleteNode(
-                DistanceComputer* dc,
+                DistanceComputer *dc,
                 orangedb::vector_idx_t deletedId,
                 std::vector<omp_lock_t> &locks,
                 const float *infVector,
@@ -198,7 +205,7 @@ namespace orangedb {
                 Stats &stats);
 
         void deleteNodeV2(
-                DistanceComputer* dc,
+                DistanceComputer *dc,
                 orangedb::vector_idx_t deletedId,
                 std::vector<omp_lock_t> &locks,
                 const float *infVector,
@@ -206,7 +213,7 @@ namespace orangedb {
                 Stats &stats);
 
         void deleteNodeV3(
-                DistanceComputer* dc,
+                DistanceComputer *dc,
                 orangedb::vector_idx_t deletedId,
                 std::vector<omp_lock_t> &locks,
                 const float *infVector,

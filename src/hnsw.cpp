@@ -220,6 +220,13 @@ namespace orangedb {
             stats.shrinkCallsPerNode[id] = 1;
         }
         stats.totalShrinkCalls++;
+        auto currentVal = storage->elementShrinkCalls->at(id).fetch_add(1);
+        auto tempAlpha = config.alpha;
+
+        // Switch to max alpha if the number of shrink calls is greater than the threshold
+        if (currentVal > config.adaptiveAlphaThreshold) {
+            tempAlpha = config.maxAlpha;
+        }
 
         std::priority_queue<NodeDistFarther> temp;
         std::vector<NodeDistFarther> result;
@@ -239,7 +246,7 @@ namespace orangedb {
                 double distNodeAB;
                 dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), dim, &distNodeAB);
                 stats.totalDistCompDuringShrink++;
-                if ((config.alpha * distNodeAB) < distNodeAQ) {
+                if ((tempAlpha * distNodeAB) < distNodeAQ) {
                     good = false;
                     break;
                 }
