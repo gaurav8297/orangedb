@@ -36,6 +36,7 @@ namespace orangedb {
         }
 
         inline void resize(uint32_t n, uint8_t level) {
+//            elementShrinkCalls = std::vector<std::atomic_uint16_t>(n, 0);
             graphs[level].neighbors.resize(n * max_neighbors_per_level[level], INVALID_VECTOR_ID);
             if (level > 0) {
                 next_level_ids[level].resize(n);
@@ -88,6 +89,7 @@ namespace orangedb {
         std::vector<GraphCSR> graphs;
         std::vector<vector_idx_t> next_level_ids[MAX_LEVELS];
         std::vector<vector_idx_t> actual_ids[MAX_LEVELS];
+//        std::vector<std::atomic_uint16_t> elementShrinkCalls;
         // This is needed because atomics doesn't support copy or more. So we can't dynamically allocate it with resize.
         LevelCounter level_counters[MAX_LEVELS];
         uint32_t fast_level_counters[MAX_LEVELS];

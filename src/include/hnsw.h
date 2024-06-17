@@ -38,13 +38,24 @@ namespace orangedb {
                         });
 
             // Print top 5% of the nodes
-            auto top5Percent = sortedShrinkCallsPerNode.size() * 0.05;
-            // Sum of all shrink calls
-            uint64_t totalShrinkCalls5Percent = 0;
-            for (size_t i = 0; i < top5Percent; i++) {
-                totalShrinkCalls5Percent += sortedShrinkCallsPerNode[i].second;
+            size_t size5Percent = sortedShrinkCallsPerNode.size() * 0.05;
+            size_t start = 0;
+            size_t end = size5Percent;
+            int init = 5;
+            while (end <= sortedShrinkCallsPerNode.size()) {
+                // Sum of all shrink calls
+                uint64_t totalShrinkCalls5Percent = 0;
+                for (size_t i = start; i < end; i++) {
+                    totalShrinkCalls5Percent += sortedShrinkCallsPerNode[i].second;
+                }
+                spdlog::info("Total Shrink Calls {}%-{}% of nodes: {}", init, init + 5, totalShrinkCalls5Percent);
+                spdlog::info("Avg Shrink Calls {}%-{}% of nodes: {}", init, init + 5, totalShrinkCalls5Percent / size5Percent);
+  
+                start += size5Percent;
+                end += size5Percent;
+                end = std::min(end, sortedShrinkCallsPerNode.size());
+                init += 5;
             }
-            spdlog::info("Total Shrink Calls in Top 5% of the nodes: {}", totalShrinkCalls5Percent);
             spdlog::info("Total Shrink Calls: {}", totalShrinkCalls);
         }
 
