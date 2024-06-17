@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <stdexcept>
 
 namespace orangedb::storage {
     FileHandle::FileHandle(std::string &path, int flag, bool readOnly) : path(path) {
