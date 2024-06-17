@@ -20,6 +20,7 @@ namespace orangedb {
         uint64_t totalDistCompDuringDelete = 0;
         uint64_t totalNodesShrinkDuringDelete = 0;
         uint64_t totalShrinkCalls = 0;
+        std::unordered_map<vector_idx_t, uint64_t> shrinkCallsPerNode;
 
 
         void logStats() {
@@ -28,6 +29,18 @@ namespace orangedb {
             spdlog::info("Total Distance Computations in MakeConnection: {}", totalDistCompDuringMakeConnection);
             spdlog::info("Total Distance Computations in Delete: {}", totalDistCompDuringDelete);
             spdlog::info("Total Nodes Shrink During Delete: {}", totalNodesShrinkDuringDelete);
+            // Sort shrinkCallsPerNode in descending order and print
+            std::vector<std::pair<vector_idx_t, uint64_t>> sortedShrinkCallsPerNode(shrinkCallsPerNode.begin(),
+                                                                                     shrinkCallsPerNode.end());
+            std::sort(sortedShrinkCallsPerNode.begin(), sortedShrinkCallsPerNode.end(),
+                        [](const std::pair<vector_idx_t, uint64_t> &a, const std::pair<vector_idx_t, uint64_t> &b) {
+                            return a.second > b.second;
+                        });
+            // Print top 100 nodes
+            for (int i = 0; i < std::min(100, (int) sortedShrinkCallsPerNode.size()); i++) {
+                spdlog::info("Node: {}, Shrink Calls: {}", sortedShrinkCallsPerNode[i].first,
+                             sortedShrinkCallsPerNode[i].second);
+            }
             spdlog::info("Total Shrink Calls: {}", totalShrinkCalls);
         }
 
@@ -38,6 +51,7 @@ namespace orangedb {
             totalDistCompDuringDelete = 0;
             totalNodesShrinkDuringDelete = 0;
             totalShrinkCalls = 0;
+            shrinkCallsPerNode.clear();
         }
 
         void merge(Stats &other) {
@@ -49,6 +63,9 @@ namespace orangedb {
                 totalDistCompDuringDelete += other.totalDistCompDuringDelete;
                 totalNodesShrinkDuringDelete += other.totalNodesShrinkDuringDelete;
                 totalShrinkCalls += other.totalShrinkCalls;
+                for (auto &it : other.shrinkCallsPerNode) {
+                    shrinkCallsPerNode[it.first] += it.second;
+                }
             }
         }
     };
@@ -120,6 +137,7 @@ namespace orangedb {
 
         void shrinkNeighbors(
                 DistanceComputer *dc,
+                vector_idx_t id,
                 std::priority_queue<NodeDistCloser> &results,
                 int maxSize,
                 level_t level,

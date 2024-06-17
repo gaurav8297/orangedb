@@ -733,9 +733,9 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto thread_count = stoi(input.getCmdOption("-nThreads"));
     auto num_vectors = stoi(input.getCmdOption("-numVectors"));
     auto alpha = stof(input.getCmdOption("-alpha"));
-    auto deletePercent = stof(input.getCmdOption("-deletePercent"));
-    auto deleteAlpha = stof(input.getCmdOption("-deleteAlpha"));
-    auto deleteDim = stoi(input.getCmdOption("-deleteDim"));
+//    auto deletePercent = stof(input.getCmdOption("-deletePercent"));
+//    auto deleteAlpha = stof(input.getCmdOption("-deleteAlpha"));
+//    auto deleteDim = stoi(input.getCmdOption("-deleteDim"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -764,21 +764,21 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     hnsw.logStats();
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 
-    hnsw.config.alpha = deleteAlpha;
-    auto numVecToDelete = baseNumVectors * deletePercent;
-    std::vector<vector_idx_t> vecsToDelete(numVecToDelete);
-    rng.randomPerm(baseNumVectors, vecsToDelete.data(), numVecToDelete);
-    Stats stats;
-    spdlog::info("Deleting {} vectors", numVecToDelete);
-    auto start = std::chrono::high_resolution_clock::now();
-    hnsw.deleteNodes(vecsToDelete.data(), numVecToDelete, deleteDim, stats);
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    spdlog::info("Deletion time: {} ms", duration);
-    stats.logStats();
-    spdlog::info("Generating ground truth after deleting vectors!!");
-    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, 100, gtVecs);
-    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
+//    hnsw.config.alpha = deleteAlpha;
+//    auto numVecToDelete = baseNumVectors * deletePercent;
+//    std::vector<vector_idx_t> vecsToDelete(numVecToDelete);
+//    rng.randomPerm(baseNumVectors, vecsToDelete.data(), numVecToDelete);
+//    Stats stats;
+//    spdlog::info("Deleting {} vectors", numVecToDelete);
+//    auto start = std::chrono::high_resolution_clock::now();
+//    hnsw.deleteNodes(vecsToDelete.data(), numVecToDelete, deleteDim, stats);
+//    auto end = std::chrono::high_resolution_clock::now();
+//    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+//    spdlog::info("Deletion time: {} ms", duration);
+//    stats.logStats();
+//    spdlog::info("Generating ground truth after deleting vectors!!");
+//    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, 100, gtVecs);
+//    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
 }
 
 //void benchmark_scalar_quantizer() {
@@ -907,14 +907,14 @@ void benchmarkClustering(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-//    benchmark_hnsw_queries(argc, argv);
+    benchmark_hnsw_queries(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();
 //    benchmark_scalar_quantizer();
 //    benchmark_quantizer();
 //    benchmark_explore_data();
-    benchmarkClustering(argc, argv);
+//    benchmarkClustering(argc, argv);
 //    benchmarkSimSimd();
     return 0;
 }

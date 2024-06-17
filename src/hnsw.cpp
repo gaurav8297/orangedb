@@ -204,6 +204,7 @@ namespace orangedb {
     //       Another idea: Use centroids to check the equality condition
     void HNSW::shrinkNeighbors(
             DistanceComputer *dc,
+            vector_idx_t id,
             std::priority_queue<NodeDistCloser> &results,
             int maxSize,
             level_t level,
@@ -212,6 +213,14 @@ namespace orangedb {
         if (results.size() <= maxSize) {
             return;
         }
+
+        if (stats.shrinkCallsPerNode.contains(id)) {
+            stats.shrinkCallsPerNode[id]++;
+        } else {
+            stats.shrinkCallsPerNode[id] = 1;
+        }
+        stats.totalShrinkCalls++;
+
         std::priority_queue<NodeDistFarther> temp;
         std::vector<NodeDistFarther> result;
         while (!results.empty()) {
@@ -245,7 +254,6 @@ namespace orangedb {
         for (auto &node: result) {
             results.emplace(node.id, node.dist);
         }
-        return;
     }
 
     // It is assumed that the node is already locked.
@@ -285,7 +293,7 @@ namespace orangedb {
             stats.totalDistCompDuringMakeConnection++;
             results.emplace(neighbor, distSrcNbr);
         }
-        shrinkNeighbors(dc, results, storage->max_neighbors_per_level[level], level, storage->dim, stats);
+        shrinkNeighbors(dc, src, results, storage->max_neighbors_per_level[level], level, storage->dim, stats);
         size_t i = begin;
         while (!results.empty()) {
             neighbors[i++] = results.top().id;
@@ -307,7 +315,7 @@ namespace orangedb {
             Stats &stats) {
         std::priority_queue<NodeDistCloser> linkTargets;
         searchNeighbors(dc, level, linkTargets, entrypoint, entrypointDist, visited, config.efConstruction, stats);
-        shrinkNeighbors(dc, linkTargets, storage->max_neighbors_per_level[level], level, storage->dim, stats);
+        shrinkNeighbors(dc, id, linkTargets, storage->max_neighbors_per_level[level], level, storage->dim, stats);
 
         neighbors.reserve(linkTargets.size());
         while (!linkTargets.empty()) {
@@ -573,7 +581,7 @@ namespace orangedb {
                     stats.totalDistCompDuringShrink++;
                     shrinkNodes.emplace(node, dist);
                 }
-                shrinkNeighbors(dc, shrinkNodes, storage->max_neighbors_per_level[0], 0, dim, stats);
+                shrinkNeighbors(dc, nbr, shrinkNodes, storage->max_neighbors_per_level[0], 0, dim, stats);
 
                 // Push result into union nodes
                 unionNodes.clear();
