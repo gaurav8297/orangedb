@@ -245,7 +245,8 @@ namespace orangedb {
             for (NodeDistFarther &nodeB: result) {
                 // if distAQ >>> distBQ, then we can safely add nodeA to the result
                 if (distNodeAQ > (nodeB.dist * config.distanceMultiplier)) {
-                    continue;
+                    stats.totalShrinkMulCalls++;
+                    break;
                 }
 
                 double distNodeAB;
