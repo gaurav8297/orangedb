@@ -50,7 +50,10 @@ namespace orangedb {
                 }
                 spdlog::info("Total Shrink Calls {}%-{}% of nodes: {}", init, init + 5, totalShrinkCalls5Percent);
                 spdlog::info("Avg Shrink Calls {}%-{}% of nodes: {}", init, init + 5, totalShrinkCalls5Percent / size5Percent);
-  
+
+                if (end == sortedShrinkCallsPerNode.size()) {
+                    break;
+                }
                 start += size5Percent;
                 end += size5Percent;
                 end = std::min(end, sortedShrinkCallsPerNode.size());
