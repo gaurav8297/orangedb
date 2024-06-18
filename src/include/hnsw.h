@@ -104,19 +104,16 @@ namespace orangedb {
         // The number of neighbors to explore during search
         uint16_t efSearch = 50;
         // RNG alpha parameter
-        float alpha = 1.0;
-        // [Experimental] adaptive alpha threshold
-        int adaptiveAlphaThreshold = 2;
+        float minAlpha = 0.95;
         // [Experimental] max alpha value
-        float maxAlpha = 1.1;
-        // [Experimental] distance multiplier
-        float distanceMultiplier = 2.0;
+        float maxAlpha = 1.2;
+        // Alpha decay
+        float alphaDecay = 0.03;
 
-        HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float alpha, int adaptiveAlphaThreshold,
-                   float maxAlpha, float distanceMultiplier)
-                : M(M), efConstruction(efConstruction), efSearch(efSearch), alpha(alpha),
-                  adaptiveAlphaThreshold(adaptiveAlphaThreshold), maxAlpha(maxAlpha),
-                  distanceMultiplier(distanceMultiplier) {}
+        HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float minAlpha,
+                   float maxAlpha, float alphaDecay)
+                : M(M), efConstruction(efConstruction), efSearch(efSearch), minAlpha(minAlpha),
+                  maxAlpha(maxAlpha), alphaDecay(alphaDecay) {}
     };
 
     class HNSW {

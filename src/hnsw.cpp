@@ -221,13 +221,7 @@ namespace orangedb {
         }
         stats.totalShrinkCalls++;
         auto currentVal = storage->elementShrinkCalls->at(id).fetch_add(1);
-        auto tempAlpha = config.alpha;
-
-        // Switch to max alpha if the number of shrink calls is greater than the threshold
-        if (currentVal + 1 <= config.adaptiveAlphaThreshold) {
-            tempAlpha = config.maxAlpha;
-        }
-
+        auto alpha = std::max(config.maxAlpha - (config.alphaDecay * currentVal), config.minAlpha);
         std::priority_queue<NodeDistFarther> temp;
         std::vector<NodeDistFarther> result;
         while (!results.empty()) {
@@ -243,16 +237,10 @@ namespace orangedb {
             auto distNodeAQ = nodeA.dist;
             bool good = true;
             for (NodeDistFarther &nodeB: result) {
-                // if distAQ >>> distBQ, then we can safely add nodeA to the result
-                if (distNodeAQ > (nodeB.dist * config.distanceMultiplier)) {
-                    stats.totalShrinkMulCalls++;
-                    continue;
-                }
-
                 double distNodeAB;
                 dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), dim, &distNodeAB);
                 stats.totalDistCompDuringShrink++;
-                if ((tempAlpha * distNodeAB) < distNodeAQ) {
+                if ((alpha * distNodeAB) < distNodeAQ) {
                     good = false;
                     break;
                 }
@@ -441,7 +429,7 @@ namespace orangedb {
             DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
             VisitedTable visited(n);
             Stats localStats = Stats();
-#pragma omp for schedule(static)
+#pragma omp for schedule(dynamic, 1000)
             for (int i = 0; i < n; i++) {
                 localDc->setQuery(storage->data + (i * storage->dim));
                 addNode(localDc, node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
