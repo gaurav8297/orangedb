@@ -29,18 +29,15 @@ function execute_with_retry {
 echo "Starting the experiment..."
 
 echo "Running the baseline with 1.2"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 32 -numVectors 1000000 -minAlpha 1.05 -maxAlpha 1.05 -alphaDecay 0.0" "baseline_1.05.txt"
+execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 32 -numVectors 1000000 -minAlpha 1.0 -maxAlpha 1.0 -alphaDecay 0.0" "baseline_1.0.txt"
 
-echo "Running the baseline with 1.15"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 32 -numVectors 1000000 -minAlpha 1.1 -maxAlpha 1.1 -alphaDecay 0.0" "baseline_1.1.txt"
+echo "Running the experiment with minAlpha 0.95, maxAlpha 1.0 and alphaDecay 0.02"
+execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 32 -numVectors 1000000 -minAlpha 0.9 -maxAlpha 1 -alphaDecay 0.01" "output1_3.txt"
 
-echo "Running the experiment with minAlpha 0.95, maxAlpha 1.2 and alphaDecay 0.02"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 32 -numVectors 1000000 -minAlpha 0.95 -maxAlpha 1.1 -alphaDecay 0.02" "output1_2.txt"
-
-echo "Running the experiment with minAlpha 0.95, maxAlpha 1.2 and alphaDecay 0.04"
+echo "Running the experiment with minAlpha 0.9, maxAlpha 1.0 and alphaDecay 0.04"
 execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 32 -numVectors 1000000 -minAlpha 0.95 -maxAlpha 1.1 -alphaDecay 0.04" "output2_2.txt"
 
-echo "Running the experiment with minAlpha 0.95, maxAlpha 1.2 and alphaDecay 0.06"
+echo "Running the experiment with minAlpha 0.9, maxAlpha 1.2 and alphaDecay 0.06"
 execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/gist -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 32 -numVectors 1000000 -minAlpha 0.95 -maxAlpha 1.1 -alphaDecay 0.06" "output3_2.txt"
 
 echo "Running the experiment with minAlpha 0.95, maxAlpha 1.2 and alphaDecay 0.08"

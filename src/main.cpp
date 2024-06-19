@@ -662,9 +662,9 @@ void query_graph(
             res.emplace_back(top.id, top.dist);
             results.pop();
         }
-        auto gt = gtVecs + i * 100;
+        auto gt = gtVecs + i * k;
         for (auto &result: res) {
-            if (std::find(gt, gt + 100, result.id) != (gt + 100)) {
+            if (std::find(gt, gt + k, result.id) != (gt + k)) {
                 recall++;
             }
         }
@@ -758,13 +758,17 @@ void benchmark_hnsw_queries(int argc, char **argv) {
         }
     }
 
+    // Print grond truth num vectors
+    printf("Ground truth num vectors: %zu\n", gtNumVectors);
+    printf("Ground truth dimension: %zu\n", gtDimension);
+
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
     HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay);
     HNSW hnsw(config, &rng, baseDimension);
-    build_graph(hnsw, baseVecs, num_vectors);
+    build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
-    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
+    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, gtDimension, efSearch, baseNumVectors);
 
 //    hnsw.config.alpha = deleteAlpha;
 //    auto numVecToDelete = baseNumVectors * deletePercent;
