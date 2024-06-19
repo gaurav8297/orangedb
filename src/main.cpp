@@ -768,6 +768,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
+    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, gtDimension, gtVecs);
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, gtDimension, efSearch, baseNumVectors);
 
 //    hnsw.config.alpha = deleteAlpha;
