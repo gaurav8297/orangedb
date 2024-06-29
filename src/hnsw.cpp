@@ -256,7 +256,27 @@ namespace orangedb {
             results.emplace(node.id, node.dist);
         }
 
-        if (stats.shrinkCallsPerNode[id] > 1 && level == 0) {
+        if (level == 0) {
+            std::vector<double> oldDistances;
+            // read old distances till the last blocker
+            for (int i = storage->afterShrinkDistances[id].size() - 1; i >= 0; i--) {
+                if (storage->afterShrinkDistances[id][i] == -1) {
+                    break;
+                }
+                oldDistances.push_back(storage->afterShrinkDistances[id][i]);
+            }
+
+            // check if the new distances are same as the old distances sort and check
+            if (!oldDistances.empty()) {
+                std::sort(oldDistances.begin(), oldDistances.end());
+                for (int i = 0; i < result.size(); i++) {
+                    if (oldDistances[i] != result[i].dist) {
+                        stats.totalShrinkNoUse++;
+                        break;
+                    }
+                }
+            }
+
             for (auto &node: result) {
                 storage->afterShrinkDistances[id].push_back(node.dist);
             }
@@ -676,26 +696,26 @@ namespace orangedb {
         spdlog::warn("Average number of nodes in last layer: {}", count / storage->fast_level_counters[0]);
 
         // print how neighbors changed after shrink for node with highest shrink calls
-        int maxShrinkCalls = 0;
-        vector_idx_t maxShrinkCallsId = 0;
-        for (auto &node: stats.shrinkCallsPerNode) {
-            if (node.second > maxShrinkCalls) {
-                maxShrinkCalls = node.second;
-                maxShrinkCallsId = node.first;
-            }
-        }
+//        int maxShrinkCalls = 0;
+//        vector_idx_t maxShrinkCallsId = 0;
+//        for (auto &node: stats.shrinkCallsPerNode) {
+//            if (node.second > maxShrinkCalls) {
+//                maxShrinkCalls = node.second;
+//                maxShrinkCallsId = node.first;
+//            }
+//        }
 
-        spdlog::warn("============================================================");
-        if (maxShrinkCalls > 1) {
-            spdlog::warn("Node with highest shrink calls: {}", maxShrinkCallsId);
-            std::string distances;
-            for (auto &dist: storage->afterShrinkDistances[maxShrinkCallsId]) {
-                if (dist == -1) {
-                    printf("%s\n", distances.c_str());
-                    distances = "";
-                }
-                distances += std::to_string(dist) + ",";
-            }
-        }
+//        spdlog::warn("============================================================");
+//        if (maxShrinkCalls > 1) {
+//            spdlog::warn("Node with highest shrink calls: {}", maxShrinkCallsId);
+//            std::string distances;
+//            for (auto &dist: storage->afterShrinkDistances[maxShrinkCallsId]) {
+//                if (dist == -1) {
+//                    printf("%s\n", distances.c_str());
+//                    distances = "";
+//                }
+//                distances += std::to_string(dist) + ",";
+//            }
+//        }
     }
 } // namespace orangedb

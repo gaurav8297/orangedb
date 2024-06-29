@@ -21,6 +21,7 @@ namespace orangedb {
         uint64_t totalNodesShrinkDuringDelete = 0;
         uint64_t totalShrinkCalls = 0;
         uint64_t totalShrinkMulCalls = 0;
+        uint64_t totalShrinkNoUse = 0;
         std::unordered_map<vector_idx_t, uint64_t> shrinkCallsPerNode;
 
 
@@ -66,6 +67,7 @@ namespace orangedb {
             }
             spdlog::info("Total Shrink Calls: {}", totalShrinkCalls);
             spdlog::info("Total Shrink Mul Calls: {}", totalShrinkMulCalls);
+            spdlog::info("Total Shrink No Use: {}", totalShrinkNoUse);
         }
 
         void reset() {
@@ -76,6 +78,7 @@ namespace orangedb {
             totalNodesShrinkDuringDelete = 0;
             totalShrinkCalls = 0;
             totalShrinkMulCalls = 0;
+            totalShrinkNoUse = 0;
             shrinkCallsPerNode.clear();
         }
 
@@ -89,6 +92,7 @@ namespace orangedb {
                 totalNodesShrinkDuringDelete += other.totalNodesShrinkDuringDelete;
                 totalShrinkCalls += other.totalShrinkCalls;
                 totalShrinkMulCalls += other.totalShrinkMulCalls;
+                totalShrinkNoUse += other.totalShrinkNoUse;
                 for (auto &it: other.shrinkCallsPerNode) {
                     shrinkCallsPerNode[it.first] += it.second;
                 }
