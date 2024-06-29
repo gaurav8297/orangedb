@@ -255,6 +255,14 @@ namespace orangedb {
         for (auto &node: result) {
             results.emplace(node.id, node.dist);
         }
+
+        if (stats.shrinkCallsPerNode[id] > 1 && level == 0) {
+            for (auto &node: result) {
+                storage->afterShrinkDistances[id].push_back(node.dist);
+            }
+            // Add a blocker
+            storage->afterShrinkDistances[id].push_back(-1);
+        }
     }
 
     // It is assumed that the node is already locked.
@@ -666,5 +674,28 @@ namespace orangedb {
             }
         }
         spdlog::warn("Average number of nodes in last layer: {}", count / storage->fast_level_counters[0]);
+
+        // print how neighbors changed after shrink for node with highest shrink calls
+        int maxShrinkCalls = 0;
+        vector_idx_t maxShrinkCallsId = 0;
+        for (auto &node: stats.shrinkCallsPerNode) {
+            if (node.second > maxShrinkCalls) {
+                maxShrinkCalls = node.second;
+                maxShrinkCallsId = node.first;
+            }
+        }
+
+        spdlog::warn("============================================================");
+        if (maxShrinkCalls > 1) {
+            spdlog::warn("Node with highest shrink calls: {}", maxShrinkCallsId);
+            std::string distances;
+            for (auto &dist: storage->afterShrinkDistances[maxShrinkCallsId]) {
+                if (dist == -1) {
+                    printf("%s\n", distances.c_str());
+                    distances = "";
+                }
+                distances += std::to_string(dist) + ",";
+            }
+        }
     }
 } // namespace orangedb
