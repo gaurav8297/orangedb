@@ -259,7 +259,7 @@ namespace orangedb {
         if (level == 0) {
             std::vector<double> oldDistances;
             // read old distances till the last blocker
-            for (int i = storage->afterShrinkDistances[id].size() - 1; i >= 0; i--) {
+            for (int i = storage->afterShrinkDistances[id].size() - 2; i >= 0; i--) {
                 if (storage->afterShrinkDistances[id][i] == -1) {
                     break;
                 }
