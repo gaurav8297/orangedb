@@ -275,6 +275,8 @@ namespace orangedb {
                         break;
                     }
                 }
+            } else {
+                stats.totalShrinkNoUse++;
             }
 
             for (auto &node: result) {
