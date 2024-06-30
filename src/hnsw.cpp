@@ -456,7 +456,7 @@ namespace orangedb {
         printf("Building the graph %d\n", max_level);
 #pragma omp parallel
         {
-            DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
+            DistanceComputer *localDc = new CosineDistanceComputer(data, storage->dim, n);
             VisitedTable visited(n);
             Stats localStats = Stats();
 #pragma omp for schedule(dynamic, 1000)
@@ -496,7 +496,7 @@ namespace orangedb {
             VisitedTable &visited,
             std::priority_queue<NodeDistCloser> &results,
             Stats &stats) {
-        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
+        CosineDistanceComputer dc = CosineDistanceComputer(storage->data, storage->dim, storage->numPoints);
         dc.setQuery(query);
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = entryPoint;
@@ -520,7 +520,7 @@ namespace orangedb {
     }
 
     void HNSW::deleteNodes(const vector_idx_t *deletedIds, size_t n, int dim, Stats &stats) {
-        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
+        CosineDistanceComputer dc = CosineDistanceComputer(storage->data, storage->dim, storage->numPoints);
         std::vector<omp_lock_t> locks(storage->numPoints);
         for (int i = 0; i < storage->numPoints; i++) {
             omp_init_lock(&locks[i]);
