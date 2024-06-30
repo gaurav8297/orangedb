@@ -28,20 +28,20 @@ function execute_with_retry {
 # Retry the below commands if they fail
 echo "Starting the experiment..."
 
-echo "Running the baseline with 1.2"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 40 -efSearch 300 -nThreads 32 -minAlpha 1 -maxAlpha 1 -alphaDecay 0" "baseline_40.txt"
+#echo "Running the baseline with 1.2"
+#execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 40 -efSearch 300 -nThreads 32 -minAlpha 1 -maxAlpha 1 -alphaDecay 0" "baseline_40.txt"
 
 echo "Running the experiment with minAlpha 0.95, maxAlpha 1.0 and alphaDecay 0.02"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 80 -efSearch 300 -nThreads 32 -minAlpha 1 -maxAlpha 1 -alphaDecay 0" "baseline_80.txt"
+execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 40 -efSearch 300 -nThreads 32 -minAlpha 1.1 -maxAlpha 1.1 -alphaDecay 0" "out_40_1.1.txt"
 
 echo "Running the experiment with minAlpha 0.9, maxAlpha 1.0 and alphaDecay 0.04"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 120 -efSearch 300 -nThreads 32 -minAlpha 1 -maxAlpha 1 -alphaDecay 0" "baseline_120.txt"
+execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 40 -efSearch 300 -nThreads 32 -minAlpha 1.2 -maxAlpha 1.2 -alphaDecay 0" "out_40_1.2.txt"
 
 echo "Running the experiment with minAlpha 0.9, maxAlpha 1.2 and alphaDecay 0.06"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 160 -efSearch 300 -nThreads 32 -minAlpha 1 -maxAlpha 1 -alphaDecay 0" "baseline_160.txt"
+execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 40 -efSearch 300 -nThreads 32 -minAlpha 0.95 -maxAlpha 1.1 -alphaDecay 0.02" "out_40_0.02.txt"
 
 echo "Running the experiment with minAlpha 0.95, maxAlpha 1.2 and alphaDecay 0.08"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 200 -efSearch 300 -nThreads 32 -minAlpha 1 -maxAlpha 1 -alphaDecay 0" "baseline_200.txt"
+execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 40 -efSearch 300 -nThreads 32 -minAlpha 0.95 -maxAlpha 1.1 -alphaDecay 0.04" "out_40_0.04.txt"
 
 echo "Running the experiment with minAlpha 0.95, maxAlpha 1.2 and alphaDecay 0.1"
-execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 240 -efSearch 300 -nThreads 32 -minAlpha 1 -maxAlpha 1 -alphaDecay 0" "baseline_240.txt"
+execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 16 -k 100 -efConstruction 40 -efSearch 300 -nThreads 32 -minAlpha 0.95 -maxAlpha 1.1 -alphaDecay 0.08" "out_40_0.08.txt"
