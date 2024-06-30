@@ -11,6 +11,8 @@
 #include <assert.h>    // assert
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
+#include <iostream>
+#include <fstream>
 
 using namespace orangedb;
 
@@ -725,6 +727,37 @@ void generateGroundTruth(
     }
 }
 
+void writeToFile(const std::string &path, const uint8_t *data, size_t size) {
+    std::ofstream outputFile(path, std::ios::binary);
+    outputFile.write(reinterpret_cast<const char *>(data), size);
+    outputFile.close();
+}
+
+void loadFromFile(const std::string &path, uint8_t *data, size_t size) {
+    std::ifstream inputFile(path, std::ios::binary);
+    inputFile.read(reinterpret_cast<char *>(data), size);
+    inputFile.close();
+}
+
+void generateGroundTruth(int argc, char **argv) {
+    InputParser input(argc, argv);
+    const std::string &basePath = input.getCmdOption("-basePath");
+    auto k = stoi(input.getCmdOption("-k"));
+    const std::string &gtPath = input.getCmdOption("-gtPath");
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
+
+    // serialize gtVecs to a file
+    writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+}
+
 void benchmark_hnsw_queries(int argc, char **argv) {
     InputParser input(argc, argv);
     const std::string &basePath = input.getCmdOption("-basePath");
@@ -916,7 +949,8 @@ void benchmarkClustering(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-    benchmark_hnsw_queries(argc, argv);
+//    benchmark_hnsw_queries(argc, argv);
+      generateGroundTruth(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();
