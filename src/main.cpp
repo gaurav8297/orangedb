@@ -732,10 +732,10 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto M = stoi(input.getCmdOption("-M"));
     auto efSearch = stoi(input.getCmdOption("-efSearch"));
     auto thread_count = stoi(input.getCmdOption("-nThreads"));
-    auto num_vectors = stoi(input.getCmdOption("-numVectors"));
     auto minAlpha = stof(input.getCmdOption("-minAlpha"));
     auto maxAlpha = stof(input.getCmdOption("-maxAlpha"));
     auto alphaDecay = stof(input.getCmdOption("-alphaDecay"));
+    auto k = stoi(input.getCmdOption("-k"));
 //    auto deletePercent = stof(input.getCmdOption("-deletePercent"));
 //    auto deleteAlpha = stof(input.getCmdOption("-deleteAlpha"));
 //    auto deleteDim = stoi(input.getCmdOption("-deleteDim"));
@@ -748,20 +748,20 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
-    size_t gtDimension, gtNumVectors;
-    int *gtVecsInt = readIvecFile(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
+//    size_t gtDimension, gtNumVectors;
+//    int *gtVecsInt = readIvecFile(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-    CHECK_ARGUMENT(queryNumVectors == gtNumVectors, "Query and ground truth numbers are not same");
-    auto *gtVecs = new vector_idx_t[gtNumVectors * gtDimension];
-    for (int i = 0; i < gtNumVectors; i++) {
-        for (int j = 0; j < gtDimension; j++) {
-            gtVecs[i * gtDimension + j] = gtVecsInt[i * gtDimension + j];
-        }
-    }
+//    CHECK_ARGUMENT(queryNumVectors == gtNumVectors, "Query and ground truth numbers are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+//    for (int i = 0; i < gtNumVectors; i++) {
+//        for (int j = 0; j < gtDimension; j++) {
+//            gtVecs[i * gtDimension + j] = gtVecsInt[i * gtDimension + j];
+//        }
+//    }
 
     // Print grond truth num vectors
-    printf("Ground truth num vectors: %zu\n", gtNumVectors);
-    printf("Ground truth dimension: %zu\n", gtDimension);
+    printf("Ground truth num vectors: %zu\n", queryNumVectors);
+    printf("Ground truth dimension: %zu\n", k);
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
@@ -769,8 +769,9 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
-    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, gtDimension, gtVecs);
-    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, gtDimension, efSearch, baseNumVectors);
+    spdlog::info("Generating ground truth!!");
+    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
+    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 
 //    hnsw.config.alpha = deleteAlpha;
 //    auto numVecToDelete = baseNumVectors * deletePercent;

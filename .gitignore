@@ -33,6 +33,7 @@ scripts/pre-compiled-bins/lib*
 scripts/pre-compiled-bins/kuzu*
 
 data/gist*
+data/openai*
 
 venv/
 experiments/.idea/
