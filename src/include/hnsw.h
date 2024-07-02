@@ -110,7 +110,7 @@ namespace orangedb {
         // RNG alpha parameter
         float minAlpha = 0.95;
         // [Experimental] max alpha value
-        float maxAlpha = 1.2;
+        float maxAlpha = 1.0;
         // Alpha decay
         float alphaDecay = 0.03;
 

@@ -214,14 +214,14 @@ namespace orangedb {
             return;
         }
 
-        if (stats.shrinkCallsPerNode.contains(id)) {
-            stats.shrinkCallsPerNode[id]++;
-        } else {
-            stats.shrinkCallsPerNode[id] = 1;
-        }
-        stats.totalShrinkCalls++;
-        auto currentVal = storage->elementShrinkCalls->at(id).fetch_add(1);
-        auto alpha = std::max(config.maxAlpha - (config.alphaDecay * currentVal), config.minAlpha);
+//        if (stats.shrinkCallsPerNode.contains(id)) {
+//            stats.shrinkCallsPerNode[id]++;
+//        } else {
+//            stats.shrinkCallsPerNode[id] = 1;
+//        }
+//        stats.totalShrinkCalls++;
+//        auto currentVal = storage->elementShrinkCalls->at(id).fetch_add(1);
+//        auto alpha = std::max(config.maxAlpha - (config.alphaDecay * currentVal), config.minAlpha);
         std::priority_queue<NodeDistFarther> temp;
         std::vector<NodeDistFarther> result;
         while (!results.empty()) {
@@ -240,7 +240,7 @@ namespace orangedb {
                 double distNodeAB;
                 dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), dim, &distNodeAB);
                 stats.totalDistCompDuringShrink++;
-                if ((alpha * distNodeAB) < distNodeAQ) {
+                if ((config.minAlpha * distNodeAB) < distNodeAQ) {
                     good = false;
                     break;
                 }
@@ -256,35 +256,35 @@ namespace orangedb {
             results.emplace(node.id, node.dist);
         }
 
-        if (level == 0) {
-            std::vector<double> oldDistances;
-            // read old distances till the last blocker
-            for (int i = storage->afterShrinkDistances[id].size() - 2; i >= 0; i--) {
-                if (storage->afterShrinkDistances[id][i] == -1) {
-                    break;
-                }
-                oldDistances.push_back(storage->afterShrinkDistances[id][i]);
-            }
-
-            // check if the new distances are same as the old distances sort and check
-            if (!oldDistances.empty()) {
-                std::sort(oldDistances.begin(), oldDistances.end());
-                for (int i = 0; i < result.size(); i++) {
-                    if (oldDistances[i] != result[i].dist) {
-                        stats.totalShrinkNoUse++;
-                        break;
-                    }
-                }
-            } else {
-                stats.totalShrinkNoUse++;
-            }
-
-            for (auto &node: result) {
-                storage->afterShrinkDistances[id].push_back(node.dist);
-            }
-            // Add a blocker
-            storage->afterShrinkDistances[id].push_back(-1);
-        }
+//        if (level == 0) {
+//            std::vector<double> oldDistances;
+//            // read old distances till the last blocker
+//            for (int i = storage->afterShrinkDistances[id].size() - 2; i >= 0; i--) {
+//                if (storage->afterShrinkDistances[id][i] == -1) {
+//                    break;
+//                }
+//                oldDistances.push_back(storage->afterShrinkDistances[id][i]);
+//            }
+//
+//            // check if the new distances are same as the old distances sort and check
+//            if (!oldDistances.empty()) {
+//                std::sort(oldDistances.begin(), oldDistances.end());
+//                for (int i = 0; i < result.size(); i++) {
+//                    if (oldDistances[i] != result[i].dist) {
+//                        stats.totalShrinkNoUse++;
+//                        break;
+//                    }
+//                }
+//            } else {
+//                stats.totalShrinkNoUse++;
+//            }
+//
+//            for (auto &node: result) {
+//                storage->afterShrinkDistances[id].push_back(node.dist);
+//            }
+//            // Add a blocker
+//            storage->afterShrinkDistances[id].push_back(-1);
+//        }
     }
 
     // It is assumed that the node is already locked.
