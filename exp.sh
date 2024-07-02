@@ -45,3 +45,6 @@ execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/op
 
 echo "Running the experiment with minAlpha 0.95, maxAlpha 1.2 and alphaDecay 0.1"
 execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/openai_dbpedia -M 24 -k 100 -efConstruction 50 -efSearch 300 -nThreads 32 -minAlpha 0.95 -maxAlpha 1.1 -alphaDecay 0.08" "out_40_0.08.txt"
+
+
+perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/def-ssalihog/g3sehgal/gist_50k -M 64 -k 100 -efConstruction 100 -efSearch 100 -nThreads 32 -minAlpha 1.0 -maxAlpha 1.0 -alphaDecay 0
