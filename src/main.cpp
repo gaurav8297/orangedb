@@ -775,7 +775,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
-//    auto groundTruthPath = fmt::format("{}/gt.bin", basePath);
+    auto groundTruthPath = fmt::format("{}/gt.bin", basePath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -785,8 +785,8 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 //    int *gtVecsInt = readIvecFile(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
 //    CHECK_ARGUMENT(queryNumVectors == gtNumVectors, "Query and ground truth numbers are not same");
-//    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-//    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 //    for (int i = 0; i < gtNumVectors; i++) {
 //        for (int j = 0; j < gtDimension; j++) {
 //            gtVecs[i * gtDimension + j] = gtVecsInt[i * gtDimension + j];
@@ -794,8 +794,8 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 //    }
 
     // Print grond truth num vectors
-    printf("Ground truth num vectors: %zu\n", queryNumVectors);
-    printf("Ground truth dimension: %zu\n", k);
+    printf("Query num vectors: %zu\n", queryNumVectors);
+    printf("Query dimension: %zu\n", k);
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
@@ -805,7 +805,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     hnsw.logStats();
     spdlog::info("Generating ground truth!!");
 //    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
-//    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
+    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 
 //    hnsw.config.alpha = deleteAlpha;
 //    auto numVecToDelete = baseNumVectors * deletePercent;
@@ -950,8 +950,8 @@ void benchmarkClustering(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-    benchmark_hnsw_queries(argc, argv);
-//      generateGroundTruth(argc, argv);
+//    benchmark_hnsw_queries(argc, argv);
+      generateGroundTruth(argc, argv);
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();

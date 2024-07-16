@@ -346,6 +346,9 @@ namespace orangedb {
             Stats &stats) {
         std::priority_queue<NodeDistCloser> linkTargets;
         searchNeighbors(dc, level, linkTargets, entrypoint, entrypointDist, visited, config.efConstruction, stats);
+//        if (level == 0) {
+//            printf("size of linkTargets %d\n", linkTargets.size());
+//        }
         shrinkNeighbors(dc, id, linkTargets, storage->max_neighbors_per_level[level], level, storage->dim, stats);
 
         neighbors.reserve(linkTargets.size());
