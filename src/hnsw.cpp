@@ -118,7 +118,6 @@ namespace orangedb {
         visited.reset();
     }
 
-    // TODO: Figure out why this is not working!!
     void HNSW::searchNeighborsOnLastLevel(
             DistanceComputer *dc,
             std::priority_queue<NodeDistCloser> &results,

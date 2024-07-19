@@ -786,7 +786,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
 //    CHECK_ARGUMENT(queryNumVectors == gtNumVectors, "Query and ground truth numbers are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+//    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 //    for (int i = 0; i < gtNumVectors; i++) {
 //        for (int j = 0; j < gtDimension; j++) {
 //            gtVecs[i * gtDimension + j] = gtVecsInt[i * gtDimension + j];
