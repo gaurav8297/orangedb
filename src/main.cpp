@@ -1,6 +1,5 @@
 #include <iostream>
 #include "hnsw.h"
-#include "scalar_quantizer.h"
 #include "spdlog/fmt/fmt.h"
 
 #ifdef __AVX2__
@@ -645,6 +644,7 @@ void build_graph(HNSW &hnsw, const float *baseVecs, size_t baseNumVectors) {
 void query_graph(
         HNSW &hnsw,
         const float *queryVecs,
+        const uint8_t *filteredMask,
         size_t queryNumVectors,
         size_t queryDimension,
         const vector_idx_t *gtVecs,
@@ -656,9 +656,10 @@ void query_graph(
     auto recall = 0.0;
     Stats stats{};
     for (size_t i = 0; i < queryNumVectors; i++) {
+        auto localRecall = 0.0;
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
-        hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
+        hnsw.searchWithFilter(queryVecs + (i * queryDimension), k, ef_search, visited, results, filteredMask + (i * baseNumVectors), stats);
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
@@ -668,8 +669,10 @@ void query_graph(
         for (auto &result: res) {
             if (std::find(gt, gt + k, result.id) != (gt + k)) {
                 recall++;
+                localRecall++;
             }
         }
+//        printf("Recall: %f\n", localRecall);
     }
     auto recallPerQuery = recall / queryNumVectors;
     stats.logStats();
@@ -711,6 +714,7 @@ void generateGroundTruth(
         size_t dim,
         size_t numVectors,
         float *queryVecs,
+        const uint8_t* filteredMask,
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
@@ -722,7 +726,7 @@ void generateGroundTruth(
 #pragma omp for schedule(dynamic, 100)
         for (size_t i = 0; i < queryNumVectors; i++) {
             double dists[k];
-            index.knn(k, queryVecs + i * dim, dists, gtVecs + i * k);
+            index.knnFiltered(k, queryVecs + i * dim, dists, gtVecs + i * k, filteredMask + i * numVectors);
         }
     }
 }
@@ -739,11 +743,29 @@ void loadFromFile(const std::string &path, uint8_t *data, size_t size) {
     inputFile.close();
 }
 
-void generateGroundTruth(int argc, char **argv) {
-    InputParser input(argc, argv);
+void setFilterMaskUsingSelectivity(
+        size_t queryNumVectors,
+        uint8_t* filteredMask,
+        size_t numVectors,
+        float selectivity) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dis(0.0, 1.0);
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        for (size_t j = 0; j < numVectors; j++) {
+            if (dis(gen) < selectivity) {
+                filteredMask[i * numVectors + j] = 1;
+            }
+        }
+    }
+}
+
+void generateGroundTruth(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     auto k = stoi(input.getCmdOption("-k"));
     const std::string &gtPath = input.getCmdOption("-gtPath");
+    auto selectivity = stof(input.getCmdOption("-selectivity"));
+    const std::string &filteredMaskPath = input.getCmdOption("-filteredMaskPath");
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
 
@@ -752,14 +774,17 @@ void generateGroundTruth(int argc, char **argv) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
 
+    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
+    setFilterMaskUsingSelectivity(queryNumVectors, filteredMask, baseNumVectors, selectivity);
+    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
     // serialize gtVecs to a file
     writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    // serialize filteredMask to a file
+    writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
 }
 
-void benchmark_hnsw_queries(int argc, char **argv) {
-    InputParser input(argc, argv);
+void benchmark_filtered_hnsw_queries(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     auto efConstruction = stoi(input.getCmdOption("-efConstruction"));
     auto M = stoi(input.getCmdOption("-M"));
@@ -776,6 +801,7 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
     auto groundTruthPath = fmt::format("{}/gt.bin", basePath);
+    auto maskPath = fmt::format("{}/mask.bin", basePath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -786,12 +812,14 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
 //    CHECK_ARGUMENT(queryNumVectors == gtNumVectors, "Query and ground truth numbers are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-//    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 //    for (int i = 0; i < gtNumVectors; i++) {
 //        for (int j = 0; j < gtDimension; j++) {
 //            gtVecs[i * gtDimension + j] = gtVecsInt[i * gtDimension + j];
 //        }
 //    }
+    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
+    loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
 
     // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
@@ -803,9 +831,9 @@ void benchmark_hnsw_queries(int argc, char **argv) {
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
-    spdlog::info("Generating ground truth!!");
+//    spdlog::info("Generating ground truth!!");
 //    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
-    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
+    query_graph(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 
 //    hnsw.config.alpha = deleteAlpha;
 //    auto numVecToDelete = baseNumVectors * deletePercent;
@@ -822,67 +850,6 @@ void benchmark_hnsw_queries(int argc, char **argv) {
 //    spdlog::info("Generating ground truth after deleting vectors!!");
 //    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, 100, gtVecs);
 //    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
-}
-
-//void benchmark_scalar_quantizer() {
-//    auto basePath = "/home/gaurav/vector_index_experiments/vector_index/data/gist_50k";
-//    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-//
-//    size_t baseDimension, baseNumVectors;
-//    float *baseVecs = Utils::fvecs_read(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
-//    uint8_t *codes;
-//    Utils::alloc_aligned((void **) &codes, baseNumVectors * baseDimension, 64);
-//    printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
-//    float *vmin;
-//    float *vdiff;
-//    ScalarQuantizer sq(baseDimension, vmin, vdiff);
-//    sq.train(baseNumVectors, baseVecs);
-//    sq.compute_codes(baseVecs, codes, baseNumVectors);
-////    float *decoded;
-////    Utils::alloc_aligned((void**)&decoded, baseNumVectors * baseDimension * sizeof(float), 64);
-////    sq.decode(codes, decoded, baseNumVectors);
-//    Storage storage(baseDimension, 64, 2);
-//    storage.data = baseVecs;
-//    storage.codes = codes;
-//    storage.vmin = sq.vmin;
-//    storage.vdiff = sq.vdiff;
-//
-//    // Print 0 dimension for first 10 vectors
-////    auto error = 0.0;
-////    for (int i = 0; i < baseNumVectors; i++) {
-////        printf("Actual 0th location %f\n", baseVecs[i * 960]);
-////        printf("Decoded 0th location %f\n", decoded[i * 960]);
-////        error += baseVecs[i * 960] - decoded[i * 960];
-////    }
-////    printf("Error: %f\n", (error / baseNumVectors));
-//
-//    L2DistanceComputer normaldc(storage.data, baseDimension, baseNumVectors);
-//    SQDistanceComputer sqdc(storage.codes, baseDimension, baseNumVectors, storage.vmin, storage.vdiff);
-//    normaldc.setQuery(baseVecs);
-//    sqdc.setQuery(baseVecs);
-//
-//    auto error = 0.0;
-//    for (int i = 1; i < baseNumVectors; i++) {
-//        float actual, fake;
-//        normaldc.computeDistance(4, i, actual);
-//        sqdc.computeDistance(4, i, fake);
-//        printf("Actual: %f, Fake: %f\n", actual, fake);
-//        error += fake - actual;
-//    }
-//    printf("Error: %f\n", (error / baseNumVectors));
-//
-//    // TODO - Calculate distance between two vectors. First convert to float and then calc distances.
-//    // TODO - Try other way where normalize the equation and precompute some values to reduce computation/
-////    sq.print_stats();
-//}
-
-void benchmark_quantizer() {
-    auto val = 0.5645566777f;
-    uint8_t quantized = int(val * 255.0f);
-    float dequantized_v1 = quantized / 255.0f;
-    printf("Quantized: %d, Dequantized: %f\n", quantized, dequantized_v1);
-    float dequantized_v2 = (quantized + 0.5f) / 255.0f;
-    printf("Dequantized: %f\n", dequantized_v2);
 }
 
 // Benchmark clustering
@@ -950,8 +917,13 @@ void benchmarkClustering(int argc, char **argv) {
 }
 
 int main(int argc, char **argv) {
-    benchmark_hnsw_queries(argc, argv);
-//      generateGroundTruth(argc, argv);
+    InputParser input(argc, argv);
+    const std::string &run = input.getCmdOption("-run");
+    if (run == "benchmark") {
+        benchmark_filtered_hnsw_queries(input);
+    } else if (run == "generateGT") {
+        generateGroundTruth(input);
+    }
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();

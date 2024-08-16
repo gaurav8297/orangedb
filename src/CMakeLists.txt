@@ -4,7 +4,6 @@ add_library(orangedb
         helper_ds.cpp
         hnsw.cpp
         clustering.cpp
-        scalar_quantizer.cpp
         partitioned_index.cpp
         file_handle.cpp)
 

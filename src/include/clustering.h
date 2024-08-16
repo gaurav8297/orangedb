@@ -17,6 +17,7 @@ namespace orangedb {
 
         void knn(int k, const float *queries, double *distances, vector_idx_t *resultIds);
 
+        void knnFiltered(int k, const float *query, double *distance, vector_idx_t *resultIds, const uint8_t *filteredMask);
     private:
         DistanceComputer *dc;
         int dim;

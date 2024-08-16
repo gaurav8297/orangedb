@@ -558,6 +558,214 @@ namespace orangedb {
         }
     }
 
+    void HNSW::searchNeighborsOnLastLevelWithFilterA(
+            orangedb::DistanceComputer *dc,
+            std::priority_queue<NodeDistCloser> &results,
+            orangedb::vector_idx_t entrypoint,
+            double entrypointDist,
+            orangedb::VisitedTable &visited,
+            uint16_t efSearch,
+            int distCompBatchSize,
+            const uint8_t *filterMask,
+            orangedb::Stats &stats) {
+        std::priority_queue<NodeDistFarther> candidates;
+        candidates.emplace(entrypoint, entrypointDist);
+        results.emplace(entrypoint, entrypointDist);
+        visited.set(entrypoint);
+        auto neighbors = storage->get_neighbors(0);
+        while (!candidates.empty()) {
+            auto candidate = candidates.top();
+            // TODO: Do we need to check if the results are above efSearch?
+            if (candidate.dist > results.top().dist) {
+                break;
+            }
+            candidates.pop();
+            size_t begin, end;
+            storage->get_neighbors_offsets(candidate.id, 0, begin, end);
+            stats.totalGetNbrsCall++;
+
+            // the following version processes 4 neighbors at a time
+            size_t jmax = begin;
+            for (size_t i = begin; i < end; i++) {
+                vector_idx_t neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID)
+                    break;
+                prefetch_L3(visited.data() + neighbor);
+                jmax += 1;
+            }
+
+            // Perform distance computation on 4 vectors at a time
+            int counter = 0;
+            vector_idx_t vectorIds[distCompBatchSize];
+            for (size_t j = begin; j < jmax; j++) {
+                vector_idx_t neighbor = neighbors[j];
+                if (neighbor == INVALID_VECTOR_ID)
+                    break;
+                bool vget = visited.get(neighbor);
+                // TODO: Try to set visited in the end of loop
+                visited.set(neighbor);
+                vectorIds[counter] = neighbor;
+                counter += vget ? 0 : 1;
+                if (counter == distCompBatchSize) {
+                    double distances[distCompBatchSize];
+                    dc->batchComputeDistances(vectorIds, distances, distCompBatchSize);
+                    stats.totalDistCompDuringSearch += distCompBatchSize;
+                    for (int k = 0; k < distCompBatchSize; k++) {
+                        if (results.size() < efSearch || distances[k] < results.top().dist) {
+                            candidates.emplace(vectorIds[k], distances[k]);
+                            if (filterMask[vectorIds[k]]) {
+                                results.emplace(vectorIds[k], distances[k]);
+                                if (results.size() > efSearch) {
+                                    results.pop();
+                                }
+                            }
+                        }
+                    }
+                    counter = 0;
+                }
+            }
+
+            // For the left out nodes
+            for (int k = 0; k < counter; k++) {
+                double dist;
+                dc->computeDistance(vectorIds[k], &dist);
+                stats.totalDistCompDuringSearch++;
+                if (results.size() < efSearch || dist < results.top().dist) {
+                    candidates.emplace(vectorIds[k], dist);
+                    if (filterMask[vectorIds[k]]) {
+                        results.emplace(vectorIds[k], dist);
+                        if (results.size() > efSearch) {
+                            results.pop();
+                        }
+                    }
+                }
+            }
+        }
+        // Reset the visited table
+        visited.reset();
+    }
+
+    void HNSW::findNextFilteredKNeighbours(
+            DistanceComputer *dc,
+            vector_idx_t entrypoint,
+            std::vector<vector_idx_t> &nbrs,
+            const uint8_t *filterMask,
+            orangedb::VisitedTable &visited,
+            int maxK,
+            int maxNeighboursCheck,
+            Stats &stats) {
+        auto neighbors = storage->get_neighbors(0);
+        std::queue<vector_idx_t> candidates;
+        candidates.push(entrypoint);
+        auto neighboursChecked = 0;
+        while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
+            auto candidate = candidates.front();
+            candidates.pop();
+            size_t begin, end;
+            storage->get_neighbors_offsets(candidate, 0, begin, end);
+            neighboursChecked += 1;
+            stats.totalGetNbrsCall++;
+            // TODO: Maybe make it prioritized, might help in correlated cases
+            for (size_t i = begin; i < end; i++) {
+                auto neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID) {
+                    break;
+                }
+                if (visited.get(neighbor)) {
+                    continue;
+                }
+                if (filterMask[neighbor]) {
+                    nbrs.push_back(neighbor);
+                    if (nbrs.size() >= maxK) {
+                        return;
+                    }
+                }
+                candidates.push(neighbor);
+            }
+        }
+    }
+
+    void HNSW::searchNeighborsOnLastLevelWithFilterB(
+            DistanceComputer *dc,
+            std::priority_queue<NodeDistCloser> &results,
+            vector_idx_t entrypoint,
+            double entrypointDist,
+            VisitedTable &visited,
+            uint16_t efSearch,
+            int distCompBatchSize,
+            const uint8_t *filterMask,
+            orangedb::Stats &stats) {
+        std::priority_queue<NodeDistFarther> candidates;
+        candidates.emplace(entrypoint, entrypointDist);
+        results.emplace(entrypoint, entrypointDist);
+        visited.set(entrypoint);
+        auto neighbors = storage->get_neighbors(0);
+        while (!candidates.empty()) {
+            auto candidate = candidates.top();
+            if (candidate.dist > results.top().dist && results.size() >= efSearch) {
+                break;
+            }
+            candidates.pop();
+            std::vector<vector_idx_t> nbrs;
+            findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 20, 64, stats);
+            if (nbrs.empty()) {
+                 // TODO: Maybe change the entrypoint in case no results
+                 //     calculate the unvisited filtered neighbors, if above some threshold, then change the entrypoint
+            }
+            for (auto neighbor: nbrs) {
+                if (visited.get(neighbor)) {
+                    continue;
+                }
+                visited.set(neighbor);
+                double dist;
+                dc->computeDistance(neighbor, &dist);
+                stats.totalDistCompDuringSearch++;
+                if (results.size() < efSearch || dist < results.top().dist) {
+                    candidates.emplace(neighbor, dist);
+                    if (filterMask[neighbor]) {
+                        results.emplace(neighbor, dist);
+                        if (results.size() > efSearch) {
+                            results.pop();
+                        }
+                    }
+                }
+            }
+        }
+        visited.reset();
+    }
+
+    void HNSW::searchWithFilter(
+            const float *query,
+            uint16_t k,
+            uint16_t efSearch,
+            orangedb::VisitedTable &visited,
+            std::priority_queue<NodeDistCloser> &results,
+            const uint8_t *filterMask,
+            orangedb::Stats &stats) {
+        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
+        dc.setQuery(query);
+        int newEfSearch = std::max(k, efSearch);
+        vector_idx_t nearestID = entryPoint;
+        double nearestDist;
+        int level = maxLevel;
+        dc.computeDistance(getActualId(level, nearestID), &nearestDist);
+        // Update the nearest node
+        for (; level > 0; level--) {
+            searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
+            nearestID = storage->next_level_ids[level][nearestID];
+        }
+        searchNeighborsOnLastLevelWithFilterB(
+                &dc,
+                results,
+                nearestID,
+                nearestDist,
+                visited,
+                newEfSearch,
+                4,
+                filterMask,
+                stats);
+    }
+
     void HNSW::deleteNode(
             DistanceComputer* dc,
             orangedb::vector_idx_t deletedId,

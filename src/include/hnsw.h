@@ -22,6 +22,7 @@ namespace orangedb {
         uint64_t totalShrinkCalls = 0;
         uint64_t totalShrinkMulCalls = 0;
         uint64_t totalShrinkNoUse = 0;
+        uint64_t totalGetNbrsCall = 0;
         std::unordered_map<vector_idx_t, uint64_t> shrinkCallsPerNode;
 
 
@@ -31,6 +32,7 @@ namespace orangedb {
             spdlog::info("Total Distance Computations in MakeConnection: {}", totalDistCompDuringMakeConnection);
             spdlog::info("Total Distance Computations in Delete: {}", totalDistCompDuringDelete);
             spdlog::info("Total Nodes Shrink During Delete: {}", totalNodesShrinkDuringDelete);
+            spdlog::info("Total Get Nbrs Call: {}", totalGetNbrsCall);
             // Sort shrinkCallsPerNode in descending order and print
             std::vector<std::pair<vector_idx_t, uint64_t>> sortedShrinkCallsPerNode(shrinkCallsPerNode.begin(),
                                                                                     shrinkCallsPerNode.end());
@@ -79,6 +81,7 @@ namespace orangedb {
             totalShrinkCalls = 0;
             totalShrinkMulCalls = 0;
             totalShrinkNoUse = 0;
+            totalGetNbrsCall = 0;
             shrinkCallsPerNode.clear();
         }
 
@@ -93,6 +96,7 @@ namespace orangedb {
                 totalShrinkCalls += other.totalShrinkCalls;
                 totalShrinkMulCalls += other.totalShrinkMulCalls;
                 totalShrinkNoUse += other.totalShrinkNoUse;
+                totalGetNbrsCall += other.totalGetNbrsCall;
                 for (auto &it: other.shrinkCallsPerNode) {
                     shrinkCallsPerNode[it.first] += it.second;
                 }
@@ -134,6 +138,15 @@ namespace orangedb {
                 std::priority_queue<NodeDistCloser> &results,
                 Stats &stats);
 
+        void searchWithFilter(
+                const float *query,
+                uint16_t k,
+                uint16_t efSearch,
+                orangedb::VisitedTable &visited,
+                std::priority_queue<NodeDistCloser> &results,
+                const uint8_t *filterMask,
+                Stats &stats);
+
         void deleteNodes(const vector_idx_t *deletedIds, size_t n, int dim, Stats &stats);
 
         void logStats();
@@ -169,6 +182,38 @@ namespace orangedb {
                 VisitedTable &visited,
                 uint16_t efSearch,
                 int distCompBatchSize,
+                Stats &stats);
+
+        void findNextFilteredKNeighbours(
+                DistanceComputer *dc,
+                vector_idx_t entrypoint,
+                std::vector<vector_idx_t> &nbrs,
+                const uint8_t *filterMask,
+                VisitedTable &visited,
+                int maxK,
+                int maxNeighboursCheck,
+                Stats &stats);
+
+        void searchNeighborsOnLastLevelWithFilterA(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                vector_idx_t entrypoint,
+                double entrypointDist,
+                VisitedTable &visited,
+                uint16_t efSearch,
+                int distCompBatchSize,
+                const uint8_t *filterMask,
+                Stats &stats);
+
+        void searchNeighborsOnLastLevelWithFilterB(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                vector_idx_t entrypoint,
+                double entrypointDist,
+                VisitedTable &visited,
+                uint16_t efSearch,
+                int distCompBatchSize,
+                const uint8_t *filterMask,
                 Stats &stats);
 
         void shrinkNeighbors(

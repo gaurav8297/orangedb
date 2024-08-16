@@ -205,16 +205,37 @@ namespace orangedb {
         }
     }
 
-    void IndexOneNN::knn(int k, const float *queries, double *distance, vector_idx_t *resultIds) {
+    void IndexOneNN::knn(int k, const float *query, double *distance, vector_idx_t *resultIds) {
         // Single threaded implementation
         auto localDc = dc->clone();
         // Find the k nearest neighbors
-        localDc->setQuery(queries);
+        localDc->setQuery(query);
         std::priority_queue<NodeDistFarther> res;
         for (int i = 0; i < numEntries; i++) {
             double d;
             localDc->computeDistance(i, &d);
             res.emplace(i, d);
+        }
+        for (int i = 0; i < k; i++) {
+            resultIds[i] = res.top().id;
+            distance[i] = res.top().dist;
+            res.pop();
+        }
+    }
+
+    void IndexOneNN::knnFiltered(int k, const float *query, double *distance, vector_idx_t *resultIds, const uint8_t *filteredMask) {
+        // Single threaded implementation
+        auto localDc = dc->clone();
+        // Find the k nearest neighbors
+        localDc->setQuery(query);
+        std::priority_queue<NodeDistFarther> res;
+        for (int i = 0; i < numEntries; i++) {
+            if (filteredMask[i]) {
+                double d;
+                localDc->computeDistance(i, &d);
+                // TODO: Optimize this to only keep top k elements
+                res.emplace(i, d);
+            }
         }
         for (int i = 0; i < k; i++) {
             resultIds[i] = res.top().id;
