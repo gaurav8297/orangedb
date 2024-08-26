@@ -662,6 +662,7 @@ namespace orangedb {
             auto candidate = candidates.front();
             candidates.pop();
             size_t begin, end;
+            visited.set(candidate);
             storage->get_neighbors_offsets(candidate, 0, begin, end);
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
@@ -674,8 +675,10 @@ namespace orangedb {
                 if (visited.get(neighbor)) {
                     continue;
                 }
+                // Add to visited
                 if (filterMask[neighbor]) {
                     nbrs.push_back(neighbor);
+                    visited.set(neighbor);
                     if (nbrs.size() >= maxK) {
                         return;
                     }
@@ -714,21 +717,16 @@ namespace orangedb {
 //                 spdlog::warn("Nbrs turn out empty!!!");
             }
             for (auto neighbor: nbrs) {
-                if (visited.get(neighbor)) {
-                    continue;
-                }
-                visited.set(neighbor);
                 double dist;
                 dc->computeDistance(neighbor, &dist);
                 stats.totalDistCompDuringSearch++;
                 if (results.size() < efSearch || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
-                    if (filterMask[neighbor]) {
-                        results.emplace(neighbor, dist);
-                        if (results.size() > efSearch) {
-                            results.pop();
-                        }
+                    results.emplace(neighbor, dist);
+                    if (results.size() > efSearch) {
+                        results.pop();
                     }
+
                 }
             }
         }
