@@ -711,7 +711,7 @@ namespace orangedb {
             if (nbrs.empty()) {
                  // TODO: Maybe change the entrypoint in case no results
                  //     calculate the unvisited filtered neighbors, if above some threshold, then change the entrypoint
-                 spdlog::warn("Nbrs turn out empty!!!");
+//                 spdlog::warn("Nbrs turn out empty!!!");
             }
             for (auto neighbor: nbrs) {
                 if (visited.get(neighbor)) {
@@ -755,7 +755,7 @@ namespace orangedb {
             searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
-        searchNeighborsOnLastLevelWithFilterB(
+        searchNeighborsOnLastLevelWithFilterA(
                 &dc,
                 results,
                 nearestID,
