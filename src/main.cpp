@@ -794,6 +794,8 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto maxAlpha = stof(input.getCmdOption("-maxAlpha"));
     auto alphaDecay = stof(input.getCmdOption("-alphaDecay"));
     auto k = stoi(input.getCmdOption("-k"));
+    auto filterMinK = stoi(input.getCmdOption("-filterMinK"));
+    auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
 //    auto deletePercent = stof(input.getCmdOption("-deletePercent"));
 //    auto deleteAlpha = stof(input.getCmdOption("-deleteAlpha"));
 //    auto deleteDim = stoi(input.getCmdOption("-deleteDim"));
@@ -827,12 +829,10 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
-    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay);
+    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck);
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
-//    spdlog::info("Generating ground truth!!");
-//    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
     query_graph(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 
 //    hnsw.config.alpha = deleteAlpha;

@@ -707,7 +707,7 @@ namespace orangedb {
             }
             candidates.pop();
             std::vector<vector_idx_t> nbrs;
-            findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 20, 64, stats);
+            findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, config.filterMinK, config.maxNeighboursCheck, stats);
             if (nbrs.empty()) {
                  // TODO: Maybe change the entrypoint in case no results
                  //     calculate the unvisited filtered neighbors, if above some threshold, then change the entrypoint

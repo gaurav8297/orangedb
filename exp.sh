@@ -48,3 +48,6 @@ execute_with_retry "./orangedb_main -basePath /home/g3sehgal/vector_index_exp/op
 
 
 perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/def-ssalihog/g3sehgal/gist_50k -M 64 -k 100 -efConstruction 100 -efSearch 100 -nThreads 32 -minAlpha 1.0 -maxAlpha 1.0 -alphaDecay 0
+
+
+./orangedb/build/release/bin/orangedb_main -run benchmark -basePath /localscratch/g3sehgal.41075833.0/gist_1M -k 100 -M 64 -K 100 -efConstruction 200 -efSearch 200 -nThreads 32 -minAlpha 1 -alphaDecay 0.1 -maxAlpha 1.1

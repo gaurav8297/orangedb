@@ -118,10 +118,15 @@ namespace orangedb {
         // Alpha decay
         float alphaDecay = 0.03;
 
+        // Filtered!!
+        int filterMinK = 30;
+        int maxNeighboursCheck = 64;
+
         HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float minAlpha,
-                   float maxAlpha, float alphaDecay)
+                   float maxAlpha, float alphaDecay, int filterMinK, int maxNeighboursCheck)
                 : M(M), efConstruction(efConstruction), efSearch(efSearch), minAlpha(minAlpha),
-                  maxAlpha(maxAlpha), alphaDecay(alphaDecay) {}
+                  maxAlpha(maxAlpha), alphaDecay(alphaDecay), filterMinK(filterMinK),
+                  maxNeighboursCheck(maxNeighboursCheck) {}
     };
 
     class HNSW {
