@@ -658,10 +658,15 @@ namespace orangedb {
         std::queue<vector_idx_t> candidates;
         candidates.push(entrypoint);
         auto neighboursChecked = 0;
+        std::unordered_set<vector_idx_t> visitedSet;
         while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
             auto candidate = candidates.front();
             candidates.pop();
             size_t begin, end;
+            if (visitedSet.contains(candidate)) {
+                continue;
+            }
+            visitedSet.insert(candidate);
             visited.set(candidate);
             storage->get_neighbors_offsets(candidate, 0, begin, end);
             neighboursChecked += 1;
@@ -702,7 +707,6 @@ namespace orangedb {
         candidates.emplace(entrypoint, entrypointDist);
         results.emplace(entrypoint, entrypointDist);
         visited.set(entrypoint);
-        auto neighbors = storage->get_neighbors(0);
         while (!candidates.empty()) {
             auto candidate = candidates.top();
             if (candidate.dist > results.top().dist && results.size() >= efSearch) {
@@ -726,7 +730,6 @@ namespace orangedb {
                     if (results.size() > efSearch) {
                         results.pop();
                     }
-
                 }
             }
         }
