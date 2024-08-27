@@ -54,3 +54,7 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 
 ./orangedb/build/release/bin/orangedb_main -run generateGT -basePath /localscratch/g3sehgal.41095149.0/gist_1M -k 100 -gtPath /localscratch/g3sehgal.41095149.0/gist_1M/gt.bin -filteredMaskPath /localscratch/g3sehgal.41095149.0/gist_1M/mask.bin -selectivity 0.05
 
+
+./orangedb/build/release/bin/orangedb_main -run generateGT -basePath /localscratch/g3sehgal.41104075.0/gist_1M -k 100 -gtPath /localscratch/g3sehgal.41104075.0/gist_1M/gt.bin -filteredMaskPath /localscratch/g3sehgal.41104075.0/gist_1M/mask.bin -selectivity 0.1
+
+./orangedb/build/release/bin/orangedb_main -run benchmark -basePath /localscratch/g3sehgal.41104075.0/gist_1M -k 100 -M 64 -efConstruction 200 -efSearch 200 -nThreads 32 -minAlpha 1 -alphaDecay 0.1 -maxAlpha 1.1 -filterMinK 40 -maxNeighboursCheck 60
