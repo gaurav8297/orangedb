@@ -122,11 +122,20 @@ namespace orangedb {
         int filterMinK = 30;
         int maxNeighboursCheck = 64;
 
+        // Compression type (scalar, pair_wise)
+        std::string compressionType = "none";
+
+        // Storage path
+        std::string storagePath = "/tmp/orangedb";
+        bool loadStorage = false;
+
         HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float minAlpha,
-                   float maxAlpha, float alphaDecay, int filterMinK, int maxNeighboursCheck)
+                   float maxAlpha, float alphaDecay, int filterMinK, int maxNeighboursCheck,
+                   std::string compressionType, std::string storagePath, bool loadStorage)
                 : M(M), efConstruction(efConstruction), efSearch(efSearch), minAlpha(minAlpha),
                   maxAlpha(maxAlpha), alphaDecay(alphaDecay), filterMinK(filterMinK),
-                  maxNeighboursCheck(maxNeighboursCheck) {}
+                  maxNeighboursCheck(maxNeighboursCheck), compressionType(compressionType), storagePath(storagePath),
+                  loadStorage(loadStorage) {}
     };
 
     class HNSW {
@@ -135,7 +144,19 @@ namespace orangedb {
 
         void build(const float *data, size_t n);
 
+        inline void flushToDisk() {
+            storage->flush_to_disk(config.storagePath);
+        }
+
         void search(
+                const float *query,
+                uint16_t k,
+                uint16_t efSearch,
+                orangedb::VisitedTable &visited,
+                std::priority_queue<NodeDistCloser> &results,
+                Stats &stats);
+
+        void searchWithQuantizer(
                 const float *query,
                 uint16_t k,
                 uint16_t efSearch,
@@ -188,6 +209,17 @@ namespace orangedb {
                 uint16_t efSearch,
                 int distCompBatchSize,
                 Stats &stats);
+
+        void searchNearestOnLevelWithQuantizer(
+                const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
+                orangedb::vector_idx_t &nearest, double &nearestDist,
+                orangedb::Stats &stats);
+
+        void searchNeighborsOnLastLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc,
+                                                     std::priority_queue<NodeDistCloser> &results,
+                                                     orangedb::vector_idx_t entrypoint, double entrypointDist,
+                                                     orangedb::VisitedTable &visited, uint16_t efSearch,
+                                                     int distCompBatchSize, orangedb::Stats &stats);
 
         void findNextFilteredKNeighbours(
                 DistanceComputer *dc,
@@ -288,10 +320,8 @@ namespace orangedb {
         HNSWConfig config;
 
     private:
-        vector_idx_t entryPoint;
-        level_t maxLevel;
         std::vector<double> levelProbabs;
-
+        std::unique_ptr<fastq::Quantizer<uint8_t>> quantizer;
         Storage *storage;
         RandomGenerator *rg;
         Stats stats;

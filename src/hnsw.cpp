@@ -4,15 +4,30 @@
 #include "include/prefetch.h"
 #include "spdlog/spdlog.h"
 #include <memory>
-#include <unistd.h>
+#include <fastQ/pair_wise.h>
+#include <fastQ/scalar_8bit.h>
 
 namespace orangedb {
-    HNSW::HNSW(HNSWConfig config, RandomGenerator *rg, uint16_t dim) : config(config), entryPoint(INVALID_VECTOR_ID),
-                                                                       maxLevel(0),
+    HNSW::HNSW(HNSWConfig config, RandomGenerator *rg, uint16_t dim) : config(config),
                                                                        rg(rg), stats(Stats()) {
         // Initialize probabilities to save computation time later.
         initProbabs(config.M, 1.0 / log(config.M));
-        storage = new Storage(dim, config.M, levelProbabs.size());
+
+        auto code_size = 0;
+        // Initialize the quantizer
+        if (config.compressionType == "scalar_8bit") {
+            quantizer = std::make_unique<fastq::scalar_8bit::SQ8Bit>(dim);
+            code_size = quantizer->codeSize;
+        } else if (config.compressionType == "pair_wise") {
+            quantizer = std::make_unique<fastq::pair_wise::PairWise2Bit>(dim);
+            code_size = quantizer->codeSize;
+        }
+
+        if (config.loadStorage) {
+            storage = new Storage(config.storagePath, levelProbabs.size(), code_size);
+        } else {
+            storage = new Storage(dim, config.M, levelProbabs.size(), code_size);
+        }
     }
 
     void HNSW::initProbabs(uint16_t M, double levelMult) {
@@ -373,13 +388,13 @@ namespace orangedb {
         int level;
 #pragma omp critical
         {
-            if (entryPoint == INVALID_VECTOR_ID) {
-                maxLevel = node_level;
+            if (storage->entryPoint == INVALID_VECTOR_ID) {
+                storage->maxLevel = node_level;
                 // Fix this maybe
-                entryPoint = node_id[node_level];
+                storage->entryPoint = node_id[node_level];
             }
-            nearestId = entryPoint;
-            level = maxLevel;
+            nearestId = storage->entryPoint;
+            level = storage->maxLevel;
         }
 
         omp_set_lock(&locks[node_id[0]]);
@@ -414,15 +429,31 @@ namespace orangedb {
 #pragma omp critical
         {
             // Update the entry point
-            if (node_level > maxLevel) {
-                maxLevel = node_level;
-                entryPoint = node_id[node_level];
+            if (node_level > storage->maxLevel) {
+                storage->maxLevel = node_level;
+                storage->entryPoint = node_id[node_level];
             }
         }
     }
 
     // TODO: Add caching, thread pinning, live locks, queue with locks etc
     void HNSW::build(const float *data, size_t n) {
+        if (config.loadStorage) {
+            storage->data = data;
+            if (config.compressionType == "scalar_8bit") {
+                storage->codes = new uint8_t[n * quantizer->codeSize];
+                quantizer->batch_train(n, data);
+                quantizer->encode(data, storage->codes, n);
+            } else if (config.compressionType == "pair_wise") {
+                // Pair wise quantization
+                storage->codes = new uint8_t[n * quantizer->codeSize];
+                quantizer->batch_train(n, data);
+                quantizer->encode(data, storage->codes, n);
+            }
+            return;
+        }
+
+
         std::vector<omp_lock_t> locks(n);
         for (int i = 0; i < n; i++) {
             omp_init_lock(&locks[i]);
@@ -441,6 +472,18 @@ namespace orangedb {
         // Todo: Copy data to storage
         storage->data = data;
 
+        // Quantize the data
+        if (config.compressionType == "scalar_8bit") {
+            storage->codes = new uint8_t[n * quantizer->codeSize];
+            quantizer->batch_train(n, data);
+            quantizer->encode(data, storage->codes, n);
+        } else if (config.compressionType == "pair_wise") {
+            // Pair wise quantization
+            storage->codes = new uint8_t[n * quantizer->codeSize];
+            quantizer->batch_train(n, data);
+            quantizer->encode(data, storage->codes, n);
+        }
+
         // Set the size for storage
         // Todo: Figure out if ordering is important!! Basically we are adding vectors from highest to lowest level.
         for (int i = 0; i <= max_level; i++) {
@@ -458,15 +501,19 @@ namespace orangedb {
         printf("Building the graph %d\n", max_level);
 #pragma omp parallel
         {
+            auto asym_dc = quantizer->get_asym_distance_computer(fastq::DistanceType::L2);
+            auto sym_dc = quantizer->get_sym_distance_computer(fastq::DistanceType::L2);
             DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
+//            DistanceComputer *localDc = new QuantizedDistanceComputer(storage->codes, asym_dc.get(), sym_dc.get(),
+//                                                                      storage->code_size);
             VisitedTable visited(n);
             Stats localStats = Stats();
 #pragma omp for schedule(dynamic, 1000)
             for (int i = 0; i < n; i++) {
                 localDc->setQuery(storage->data + (i * storage->dim));
                 addNode(localDc, node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
-                if (i % 100000 == 0) {
-                    spdlog::warn("Inserted 100000!!");
+                if (i % 10000 == 0) {
+                    spdlog::warn("Inserted 10000!!");
                 }
             }
             // Merge stats
@@ -501,9 +548,9 @@ namespace orangedb {
         L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
         dc.setQuery(query);
         int newEfSearch = std::max(k, efSearch);
-        vector_idx_t nearestID = entryPoint;
+        vector_idx_t nearestID = storage->entryPoint;
         double nearestDist;
-        int level = maxLevel;
+        int level = storage->maxLevel;
         dc.computeDistance(getActualId(level, nearestID), &nearestDist);
         // Update the nearest node
         for (; level > 0; level--) {
@@ -512,6 +559,119 @@ namespace orangedb {
         }
         searchNeighborsOnLastLevel(
                 &dc,
+                results,
+                nearestID,
+                nearestDist,
+                visited,
+                newEfSearch,
+                4,
+                stats);
+    }
+
+    void HNSW::searchNearestOnLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
+                                                 orangedb::vector_idx_t &nearest, double &nearestDist,
+                                                 orangedb::Stats &stats) {
+        CHECK_ARGUMENT(level > 0, "Level should be greater than 0");
+        auto neighbors = storage->get_neighbors(level);
+        // Can we do distance computation on 4 vectors at a time?
+        while (true) {
+            vector_idx_t prev_nearest = nearest;
+            size_t begin, end;
+            storage->get_neighbors_offsets(nearest, level, begin, end);
+            for (size_t i = begin; i < end; i++) {
+                vector_idx_t neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID) {
+                    break;
+                }
+                double dist;
+                stats.totalDistCompDuringSearch++;
+                const uint8_t *code = storage->codes + getActualId(level, neighbor) * quantizer->codeSize;
+                dc->compute_distance(query, code, &dist);
+                if (dist < nearestDist) {
+                    nearest = neighbor;
+                    nearestDist = dist;
+                }
+            }
+            if (prev_nearest == nearest) {
+                break;
+            }
+        }
+
+    }
+
+    void HNSW::searchNeighborsOnLastLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc,
+                                                       std::priority_queue<NodeDistCloser> &results,
+                                                       orangedb::vector_idx_t entrypoint, double entrypointDist,
+                                                       orangedb::VisitedTable &visited, uint16_t efSearch,
+                                                       int distCompBatchSize, orangedb::Stats &stats) {
+        std::priority_queue<NodeDistFarther> candidates;
+        candidates.emplace(entrypoint, entrypointDist);
+        results.emplace(entrypoint, entrypointDist);
+        visited.set(entrypoint);
+        auto neighbors = storage->get_neighbors(0);
+        while (!candidates.empty()) {
+            auto candidate = candidates.top();
+            if (candidate.dist > results.top().dist) {
+                break;
+            }
+            candidates.pop();
+            size_t begin, end;
+            storage->get_neighbors_offsets(candidate.id, 0, begin, end);
+
+            // the following version processes 4 neighbors at a time
+            size_t jmax = begin;
+            for (size_t i = begin; i < end; i++) {
+                vector_idx_t neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID)
+                    break;
+                prefetch_L3(visited.data() + neighbor);
+                jmax += 1;
+            }
+
+            // Perform distance computation on 4 vectors at a time
+            for (size_t i = begin; i < jmax; i++) {
+                vector_idx_t neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID) {
+                    break;
+                }
+                if (visited.get(neighbor)) {
+                    continue;
+                }
+                visited.set(neighbor);
+                double dist;
+                const uint8_t *code = storage->codes + neighbor * quantizer->codeSize;
+                dc->compute_distance(query, code, &dist);
+                stats.totalDistCompDuringSearch++;
+                if (results.size() < efSearch || dist < results.top().dist) {
+                    candidates.emplace(neighbor, dist);
+                    results.emplace(neighbor, dist);
+                    if (results.size() > efSearch) {
+                        results.pop();
+                    }
+                }
+            }
+        }
+        // Reset the visited table
+        visited.reset();
+    }
+
+    void HNSW::searchWithQuantizer(const float *query, uint16_t k, uint16_t efSearch, orangedb::VisitedTable &visited,
+                                   std::priority_queue<NodeDistCloser> &results, orangedb::Stats &stats) {
+        auto dc = quantizer->get_asym_distance_computer(fastq::DistanceType::L2);
+        int newEfSearch = std::max(k, efSearch);
+        vector_idx_t nearestID = storage->entryPoint;
+        double nearestDist;
+        int level = storage->maxLevel;
+        const uint8_t *code = storage->codes + getActualId(level, nearestID) * quantizer->codeSize;
+        dc->compute_distance(query, code, &nearestDist);
+        // Update the nearest node
+        for (; level > 0; level--) {
+            searchNearestOnLevelWithQuantizer(query, dc.get(), level, nearestID, nearestDist, stats);
+            nearestID = storage->next_level_ids[level][nearestID];
+        }
+        searchNeighborsOnLastLevelWithQuantizer(
+                query,
+                dc.get(),
                 results,
                 nearestID,
                 nearestDist,
@@ -747,9 +907,9 @@ namespace orangedb {
         L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
         dc.setQuery(query);
         int newEfSearch = std::max(k, efSearch);
-        vector_idx_t nearestID = entryPoint;
+        vector_idx_t nearestID = storage->entryPoint;
         double nearestDist;
-        int level = maxLevel;
+        int level = storage->maxLevel;
         dc.computeDistance(getActualId(level, nearestID), &nearestDist);
         // Update the nearest node
         for (; level > 0; level--) {
@@ -862,7 +1022,7 @@ namespace orangedb {
         }
 
         // update actual_ids for all level
-        for (int level = 0; level < maxLevel; level++) {
+        for (int level = 0; level < storage->maxLevel; level++) {
             for (auto &actualId: storage->actual_ids[level]) {
                 if (actualId == deletedId) {
                     actualId = replacementNode;

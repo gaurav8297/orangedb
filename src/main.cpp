@@ -641,7 +641,7 @@ void build_graph(HNSW &hnsw, const float *baseVecs, size_t baseNumVectors) {
     std::cout << "Building time: " << duration << " ms" << std::endl;
 }
 
-void query_graph(
+void query_graph_filter(
         HNSW &hnsw,
         const float *queryVecs,
         const uint8_t *filteredMask,
@@ -709,7 +709,7 @@ void disable_perf() {
     assert(strcmp(ack, "ack\n") == 0);
 }
 
-void generateGroundTruth(
+void generateFilterGroundTruth(
         const float* vectors,
         size_t dim,
         size_t numVectors,
@@ -760,7 +760,7 @@ void setFilterMaskUsingSelectivity(
     }
 }
 
-void generateGroundTruth(InputParser &input) {
+void generateFilterGroundTruth(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     auto k = stoi(input.getCmdOption("-k"));
     const std::string &gtPath = input.getCmdOption("-gtPath");
@@ -776,12 +776,52 @@ void generateGroundTruth(InputParser &input) {
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
 
     auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
+    memset(filteredMask, 0, queryNumVectors * baseNumVectors);
     setFilterMaskUsingSelectivity(queryNumVectors, filteredMask, baseNumVectors, selectivity);
-    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
+    generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
     // serialize gtVecs to a file
     writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     // serialize filteredMask to a file
     writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
+}
+
+void generateGroundTruth(
+        const float* vectors,
+        size_t dim,
+        size_t numVectors,
+        float *queryVecs,
+        size_t queryNumVectors,
+        int k,
+        vector_idx_t *gtVecs) {
+    L2DistanceComputer dc(vectors, dim, numVectors);
+#pragma omp parallel
+    {
+        auto localDc = dc.clone();
+        IndexOneNN index(localDc.get(), dim, numVectors);
+#pragma omp for schedule(dynamic, 100)
+        for (size_t i = 0; i < queryNumVectors; i++) {
+            double dists[k];
+            index.knn(k, queryVecs + i * dim, dists, gtVecs + i * k);
+        }
+    }
+}
+
+void generateGroundTruth(InputParser &input) {
+    const std::string &basePath = input.getCmdOption("-basePath");
+    auto k = stoi(input.getCmdOption("-k"));
+    const std::string &gtPath = input.getCmdOption("-gtPath");
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+
+    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
+    // serialize gtVecs to a file
+    writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 }
 
 void benchmark_filtered_hnsw_queries(InputParser &input) {
@@ -796,9 +836,6 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto k = stoi(input.getCmdOption("-k"));
     auto filterMinK = stoi(input.getCmdOption("-filterMinK"));
     auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
-//    auto deletePercent = stof(input.getCmdOption("-deletePercent"));
-//    auto deleteAlpha = stof(input.getCmdOption("-deleteAlpha"));
-//    auto deleteDim = stoi(input.getCmdOption("-deleteDim"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -809,17 +846,9 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
-//    size_t gtDimension, gtNumVectors;
-//    int *gtVecsInt = readIvecFile(groundTruthPath.c_str(), &gtDimension, &gtNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-//    CHECK_ARGUMENT(queryNumVectors == gtNumVectors, "Query and ground truth numbers are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-//    for (int i = 0; i < gtNumVectors; i++) {
-//        for (int j = 0; j < gtDimension; j++) {
-//            gtVecs[i * gtDimension + j] = gtVecsInt[i * gtDimension + j];
-//        }
-//    }
     auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
     loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
 
@@ -829,27 +858,92 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
-    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck);
+    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck, "none", "", false);
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
-    query_graph(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
+    query_graph_filter(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
+}
 
-//    hnsw.config.alpha = deleteAlpha;
-//    auto numVecToDelete = baseNumVectors * deletePercent;
-//    std::vector<vector_idx_t> vecsToDelete(numVecToDelete);
-//    rng.randomPerm(baseNumVectors, vecsToDelete.data(), numVecToDelete);
-//    Stats stats;
-//    spdlog::info("Deleting {} vectors", numVecToDelete);
-//    auto start = std::chrono::high_resolution_clock::now();
-//    hnsw.deleteNodes(vecsToDelete.data(), numVecToDelete, deleteDim, stats);
-//    auto end = std::chrono::high_resolution_clock::now();
-//    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-//    spdlog::info("Deletion time: {} ms", duration);
-//    stats.logStats();
-//    spdlog::info("Generating ground truth after deleting vectors!!");
-//    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, 100, gtVecs);
-//    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, 100, efSearch, baseNumVectors);
+void query_graph(
+        HNSW &hnsw,
+        const float *queryVecs,
+        size_t queryNumVectors,
+        size_t queryDimension,
+        const vector_idx_t *gtVecs,
+        size_t k,
+        size_t ef_search,
+        size_t baseNumVectors) {
+    auto start = std::chrono::high_resolution_clock::now();
+    auto visited = VisitedTable(baseNumVectors);
+    auto recall = 0.0;
+    Stats stats{};
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        std::priority_queue<NodeDistCloser> results;
+        std::vector<NodeDistFarther> res;
+        hnsw.searchWithQuantizer(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
+        while (!results.empty()) {
+            auto top = results.top();
+            res.emplace_back(top.id, top.dist);
+            results.pop();
+        }
+        auto gt = gtVecs + i * k;
+        for (auto &result: res) {
+            if (std::find(gt, gt + k, result.id) != (gt + k)) {
+                recall++;
+            }
+        }
+    }
+    auto recallPerQuery = recall / queryNumVectors;
+    stats.logStats();
+    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
+    std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "Query time: " << duration << " ms" << std::endl;
+}
+
+void benchmark_hnsw_queries(InputParser &input) {
+    const std::string &basePath = input.getCmdOption("-basePath");
+    auto efConstruction = stoi(input.getCmdOption("-efConstruction"));
+    auto M = stoi(input.getCmdOption("-M"));
+    auto efSearch = stoi(input.getCmdOption("-efSearch"));
+    auto thread_count = stoi(input.getCmdOption("-nThreads"));
+    auto minAlpha = stof(input.getCmdOption("-minAlpha"));
+    auto maxAlpha = stof(input.getCmdOption("-maxAlpha"));
+    auto alphaDecay = stof(input.getCmdOption("-alphaDecay"));
+    auto k = stoi(input.getCmdOption("-k"));
+    bool loadFromStorage = stoi(input.getCmdOption("-loadFromDisk"));
+    std::string compressionType = input.getCmdOption("-compressionType");
+
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    auto groundTruthPath = fmt::format("{}/gt.bin", basePath);
+    auto storagePath = fmt::format("{}/storage_2bit.bin", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    // Print grond truth num vectors
+    printf("Query num vectors: %zu\n", queryNumVectors);
+    printf("k: %zu\n", k);
+    printf("base dimension: %zu\n", baseDimension);
+
+    omp_set_num_threads(thread_count);
+    RandomGenerator rng(1234);
+    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, 30, 30, compressionType, storagePath, loadFromStorage);
+    HNSW hnsw(config, &rng, baseDimension);
+    build_graph(hnsw, baseVecs, baseNumVectors);
+    if (!loadFromStorage) {
+        hnsw.flushToDisk();
+    }
+    hnsw.logStats();
+    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 }
 
 // Benchmark clustering
@@ -920,7 +1014,7 @@ int main(int argc, char **argv) {
     InputParser input(argc, argv);
     const std::string &run = input.getCmdOption("-run");
     if (run == "benchmark") {
-        benchmark_filtered_hnsw_queries(input);
+        benchmark_hnsw_queries(input);
     } else if (run == "generateGT") {
         generateGroundTruth(input);
     }
