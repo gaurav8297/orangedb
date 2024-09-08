@@ -39,3 +39,4 @@ venv/
 experiments/.idea/
 
 data/arxiv*
+data/random_768*

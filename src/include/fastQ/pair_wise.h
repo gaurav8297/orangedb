@@ -10,10 +10,12 @@ namespace fastq {
         encode_8_serial(const float *x, size_t i, const float *vmin, const float *vdiff, const float *skewed_vmin,
                         const float *skewed_vdiff) {
             bool mask = true;
+            bool mask2 = false;
             for (size_t j = 0; j < 8; j++) {
                 auto k = i + j;
                 auto skewed_vmax = skewed_vmin[k] + skewed_vdiff[k];
                 mask &= x[k] >= skewed_vmin[k] && x[k] <= skewed_vmax;
+                mask2 |= x[k] < skewed_vmin[k] || x[k] > skewed_vmax;
             }
 
             std::vector<uint8_t> vals(8);
@@ -21,7 +23,7 @@ namespace fastq {
                 for (size_t j = 0; j < 8; j++) {
                     auto k = i + j;
                     auto scaled = (x[k] - skewed_vmin[k]) / skewed_vdiff[k];
-                    vals[j] =  std::min(int(scaled * 4.0f), 3);
+                    vals[j] = std::min(int(scaled * 4.0f), 3);
                     if (vals[j] == 3) {
                         throw std::runtime_error("Invalid value");
                     }
@@ -47,7 +49,7 @@ namespace fastq {
             for (size_t j = 0; j < 4; j++) {
                 auto k = i + j;
                 auto skewed_vmax = skewed_vmin[k] + skewed_vdiff[k];
-                mask &= x[k] >= skewed_vmin[k] && x[k] <= skewed_vmax;
+                mask &= (x[k] >= skewed_vmin[k] && x[k] <= skewed_vmax);
             }
 
             std::vector<uint8_t> vals(4);
@@ -55,7 +57,7 @@ namespace fastq {
                 for (size_t j = 0; j < 4; j++) {
                     auto k = i + j;
                     auto scaled = (x[k] - skewed_vmin[k]) / skewed_vdiff[k];
-                    vals[j] =  std::min(int(scaled * 4.0f), 3);
+                    vals[j] = std::min(int(scaled * 4.0f), 3);
                 }
             } else {
                 for (size_t j = 0; j < 4; j++) {
@@ -116,6 +118,7 @@ namespace fastq {
 #pragma GCC push_options
 #pragma GCC target("+simd")
 #pragma clang attribute push(__attribute__((target("+simd"))), apply_to = function)
+
         inline float32x4x2_t
         decode_neon(const uint8_t *code, size_t i, const float *alpha, const float *beta, const float *skewed_alpha,
                     const float *skewed_beta, uint8_t mask1, uint8_t mask2) {
@@ -130,11 +133,35 @@ namespace fastq {
 
             // skewed_x = skewed_alpha * ci + skewed_beta
             float32x4_t skewed_x_low = vmlaq_f32(vld1q_f32(skewed_beta + i), vld1q_f32(skewed_alpha + i), ci_vec32_low);
-            float32x4_t skewed_x_high = vmlaq_f32(vld1q_f32(skewed_beta + i + 4), vld1q_f32(skewed_alpha + i + 4), ci_vec32_high);
-            // x = mask * skewed_x + !mask * x
-            x_low = vbslq_f32(vdupq_n_u32(mask1), skewed_x_low, x_low);
-            x_high = vbslq_f32(vdupq_n_u32(mask2), skewed_x_high, x_high);
-            return {x_low, x_high};
+            float32x4_t skewed_x_high = vmlaq_f32(vld1q_f32(skewed_beta + i + 4), vld1q_f32(skewed_alpha + i + 4),
+                                                  ci_vec32_high);
+
+            float32x4_t low = vbslq_f32(vceqq_s32(vdupq_n_s32(mask1), vdupq_n_s32(1)), skewed_x_low, x_low);
+            float32x4_t high = vbslq_f32(vceqq_s32(vdupq_n_s32(mask2), vdupq_n_s32(1)), skewed_x_high, x_high);
+            return {low, high};
+        }
+
+        inline void decode_neon(const uint8_t *code, float *x, size_t n, size_t dim, int codeSize, const float *alpha,
+                                const float *beta,
+                                const float *skewed_alpha, const float *skewed_beta) {
+            auto code_mask_size = ceil(dim / 32.0f);
+            std::vector<uint8_t> masks(dim / 4);
+            for (int i = 0; i < n; i++) {
+                auto ci = code + i * codeSize;
+                auto xi = x + i * dim;
+                for (int j = 0; j < code_mask_size; j++) {
+                    unpack_uint8_to_8_bool(ci + dim, j, masks.data() + j * 8);
+                }
+                int k = 0;
+                simsimd_size_t m = 0;
+                for (; m + 8 <= dim; m += 8) {
+                    float32x4x2_t x_decoded = decode_neon(ci, m, alpha, beta, skewed_alpha, skewed_beta, masks[k],
+                                                          masks[k + 1]);
+                    vst1q_f32(xi + m, x_decoded.val[0]);
+                    vst1q_f32(xi + m + 4, x_decoded.val[1]);
+                    k += 2;
+                }
+            }
         }
 
         inline void compute_asym_l2sqr_neon(const float *x, const uint8_t *y, double *result, size_t dim,
@@ -147,7 +174,8 @@ namespace fastq {
             int k = 0;
             simsimd_size_t i = 0;
             for (; i + 8 <= dim; i += 8) {
-                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta, skewed_alpha, skewed_beta, masks[k], masks[k + 1]);
+                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta, skewed_alpha, skewed_beta, masks[k],
+                                                      masks[k + 1]);
                 float32x4_t x_low_vec = vld1q_f32(x + i);
                 float32x4_t y_low_vec = y_decoded.val[0];
                 float32x4_t x_high_vec = vld1q_f32(x + i + 4);
@@ -164,7 +192,8 @@ namespace fastq {
 
         inline void compute_sym_l2sqr_neon(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
                                            const float *alpha, const float *beta, const float *skewed_alpha,
-                                           const float *skewed_beta, int code_mask_size, uint8_t *x_masks, uint8_t *y_masks) {
+                                           const float *skewed_beta, int code_mask_size, uint8_t *x_masks,
+                                           uint8_t *y_masks) {
             float32x4_t sum_vec = vdupq_n_f32(0);
             for (int i = 0; i < code_mask_size; i++) {
                 unpack_uint8_to_8_bool(x + dim, i, x_masks + i * 8);
@@ -173,8 +202,10 @@ namespace fastq {
             int k = 0;
             simsimd_size_t i = 0;
             for (; i + 8 <= dim; i += 8) {
-                float32x4x2_t x_decoded = decode_neon(x, i, alpha, beta, skewed_alpha, skewed_beta, x_masks[k], x_masks[k + 1]);
-                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta, skewed_alpha, skewed_beta, y_masks[k], y_masks[k + 1]);
+                float32x4x2_t x_decoded = decode_neon(x, i, alpha, beta, skewed_alpha, skewed_beta, x_masks[k],
+                                                      x_masks[k + 1]);
+                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta, skewed_alpha, skewed_beta, y_masks[k],
+                                                      y_masks[k + 1]);
                 float32x4_t x_low_vec = x_decoded.val[0];
                 float32x4_t y_low_vec = y_decoded.val[0];
                 float32x4_t x_high_vec = x_decoded.val[1];
@@ -243,7 +274,8 @@ namespace fastq {
 
             inline void compute_distance(const uint8_t *x, const uint8_t *y, double *result) override {
 #if SIMSIMD_TARGET_NEON
-                compute_sym_l2sqr_neon(x, y, result, dim, alpha, beta, skewed_alpha, skewed_beta, code_mask_size, x_masks.data(), y_masks.data());
+                compute_sym_l2sqr_neon(x, y, result, dim, alpha, beta, skewed_alpha, skewed_beta, code_mask_size,
+                                       x_masks.data(), y_masks.data());
 #else
                 throw std::runtime_error("Not implemented");
 #endif
@@ -269,7 +301,7 @@ namespace fastq {
         //  is we can utilize data into consideration.
         class PairWise2Bit : public Quantizer<uint8_t> {
             static constexpr size_t NUM_BINS = 512;
-            static constexpr float BREAK_POINT_DATA_RATIO = 0.70f;
+            static constexpr float BREAK_POINT_DATA_RATIO = 0.8f;
             static constexpr float SCALAR_DATA_RATIO = 0.95f;
         public:
             explicit PairWise2Bit(int dim)
@@ -387,7 +419,7 @@ namespace fastq {
             }
 
             inline void decode(const uint8_t *code, float *x, size_t n) const override {
-                throw std::runtime_error("Not implemented");
+                decode_neon(code, x, n, dim, codeSize, non_skewed_alpha, non_skewed_beta, skewed_alpha, skewed_beta);
             }
 
             inline std::unique_ptr<DistanceComputer<float, uint8_t>>

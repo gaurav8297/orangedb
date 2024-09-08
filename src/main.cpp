@@ -12,6 +12,8 @@
 #include "include/partitioned_index.h"
 #include <iostream>
 #include <fstream>
+#include <fastQ/scalar_8bit.h>
+#include <fastQ/pair_wise.h>
 
 using namespace orangedb;
 
@@ -919,7 +921,7 @@ void benchmark_hnsw_queries(InputParser &input) {
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
     auto groundTruthPath = fmt::format("{}/gt.bin", basePath);
-    auto storagePath = fmt::format("{}/storage_2bit.bin", basePath);
+    auto storagePath = fmt::format("{}/storage.bin", basePath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -1010,7 +1012,47 @@ void benchmarkClustering(int argc, char **argv) {
     std::cout << "Avg Centroid: " << avgCentroid / queryNumVectors << std::endl;
 }
 
+void benchmarkPairWise() {
+    auto basePath = "/Users/gauravsehgal/work/orangedb/data/openai";
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    auto groundTruthPath = fmt::format("{}/groundtruth.ivecs", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    fastq::scalar_8bit::SQ8Bit sq8(baseDimension);
+    sq8.batch_train(baseNumVectors, baseVecs);
+
+    fastq::pair_wise::PairWise2Bit pw2(baseDimension);
+    pw2.batch_train(baseNumVectors, baseVecs);
+
+    // encode first vector
+    uint8_t *sq8_codes = new uint8_t[sq8.codeSize];
+    sq8.encode(baseVecs, sq8_codes, 1);
+
+    uint8_t *pw2_codes = new uint8_t[pw2.codeSize];
+    pw2.encode(baseVecs, pw2_codes, 1);
+
+    // decode first vector
+    float *sq8_decoded = new float[baseDimension];
+    sq8.decode(sq8_codes, sq8_decoded, 1);
+
+    float *pw2_decoded = new float[baseDimension];
+    pw2.decode(pw2_codes, pw2_decoded, 1);
+
+    // Print the [original, sq8_decoded, pw2_decoded] vectors
+    for (int i = 0; i < baseDimension; i++) {
+        if (sq8_decoded[i] != pw2_decoded[i]) {
+            printf("[%d, %f, %f, %f] ", i, baseVecs[i], sq8_decoded[i], pw2_decoded[i]);
+        }
+    }
+
+    printf("\n");
+}
+
 int main(int argc, char **argv) {
+//    benchmarkPairWise();
     InputParser input(argc, argv);
     const std::string &run = input.getCmdOption("-run");
     if (run == "benchmark") {

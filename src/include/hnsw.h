@@ -211,11 +211,11 @@ namespace orangedb {
                 Stats &stats);
 
         void searchNearestOnLevelWithQuantizer(
-                const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
+                const uint8_t *query, fastq::DistanceComputer<uint8_t, uint8_t> *dc, orangedb::level_t level,
                 orangedb::vector_idx_t &nearest, double &nearestDist,
                 orangedb::Stats &stats);
 
-        void searchNeighborsOnLastLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc,
+        void searchNeighborsOnLastLevelWithQuantizer(const uint8_t *query, fastq::DistanceComputer<uint8_t, uint8_t> *dc,
                                                      std::priority_queue<NodeDistCloser> &results,
                                                      orangedb::vector_idx_t entrypoint, double entrypointDist,
                                                      orangedb::VisitedTable &visited, uint16_t efSearch,

@@ -278,6 +278,75 @@ namespace fastq {
             *result = sum;
         }
 
+        inline float32x4x2_t decode_neon_new(const uint8_t *code1, const uint8_t *code2, size_t i, const float *alpha) {
+            uint8x8_t c1_vec = vld1_u8(code1 + i);
+            uint8x8_t c2_vec = vld1_u8(code2 + i);
+            // abs(diff_vec)
+            uint8x8_t diff_vec = vabd_u8(c1_vec, c2_vec);
+            // print 4 element of ci_vec and c2_vec
+
+            // Convert to 32-bit integers
+            uint16x8_t umov = vmovl_u8(vmul_u8(diff_vec, diff_vec));
+            uint32x4_t ci_vec32_low = vmovl_u16(vget_low_u16(umov));
+            uint32x4_t ci_vec32_high = vmovl_u16(vget_high_u16(umov));
+
+            // Convert to float
+            float32x4_t ci_vec32_low_f = vcvtq_f32_u32(ci_vec32_low);
+            float32x4_t ci_vec32_high_f = vcvtq_f32_u32(ci_vec32_high);
+
+            // Load alpha
+            float32x4_t alpha_vec_low = vld1q_f32(alpha + i);
+            float32x4_t alpha_vec_high = vld1q_f32(alpha + i + 4);
+
+            // Multiply by alpha
+            float32x4_t ci_vec32_low_alpha = vmulq_f32(ci_vec32_low_f, alpha_vec_low);
+            float32x4_t ci_vec32_high_alpha = vmulq_f32(ci_vec32_high_f, alpha_vec_high);
+
+
+            return {ci_vec32_low_alpha, ci_vec32_high_alpha};
+        }
+
+        inline uint16x8_t decode_neon_new_new(const uint8_t *code1, const uint8_t *code2, size_t i, const float *alpha) {
+            uint8x8_t c1_vec = vld1_u8(code1 + i);
+            uint8x8_t c2_vec = vld1_u8(code2 + i);
+            // abs(diff_vec)
+            uint8x8_t diff_vec = vabd_u8(c1_vec, c2_vec);
+            // print 4 element of ci_vec and c2_vec
+
+            // Convert to 32-bit integers
+//            uint16x8_t umov = vmovl_u8(vmul_u8(diff_vec, diff_vec));
+            uint16x8_t umov = vmovl_u8(diff_vec);
+//            uint32x4_t ci_vec32_low = vmovl_u16(vget_low_u16(umov));
+//            uint32x4_t ci_vec32_high = vmovl_u16(vget_high_u16(umov));
+
+            // Convert to float
+//            float32x4_t ci_vec32_low_f = vcvtq_f32_u32(ci_vec32_low);
+//            float32x4_t ci_vec32_high_f = vcvtq_f32_u32(ci_vec32_high);
+//
+//            // Load alpha
+//            float32x4_t alpha_vec_low = vld1q_f32(alpha + i);
+//            float32x4_t alpha_vec_high = vld1q_f32(alpha + i + 4);
+//
+//            // Multiply by alpha
+//            float32x4_t ci_vec32_low_alpha = vmulq_f32(ci_vec32_low_f, alpha_vec_low);
+//            float32x4_t ci_vec32_high_alpha = vmulq_f32(ci_vec32_high_f, alpha_vec_high);
+
+
+            return umov;
+        }
+
+        inline void compute_sym_l2sqr_neon_new(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
+                                           const float *alphaSqr, const float *beta) {
+            uint16x8_t sum_vec = vdupq_n_u32(0);
+            simsimd_size_t i = 0;
+            for (; i + 8 <= dim; i += 8) {
+                uint16x8_t decoded = decode_neon_new_new(x, y, i, alphaSqr);
+                sum_vec = vaddq_u16(sum_vec, decoded);
+            }
+            simsimd_f32_t sum = (float) vaddvq_u16(sum_vec);
+            *result = sum;
+        }
+
         // This uses precomputed values
         inline void compute_sym_ip_neon(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
                                         const float *alphaSqr, const float *betaSqr) {
@@ -584,15 +653,15 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
 
         class SymmetricL2Sq : public DistanceComputer<uint8_t, uint8_t> {
         public:
-            explicit SymmetricL2Sq(int dim, const float *alpha, const float *beta)
-                    : DistanceComputer(dim), alpha(alpha), beta(beta) {
+            explicit SymmetricL2Sq(int dim, const float *alpha, const float *beta, const float *alphaSqr)
+                    : DistanceComputer(dim), alpha(alpha), beta(beta), alphaSqr(alphaSqr) {
             };
 
             ~SymmetricL2Sq() = default;
 
             inline void compute_distance(const uint8_t *x, const uint8_t *y, double *result) override {
 #if SIMSIMD_TARGET_NEON
-                compute_sym_l2sqr_neon(x, y, result, dim, alpha, beta);
+                compute_sym_l2sqr_neon_new(x, y, result, dim, alpha, beta);
 #else
                 compute_sym_l2sq_serial(x, y, result, dim, alpha, beta);
 #endif
@@ -607,6 +676,7 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
             }
 
         private:
+            const float *alphaSqr;
             const float *alpha;
             const float *beta;
         };
@@ -706,6 +776,11 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
                     alphaSqr[i] = alpha[i] * alpha[i];
                     betaSqr[i] = beta[i] * beta[i];
                 }
+
+                // print alpha
+                for (size_t i = 0; i < 10; i++) {
+                    printf("alpha[%d]: %f, beta[%d]: %f\n", i, alpha[i], i, beta[i]);
+                }
             }
 
             inline void encode(const float *x, uint8_t *codes, size_t n) const override {
@@ -738,7 +813,7 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
             get_sym_distance_computer(DistanceType type) const override {
                 switch (type) {
                     case DistanceType::L2:
-                        return std::make_unique<SymmetricL2Sq>(dim, alpha, beta);
+                        return std::make_unique<SymmetricL2Sq>(dim, alpha, beta, alphaSqr);
                     default:
                         throw std::runtime_error("Unsupported distance type");
                 }

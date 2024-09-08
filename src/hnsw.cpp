@@ -568,7 +568,7 @@ namespace orangedb {
                 stats);
     }
 
-    void HNSW::searchNearestOnLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
+    void HNSW::searchNearestOnLevelWithQuantizer(const uint8_t *query, fastq::DistanceComputer<uint8_t, uint8_t> *dc, orangedb::level_t level,
                                                  orangedb::vector_idx_t &nearest, double &nearestDist,
                                                  orangedb::Stats &stats) {
         CHECK_ARGUMENT(level > 0, "Level should be greater than 0");
@@ -599,7 +599,7 @@ namespace orangedb {
 
     }
 
-    void HNSW::searchNeighborsOnLastLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc,
+    void HNSW::searchNeighborsOnLastLevelWithQuantizer(const uint8_t *query, fastq::DistanceComputer<uint8_t, uint8_t> *dc,
                                                        std::priority_queue<NodeDistCloser> &results,
                                                        orangedb::vector_idx_t entrypoint, double entrypointDist,
                                                        orangedb::VisitedTable &visited, uint16_t efSearch,
@@ -657,20 +657,23 @@ namespace orangedb {
 
     void HNSW::searchWithQuantizer(const float *query, uint16_t k, uint16_t efSearch, orangedb::VisitedTable &visited,
                                    std::priority_queue<NodeDistCloser> &results, orangedb::Stats &stats) {
-        auto dc = quantizer->get_asym_distance_computer(fastq::DistanceType::L2);
+        auto dc = quantizer->get_sym_distance_computer(fastq::DistanceType::L2);
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = storage->entryPoint;
         double nearestDist;
         int level = storage->maxLevel;
         const uint8_t *code = storage->codes + getActualId(level, nearestID) * quantizer->codeSize;
-        dc->compute_distance(query, code, &nearestDist);
+        std::vector<uint8_t> queryCode(quantizer->codeSize);
+        quantizer->encode(query, queryCode.data(), 1);
+
+        dc->compute_distance(queryCode.data(), code, &nearestDist);
         // Update the nearest node
         for (; level > 0; level--) {
-            searchNearestOnLevelWithQuantizer(query, dc.get(), level, nearestID, nearestDist, stats);
+            searchNearestOnLevelWithQuantizer(queryCode.data(), dc.get(), level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
         searchNeighborsOnLastLevelWithQuantizer(
-                query,
+                queryCode.data(),
                 dc.get(),
                 results,
                 nearestID,
