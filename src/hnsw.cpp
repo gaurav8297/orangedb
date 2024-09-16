@@ -826,10 +826,9 @@ namespace orangedb {
                         continue;
                     }
                     int s = findNextKNeighbours(candidates[i].id, nextFrontier.data() + (i * config.nodeExpansionPerNode), visited,
-                                        config.nodeExpansionPerNode, 128);
+                                        config.nodeExpansionPerNode, 256);
                     totalExpansion += s;
                 }
-
                 printf("Thread %d totalExpansion %d\n", tId, totalExpansion);
             }
 
