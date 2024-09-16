@@ -440,16 +440,16 @@ namespace orangedb {
     void HNSW::build(const float *data, size_t n) {
         if (config.loadStorage) {
             storage->data = data;
-            if (config.compressionType == "scalar_8bit") {
-                storage->codes = new uint8_t[n * quantizer->codeSize];
-                quantizer->batch_train(n, data);
-                quantizer->encode(data, storage->codes, n);
-            } else if (config.compressionType == "pair_wise") {
-                // Pair wise quantization
-                storage->codes = new uint8_t[n * quantizer->codeSize];
-                quantizer->batch_train(n, data);
-                quantizer->encode(data, storage->codes, n);
-            }
+//            if (config.compressionType == "scalar_8bit") {
+//                storage->codes = new uint8_t[n * quantizer->codeSize];
+//                quantizer->batch_train(n, data);
+//                quantizer->encode(data, storage->codes, n);
+//            } else if (config.compressionType == "pair_wise") {
+//                // Pair wise quantization
+//                storage->codes = new uint8_t[n * quantizer->codeSize];
+//                quantizer->batch_train(n, data);
+//                quantizer->encode(data, storage->codes, n);
+//            }
             return;
         }
 
@@ -866,6 +866,14 @@ namespace orangedb {
                 }
             }
         }
+    }
+
+    void HNSW::searchParallelNeighborsOnLastLevel2(orangedb::DistanceComputer *dc,
+                                                   std::priority_queue<NodeDistCloser> &results,
+                                                   orangedb::vector_idx_t entrypoint, double entrypointDist,
+                                                   orangedb::AtomicVisitedTable &visited, uint16_t efSearch,
+                                                   orangedb::Stats &stats) {
+        // TODO: Implement parallel search
     }
 
     void HNSW::searchWithQuantizer(const float *query, uint16_t k, uint16_t efSearch, orangedb::VisitedTable &visited,

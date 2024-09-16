@@ -240,6 +240,15 @@ namespace orangedb {
                 uint16_t efSearch,
                 Stats &stats);
 
+        void searchParallelNeighborsOnLastLevel2(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                vector_idx_t entrypoint,
+                double entrypointDist,
+                AtomicVisitedTable &visited,
+                uint16_t efSearch,
+                Stats &stats);
+
         void searchNearestOnLevelWithQuantizer(
                 const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
                 orangedb::vector_idx_t &nearest, double &nearestDist,
