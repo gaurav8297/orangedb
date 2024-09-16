@@ -498,13 +498,9 @@ namespace orangedb {
             }
         }
 
-        omp_set_num_threads(8);
-        printf("thread count %d\n", omp_get_max_threads());
-
         printf("Building the graph %d\n", max_level);
 #pragma omp parallel
         {
-            printf("thread count %d\n", omp_get_num_threads());
             auto asym_dc = quantizer->get_asym_distance_computer(fastq::DistanceType::L2);
             auto sym_dc = quantizer->get_sym_distance_computer(fastq::DistanceType::L2);
             DistanceComputer *localDc = new CosineDistanceComputer(data, storage->dim, n);
@@ -780,7 +776,6 @@ namespace orangedb {
 //        int W = 100;
 //        auto candidates = std::make_shared<Multiqueue>(omp_get_num_threads(), 2, 100000);
 //        candidates->push(entrypoint, entrypointDist);
-        omp_set_num_threads(8);
         printf("Parallel search\n");
         int numThreads = omp_get_num_threads();
         int nodesToExplore = std::max(config.nodesToExplore, numThreads);

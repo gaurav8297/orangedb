@@ -1067,7 +1067,7 @@ void testParallelPriorityQueue() {
     int numThreads = 4;
     int sizeMultiple = 1;
     int initElements = 500000 / numThreads;
-    omp_set_num_threads(4);
+//    omp_set_num_threads(4);
     ParallelMultiQueue<NodeDistCloser> mq(numThreads * sizeMultiple, initElements);
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < 40; i++) {
