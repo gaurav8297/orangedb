@@ -887,7 +887,7 @@ void query_graph(
         auto visited = VisitedTable(baseNumVectors);
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
-        hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats, taskScheduler);
+        hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
