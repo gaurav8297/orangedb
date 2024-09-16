@@ -722,7 +722,7 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
 #if SIMSIMD_TARGET_NEON
                 compute_sym_l2sqr_neon_new(x, y, result, dim, alpha, beta);
 #else
-                compute_sym_l2sq_serial(x, y, result, dim, alpha, beta);
+                compute_sym_ip_serial(x, y, result, dim, alpha, beta);
 #endif
             }
 

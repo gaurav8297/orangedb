@@ -8,7 +8,6 @@
 #include <unordered_map>
 #include <random>
 #include <iostream>
-#include <format>
 #include <unordered_set>
 
 namespace fastq {
