@@ -884,10 +884,10 @@ void query_graph(
     for (size_t i = 0; i < queryNumVectors; i++) {
         auto localRecall = 0.0;
         auto startTime = std::chrono::high_resolution_clock::now();
-        auto visited = AtomicVisitedTable(baseNumVectors);
+        auto visited = VisitedTable(baseNumVectors);
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
-        hnsw.searchParallel(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats, taskScheduler);
+        hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats, taskScheduler);
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
