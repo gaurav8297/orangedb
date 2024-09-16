@@ -819,14 +819,18 @@ namespace orangedb {
 
                 int start = (tId * nodesToExplore) / nT;
                 int end = ((tId + 1) * nodesToExplore) / nT;
+                int totalExpansion = 0;
 
                 for (int i = start; i < end; i++) {
                     if (candidates[i].isInvalid()) {
                         continue;
                     }
-                    findNextKNeighbours(candidates[i].id, nextFrontier.data() + (i * config.nodeExpansionPerNode), visited,
+                    int s = findNextKNeighbours(candidates[i].id, nextFrontier.data() + (i * config.nodeExpansionPerNode), visited,
                                         config.nodeExpansionPerNode, 128);
+                    totalExpansion += s;
                 }
+
+                printf("Thread %d totalExpansion %d\n", tId, totalExpansion);
             }
 
             // print top 5 nextFrontier for each candidate
@@ -841,6 +845,7 @@ namespace orangedb {
             {
                 int nT = omp_get_num_threads();
                 int tId = omp_get_thread_num();
+                int totalDistComp = 0;
 
                 int start = (tId * nextFrontier.size()) / nT;
                 int end = ((tId + 1) * nextFrontier.size()) / nT;
@@ -849,8 +854,11 @@ namespace orangedb {
                     // TODO: Remove the visited check
                     if (!neighbor.isInvalid()) {
                         dc->computeDistance(neighbor.id, &neighbor.dist);
+                        totalDistComp++;
                     }
                 }
+
+                printf("Thread %d totalDistComp %d\n", tId, totalDistComp);
             }
 
             // Sort the nextFrontier
