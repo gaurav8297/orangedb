@@ -661,7 +661,8 @@ namespace orangedb {
             uint16_t efSearch,
             AtomicVisitedTable &visited,
             std::priority_queue<NodeDistCloser> &results,
-            Stats &stats) {
+            Stats &stats,
+            fastq::common::TaskScheduler *scheduler) {
         CosineDistanceComputer dc = CosineDistanceComputer(storage->data, storage->dim, storage->numPoints);
         dc.setQuery(query);
         int newEfSearch = std::max(k, efSearch);
@@ -675,7 +676,7 @@ namespace orangedb {
             nearestID = storage->next_level_ids[level][nearestID];
         }
         // Parallel search
-        searchParallelNeighborsOnLastLevel(&dc, results, nearestID, nearestDist, visited, newEfSearch, stats);
+        searchParallelNeighborsOnLastLevel3(&dc, results, nearestID, nearestDist, visited, newEfSearch, stats, scheduler);
     }
 
     int HNSW::findNextKNeighbours(
@@ -876,6 +877,122 @@ namespace orangedb {
 //            for (int i = 0; i < 5; i++) {
 //                printf("Candidate %llu %f\n", candidates[i].id, candidates[i].dist);
 //            }
+
+            // Add the candidates to the resultQ
+            for (int i = 0; i < candidates.size(); i++) {
+                auto neighbor = candidates[i];
+                if (neighbor.isInvalid()) {
+                    continue;
+                }
+                results.push(NodeDistCloser(neighbor.id, neighbor.dist));
+                if (results.size() > efSearch) {
+                    results.pop();
+                }
+            }
+        }
+    }
+
+    void HNSW::searchParallelNeighborsOnLastLevel3(
+            DistanceComputer *dc,
+            std::priority_queue<NodeDistCloser> &results,
+            vector_idx_t entrypoint,
+            double entrypointDist,
+            AtomicVisitedTable &visited,
+            uint16_t efSearch,
+            Stats &stats,
+            fastq::common::TaskScheduler *scheduler) {
+        // Steps:
+        // 1. Parallel priority queue
+        // 2. Scan the neighbors (or neighbors of neighbors)
+        // 3. Compute the distances in parallel
+        // 4. push the results to the priority queue
+
+        // Another approach:
+        // Expand the neighbors (nbrs -> nbrs of nbrs) to some M value
+        // Parallelize the distance computation
+
+        // Parallelize next expansion top M nodes
+//        auto result = std::make_shared<Multiqueue>(omp_get_num_threads(), 2, 100000);
+//        int M = 50;
+//        int W = 100;
+//        auto candidates = std::make_shared<Multiqueue>(omp_get_num_threads(), 2, 100000);
+//        candidates->push(entrypoint, entrypointDist);
+        printf("Parallel search\n");
+        int numThreads = scheduler->numThreads;
+        int nodesToExplore = std::max(config.nodesToExplore, numThreads);
+        std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode * nodesToExplore, NodeDistCloser());
+        std::vector<NodeDistCloser> candidates(nodesToExplore * config.nodeExpansionPerNode, NodeDistCloser()); // Keep atleast 10 times the nodes to explore
+        // TODO: Maybe replace with parallel priority queue
+        std::priority_queue<NodeDistFarther> resultQ;
+        results.push(NodeDistCloser(entrypoint, entrypointDist));
+        visited.set(entrypoint);
+        // Find the next K neighbors
+        int k = findNextKNeighbours(entrypoint, candidates.data(), visited, nodesToExplore, 64);
+        for (int i = 0; i < k; i++) {
+            auto& neighbor = candidates[i];
+            dc->computeDistance(neighbor.id, &neighbor.dist);
+
+            // Add the candidates to the resultQ
+            results.push(NodeDistCloser(neighbor.id, neighbor.dist));
+            if (results.size() > efSearch) {
+                results.pop();
+            }
+        }
+
+        // Sort the candidates
+        sort(candidates.begin(), candidates.end());
+        int batchSize = std::min(nodesToExplore / numThreads, 2);
+        int anotherBatchSize = std::min((int) (nextFrontier.size() / numThreads), 200);
+
+        while (!candidates.empty()) {
+            if (results.top().dist < candidates[0].dist) {
+                break;
+            }
+
+            // reset nextFrontier
+            for (int i = 0; i < nextFrontier.size(); i++) {
+                nextFrontier[i] = NodeDistCloser();
+            }
+
+            // Node expansion
+            scheduler->parallelize_and_wait(0, nodesToExplore, batchSize, [&](int tId, int start, int end) {
+                int totalExpansion = 0;
+                for (int i = start; i < end; i++) {
+                    if (candidates[i].isInvalid()) {
+                        continue;
+                    }
+                    int s = findNextKNeighbours(candidates[i].id, nextFrontier.data() + (i * config.nodeExpansionPerNode), visited,
+                                                config.nodeExpansionPerNode, 256);
+                    totalExpansion += s;
+                }
+                printf("Thread %d totalExpansion %d\n", tId, totalExpansion);
+            });
+
+            scheduler->parallelize_and_wait(0, nextFrontier.size(), anotherBatchSize, [&](int tId, int start, int end) {
+                int totalDistComp = 0;
+                for (int i = start; i < end; i++) {
+                    auto &neighbor = nextFrontier[i];
+                    // TODO: Remove the visited check
+                    if (!neighbor.isInvalid()) {
+                        dc->computeDistance(neighbor.id, &neighbor.dist);
+                        totalDistComp++;
+                    }
+                }
+                printf("Thread %d totalDistComp %d\n", tId, totalDistComp);
+            });
+
+            // Sort the nextFrontier
+            sort(nextFrontier.begin(), nextFrontier.end());
+
+            // move the last nodesToExplore to the front
+            for (int i = 0; i < nodesToExplore; i++) {
+                candidates[i] = NodeDistCloser();
+            }
+
+            sort(candidates.begin(), candidates.end());
+
+            // Merge sort the candidates and nextFrontier
+            mergeSortCandidates(candidates, nextFrontier, candidates.size(), nextFrontier.size(), 1);
 
             // Add the candidates to the resultQ
             for (int i = 0; i < candidates.size(); i++) {

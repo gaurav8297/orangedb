@@ -14,6 +14,7 @@
 #include <fastQ/scalar_8bit.h>
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
+#include <fastQ/common.h>
 
 using namespace orangedb;
 
@@ -875,7 +876,8 @@ void query_graph(
         const vector_idx_t *gtVecs,
         size_t k,
         size_t ef_search,
-        size_t baseNumVectors) {
+        size_t baseNumVectors,
+        fastq::common::TaskScheduler *taskScheduler) {
     auto start = std::chrono::high_resolution_clock::now();
     auto recall = 0.0;
     Stats stats{};
@@ -885,7 +887,7 @@ void query_graph(
         auto visited = AtomicVisitedTable(baseNumVectors);
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
-        hnsw.searchParallel(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
+        hnsw.searchParallel(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats, taskScheduler);
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
@@ -947,6 +949,8 @@ void benchmark_hnsw_queries(InputParser &input) {
     printf("base dimension: %zu\n", baseDimension);
     printf("thread count: %d\n", thread_count);
 
+    fastq::common::TaskScheduler taskScheduler(thread_count);
+
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
     HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, 30, 30, compressionType, storagePath, loadFromStorage, nodesToExplore, nodeExpansionPerNode);
@@ -957,7 +961,7 @@ void benchmark_hnsw_queries(InputParser &input) {
     }
     hnsw.logStats();
 //    omp_set_num_threads(2);
-    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
+    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors, &taskScheduler);
 }
 
 // Benchmark clustering

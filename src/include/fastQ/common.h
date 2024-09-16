@@ -40,9 +40,10 @@ namespace fastq {
 
         class TaskScheduler {
         public:
+            const int numThreads;
             explicit TaskScheduler() : TaskScheduler(std::thread::hardware_concurrency() * 2) {};
 
-            explicit TaskScheduler(int numThreads) : stop(false), tasksInProgress(0) {
+            explicit TaskScheduler(int numThreads) : numThreads(numThreads), stop(false), tasksInProgress(0) {
                 // Initialize the thread pool
                 for (size_t i = 0; i < numThreads; ++i) {
                     workers.emplace_back(&TaskScheduler::workerThread, this, i);

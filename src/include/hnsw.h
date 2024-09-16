@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fastQ/common.h>
 #include <unistd.h>
 #include <omp.h>
 #include <vector>
@@ -185,7 +186,8 @@ namespace orangedb {
                 uint16_t efSearch,
                 orangedb::AtomicVisitedTable &visited,
                 std::priority_queue<NodeDistCloser> &results,
-                Stats &stats);
+                Stats &stats,
+                fastq::common::TaskScheduler *scheduler);
 
         void deleteNodes(const vector_idx_t *deletedIds, size_t n, int dim, Stats &stats);
 
@@ -248,6 +250,16 @@ namespace orangedb {
                 AtomicVisitedTable &visited,
                 uint16_t efSearch,
                 Stats &stats);
+
+        void searchParallelNeighborsOnLastLevel3(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                vector_idx_t entrypoint,
+                double entrypointDist,
+                AtomicVisitedTable &visited,
+                uint16_t efSearch,
+                Stats &stats,
+                fastq::common::TaskScheduler *scheduler);
 
         void searchNearestOnLevelWithQuantizer(
                 const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
