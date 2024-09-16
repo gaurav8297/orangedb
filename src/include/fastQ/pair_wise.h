@@ -419,7 +419,9 @@ namespace fastq {
             }
 
             inline void decode(const uint8_t *code, float *x, size_t n) const override {
+#if SIMSIMD_TARGET_NEON
                 decode_neon(code, x, n, dim, codeSize, non_skewed_alpha, non_skewed_beta, skewed_alpha, skewed_beta);
+#endif
             }
 
             inline std::unique_ptr<DistanceComputer<float, uint8_t>>
