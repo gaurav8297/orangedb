@@ -7,9 +7,10 @@
 #include <fstream>
 #include <iostream>
 #include <cstring>  // for memcpy
+#include <thread>
+#include <chrono>
 
 #define MAX_LEVELS 10
-#define INVALID_VECTOR_ID UINT32_MAX
 
 namespace orangedb {
 
@@ -68,6 +69,8 @@ namespace orangedb {
         }
 
         inline void get_neighbors_offsets(vector_idx_t id, level_t level, size_t &begin, size_t &end) {
+            // Add some nanoseconds delay to recreate kuzu behavior
+            std::this_thread::sleep_for(std::chrono::nanoseconds(3000));
             begin = id * max_neighbors_per_level[level];
             end = begin + max_neighbors_per_level[level];
         }

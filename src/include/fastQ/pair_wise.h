@@ -1,7 +1,7 @@
 #pragma once
 
-#include <fastq/common.h>
-#include <fastq/fastq.h>
+#include <fastQ/common.h>
+#include <fastQ/fastq.h>
 
 namespace fastq {
     namespace pair_wise {
@@ -124,8 +124,8 @@ namespace fastq {
                     const float *skewed_beta, uint8_t mask1, uint8_t mask2) {
             uint8x8_t ci_vec = vld1_u8(code + i);
             uint16x8_t ci_vec16 = vmovl_u8(ci_vec);
-            uint32x4_t ci_vec32_low = vcvtq_f32_u32(vmovl_u16(vget_low_u16(ci_vec16)));
-            uint32x4_t ci_vec32_high = vcvtq_f32_u32(vmovl_u16(vget_high_u16(ci_vec16)));
+            float32x4_t ci_vec32_low = vcvtq_f32_u32(vmovl_u16(vget_low_u16(ci_vec16)));
+            float32x4_t ci_vec32_high = vcvtq_f32_u32(vmovl_u16(vget_high_u16(ci_vec16)));
 
             // x = alpha * ci + beta
             float32x4_t x_low = vmlaq_f32(vld1q_f32(beta + i), vld1q_f32(alpha + i), ci_vec32_low);

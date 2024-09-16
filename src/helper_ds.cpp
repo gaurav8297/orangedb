@@ -1,107 +1,257 @@
 #include "include/helper_ds.h"
+#include "atomic"
+#include "omp.h"
 
 namespace orangedb {
-    static inline bool compareWithId(
-            const vector_idx_t &id1, const float &val1, const vector_idx_t &id2, const float &val2) {
-        // This is needed because if the distance is same then we need to remove element based on id. Basically
-        // those which has INVALID_VECTOR_ID as id since they are already removed from heap.
-        return val1 < val2 || (val1 == val2 && id1 > id2);
+    constexpr int DUMMY_ITER = 5;
+
+    template<typename T>
+    BinaryHeap<T>::BinaryHeap(int capacity)
+            : capacity{capacity}, actual_size{0} {
+        // Initialize nodes with invalid entries
+        nodes.resize(capacity + 1, T());  // +1 for 1-based indexing
+        omp_init_lock(&mtx);
+        minElement.store(&nodes[1], std::memory_order_relaxed);
     }
 
-    MaxHeap::MaxHeap(int capacity) : capacity{capacity}, physical_size{0}, logical_size{0} {
-        values.resize(capacity + 1);
-        ids.resize(capacity + 1);
-    }
-
-    void MaxHeap::push(vector_idx_t id, float val) {
-        if (physical_size == capacity) {
-            if (val >= values[1]) {
-                return;
+    template<typename T>
+    void BinaryHeap<T>::push(T node) {
+        if (actual_size == capacity) {
+            if (node >= nodes[1]) {
+                return;  // Node is not closer/farther enough to be inserted into the heap
             }
-            if (ids[1] == INVALID_VECTOR_ID) {
-                logical_size--;
-            }
-            popFromHeap();
-            physical_size--;
+            popMaxFromHeap();  // Remove the root (minimum or maximum, depending on heap type)
+            actual_size--;
         }
-        physical_size++;
-        logical_size++;
-        pushToHeap(id, val);
+        actual_size++;
+        pushToHeap(node);
+        minElement.store(&nodes[1], std::memory_order_relaxed);
     }
 
-    inline void MaxHeap::pushToHeap(vector_idx_t id, float val) {
-        // Use 1-based indexing for easier node->child translation
-        size_t i = physical_size, i_father;
+    template<typename T>
+    inline void BinaryHeap<T>::pushToHeap(T node) {
+        size_t i = actual_size, i_father;
+        // Heap up to maintain the heap property
         while (i > 1) {
-            i_father = i >> 1;
-            if (compareWithId(id, val, ids[i_father], values[i_father])) {
-                // heap structure is satisfied
-                break;
+            i_father = i >> 1;  // Get parent index
+            if (node >= nodes[i_father]) {
+                break;  // Heap property is satisfied
             }
-            values[i] = values[i_father];
-            ids[i] = ids[i_father];
+            nodes[i] = nodes[i_father];  // Move parent down
             i = i_father;
         }
-        values[i] = val;
-        ids[i] = id;
+        nodes[i] = node;  // Place new node in the correct position
     }
 
-    void MaxHeap::popFromHeap() {
-        float val = values[physical_size];
-        vector_idx_t id = ids[physical_size];
+    template<typename T>
+    T BinaryHeap<T>::popMin() {
+        if (actual_size == 0) {
+            return T();
+        }
+        T minNode = nodes[1];
+        popMinFromHeap();
+        actual_size--;
+        if (actual_size == 0) {
+            nodes[1] = T();
+        }
+        minElement.store(&nodes[1], std::memory_order_relaxed);
+        return minNode;
+    }
+
+    template<typename T>
+    void BinaryHeap<T>::popMinFromHeap() {
+        T node = nodes[actual_size];  // Replace the root with the last node
         size_t i = 1, i1, i2;
+        // Heap down to maintain the heap property
         while (true) {
-            i1 = i << 1;
-            i2 = i1 + 1;
-            if (i1 > physical_size) {
-                break;
+            i1 = i << 1;  // Left child index
+            i2 = i1 + 1;  // Right child index
+            if (i1 > actual_size) {
+                break;  // No children
             }
-            if ((i2 == physical_size + 1) || compareWithId(ids[i1], values[i1], ids[i2], values[i2])) {
-                if (compareWithId(id, val, ids[i1], values[i1])) {
-                    break;
+            if (i2 > actual_size || nodes[i1] < nodes[i2]) {
+                // If only one child exists or the left child is smaller/larger (depending on heap type)
+                if (node <= nodes[i1]) {
+                    break;  // Heap property is satisfied
                 }
-                values[i] = values[i1];
-                ids[i] = ids[i1];
+                nodes[i] = nodes[i1];  // Move child up
                 i = i1;
             } else {
-                if (compareWithId(id, val, ids[i2], values[i2])) {
-                    break;
+                // Right child is smaller/larger
+                if (node <= nodes[i2]) {
+                    break;  // Heap property is satisfied
                 }
-                values[i] = values[i2];
-                ids[i] = ids[i2];
+                nodes[i] = nodes[i2];  // Move child up
                 i = i2;
             }
         }
-        values[i] = values[physical_size];
-        ids[i] = ids[physical_size];
+        nodes[i] = node;  // Place the last node in the correct position
     }
 
-    inline vector_idx_t MaxHeap::popMin(float *val) {
-        // TODO: Pop min can be implemented through simd
-        int i = physical_size;
-        while (i > 0) {
-            if (ids[i] != INVALID_VECTOR_ID) {
-                break;
+    template<typename T>
+    void BinaryHeap<T>::popMaxFromHeap() {
+        T node = nodes[actual_size];  // Replace the root with the last node
+        size_t i = 1, i1, i2;
+        // Heap down to maintain the heap property
+        while (true) {
+            i1 = i << 1;  // Left child index
+            i2 = i1 + 1;  // Right child index
+            if (i1 > actual_size) {
+                break;  // No children
             }
-            i--;
-        }
-        if (i == 0) {
-            return INVALID_VECTOR_ID;
-        }
-        int iMin = i;
-        float vMin = values[i];
-        i--;
-        while (i > 0) {
-            if (ids[i] != INVALID_VECTOR_ID && values[i] < vMin) {
-                vMin = values[i];
-                iMin = i;
+            if (i2 > actual_size || nodes[i1] > nodes[i2]) {
+                // If only one child exists or the left child is smaller/larger (depending on heap type)
+                if (node >= nodes[i1]) {
+                    break;  // Heap property is satisfied
+                }
+                nodes[i] = nodes[i1];  // Move child up
+                i = i1;
+            } else {
+                // Right child is smaller/larger
+                if (node >= nodes[i2]) {
+                    break;  // Heap property is satisfied
+                }
+                nodes[i] = nodes[i2];  // Move child up
+                i = i2;
             }
-            i--;
         }
-        *val = values[iMin];
-        vector_idx_t id = ids[iMin];
-        ids[iMin] = INVALID_VECTOR_ID;
-        logical_size--;
-        return id;
+        nodes[i] = node;  // Place the last node in the correct position
     }
+
+    inline uint64_t randomFnv1a(uint64_t &seed) {
+        const static uint64_t offset = 14695981039346656037ULL;
+        const static uint64_t prime = 1099511628211;
+
+        uint64_t hash = offset;
+        hash ^= seed;
+        hash *= prime;
+        seed = hash;
+        return hash;
+    }
+
+    template<typename T>
+    ParallelMultiQueue<T>::ParallelMultiQueue(int num_queues, int reserve_size) {
+        queues.reserve(num_queues);
+        for (int i = 0; i < num_queues; i++) {
+            queues.emplace_back(std::make_unique<BinaryHeap<T>>(reserve_size));
+        }
+    }
+
+    template<typename T>
+    int ParallelMultiQueue<T>::getRandQueueIndex() const {
+        static std::atomic<int> num_threads_registered{0};
+        thread_local uint64_t seed = 2758756369U + num_threads_registered++;
+        return randomFnv1a(seed) % queues.size();
+    }
+
+    template<typename T>
+    void ParallelMultiQueue<T>::push(T val) {
+        int q_id = getRandQueueIndex();
+        printf("q_id: %d\n", q_id);
+        queues[q_id]->lock();
+        queues[q_id]->push(val);
+        queues[q_id]->unlock();
+    }
+
+    template<typename T>
+    T ParallelMultiQueue<T>::popMin() {
+        bool updateByOtherThreads = false;
+        do {
+            updateByOtherThreads = false;
+            for (auto dummy_i = 0; dummy_i < DUMMY_ITER; dummy_i++) {
+                int i, j;
+                i = getRandQueueIndex();
+                do {
+                    j = getRandQueueIndex();
+                } while (i == j);
+
+                auto topI = queues[i]->getMinElement();
+                auto topJ = queues[j]->getMinElement();
+
+                if (topI->isInvalid() && topJ->isInvalid()) {
+                    continue;
+                }
+
+                const T *min;
+                int minIdx;
+                if (topI->isInvalid()) {
+                    min = topJ;
+                    minIdx = j;
+                } else if (topJ->isInvalid()) {
+                    min = topI;
+                    minIdx = i;
+                } else {
+                    min = *topI < *topJ ? topI : topJ;
+                    minIdx = *topI < *topJ ? i : j;
+                }
+
+                queues[minIdx]->lock();
+                if (min == queues[minIdx]->top()) {
+                    auto res = queues[minIdx]->popMin();
+                    queues[minIdx]->unlock();
+                    return res;
+                }
+                updateByOtherThreads = true;
+                queues[minIdx]->unlock();
+            }
+        } while (updateByOtherThreads);
+        return T();
+    }
+
+    template<typename T>
+    const T *ParallelMultiQueue<T>::top() {
+        bool updateByOtherThreads = false;
+        do {
+            updateByOtherThreads = false;
+            for (std::size_t dummy_i = 0; dummy_i < DUMMY_ITER; dummy_i++) {
+                int i, j;
+                i = getRandQueueIndex();
+                do {
+                    j = getRandQueueIndex();
+                } while (i != j);
+
+                auto topI = queues[i]->getMinElement();
+                auto topJ = queues[j]->getMinElement();
+
+                if (topI->isInvalid() && topJ->isInvalid()) {
+                    continue;
+                }
+
+                const T *min;
+                int minIdx;
+                if (topI->isInvalid()) {
+                    min = topJ;
+                    minIdx = j;
+                } else if (topJ->isInvalid()) {
+                    min = topI;
+                    minIdx = i;
+                } else {
+                    min = *topI < *topJ ? topI : topJ;
+                    minIdx = *topI < *topJ ? i : j;
+                }
+
+                queues[minIdx]->lock();
+                if (min == queues[minIdx]->top()) {
+                    queues[minIdx]->unlock();
+                    return min;
+                }
+                updateByOtherThreads = true;
+                queues[minIdx]->unlock();
+            }
+        } while (updateByOtherThreads);
+
+        return nullptr;
+    }
+
+    template
+    class BinaryHeap<NodeDistCloser>;
+
+    template
+    class BinaryHeap<NodeDistFarther>;
+
+    template
+    class ParallelMultiQueue<NodeDistCloser>;
+
+    template
+    class ParallelMultiQueue<NodeDistFarther>;
 } // namespace orangedb

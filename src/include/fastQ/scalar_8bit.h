@@ -2,7 +2,7 @@
 
 #include <vector>
 #include <simsimd/simsimd.h>
-#include <fastq/fastq.h>
+#include <fastQ/fastq.h>
 
 // TODO:
 // 1. Add support for avx2
@@ -171,8 +171,8 @@ namespace fastq {
         inline float32x4x2_t decode_neon(const uint8_t *code, size_t i, const float *alpha, const float *beta) {
             uint8x8_t ci_vec = vld1_u8(code + i);
             uint16x8_t ci_vec16 = vmovl_u8(ci_vec);
-            uint32x4_t ci_vec32_low = vcvtq_f32_u32(vmovl_u16(vget_low_u16(ci_vec16)));
-            uint32x4_t ci_vec32_high = vcvtq_f32_u32(vmovl_u16(vget_high_u16(ci_vec16)));
+            float32x4_t ci_vec32_low = vcvtq_f32_u32(vmovl_u16(vget_low_u16(ci_vec16)));
+            float32x4_t ci_vec32_high = vcvtq_f32_u32(vmovl_u16(vget_high_u16(ci_vec16)));
 
             // x = alpha * ci + beta
             float32x4_t x_low = vmlaq_f32(vld1q_f32(beta + i), vld1q_f32(alpha + i), ci_vec32_low);
@@ -306,7 +306,8 @@ namespace fastq {
             return {ci_vec32_low_alpha, ci_vec32_high_alpha};
         }
 
-        inline uint16x8_t decode_neon_new_new(const uint8_t *code1, const uint8_t *code2, size_t i, const float *alpha) {
+        inline uint16x8_t
+        decode_neon_new_new(const uint8_t *code1, const uint8_t *code2, size_t i, const float *alpha) {
             uint8x8_t c1_vec = vld1_u8(code1 + i);
             uint8x8_t c2_vec = vld1_u8(code2 + i);
             // abs(diff_vec)
@@ -336,8 +337,8 @@ namespace fastq {
         }
 
         inline void compute_sym_l2sqr_neon_new(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
-                                           const float *alphaSqr, const float *beta) {
-            uint16x8_t sum_vec = vdupq_n_u32(0);
+                                               const float *alphaSqr, const float *beta) {
+            uint16x8_t sum_vec = vdupq_n_u16(0);
             simsimd_size_t i = 0;
             for (; i + 8 <= dim; i += 8) {
                 uint16x8_t decoded = decode_neon_new_new(x, y, i, alphaSqr);
@@ -382,6 +383,38 @@ namespace fastq {
             // Add precomputed value (last 4 bytes)
             xy += *reinterpret_cast<const float *>(x + dim);
             *result = xy;
+        }
+
+        inline void compute_asym_cos_neon(const float *x, const uint8_t *y, double *result, size_t dim,
+                                          const float *alpha, const float *beta) {
+            float32x4_t xy_vec = vdupq_n_f32(0), x2_vec = vdupq_n_f32(0), y2_vec = vdupq_n_f32(0);
+            simsimd_size_t i = 0;
+            for (; i + 8 <= dim; i += 8) {
+                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta);
+                float32x4_t x_low_vec = vld1q_f32(x + i);
+                float32x4_t y_low_vec = y_decoded.val[0];
+                float32x4_t x_high_vec = vld1q_f32(x + i + 4);
+                float32x4_t y_high_vec = y_decoded.val[1];
+
+                xy_vec = vfmaq_f32(xy_vec, x_low_vec, y_low_vec);
+                xy_vec = vfmaq_f32(xy_vec, x_high_vec, y_high_vec);
+                x2_vec = vfmaq_f32(x2_vec, x_low_vec, x_low_vec);
+                x2_vec = vfmaq_f32(x2_vec, x_high_vec, x_high_vec);
+                y2_vec = vfmaq_f32(y2_vec, y_low_vec, y_low_vec);
+                y2_vec = vfmaq_f32(y2_vec, y_high_vec, y_high_vec);
+            }
+
+            simsimd_f32_t xy = vaddvq_f32(xy_vec), x2 = vaddvq_f32(x2_vec), y2 = vaddvq_f32(y2_vec);
+            for (; i < dim; ++i) {
+                float xi = x[i], yi = decode_serial(y, i, alpha, beta);
+                xy += xi * yi;
+                x2 += xi * xi;
+                y2 += yi * yi;
+            }
+
+            simsimd_f32_t x2_y2_arr[2] = {x2, y2};
+            vst1_f32(x2_y2_arr, vrsqrte_f32(vld1_f32(x2_y2_arr)));
+            *result = xy != 0 ? 1 - xy * x2_y2_arr[0] * x2_y2_arr[1] : 1;
         }
 
 #pragma clang attribute pop
@@ -574,6 +607,32 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
             }
 
             inline void batch_compute_distances(const float *x, const uint8_t *y, double *results, size_t n) override {
+                for (size_t i = 0; i < n; i++) {
+                    // We need to skip the last 4 bytes as they are precomputed values
+                    compute_distance(x + i * dim, y + i * (dim + 4), results + i);
+                }
+            }
+
+        private:
+            const float *alpha;
+            const float *beta;
+        };
+
+        class AsymmetricCosine : public DistanceComputer<float, uint8_t> {
+        public:
+            explicit AsymmetricCosine(int dim, const float *alpha, const float *beta)
+                    : DistanceComputer(dim), alpha(alpha), beta(beta) {};
+
+            ~AsymmetricCosine() = default;
+
+            inline void compute_distance(const float *x, const uint8_t *y, double *result) override {
+#if SIMSIMD_TARGET_NEON
+                compute_asym_cos_neon(x, y, result, dim, alpha, beta);
+#endif
+            }
+
+            inline void batch_compute_distances(const float *x, const uint8_t *y, double *results,
+                                                size_t n) override {
                 for (size_t i = 0; i < n; i++) {
                     // We need to skip the last 4 bytes as they are precomputed values
                     compute_distance(x + i * dim, y + i * (dim + 4), results + i);
@@ -804,6 +863,8 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
                 switch (type) {
                     case DistanceType::L2:
                         return std::make_unique<AsymmetricL2Sq>(dim, alpha, beta);
+                    case DistanceType::COSINE:
+                        return std::make_unique<AsymmetricCosine>(dim, alpha, beta);
                     default:
                         throw std::runtime_error("Unsupported distance type");
                 }

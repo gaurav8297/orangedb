@@ -9,7 +9,7 @@ namespace orangedb {
             indexes.push_back(
                     std::make_unique<HNSW>(
                             HNSWConfig(config.M, config.efConstruction, config.efSearch, config.alpha, 1, 0.01, 30, 30, "none", "",
-                                       false),
+                                       false, 20, 10),
                             rg,
                             dim));
         }

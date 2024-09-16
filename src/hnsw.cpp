@@ -498,17 +498,21 @@ namespace orangedb {
             }
         }
 
+        omp_set_num_threads(8);
+        printf("thread count %d\n", omp_get_max_threads());
+
         printf("Building the graph %d\n", max_level);
 #pragma omp parallel
         {
+            printf("thread count %d\n", omp_get_num_threads());
             auto asym_dc = quantizer->get_asym_distance_computer(fastq::DistanceType::L2);
             auto sym_dc = quantizer->get_sym_distance_computer(fastq::DistanceType::L2);
-            DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
+            DistanceComputer *localDc = new CosineDistanceComputer(data, storage->dim, n);
 //            DistanceComputer *localDc = new QuantizedDistanceComputer(storage->codes, asym_dc.get(), sym_dc.get(),
 //                                                                      storage->code_size);
             VisitedTable visited(n);
             Stats localStats = Stats();
-#pragma omp for schedule(dynamic, 1000)
+#pragma omp for schedule(static)
             for (int i = 0; i < n; i++) {
                 localDc->setQuery(storage->data + (i * storage->dim));
                 addNode(localDc, node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
@@ -545,7 +549,7 @@ namespace orangedb {
             VisitedTable &visited,
             std::priority_queue<NodeDistCloser> &results,
             Stats &stats) {
-        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
+        CosineDistanceComputer dc = CosineDistanceComputer(storage->data, storage->dim, storage->numPoints);
         dc.setQuery(query);
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = storage->entryPoint;
@@ -568,7 +572,7 @@ namespace orangedb {
                 stats);
     }
 
-    void HNSW::searchNearestOnLevelWithQuantizer(const uint8_t *query, fastq::DistanceComputer<uint8_t, uint8_t> *dc, orangedb::level_t level,
+    void HNSW::searchNearestOnLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
                                                  orangedb::vector_idx_t &nearest, double &nearestDist,
                                                  orangedb::Stats &stats) {
         CHECK_ARGUMENT(level > 0, "Level should be greater than 0");
@@ -599,7 +603,7 @@ namespace orangedb {
 
     }
 
-    void HNSW::searchNeighborsOnLastLevelWithQuantizer(const uint8_t *query, fastq::DistanceComputer<uint8_t, uint8_t> *dc,
+    void HNSW::searchNeighborsOnLastLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc,
                                                        std::priority_queue<NodeDistCloser> &results,
                                                        orangedb::vector_idx_t entrypoint, double entrypointDist,
                                                        orangedb::VisitedTable &visited, uint16_t efSearch,
@@ -655,25 +659,239 @@ namespace orangedb {
         visited.reset();
     }
 
+    void HNSW::searchParallel(
+            const float *query,
+            uint16_t k,
+            uint16_t efSearch,
+            AtomicVisitedTable &visited,
+            std::priority_queue<NodeDistCloser> &results,
+            Stats &stats) {
+        CosineDistanceComputer dc = CosineDistanceComputer(storage->data, storage->dim, storage->numPoints);
+        dc.setQuery(query);
+        int newEfSearch = std::max(k, efSearch);
+        vector_idx_t nearestID = storage->entryPoint;
+        double nearestDist;
+        int level = storage->maxLevel;
+        dc.computeDistance(getActualId(level, nearestID), &nearestDist);
+        // Update the nearest node
+        for (; level > 0; level--) {
+            searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
+            nearestID = storage->next_level_ids[level][nearestID];
+        }
+        // Parallel search
+        searchParallelNeighborsOnLastLevel(&dc, results, nearestID, nearestDist, visited, newEfSearch, stats);
+    }
+
+    int HNSW::findNextKNeighbours(
+            vector_idx_t entrypoint,
+            NodeDistCloser *nbrs,
+            AtomicVisitedTable &visited,
+            int maxK,
+            int maxNeighboursCheck) {
+        auto neighbors = storage->get_neighbors(0);
+        std::queue<vector_idx_t> candidates;
+        candidates.push(entrypoint);
+        auto neighboursChecked = 0;
+        int m = 0;
+        std::unordered_set<vector_idx_t> visitedSet;
+        while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
+            auto candidate = candidates.front();
+            candidates.pop();
+            size_t begin, end;
+            if (visitedSet.contains(candidate)) {
+                continue;
+            }
+            visitedSet.insert(candidate);
+            storage->get_neighbors_offsets(candidate, 0, begin, end);
+            neighboursChecked += 1;
+            stats.totalGetNbrsCall++;
+            // TODO: Maybe make it prioritized, might help in correlated cases
+            for (size_t i = begin; i < end; i++) {
+                auto neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID) {
+                    break;
+                }
+                // getAndSet has to be atomic
+                // Add to visited set
+                if (visited.getAndSet(neighbor)) {
+                    nbrs[m] = NodeDistCloser(neighbor, std::numeric_limits<double>::max());
+                    m++;
+                    if (m >= maxK) {
+                        return m;
+                    }
+                }
+                candidates.push(neighbor);
+            }
+        }
+        return m;
+    }
+
+    static void mergeSortCandidates(
+            std::vector<NodeDistCloser> &candidates,
+            std::vector<NodeDistCloser> &nextFrontier,
+            int M,
+            int partitionSize,
+            int numPartitions) {
+        CHECK_ARGUMENT(candidates.size() >= M, "Candidates size should be greater than M");
+        CHECK_ARGUMENT(nextFrontier.size() >= partitionSize * numPartitions, "Next frontier size should be greater than partitionSize * numPartitions");
+        int m = std::min(M, partitionSize);
+        // candidates is already sorted
+        // Next frontier each partition is sorted
+        // Merge sort the values from nextFrontier each partition to candidates until M
+        for (int part = 0; part < numPartitions; part++) {
+            int start = part * partitionSize;
+            int end = start + m;
+            int ci = 0;
+            // Merge sort the values from nextFrontier each partition to candidates until M
+            for (int i = start; i < end; i++) {
+                while (ci < M && candidates[ci] < nextFrontier[i]) {
+                    ci++;
+                }
+                if (ci == M) {
+                    break;
+                }
+                candidates[ci] = nextFrontier[i];
+                ci++;
+            }
+        }
+    }
+
+    void HNSW::searchParallelNeighborsOnLastLevel(
+            DistanceComputer *dc,
+            std::priority_queue<NodeDistCloser> &results,
+            vector_idx_t entrypoint,
+            double entrypointDist,
+            AtomicVisitedTable &visited,
+            uint16_t efSearch,
+            Stats &stats) {
+        // Steps:
+        // 1. Parallel priority queue
+        // 2. Scan the neighbors (or neighbors of neighbors)
+        // 3. Compute the distances in parallel
+        // 4. push the results to the priority queue
+
+        // Another approach:
+        // Expand the neighbors (nbrs -> nbrs of nbrs) to some M value
+        // Parallelize the distance computation
+
+        // Parallelize next expansion top M nodes
+//        auto result = std::make_shared<Multiqueue>(omp_get_num_threads(), 2, 100000);
+//        int M = 50;
+//        int W = 100;
+//        auto candidates = std::make_shared<Multiqueue>(omp_get_num_threads(), 2, 100000);
+//        candidates->push(entrypoint, entrypointDist);
+        omp_set_num_threads(8);
+        printf("Parallel search\n");
+        int numThreads = omp_get_num_threads();
+        int nodesToExplore = std::max(config.nodesToExplore, numThreads);
+        std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode * nodesToExplore, NodeDistCloser());
+        std::vector<NodeDistCloser> candidates(nodesToExplore * config.nodeExpansionPerNode, NodeDistCloser()); // Keep atleast 10 times the nodes to explore
+        // TODO: Maybe replace with parallel priority queue
+        std::priority_queue<NodeDistFarther> resultQ;
+        results.push(NodeDistCloser(entrypoint, entrypointDist));
+        visited.set(entrypoint);
+        // Find the next K neighbors
+        int k = findNextKNeighbours(entrypoint, candidates.data(), visited, nodesToExplore, 64);
+        for (int i = 0; i < k; i++) {
+            auto& neighbor = candidates[i];
+            dc->computeDistance(neighbor.id, &neighbor.dist);
+
+            // Add the candidates to the resultQ
+            results.push(NodeDistCloser(neighbor.id, neighbor.dist));
+            if (results.size() > efSearch) {
+                results.pop();
+            }
+        }
+
+        // Sort the candidates
+        sort(candidates.begin(), candidates.end());
+
+        while (!candidates.empty()) {
+            if (results.top().dist < candidates[0].dist) {
+                break;
+            }
+
+            // reset nextFrontier
+            for (int i = 0; i < nextFrontier.size(); i++) {
+                nextFrontier[i] = NodeDistCloser();
+            }
+
+            // Node expansion
+#pragma omp parallel for schedule(static)
+            for (int i = 0; i < nodesToExplore; i++) {
+                if (candidates[i].isInvalid()) {
+                    continue;
+                }
+                findNextKNeighbours(candidates[i].id, nextFrontier.data() + (i * config.nodeExpansionPerNode), visited, config.nodeExpansionPerNode, 128);
+            }
+
+            // print top 5 nextFrontier for each candidate
+//            for (int i = 0; i < nodesToExplore; i++) {
+//                printf("Candidate %llu\n", candidates[i].id);
+//                for (int j = 0; j < 5; j++) {
+//                    printf("Next frontier %llu %f\n", nextFrontier[i * nodeExpansionPerNode + j].id, nextFrontier[i * nodeExpansionPerNode + j].dist);
+//                }
+//            }
+
+#pragma omp parallel for schedule(static)
+            for (int i = 0; i < nextFrontier.size(); i++) {
+                auto& neighbor = nextFrontier[i];
+                // TODO: Remove the visited check
+                if (!neighbor.isInvalid()) {
+                    dc->computeDistance(neighbor.id, &neighbor.dist);
+                }
+            }
+
+            // Sort the nextFrontier
+            sort(nextFrontier.begin(), nextFrontier.end());
+
+            // move the last nodesToExplore to the front
+            for (int i = 0; i < nodesToExplore; i++) {
+                candidates[i] = NodeDistCloser();
+            }
+
+            sort(candidates.begin(), candidates.end());
+
+            // Merge sort the candidates and nextFrontier
+            mergeSortCandidates(candidates, nextFrontier, candidates.size(), nextFrontier.size(), 1);
+
+//            for (int i = 0; i < 5; i++) {
+//                printf("Candidate %llu %f\n", candidates[i].id, candidates[i].dist);
+//            }
+
+            // Add the candidates to the resultQ
+            for (int i = 0; i < candidates.size(); i++) {
+                auto neighbor = candidates[i];
+                if (neighbor.isInvalid()) {
+                    continue;
+                }
+                results.push(NodeDistCloser(neighbor.id, neighbor.dist));
+                if (results.size() > efSearch) {
+                    results.pop();
+                }
+            }
+        }
+    }
+
     void HNSW::searchWithQuantizer(const float *query, uint16_t k, uint16_t efSearch, orangedb::VisitedTable &visited,
                                    std::priority_queue<NodeDistCloser> &results, orangedb::Stats &stats) {
-        auto dc = quantizer->get_sym_distance_computer(fastq::DistanceType::L2);
+        auto dc = quantizer->get_asym_distance_computer(fastq::DistanceType::COSINE);
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = storage->entryPoint;
         double nearestDist;
         int level = storage->maxLevel;
         const uint8_t *code = storage->codes + getActualId(level, nearestID) * quantizer->codeSize;
-        std::vector<uint8_t> queryCode(quantizer->codeSize);
-        quantizer->encode(query, queryCode.data(), 1);
+//        std::vector<uint8_t> queryCode(quantizer->codeSize);
+//        quantizer->encode(query, queryCode.data(), 1);
 
-        dc->compute_distance(queryCode.data(), code, &nearestDist);
+        dc->compute_distance(query, code, &nearestDist);
         // Update the nearest node
         for (; level > 0; level--) {
-            searchNearestOnLevelWithQuantizer(queryCode.data(), dc.get(), level, nearestID, nearestDist, stats);
+            searchNearestOnLevelWithQuantizer(query, dc.get(), level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
         searchNeighborsOnLastLevelWithQuantizer(
-                queryCode.data(),
+                query,
                 dc.get(),
                 results,
                 nearestID,

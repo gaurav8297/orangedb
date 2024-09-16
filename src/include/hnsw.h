@@ -129,13 +129,19 @@ namespace orangedb {
         std::string storagePath = "/tmp/orangedb";
         bool loadStorage = false;
 
+        // Parallel search
+        int nodesToExplore = 20;
+        int nodeExpansionPerNode = 10;
+
         HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float minAlpha,
                    float maxAlpha, float alphaDecay, int filterMinK, int maxNeighboursCheck,
-                   std::string compressionType, std::string storagePath, bool loadStorage)
+                   std::string compressionType, std::string storagePath, bool loadStorage,
+                   int nodesToExplore, int nodeExpansionPerNode)
                 : M(M), efConstruction(efConstruction), efSearch(efSearch), minAlpha(minAlpha),
                   maxAlpha(maxAlpha), alphaDecay(alphaDecay), filterMinK(filterMinK),
                   maxNeighboursCheck(maxNeighboursCheck), compressionType(compressionType), storagePath(storagePath),
-                  loadStorage(loadStorage) {}
+                  loadStorage(loadStorage), nodesToExplore(nodesToExplore),
+                  nodeExpansionPerNode(nodeExpansionPerNode) {}
     };
 
     class HNSW {
@@ -171,6 +177,14 @@ namespace orangedb {
                 orangedb::VisitedTable &visited,
                 std::priority_queue<NodeDistCloser> &results,
                 const uint8_t *filterMask,
+                Stats &stats);
+
+        void searchParallel(
+                const float *query,
+                uint16_t k,
+                uint16_t efSearch,
+                orangedb::AtomicVisitedTable &visited,
+                std::priority_queue<NodeDistCloser> &results,
                 Stats &stats);
 
         void deleteNodes(const vector_idx_t *deletedIds, size_t n, int dim, Stats &stats);
@@ -210,12 +224,28 @@ namespace orangedb {
                 int distCompBatchSize,
                 Stats &stats);
 
+        int findNextKNeighbours(
+                vector_idx_t entrypoint,
+                NodeDistCloser *nbrs,
+                AtomicVisitedTable &visited,
+                int maxK,
+                int maxNeighboursCheck);
+
+        void searchParallelNeighborsOnLastLevel(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                vector_idx_t entrypoint,
+                double entrypointDist,
+                AtomicVisitedTable &visited,
+                uint16_t efSearch,
+                Stats &stats);
+
         void searchNearestOnLevelWithQuantizer(
-                const uint8_t *query, fastq::DistanceComputer<uint8_t, uint8_t> *dc, orangedb::level_t level,
+                const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
                 orangedb::vector_idx_t &nearest, double &nearestDist,
                 orangedb::Stats &stats);
 
-        void searchNeighborsOnLastLevelWithQuantizer(const uint8_t *query, fastq::DistanceComputer<uint8_t, uint8_t> *dc,
+        void searchNeighborsOnLastLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc,
                                                      std::priority_queue<NodeDistCloser> &results,
                                                      orangedb::vector_idx_t entrypoint, double entrypointDist,
                                                      orangedb::VisitedTable &visited, uint16_t efSearch,

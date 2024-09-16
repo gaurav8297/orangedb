@@ -10,10 +10,10 @@
 #include <assert.h>    // assert
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
-#include <iostream>
 #include <fstream>
 #include <fastQ/scalar_8bit.h>
 #include <fastQ/pair_wise.h>
+#include "helper_ds.h"
 
 using namespace orangedb;
 
@@ -795,7 +795,7 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    L2DistanceComputer dc(vectors, dim, numVectors);
+    CosineDistanceComputer dc(vectors, dim, numVectors);
 #pragma omp parallel
     {
         auto localDc = dc.clone();
@@ -860,7 +860,7 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
-    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck, "none", "", false);
+    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck, "none", "", false, 20, 10);
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
@@ -877,13 +877,15 @@ void query_graph(
         size_t ef_search,
         size_t baseNumVectors) {
     auto start = std::chrono::high_resolution_clock::now();
-    auto visited = VisitedTable(baseNumVectors);
     auto recall = 0.0;
     Stats stats{};
     for (size_t i = 0; i < queryNumVectors; i++) {
+        auto localRecall = 0.0;
+        auto visited = AtomicVisitedTable(baseNumVectors);
+        auto startTime = std::chrono::high_resolution_clock::now();
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
-        hnsw.searchWithQuantizer(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
+        hnsw.searchParallel(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
@@ -893,8 +895,14 @@ void query_graph(
         for (auto &result: res) {
             if (std::find(gt, gt + k, result.id) != (gt + k)) {
                 recall++;
+                localRecall++;
             }
         }
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+        printf("Query time: %lld ms\n", duration);
+        printf("Recall: %f\n", localRecall / k);
+        break;
     }
     auto recallPerQuery = recall / queryNumVectors;
     stats.logStats();
@@ -917,6 +925,8 @@ void benchmark_hnsw_queries(InputParser &input) {
     auto k = stoi(input.getCmdOption("-k"));
     bool loadFromStorage = stoi(input.getCmdOption("-loadFromDisk"));
     std::string compressionType = input.getCmdOption("-compressionType");
+    auto nodesToExplore = stoi(input.getCmdOption("-nodesToExplore"));
+    auto nodeExpansionPerNode = stoi(input.getCmdOption("-nodeExpansionPerNode"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -935,16 +945,18 @@ void benchmark_hnsw_queries(InputParser &input) {
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("k: %zu\n", k);
     printf("base dimension: %zu\n", baseDimension);
+    printf("thread count: %d\n", thread_count);
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
-    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, 30, 30, compressionType, storagePath, loadFromStorage);
+    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, 30, 30, compressionType, storagePath, loadFromStorage, nodesToExplore, nodeExpansionPerNode);
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     if (!loadFromStorage) {
         hnsw.flushToDisk();
     }
     hnsw.logStats();
+//    omp_set_num_threads(2);
     query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 }
 
@@ -1051,6 +1063,35 @@ void benchmarkPairWise() {
     printf("\n");
 }
 
+void testParallelPriorityQueue() {
+    int numThreads = 4;
+    int sizeMultiple = 1;
+    int initElements = 500000 / numThreads;
+    omp_set_num_threads(4);
+    ParallelMultiQueue<NodeDistCloser> mq(numThreads * sizeMultiple, initElements);
+    auto start = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < 40; i++) {
+        mq.push(NodeDistCloser(i, i));
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    printf("Duration: %lld ms\n", duration);
+
+    start = std::chrono::high_resolution_clock::now();
+#pragma omp parallel
+    {
+#pragma omp for
+        for (int i = 0; i < 50; i++) {
+            auto res = mq.popMin();
+            printf("i: %d Result: %f\n", i, res.dist);
+        }
+    }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    printf("Duration: %lld ms\n", duration);
+}
+
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
@@ -1060,6 +1101,7 @@ int main(int argc, char **argv) {
     } else if (run == "generateGT") {
         generateGroundTruth(input);
     }
+//    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
 //    benchmark_random_dist_comp();
