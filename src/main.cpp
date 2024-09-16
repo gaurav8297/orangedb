@@ -881,8 +881,8 @@ void query_graph(
     Stats stats{};
     for (size_t i = 0; i < queryNumVectors; i++) {
         auto localRecall = 0.0;
-        auto visited = AtomicVisitedTable(baseNumVectors);
         auto startTime = std::chrono::high_resolution_clock::now();
+        auto visited = VisitedTable(baseNumVectors);
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
         hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
