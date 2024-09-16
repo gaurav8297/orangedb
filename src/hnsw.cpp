@@ -503,7 +503,7 @@ namespace orangedb {
         {
 //            auto asym_dc = quantizer->get_asym_distance_computer(fastq::DistanceType::L2);
 //            auto sym_dc = quantizer->get_sym_distance_computer(fastq::DistanceType::L2);
-            DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
+            DistanceComputer *localDc = new CosineDistanceComputer(data, storage->dim, n);
 //            DistanceComputer *localDc = new QuantizedDistanceComputer(storage->codes, asym_dc.get(), sym_dc.get(),
 //                                                                      storage->code_size);
             VisitedTable visited(n);

@@ -70,7 +70,7 @@ namespace orangedb {
 
         inline void get_neighbors_offsets(vector_idx_t id, level_t level, size_t &begin, size_t &end) {
             // Add some nanoseconds delay to recreate kuzu behavior
-            std::this_thread::sleep_for(std::chrono::nanoseconds(3000));
+//            std::this_thread::sleep_for(std::chrono::nanoseconds(3000));
             begin = id * max_neighbors_per_level[level];
             end = begin + max_neighbors_per_level[level];
         }
