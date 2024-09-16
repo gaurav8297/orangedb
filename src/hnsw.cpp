@@ -812,12 +812,21 @@ namespace orangedb {
             }
 
             // Node expansion
-#pragma omp parallel for schedule(static)
-            for (int i = 0; i < nodesToExplore; i++) {
-                if (candidates[i].isInvalid()) {
-                    continue;
+#pragma omp parallel
+            {
+                int nT = omp_get_num_threads();
+                int tId = omp_get_thread_num();
+
+                int start = (tId * nodesToExplore) / nT;
+                int end = ((tId + 1) * nodesToExplore) / nT;
+
+                for (int i = start; i < end; i++) {
+                    if (candidates[i].isInvalid()) {
+                        continue;
+                    }
+                    findNextKNeighbours(candidates[i].id, nextFrontier.data() + (i * config.nodeExpansionPerNode), visited,
+                                        config.nodeExpansionPerNode, 128);
                 }
-                findNextKNeighbours(candidates[i].id, nextFrontier.data() + (i * config.nodeExpansionPerNode), visited, config.nodeExpansionPerNode, 128);
             }
 
             // print top 5 nextFrontier for each candidate
@@ -828,12 +837,19 @@ namespace orangedb {
 //                }
 //            }
 
-#pragma omp parallel for schedule(static)
-            for (int i = 0; i < nextFrontier.size(); i++) {
-                auto& neighbor = nextFrontier[i];
-                // TODO: Remove the visited check
-                if (!neighbor.isInvalid()) {
-                    dc->computeDistance(neighbor.id, &neighbor.dist);
+#pragma omp parallel
+            {
+                int nT = omp_get_num_threads();
+                int tId = omp_get_thread_num();
+
+                int start = (tId * nextFrontier.size()) / nT;
+                int end = ((tId + 1) * nextFrontier.size()) / nT;
+                for (int i = start; i < end; i++) {
+                    auto &neighbor = nextFrontier[i];
+                    // TODO: Remove the visited check
+                    if (!neighbor.isInvalid()) {
+                        dc->computeDistance(neighbor.id, &neighbor.dist);
+                    }
                 }
             }
 
