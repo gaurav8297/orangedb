@@ -1182,7 +1182,7 @@ namespace orangedb {
                         vector_idx_t neighbor = nextFrontier[j].id;
                         double dist;
                         dc->computeDistance(neighbor, &dist);
-                        if (resultsPq.size() < localEfSearch || dist < resultsPq.top()->dist) {
+                        if (localCandidates.size() < localEfSearch || dist < resultsPq.top()->dist) {
                             localCandidates.emplace(neighbor, dist);
                             resultsPq.push(NodeDistFarther(neighbor, dist));
                         }
