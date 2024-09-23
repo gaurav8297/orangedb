@@ -893,6 +893,7 @@ namespace orangedb {
             auto res = results.top();
             results.pop();
             resultPq.push(NodeDistFarther(res.id, res.dist));
+            visited.getAndSet(res.id);
             if (results.size() < nodesToExplore) {
                 candidates[numCandidates] = res;
                 numCandidates++;
@@ -927,7 +928,6 @@ namespace orangedb {
                 nextFrontier[numDistComp] = neighbor;
                 numDistComp++;
             }
-            printf("Number of dist comp: %d\n", numDistComp);
 
             int distCompBatchSize = numDistComp / config.numSearchThreads;
             stats.totalDistCompDuringSearch += numDistComp;
@@ -944,7 +944,7 @@ namespace orangedb {
             mergeSortCandidates(candidates, nextFrontier, (int) candidates.size(), distCompBatchSize, config.numSearchThreads);
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-            printf("Time to merge sort %lld ms\n", duration.count());
+            printf("Time to merge sort %lld us\n", duration.count());
 
             numCandidates = 0;
             for (int i = 0; i < nodesToExplore; i++) {
@@ -953,11 +953,6 @@ namespace orangedb {
                 }
                 numCandidates++;
             }
-
-            auto resTopDist = resultPq.top()->dist;
-            printf("Top dist: %f\n", resTopDist);
-            printf("Candidates dist %f\n", candidates[0].dist);
-
             iter++;
             if (resultPq.top()->dist < candidates[0].dist) {
                 break;
