@@ -251,6 +251,14 @@ namespace orangedb {
                 int maxK,
                 int maxNeighboursCheck);
 
+        int findNextKNeighboursV2(
+                DistanceComputer* dc,
+                vector_idx_t entrypoint,
+                NodeDistCloser *nbrs,
+                AtomicVisitedTable &visited,
+                int minK,
+                int maxNeighboursCheck);
+
         void searchParallelSyncAfterEveryIter(
                 DistanceComputer *dc,
                 std::priority_queue<NodeDistCloser> &results,

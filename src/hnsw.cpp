@@ -838,6 +838,67 @@ namespace orangedb {
         return m;
     }
 
+    int HNSW::findNextKNeighboursV2(DistanceComputer* dc, vector_idx_t entrypoint, NodeDistCloser *nbrs,
+                                    AtomicVisitedTable &visited, int minK, int maxNeighboursCheck) {
+        auto neighbors = storage->get_neighbors(0);
+        size_t begin, end;
+        storage->get_neighbors_offsets(entrypoint, 0, begin, end);
+        std::vector<NodeDistCloser> cands;
+        auto m = 0;
+        for (size_t i = begin; i < end; i++) {
+            auto neighbor = neighbors[i];
+            if (neighbor == INVALID_VECTOR_ID) {
+                break;
+            }
+            if (visited.getAndSet(neighbor)) {
+                cands.push_back(NodeDistCloser(neighbor, std::numeric_limits<double>::max()));
+            }
+        }
+        for (int i = 0; i < cands.size(); i++) {
+            nbrs[i] = cands[i];
+        }
+        if (cands.size() > minK) {
+            // Copy candidates to nbrs
+            return cands.size();
+        }
+        m = cands.size();
+        std::priority_queue<NodeDistFarther> candidates;
+        for (size_t i = begin; i < end; i++) {
+            auto neighbor = neighbors[i];
+            if (neighbor == INVALID_VECTOR_ID) {
+                break;
+            }
+            double dist;
+            dc->computeDistance(neighbor, &dist);
+
+            candidates.emplace(neighbor, dist);
+        }
+
+        // Neigbours -> Neighbours in directed fashion
+        while (!candidates.empty()) {
+            auto candidate = candidates.top();
+            candidates.pop();
+            storage->get_neighbors_offsets(candidate.id, 0, begin, end);
+            // TODO: Maybe make it prioritized, might help in correlated cases
+            for (size_t i = begin; i < end; i++) {
+                auto neighbor = neighbors[i];
+                if (neighbor == INVALID_VECTOR_ID) {
+                    break;
+                }
+                // getAndSet has to be atomic
+                // Add to visited set
+                if (visited.getAndSet(neighbor)) {
+                    nbrs[m] = NodeDistCloser(neighbor, std::numeric_limits<double>::max());
+                    m++;
+                    if (m > minK) {
+                        return m;
+                    }
+                }
+            }
+        }
+        return m;
+    }
+
     static void mergeSortCandidates(
             std::vector<NodeDistCloser> &candidates,
             std::vector<NodeDistCloser> &nextFrontier,
@@ -1099,7 +1160,10 @@ namespace orangedb {
             while (!localCandidates.empty()) {
                 auto candidate = localCandidates.top();
                 localCandidates.pop();
-                int nextFSize = findNextKNeighbours(candidate.id, nextFrontier.data(), visited, config.nodeExpansionPerNode, 128);
+                // This is the problem
+                // TODO: New algorithm to choose the neighbor
+
+                int nextFSize = findNextKNeighboursV2(dc, candidate.id, nextFrontier.data(), visited, config.nodeExpansionPerNode, 128);
 
                 // Compute the distances
                 for (size_t j = 0; j < nextFSize; j++) {
