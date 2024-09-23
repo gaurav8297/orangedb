@@ -1081,7 +1081,7 @@ namespace orangedb {
 
 #pragma omp parallel
         {
-            auto localEfSearch = efSearch / config.numSearchThreads;
+            auto localEfSearch = (efSearch / config.numSearchThreads) + 50;
             auto anotherLocalEfSearch = efSearch;
             printf("localEfSearch %d\n", localEfSearch);
             printf("anotherLocalEfSearch %d\n", anotherLocalEfSearch);
