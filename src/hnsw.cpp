@@ -1156,7 +1156,7 @@ namespace orangedb {
                 localResults.emplace(c.id, c.dist);
             }
             // Implement local search
-            std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode);
+            std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode + 150);
             while (!localCandidates.empty()) {
                 auto candidate = localCandidates.top();
                 localCandidates.pop();
