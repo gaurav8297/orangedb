@@ -1106,6 +1106,9 @@ namespace orangedb {
                     if (localResults.size() < localEfSearch || dist < localResults.top().dist) {
                         localCandidates.emplace(neighbor, dist);
                         localResults.emplace(neighbor, dist);
+                        if (localResults.size() > localEfSearch) {
+                            localResults.pop();
+                        }
                     }
                 }
 
