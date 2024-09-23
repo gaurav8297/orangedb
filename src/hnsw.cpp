@@ -1225,6 +1225,18 @@ namespace orangedb {
                 localEfSearch += 64;
             }
         };
+
+        auto start = std::chrono::high_resolution_clock::now();
+        // Put resultPq to results
+        for (auto& queue : resultsPq.queues) {
+            while (queue->size() > 0) {
+                auto min = queue->popMin();
+                results.emplace(min.id, min.dist);
+            }
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        printf("Time to put to results %lld ms\n", duration.count());
     }
 
     void HNSW::searchWithQuantizer(const float *query, uint64_t k, uint64_t efSearch, orangedb::VisitedTable &visited,
