@@ -870,13 +870,13 @@ namespace orangedb {
             }
             double dist;
             dc->computeDistance(neighbor, &dist);
-
             candidates.emplace(neighbor, dist);
         }
 
         // Neigbours -> Neighbours in directed fashion
         while (!candidates.empty()) {
             auto candidate = candidates.top();
+            printf("Candidate %f\n", candidate.dist);
             candidates.pop();
             storage->get_neighbors_offsets(candidate.id, 0, begin, end);
             // TODO: Maybe make it prioritized, might help in correlated cases
