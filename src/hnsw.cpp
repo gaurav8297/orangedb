@@ -1059,7 +1059,7 @@ namespace orangedb {
             AtomicVisitedTable &visited,
             uint64_t efSearch,
             Stats &stats) {
-        auto W = config.nodesToExplore;
+        auto W = std::max(config.nodesToExplore, config.numSearchThreads);
         printf("efSearch %llu\n", efSearch);
         std::vector<std::vector<NodeDistCloser>> candidates(config.numSearchThreads);
         // init the candidates
@@ -1082,11 +1082,14 @@ namespace orangedb {
 #pragma omp parallel
         {
             auto localEfSearch = efSearch / config.numSearchThreads;
+            auto anotherLocalEfSearch = localEfSearch * 2;
             printf("localEfSearch %d\n", localEfSearch);
+            printf("anotherLocalEfSearch %d\n", anotherLocalEfSearch);
             int tId = omp_get_thread_num();
             auto &cands = candidates[tId];
             std::priority_queue<NodeDistFarther> localCandidates;
             std::priority_queue<NodeDistCloser> localResults;
+            std::priority_queue<NodeDistCloser> anotherLocalResults;
             for (auto &c : cands) {
                 localCandidates.emplace(c.id, c.dist);
                 localResults.emplace(c.id, c.dist);
@@ -1106,8 +1109,12 @@ namespace orangedb {
                     if (localResults.size() < localEfSearch || dist < localResults.top().dist) {
                         localCandidates.emplace(neighbor, dist);
                         localResults.emplace(neighbor, dist);
+                        anotherLocalResults.emplace(neighbor, dist);
                         if (localResults.size() > localEfSearch) {
                             localResults.pop();
+                        }
+                        if (anotherLocalResults.size() > anotherLocalEfSearch) {
+                            anotherLocalResults.pop();
                         }
                     }
                 }
@@ -1120,9 +1127,9 @@ namespace orangedb {
             // Put the localResults to results
 #pragma omp critical
             {
-                while (!localResults.empty()) {
-                    results.push(localResults.top());
-                    localResults.pop();
+                while (!anotherLocalResults.empty()) {
+                    results.push(anotherLocalResults.top());
+                    anotherLocalResults.pop();
                 }
             }
         };
