@@ -878,7 +878,7 @@ namespace orangedb {
         int nodesToExplore = std::max(config.nodesToExplore, config.numSearchThreads);
         int nodeExpansionPerNode = config.nodeExpansionPerNode;
         std::vector<NodeDistCloser> nextFrontier(nodesToExplore * nodeExpansionPerNode, NodeDistCloser());
-        std::vector<NodeDistCloser> candidates(nodesToExplore * nodeExpansionPerNode, NodeDistCloser());
+        std::vector<NodeDistCloser> candidates(nodesToExplore * nodeExpansionPerNode * 4, NodeDistCloser());
         // Since the check is not parallelized, we can include all threads queue for it.
         ParallelMultiQueue<NodeDistFarther> resultPq(config.numSearchThreads * 2, efSearch);
         // Init the scheduler
