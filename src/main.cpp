@@ -861,7 +861,8 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
-    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck, "none", "", false, 20, 10);
+    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck,
+                      "none", "", false, 20, 10, 1, "none");
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
@@ -877,17 +878,20 @@ void query_graph(
         size_t k,
         size_t ef_search,
         size_t baseNumVectors,
-        fastq::common::TaskScheduler *taskScheduler) {
+        int thread_count,
+        int nodeExpansionPerNode) {
     auto start = std::chrono::high_resolution_clock::now();
     auto recall = 0.0;
     Stats stats{};
     for (size_t i = 0; i < queryNumVectors; i++) {
         auto localRecall = 0.0;
-        auto startTime = std::chrono::high_resolution_clock::now();
         auto visited = AtomicVisitedTable(baseNumVectors);
+        PocTaskScheduler taskScheduler(thread_count, &visited, nodeExpansionPerNode, hnsw.storage);
+        auto startTime = std::chrono::high_resolution_clock::now();
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
-        hnsw.searchParallel(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats, taskScheduler);
+        hnsw.searchParallel(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats, &taskScheduler);
+        auto endTime = std::chrono::high_resolution_clock::now();
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
@@ -900,7 +904,6 @@ void query_graph(
                 localRecall++;
             }
         }
-        auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         printf("Query time: %lld ms\n", duration);
         printf("Recall: %f\n", localRecall / k);
@@ -929,6 +932,7 @@ void benchmark_hnsw_queries(InputParser &input) {
     std::string compressionType = input.getCmdOption("-compressionType");
     auto nodesToExplore = stoi(input.getCmdOption("-nodesToExplore"));
     auto nodeExpansionPerNode = stoi(input.getCmdOption("-nodeExpansionPerNode"));
+    auto searchParallelAlgo = input.getCmdOption("-searchParallelAlgo");
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -949,19 +953,20 @@ void benchmark_hnsw_queries(InputParser &input) {
     printf("base dimension: %zu\n", baseDimension);
     printf("thread count: %d\n", thread_count);
 
-    fastq::common::TaskScheduler taskScheduler(thread_count);
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
-    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, 30, 30, compressionType, storagePath, loadFromStorage, nodesToExplore, nodeExpansionPerNode);
+    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, 30, 30, compressionType, storagePath,
+                      loadFromStorage, nodesToExplore, nodeExpansionPerNode, thread_count, searchParallelAlgo);
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     if (!loadFromStorage) {
         hnsw.flushToDisk();
     }
+
     hnsw.logStats();
 //    omp_set_num_threads(2);
-    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors, &taskScheduler);
+    query_graph(hnsw, queryVecs, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors, thread_count, nodeExpansionPerNode);
 }
 
 // Benchmark clustering
@@ -1070,12 +1075,20 @@ void benchmarkPairWise() {
 void testParallelPriorityQueue() {
     int numThreads = 4;
     int sizeMultiple = 1;
-    int initElements = 500000 / numThreads;
+    int initElements = 500;
 //    omp_set_num_threads(4);
-    ParallelMultiQueue<NodeDistCloser> mq(numThreads * sizeMultiple, initElements);
+    ParallelMultiQueue<NodeDistFarther> mq(numThreads, initElements);
     auto start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < 40; i++) {
-        mq.push(NodeDistCloser(i, i));
+//    for (int i = 0; i < 4000; i++) {
+//        mq.push(NodeDistFarther(i, i));
+//    }
+
+#pragma omp parallel
+    {
+#pragma omp for
+        for (int i = 0; i < 4000; i++) {
+            mq.push(NodeDistFarther(i, i));
+        }
     }
     auto end = std::chrono::high_resolution_clock::now();
 
@@ -1083,10 +1096,15 @@ void testParallelPriorityQueue() {
     printf("Duration: %lld ms\n", duration);
 
     start = std::chrono::high_resolution_clock::now();
+//    for (int i = 0; i < initElements; i++) {
+//        auto res = mq.popMin();
+//        printf("i: %d Result: %f\n", i, res.dist);
+//    }
+
 #pragma omp parallel
     {
 #pragma omp for
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0; i < initElements; i++) {
             auto res = mq.popMin();
             printf("i: %d Result: %f\n", i, res.dist);
         }

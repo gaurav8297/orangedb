@@ -17,10 +17,10 @@ namespace orangedb {
     template<typename T>
     void BinaryHeap<T>::push(T node) {
         if (actual_size == capacity) {
-            if (node >= nodes[1]) {
+            if (node < nodes[1]) {
                 return;  // Node is not closer/farther enough to be inserted into the heap
             }
-            popMaxFromHeap();  // Remove the root (minimum or maximum, depending on heap type)
+            popMinFromHeap();  // Remove the root (minimum or maximum, depending on heap type)
             actual_size--;
         }
         actual_size++;
@@ -130,10 +130,16 @@ namespace orangedb {
     }
 
     template<typename T>
-    ParallelMultiQueue<T>::ParallelMultiQueue(int num_queues, int reserve_size) {
+    ParallelMultiQueue<T>::ParallelMultiQueue(int num_queues, int reserve_size) : maxSize(std::ceil(reserve_size / num_queues)) {
         queues.reserve(num_queues);
         for (int i = 0; i < num_queues; i++) {
-            queues.emplace_back(std::make_unique<BinaryHeap<T>>(reserve_size));
+            queues.emplace_back(std::make_unique<BinaryHeap<T>>(maxSize));
+        }
+
+        queueSizes = std::vector<std::atomic_int>(num_queues);
+        // store 0
+        for (int i = 0; i < num_queues; i++) {
+            queueSizes[i].store(0);
         }
     }
 
@@ -147,9 +153,9 @@ namespace orangedb {
     template<typename T>
     void ParallelMultiQueue<T>::push(T val) {
         int q_id = getRandQueueIndex();
-        printf("q_id: %d\n", q_id);
         queues[q_id]->lock();
         queues[q_id]->push(val);
+        queueSizes[q_id].fetch_add(1);
         queues[q_id]->unlock();
     }
 
@@ -188,6 +194,7 @@ namespace orangedb {
                 queues[minIdx]->lock();
                 if (min == queues[minIdx]->top()) {
                     auto res = queues[minIdx]->popMin();
+                    queueSizes[minIdx].fetch_sub(1);
                     queues[minIdx]->unlock();
                     return res;
                 }
@@ -208,7 +215,7 @@ namespace orangedb {
                 i = getRandQueueIndex();
                 do {
                     j = getRandQueueIndex();
-                } while (i != j);
+                } while (i == j);
 
                 auto topI = queues[i]->getMinElement();
                 auto topJ = queues[j]->getMinElement();
@@ -241,6 +248,15 @@ namespace orangedb {
         } while (updateByOtherThreads);
 
         return nullptr;
+    }
+
+    template<typename T>
+    int ParallelMultiQueue<T>::size() {
+        int totalSize = 0;
+        for (int i = 0; i < queues.size(); i++) {
+            totalSize += std::min(queueSizes[i].load(), maxSize);
+        }
+        return totalSize;
     }
 
     template

@@ -111,7 +111,7 @@ namespace orangedb {
         // The number of neighbors to explore during index construction
         uint16_t efConstruction = 200;
         // The number of neighbors to explore during search
-        uint16_t efSearch = 50;
+        uint64_t efSearch = 50;
         // RNG alpha parameter
         float minAlpha = 0.95;
         // [Experimental] max alpha value
@@ -134,15 +134,23 @@ namespace orangedb {
         int nodesToExplore = 20;
         int nodeExpansionPerNode = 10;
 
-        HNSWConfig(uint16_t M, uint16_t efConstruction, uint16_t efSearch, float minAlpha,
+        // Number of threads
+        int numSearchThreads = 4;
+
+        // Search Parallel Algorithm
+        std::string searchParallelAlgorithm;
+
+        HNSWConfig(uint16_t M, uint16_t efConstruction, uint64_t efSearch, float minAlpha,
                    float maxAlpha, float alphaDecay, int filterMinK, int maxNeighboursCheck,
                    std::string compressionType, std::string storagePath, bool loadStorage,
-                   int nodesToExplore, int nodeExpansionPerNode)
+                   int nodesToExplore, int nodeExpansionPerNode, int numSearchThreads,
+                   std::string searchParallelAlgorithm)
                 : M(M), efConstruction(efConstruction), efSearch(efSearch), minAlpha(minAlpha),
                   maxAlpha(maxAlpha), alphaDecay(alphaDecay), filterMinK(filterMinK),
                   maxNeighboursCheck(maxNeighboursCheck), compressionType(compressionType), storagePath(storagePath),
                   loadStorage(loadStorage), nodesToExplore(nodesToExplore),
-                  nodeExpansionPerNode(nodeExpansionPerNode) {}
+                  nodeExpansionPerNode(nodeExpansionPerNode), numSearchThreads(numSearchThreads),
+                  searchParallelAlgorithm(searchParallelAlgorithm) {}
     };
 
     class HNSW {
@@ -157,24 +165,24 @@ namespace orangedb {
 
         void search(
                 const float *query,
-                uint16_t k,
-                uint16_t efSearch,
+                uint64_t k,
+                uint64_t efSearch,
                 orangedb::VisitedTable &visited,
                 std::priority_queue<NodeDistCloser> &results,
                 Stats &stats);
 
         void searchWithQuantizer(
                 const float *query,
-                uint16_t k,
-                uint16_t efSearch,
+                uint64_t k,
+                uint64_t efSearch,
                 orangedb::VisitedTable &visited,
                 std::priority_queue<NodeDistCloser> &results,
                 Stats &stats);
 
         void searchWithFilter(
                 const float *query,
-                uint16_t k,
-                uint16_t efSearch,
+                uint64_t k,
+                uint64_t efSearch,
                 orangedb::VisitedTable &visited,
                 std::priority_queue<NodeDistCloser> &results,
                 const uint8_t *filterMask,
@@ -182,12 +190,12 @@ namespace orangedb {
 
         void searchParallel(
                 const float *query,
-                uint16_t k,
-                uint16_t efSearch,
+                uint64_t k,
+                uint64_t efSearch,
                 orangedb::AtomicVisitedTable &visited,
                 std::priority_queue<NodeDistCloser> &results,
                 Stats &stats,
-                fastq::common::TaskScheduler *scheduler);
+                PocTaskScheduler *scheduler);
 
         void deleteNodes(const vector_idx_t *deletedIds, size_t n, int dim, Stats &stats);
 
@@ -213,7 +221,7 @@ namespace orangedb {
                 vector_idx_t entrypoint,
                 double entrypointDist,
                 VisitedTable &visited,
-                uint16_t efSearch,
+                uint64_t efSearch,
                 Stats &stats);
 
         void searchNeighborsOnLastLevel(
@@ -222,7 +230,17 @@ namespace orangedb {
                 vector_idx_t entrypoint,
                 double entrypointDist,
                 VisitedTable &visited,
-                uint16_t efSearch,
+                uint64_t efSearch,
+                int distCompBatchSize,
+                Stats &stats);
+
+        void searchNeighborsOnLastLevel1(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                vector_idx_t entrypoint,
+                double entrypointDist,
+                AtomicVisitedTable &visited,
+                uint64_t efSearch,
                 int distCompBatchSize,
                 Stats &stats);
 
@@ -233,33 +251,34 @@ namespace orangedb {
                 int maxK,
                 int maxNeighboursCheck);
 
-        void searchParallelNeighborsOnLastLevel(
+        void searchParallelSyncAfterEveryIter(
                 DistanceComputer *dc,
                 std::priority_queue<NodeDistCloser> &results,
-                vector_idx_t entrypoint,
-                double entrypointDist,
                 AtomicVisitedTable &visited,
-                uint16_t efSearch,
-                Stats &stats);
-
-        void searchParallelNeighborsOnLastLevel2(
-                DistanceComputer *dc,
-                std::priority_queue<NodeDistCloser> &results,
-                vector_idx_t entrypoint,
-                double entrypointDist,
-                AtomicVisitedTable &visited,
-                uint16_t efSearch,
-                Stats &stats);
-
-        void searchParallelNeighborsOnLastLevel3(
-                DistanceComputer *dc,
-                std::priority_queue<NodeDistCloser> &results,
-                vector_idx_t entrypoint,
-                double entrypointDist,
-                AtomicVisitedTable &visited,
-                uint16_t efSearch,
+                uint64_t efSearch,
                 Stats &stats,
-                fastq::common::TaskScheduler *scheduler);
+                PocTaskScheduler *scheduler);
+
+        void searchParallelWithParallelQueue(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                AtomicVisitedTable &visited,
+                uint64_t efSearch,
+                Stats &stats);
+
+        void searchParallelWithPartitioning(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                AtomicVisitedTable &visited,
+                uint64_t efSearch,
+                Stats &stats);
+
+        void searchParallelWithDeltaStepping(
+                DistanceComputer *dc,
+                std::priority_queue<NodeDistCloser> &results,
+                AtomicVisitedTable &visited,
+                uint64_t efSearch,
+                Stats &stats);
 
         void searchNearestOnLevelWithQuantizer(
                 const float *query, fastq::DistanceComputer<float, uint8_t> *dc, orangedb::level_t level,
@@ -269,7 +288,7 @@ namespace orangedb {
         void searchNeighborsOnLastLevelWithQuantizer(const float *query, fastq::DistanceComputer<float, uint8_t> *dc,
                                                      std::priority_queue<NodeDistCloser> &results,
                                                      orangedb::vector_idx_t entrypoint, double entrypointDist,
-                                                     orangedb::VisitedTable &visited, uint16_t efSearch,
+                                                     orangedb::VisitedTable &visited, uint64_t efSearch,
                                                      int distCompBatchSize, orangedb::Stats &stats);
 
         void findNextFilteredKNeighbours(
@@ -288,7 +307,7 @@ namespace orangedb {
                 vector_idx_t entrypoint,
                 double entrypointDist,
                 VisitedTable &visited,
-                uint16_t efSearch,
+                uint64_t efSearch,
                 int distCompBatchSize,
                 const uint8_t *filterMask,
                 Stats &stats);
@@ -299,7 +318,7 @@ namespace orangedb {
                 vector_idx_t entrypoint,
                 double entrypointDist,
                 VisitedTable &visited,
-                uint16_t efSearch,
+                uint64_t efSearch,
                 int distCompBatchSize,
                 const uint8_t *filterMask,
                 Stats &stats);
@@ -369,11 +388,11 @@ namespace orangedb {
 
     public:
         HNSWConfig config;
+        Storage *storage;
 
     private:
         std::vector<double> levelProbabs;
         std::unique_ptr<fastq::Quantizer<uint8_t>> quantizer;
-        Storage *storage;
         RandomGenerator *rg;
         Stats stats;
     };

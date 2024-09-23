@@ -89,6 +89,7 @@ namespace fastq {
                 while (!stop) {
                     Task task;
                     {
+                        auto start = std::chrono::high_resolution_clock::now();
                         std::unique_lock<std::mutex> lock(mutex);
                         condition.wait(lock, [this] { return !tasks.empty() || stop; });
                         if (stop) {
@@ -97,6 +98,9 @@ namespace fastq {
                         // Todo: Maybe replace with a lock-free queue
                         task = tasks.front();
                         tasks.pop();
+                        auto end = std::chrono::high_resolution_clock::now();
+                        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+                        printf("Thread %d took %lld us\n", threadId, duration.count());
                     }
                     task.job(threadId, task.start, task.end);
                     {
