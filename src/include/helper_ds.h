@@ -322,7 +322,19 @@ namespace orangedb {
                         resultPq->push(NodeDistFarther(neighbor.id, neighbor.dist));
                     }
                     // Sort the next frontier after processing
+                    // print old
+                    printf("start: %d, end: %d\n", start, end);
+                    for (int i = start; i < end; ++i) {
+                        printf("[%llu %f]", nextFrontier[i].id, nextFrontier[i].dist);
+                    }
+                    printf("\n");
                     std::sort(nextFrontier + start, nextFrontier + end);
+
+                    // print new
+                    for (int i = start; i < end; ++i) {
+                        printf("[%llu %f]", nextFrontier[i].id, nextFrontier[i].dist);
+                    }
+                    printf("\n");
                 } else {
                     int totalExpansion = 0;
                     for (int i = start; i < end; ++i) {

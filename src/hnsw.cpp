@@ -914,6 +914,7 @@ namespace orangedb {
             }
 
             int expandedCount = scheduler->parallelize_and_wait(0, numCandidates, false);
+            printf("Expanded count %d\n", expandedCount);
             int currentMaxNextFrontierSize = numCandidates * nodeExpansionPerNode;
             int numDistComp = 0;
             for (int i = 0; i < currentMaxNextFrontierSize; i++) {
