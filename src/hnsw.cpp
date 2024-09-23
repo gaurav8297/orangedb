@@ -963,7 +963,7 @@ namespace orangedb {
         auto endTime = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
         printf("Time to search %lld ms\n", duration.count());
-        
+
         printf("iter %d\n", iter);
         auto start = std::chrono::high_resolution_clock::now();
         // Put resultPq to results
@@ -1082,6 +1082,7 @@ namespace orangedb {
 #pragma omp parallel
         {
             auto localEfSearch = efSearch / config.numSearchThreads;
+            printf("localEfSearch %d\n", localEfSearch);
             int tId = omp_get_thread_num();
             auto &cands = candidates[tId];
             std::priority_queue<NodeDistFarther> localCandidates;
