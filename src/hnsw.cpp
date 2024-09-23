@@ -876,7 +876,6 @@ namespace orangedb {
         // Neigbours -> Neighbours in directed fashion
         while (!candidates.empty()) {
             auto candidate = candidates.top();
-            printf("Candidate %f\n", candidate.dist);
             candidates.pop();
             storage->get_neighbors_offsets(candidate.id, 0, begin, end);
             // TODO: Maybe make it prioritized, might help in correlated cases
@@ -1143,7 +1142,7 @@ namespace orangedb {
 #pragma omp parallel
         {
             auto localEfSearch = efSearch / config.numSearchThreads;
-            auto anotherLocalEfSearch = localEfSearch * 2;
+            auto anotherLocalEfSearch = efSearch;
             printf("localEfSearch %d\n", localEfSearch);
             printf("anotherLocalEfSearch %d\n", anotherLocalEfSearch);
             int tId = omp_get_thread_num();
