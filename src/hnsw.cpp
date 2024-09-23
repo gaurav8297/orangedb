@@ -1097,7 +1097,6 @@ namespace orangedb {
                 auto candidate = localCandidates.top();
                 localCandidates.pop();
                 int nextFSize = findNextKNeighbours(candidate.id, nextFrontier.data(), visited, config.nodeExpansionPerNode, 128);
-                printf("nextFSize %d\n", nextFSize);
 
                 // Compute the distances
                 for (size_t j = 0; j < nextFSize; j++) {
@@ -1114,7 +1113,6 @@ namespace orangedb {
                 }
 
                 if (localCandidates.top().dist > localResults.top().dist) {
-                    printf("Breaking\n");
                     break;
                 }
             }
