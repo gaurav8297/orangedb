@@ -914,7 +914,6 @@ namespace orangedb {
             }
 
             int expandedCount = scheduler->parallelize_and_wait(0, numCandidates, false);
-            printf("Expanded count %d\n", expandedCount);
             int currentMaxNextFrontierSize = numCandidates * nodeExpansionPerNode;
             int numDistComp = 0;
             for (int i = 0; i < currentMaxNextFrontierSize; i++) {
@@ -934,25 +933,6 @@ namespace orangedb {
             stats.totalDistCompDuringSearch += numDistComp;
             scheduler->parallelize_and_wait(0, numDistComp, true);
 
-            printf("Next frontier\n");
-            // printf the nextFrontier
-            for (int i = 0; i < numDistComp; i++) {
-                printf("[%llu %f] ", nextFrontier[i].id, nextFrontier[i].dist);
-            }
-            printf("\n");
-
-            // print
-            printf("Number of next frontier %d\n", numDistComp);
-
-
-            printf("Old Candidates\n");
-            // printf the candidates
-            for (int i = 0; i < numCandidates; i++) {
-                printf("[%llu %f] ", candidates[i].id, candidates[i].dist);
-            }
-            printf("\n");
-            printf("Total candidates %d\n", numCandidates);
-
             // Reset the top numCandidates values
             for (int i = 0; i < numCandidates; i++) {
                 candidates[i] = NodeDistCloser();
@@ -965,14 +945,6 @@ namespace orangedb {
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
             printf("Time to merge sort %lld us\n", duration.count());
-
-            printf("New Candidates\n");
-            // printf the candidates
-            for (int i = 0; i < nodesToExplore; i++) {
-                printf("[%llu %f] ", candidates[i].id, candidates[i].dist);
-            }
-            printf("\n");
-            printf("Total candidates %d\n", nodesToExplore);
 
             numCandidates = 0;
             for (int i = 0; i < nodesToExplore; i++) {
