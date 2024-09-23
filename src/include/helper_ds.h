@@ -244,8 +244,9 @@ namespace orangedb {
                 int numThreads,
                 AtomicVisitedTable *visited,
                 const int nodeExpansionPerNode,
-                Storage *storage)
-                : numThreads(numThreads), stop(false), tasksInProgress(0), visited(visited),
+                Storage *storage,
+                const int efSearch)
+                : numThreads(numThreads), stop(false), tasksInProgress(0), visited(visited), efSearch(efSearch),
                   nodeExpansionPerNode(nodeExpansionPerNode), storage(storage), resultPq(nullptr), candidates(nullptr),
                   nextFrontier(nullptr), dc(nullptr) {
             // Initialize atomic values
@@ -319,7 +320,11 @@ namespace orangedb {
                     for (int i = start; i < end; ++i) {
                         auto &neighbor = nextFrontier[i];
                         dc->computeDistance(neighbor.id, &neighbor.dist);
-                        resultPq->push(NodeDistFarther(neighbor.id, neighbor.dist));
+
+                        // Reduce the number of push operations
+                        if (resultPq->size() < efSearch || neighbor.dist < resultPq->top()->dist) {
+                            resultPq->push(NodeDistFarther(neighbor.id, neighbor.dist));
+                        }
                     }
                     // Sort the next frontier after processing
                     std::sort(nextFrontier + start, nextFrontier + end);
@@ -394,6 +399,7 @@ namespace orangedb {
         DistanceComputer *dc;
 
     private:
+        const int efSearch;
         AtomicVisitedTable *visited;
         const int nodeExpansionPerNode;
         Storage *storage;
