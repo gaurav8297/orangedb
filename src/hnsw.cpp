@@ -907,6 +907,8 @@ namespace orangedb {
         sort(candidates.begin(), candidates.begin() + numCandidates);
         int maxNextFrontierSize = nodesToExplore * nodeExpansionPerNode;
 
+        auto startTime = std::chrono::high_resolution_clock::now();
+
         while (numCandidates > 0) {
             // Reset the nextFrontier
             for (int i = 0; i < maxNextFrontierSize; i++) {
@@ -958,6 +960,10 @@ namespace orangedb {
                 break;
             }
         }
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+        printf("Time to search %lld ms\n", duration.count());
+        
         printf("iter %d\n", iter);
         auto start = std::chrono::high_resolution_clock::now();
         // Put resultPq to results
@@ -968,7 +974,7 @@ namespace orangedb {
             }
         }
         auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         printf("Time to put to results %lld ms\n", duration.count());
     }
 
