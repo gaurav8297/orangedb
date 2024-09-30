@@ -1178,6 +1178,9 @@ namespace orangedb {
             }
 
             localStats.avgGetNbrsDepth /= localStats.searchIter;
+            spdlog::info("Printing local stats for thread: {}", tId);
+            localStats.logStats();
+            spdlog::info("================================================");
 
             // Merge localStats to stats
             stats.merge(localStats);
