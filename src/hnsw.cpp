@@ -1169,7 +1169,7 @@ namespace orangedb {
                 }
 
                 if (!localC.empty() && localC.top().id == nextCandidate.id) {
-                    stats.uselessGetNbrs++;
+                    localStats.uselessGetNbrs++;
                 }
 
                 if (localC.top().dist > resultsPq.top()->dist) {
