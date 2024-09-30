@@ -24,6 +24,9 @@ namespace orangedb {
         uint64_t totalShrinkMulCalls = 0;
         uint64_t totalShrinkNoUse = 0;
         uint64_t totalGetNbrsCall = 0;
+        double avgGetNbrsDepth = 0;
+        uint64_t uselessGetNbrs = 0;
+        uint64_t searchIter = 0;
         std::unordered_map<vector_idx_t, uint64_t> shrinkCallsPerNode;
 
 
@@ -34,6 +37,9 @@ namespace orangedb {
             spdlog::info("Total Distance Computations in Delete: {}", totalDistCompDuringDelete);
             spdlog::info("Total Nodes Shrink During Delete: {}", totalNodesShrinkDuringDelete);
             spdlog::info("Total Get Nbrs Call: {}", totalGetNbrsCall);
+            spdlog::info("Avg Get Nbrs Depth: {}", avgGetNbrsDepth);
+            spdlog::info("Useless Get Nbrs: {}", uselessGetNbrs);
+            spdlog::info("Total Search Iterations: {}", searchIter);
             // Sort shrinkCallsPerNode in descending order and print
             std::vector<std::pair<vector_idx_t, uint64_t>> sortedShrinkCallsPerNode(shrinkCallsPerNode.begin(),
                                                                                     shrinkCallsPerNode.end());
@@ -83,6 +89,9 @@ namespace orangedb {
             totalShrinkMulCalls = 0;
             totalShrinkNoUse = 0;
             totalGetNbrsCall = 0;
+            avgGetNbrsDepth = 0;
+            uselessGetNbrs = 0;
+            searchIter = 0;
             shrinkCallsPerNode.clear();
         }
 
@@ -98,6 +107,9 @@ namespace orangedb {
                 totalShrinkMulCalls += other.totalShrinkMulCalls;
                 totalShrinkNoUse += other.totalShrinkNoUse;
                 totalGetNbrsCall += other.totalGetNbrsCall;
+                avgGetNbrsDepth += other.avgGetNbrsDepth;
+                uselessGetNbrs += other.uselessGetNbrs;
+                searchIter = std::max(searchIter, other.searchIter);
                 for (auto &it: other.shrinkCallsPerNode) {
                     shrinkCallsPerNode[it.first] += it.second;
                 }
@@ -249,7 +261,9 @@ namespace orangedb {
                 NodeDistCloser *nbrs,
                 AtomicVisitedTable &visited,
                 int maxK,
-                int maxNeighboursCheck);
+                int maxNeighboursCheck,
+                Stats &stats,
+                int& depth);
 
         int findNextKNeighboursV2(
                 DistanceComputer* dc,

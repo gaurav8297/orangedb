@@ -799,10 +799,13 @@ namespace orangedb {
             NodeDistCloser *nbrs,
             AtomicVisitedTable &visited,
             int maxK,
-            int maxNeighboursCheck) {
+            int maxNeighboursCheck,
+            Stats& stats,
+            int& depth) {
+        depth = 0;
         auto neighbors = storage->get_neighbors(0);
-        std::queue<vector_idx_t> candidates;
-        candidates.push(entrypoint);
+        std::queue<std::pair<vector_idx_t, int>> candidates;
+        candidates.push({entrypoint, 0});
         auto neighboursChecked = 0;
         int m = 0;
         std::unordered_set<vector_idx_t> visitedSet;
@@ -810,13 +813,14 @@ namespace orangedb {
             auto candidate = candidates.front();
             candidates.pop();
             size_t begin, end;
-            if (visitedSet.contains(candidate)) {
+            if (visitedSet.contains(candidate.first)) {
                 continue;
             }
-            visitedSet.insert(candidate);
-            storage->get_neighbors_offsets(candidate, 0, begin, end);
+            visitedSet.insert(candidate.first);
+            storage->get_neighbors_offsets(candidate.first, 0, begin, end);
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
+            depth = std::max(depth, candidate.second);
             // TODO: Maybe make it prioritized, might help in correlated cases
             for (size_t i = begin; i < end; i++) {
                 auto neighbor = neighbors[i];
@@ -832,11 +836,62 @@ namespace orangedb {
                         return m;
                     }
                 }
-                candidates.push(neighbor);
+                candidates.push({neighbor, candidate.second + 1});
             }
         }
         return m;
     }
+
+    // findFilteredNextKNeighboursV2 (uses priority queue) expands the closest first
+    // Assumption is that distance computation gets cheaper as we move forward, using quantization
+//    inline int
+//    findFilteredNextKNeighboursSmart(
+//            DistanceComputer *dc,
+//            vector_idx_t entrypoint,
+//            NodeDistCloser *nbrs,
+//            AtomicVisitedTable &visited,
+//            int minK,
+//            int minDepth,
+//            int maxNeighboursCheck,
+//            int &depth) {
+//        // Initialize the priority queue with the entry point
+//        auto neighbors = storage->get_neighbors(0);
+//        std::queue<std::pair<vector_idx_t, int>> candidates;
+//        candidates.push({entrypoint, 0});
+//        auto neighboursChecked = 0;
+//        int m = 0;
+//        std::unordered_set<vector_idx_t> visitedSet;
+//        while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
+//            auto candidate = candidates.front();
+//            candidates.pop();
+//            size_t begin, end;
+//            if (visitedSet.contains(candidate)) {
+//                continue;
+//            }
+//            visitedSet.insert(candidate);
+//            storage->get_neighbors_offsets(candidate, 0, begin, end);
+//            neighboursChecked += 1;
+//            stats.totalGetNbrsCall++;
+//            // TODO: Maybe make it prioritized, might help in correlated cases
+//            for (size_t i = begin; i < end; i++) {
+//                auto neighbor = neighbors[i];
+//                if (neighbor == INVALID_VECTOR_ID) {
+//                    break;
+//                }
+//                // getAndSet has to be atomic
+//                // Add to visited set
+//                if (visited.getAndSet(neighbor)) {
+//                    nbrs[m] = NodeDistCloser(neighbor, std::numeric_limits<double>::max());
+//                    m++;
+//                    if (m >= maxK) {
+//                        return m;
+//                    }
+//                }
+//                candidates.push(neighbor);
+//            }
+//        }
+//        return m;
+//    }
 
     int HNSW::findNextKNeighboursV2(DistanceComputer* dc, vector_idx_t entrypoint, NodeDistCloser *nbrs,
                                     AtomicVisitedTable &visited, int minK, int maxNeighboursCheck) {
@@ -1069,6 +1124,7 @@ namespace orangedb {
 
 #pragma omp parallel
         {
+            Stats localStats{};
             int tId = omp_get_thread_num();
             auto &localCandidates = candidates[tId];
             std::priority_queue<NodeDistFarther> localC;
@@ -1081,23 +1137,50 @@ namespace orangedb {
             while (!localC.empty()) {
                 auto candidate = localC.top();
                 localC.pop();
-                int nextFSize = findNextKNeighbours(candidate.id, nextFrontier.data(), visited, config.nodeExpansionPerNode, 128);
+
+                NodeDistFarther nextCandidate;
+                if (!localC.empty()) {
+                    nextCandidate = localC.top();
+                }
+                int depth = 0;
+
+                // Maybe we need to look at candidates
+                int nextFSize = findNextKNeighbours(
+                        candidate.id,
+                        nextFrontier.data(),
+                        visited,
+                        config.nodeExpansionPerNode,
+                        128,
+                        localStats,
+                        depth);
+                localStats.avgGetNbrsDepth += depth;
+                localStats.searchIter++;
 
                 // Compute the distances
                 for (size_t j = 0; j < nextFSize; j++) {
                     vector_idx_t neighbor = nextFrontier[j].id;
                     double dist;
                     dc->computeDistance(neighbor, &dist);
+                    localStats.totalDistCompDuringSearch++;
                     if (resultsPq.size() < efSearch || dist < resultsPq.top()->dist) {
                         localC.emplace(neighbor, dist);
                         resultsPq.push(NodeDistFarther(neighbor, dist));
                     }
                 }
 
+                if (!localC.empty() && localC.top().id == nextCandidate.id) {
+                    stats.uselessGetNbrs++;
+                }
+
                 if (localC.top().dist > resultsPq.top()->dist) {
                     break;
                 }
             }
+
+            localStats.avgGetNbrsDepth /= localStats.searchIter;
+
+            // Merge localStats to stats
+            stats.merge(localStats);
         }
 
         auto start = std::chrono::high_resolution_clock::now();
@@ -1243,7 +1326,7 @@ namespace orangedb {
                 while (!localCandidates.empty()) {
                     auto candidate = localCandidates.top();
                     localCandidates.pop();
-                    int nextFSize = findNextKNeighbours(candidate.id, nextFrontier.data(), visited, config.nodeExpansionPerNode, 128);
+                    int nextFSize = findNextKNeighboursV2(dc, candidate.id, nextFrontier.data(), visited, config.nodeExpansionPerNode, 128);
 
                     // Compute the distances
                     for (size_t j = 0; j < nextFSize; j++) {
