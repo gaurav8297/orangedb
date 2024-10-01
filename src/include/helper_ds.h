@@ -136,6 +136,8 @@ namespace orangedb {
 
         void push(T val);
 
+        void bulkPush(T *vals, int num_vals);
+
         T popMin();
 
         const T *top();

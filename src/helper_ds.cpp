@@ -160,6 +160,26 @@ namespace orangedb {
     }
 
     template<typename T>
+    void ParallelMultiQueue<T>::bulkPush(T *vals, int num_vals) {
+        std::vector<std::vector<int>> vals_per_queue(queues.size());
+        for (int i = 0; i < num_vals; i++) {
+            int q_id = getRandQueueIndex();
+            vals_per_queue[q_id].push_back(i);
+        }
+
+        // bulk push
+        for (int i = 0; i < queues.size(); i++) {
+            queues[i]->lock();
+            auto size = vals_per_queue[i].size();
+            for (int j = 0; j < size; j++) {
+                queues[i]->push(vals[vals_per_queue[i][j]]);
+            }
+            queueSizes[i].fetch_add(size);
+            queues[i]->unlock();
+        }
+    }
+
+    template<typename T>
     T ParallelMultiQueue<T>::popMin() {
         bool updateByOtherThreads = false;
         do {

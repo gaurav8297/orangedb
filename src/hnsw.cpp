@@ -1129,51 +1129,70 @@ namespace orangedb {
             int tId = omp_get_thread_num();
             auto &localCandidates = candidates[tId];
             std::priority_queue<NodeDistFarther> localC;
+            std::vector<NodeDistFarther> localResults;
             for (auto &c : localCandidates) {
                 localC.emplace(c.id, c.dist);
             }
+            int iterBreak = 5;
 
             // Implement local search
             std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode + 100);
             while (!localC.empty()) {
-                auto candidate = localC.top();
-                localC.pop();
+                auto queueSize = resultsPq.size();
+                auto topDist = resultsPq.top()->dist;
+                while (!localC.empty()) {
+                    auto candidate = localC.top();
+                    localC.pop();
 
-                NodeDistFarther nextCandidate;
-                if (!localC.empty()) {
-                    nextCandidate = localC.top();
-                }
-                int depth = 0;
+                    // Stats stuff
+                    NodeDistFarther nextCandidate;
+                    if (!localC.empty()) {
+                        nextCandidate = localC.top();
+                    }
+                    int depth = 0;
 
-                // Maybe we need to look at candidates
-                int nextFSize = findNextKNeighbours(
-                        candidate.id,
-                        nextFrontier.data(),
-                        localVisited,
-                        config.nodeExpansionPerNode,
-                        128,
-                        localStats,
-                        depth);
-                localStats.avgGetNbrsDepth += depth;
-                localStats.searchIter++;
+                    // Maybe we need to look at candidates
+                    int nextFSize = findNextKNeighbours(
+                            candidate.id,
+                            nextFrontier.data(),
+                            localVisited,
+                            config.nodeExpansionPerNode,
+                            128,
+                            localStats,
+                            depth);
+                    localStats.avgGetNbrsDepth += depth;
+                    localStats.searchIter++;
 
-                // Compute the distances
-                for (size_t j = 0; j < nextFSize; j++) {
-                    vector_idx_t neighbor = nextFrontier[j].id;
-                    double dist;
-                    dc->computeDistance(neighbor, &dist);
-                    localStats.totalDistCompDuringSearch++;
-                    if (resultsPq.size() < efSearch || dist < resultsPq.top()->dist) {
-                        localC.emplace(neighbor, dist);
-                        resultsPq.push(NodeDistFarther(neighbor, dist));
+                    // Compute the distances
+                    for (size_t j = 0; j < nextFSize; j++) {
+                        vector_idx_t neighbor = nextFrontier[j].id;
+                        double dist;
+                        dc->computeDistance(neighbor, &dist);
+                        localStats.totalDistCompDuringSearch++;
+                        if (queueSize < efSearch || dist < topDist) {
+                            localC.emplace(neighbor, dist);
+                            localResults.emplace_back(neighbor, dist);
+                            queueSize++;
+                            if (queueSize > efSearch) {
+                                topDist = std::min(topDist, dist);
+                            }
+                        }
+                    }
+
+                    // Stats stuff
+                    if (!localC.empty() && localC.top().id == nextCandidate.id) {
+                        localStats.uselessGetNbrs++;
+                    }
+
+                    if (localStats.searchIter % iterBreak == 0) {
+                        break;
                     }
                 }
 
-                if (!localC.empty() && localC.top().id == nextCandidate.id) {
-                    localStats.uselessGetNbrs++;
-                }
-
-                if (localC.top().dist > resultsPq.top()->dist) {
+                // put the localResults to resultsPq
+                resultsPq.bulkPush(localResults.data(), localResults.size());
+                localResults.clear();
+                if (localC.empty() || localC.top().dist > resultsPq.top()->dist) {
                     break;
                 }
             }
