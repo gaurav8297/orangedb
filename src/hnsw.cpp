@@ -1133,7 +1133,7 @@ namespace orangedb {
             for (auto &c : localCandidates) {
                 localC.emplace(c.id, c.dist);
             }
-            int iterBreak = 5;
+            int iterBreak = 3;
 
             // Implement local search
             std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode + 100);
@@ -1173,9 +1173,6 @@ namespace orangedb {
                             localC.emplace(neighbor, dist);
                             localResults.emplace_back(neighbor, dist);
                             queueSize++;
-                            if (queueSize > efSearch) {
-                                topDist = std::min(topDist, dist);
-                            }
                         }
                     }
 
