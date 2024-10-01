@@ -797,7 +797,7 @@ namespace orangedb {
     int HNSW::findNextKNeighbours(
             vector_idx_t entrypoint,
             NodeDistCloser *nbrs,
-            AtomicVisitedTable &visited,
+            BitVectorVisitedTable &visited,
             int maxK,
             int maxNeighboursCheck,
             Stats& stats,
@@ -827,16 +827,16 @@ namespace orangedb {
                 if (neighbor == INVALID_VECTOR_ID) {
                     break;
                 }
-                // getAndSet has to be atomic
-                // Add to visited set
-                if (visited.getAndSet(neighbor)) {
-                    nbrs[m] = NodeDistCloser(neighbor, std::numeric_limits<double>::max());
-                    m++;
-                    if (m >= maxK) {
-                        return m;
-                    }
+                if (visited.atomic_is_bit_set(neighbor)) {
+                    continue;
                 }
+                visited.atomic_set_bit(neighbor);
+                nbrs[m] = NodeDistCloser(neighbor, std::numeric_limits<double>::max());
+                m++;
                 candidates.push({neighbor, candidate.second + 1});
+            }
+            if (m >= maxK) {
+                break;
             }
         }
         return m;
@@ -1108,6 +1108,7 @@ namespace orangedb {
         for (int i = 0; i < config.numSearchThreads ; i++) {
             candidates[i] = std::vector<NodeDistCloser>();
         }
+        BitVectorVisitedTable localVisited(storage->numPoints);
 
         // use results to fill the candidates
         int numCandidates = 0;
@@ -1115,7 +1116,7 @@ namespace orangedb {
             auto res = results.top();
             results.pop();
             resultsPq.push(NodeDistFarther(res.id, res.dist));
-            visited.getAndSet(res.id);
+            localVisited.set_bit(res.id);
             if (results.size() < W) {
                 candidates[numCandidates].push_back(res);
                 numCandidates = (numCandidates + 1) % config.numSearchThreads;
@@ -1133,7 +1134,7 @@ namespace orangedb {
             }
 
             // Implement local search
-            std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode);
+            std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode + 100);
             while (!localC.empty()) {
                 auto candidate = localC.top();
                 localC.pop();
@@ -1148,7 +1149,7 @@ namespace orangedb {
                 int nextFSize = findNextKNeighbours(
                         candidate.id,
                         nextFrontier.data(),
-                        visited,
+                        localVisited,
                         config.nodeExpansionPerNode,
                         128,
                         localStats,

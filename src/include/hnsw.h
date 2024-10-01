@@ -259,7 +259,7 @@ namespace orangedb {
         int findNextKNeighbours(
                 vector_idx_t entrypoint,
                 NodeDistCloser *nbrs,
-                AtomicVisitedTable &visited,
+                BitVectorVisitedTable &visited,
                 int maxK,
                 int maxNeighboursCheck,
                 Stats &stats,
