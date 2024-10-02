@@ -99,6 +99,10 @@ namespace orangedb {
             omp_set_lock(&mtx);
         }
 
+        inline bool try_lock() {
+            return omp_test_lock(&mtx);
+        }
+
         inline void unlock() {
             omp_unset_lock(&mtx);
         }

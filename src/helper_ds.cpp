@@ -1,6 +1,7 @@
 #include "include/helper_ds.h"
 #include "atomic"
 #include "omp.h"
+#include "unordered_set"
 
 namespace orangedb {
     constexpr int DUMMY_ITER = 5;
@@ -166,17 +167,40 @@ namespace orangedb {
             int q_id = getRandQueueIndex();
             vals_per_queue[q_id].push_back(i);
         }
-
-        // bulk push
+        std::unordered_set<int> pendingQueues(queues.size());
         for (int i = 0; i < queues.size(); i++) {
-            queues[i]->lock();
-            auto size = vals_per_queue[i].size();
-            for (int j = 0; j < size; j++) {
-                queues[i]->push(vals[vals_per_queue[i][j]]);
-            }
-            queueSizes[i].fetch_add(size);
-            queues[i]->unlock();
+            pendingQueues.insert(i);
         }
+
+        while (!pendingQueues.empty()) {
+            for (const int q_id : pendingQueues) {
+                if (vals_per_queue[q_id].empty()) {
+                    pendingQueues.erase(q_id);
+                    break;
+                }
+                if (queues[q_id]->try_lock()) {
+                    auto size = vals_per_queue[q_id].size();
+                    for (int j = 0; j < size; j++) {
+                        queues[q_id]->push(vals[vals_per_queue[q_id][j]]);
+                    }
+                    queueSizes[q_id].fetch_add(size);
+                    queues[q_id]->unlock();
+                    vals_per_queue[q_id].clear();
+                    pendingQueues.erase(q_id);
+                    break;
+                }
+            }
+        }
+//        // optimize if lock not available then try other locking
+//        for (int i = 0; i < queues.size(); i++) {
+//            queues[i]->lock();
+//            auto size = vals_per_queue[i].size();
+//            for (int j = 0; j < size; j++) {
+//                queues[i]->push(vals[vals_per_queue[i][j]]);
+//            }
+//            queueSizes[i].fetch_add(size);
+//            queues[i]->unlock();
+//        }
     }
 
     template<typename T>
