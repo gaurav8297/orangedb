@@ -1172,7 +1172,7 @@ namespace orangedb {
                             candidate.id,
                             nextFrontier.data(),
                             localVisited,
-                            localC.empty() ? 0 : 3,
+                            localC.empty() ? 0 : 5,
                             config.nodeExpansionPerNode,
                             128,
                             localStats,
