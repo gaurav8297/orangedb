@@ -750,7 +750,7 @@ namespace orangedb {
         int level = storage->maxLevel;
         dc.computeDistance(getActualId(level, nearestID), &nearestDist);
         // Update the nearest node
-        for (; level > 0; level--) {
+        for (; level > 1; level--) {
             searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
@@ -770,15 +770,30 @@ namespace orangedb {
         }
 
         // search atleast 50 Local minima ANN
-        searchNeighborsOnLastLevel(
+        searchNeighbors(
                 &dc,
+                1,
                 results,
                 nearestID,
                 nearestDist,
                 localVisited,
-                60,
-                4,
+                64,
                 stats);
+
+        // get the actual ids
+        std::vector<NodeDistFarther> resultsWithActualIds;
+        while (!results.empty()) {
+            auto node = results.top();
+            results.pop();
+            resultsWithActualIds.push_back(NodeDistFarther(getActualId(1, node.id), node.dist));
+        }
+
+        // Push back
+        for (auto node: resultsWithActualIds) {
+            results.emplace(node.id, node.dist);
+        }
+
+        assert(results.size() > config.numSearchThreads);
 
         // Parallel search
         if (config.searchParallelAlgorithm == "et") {
@@ -1100,10 +1115,10 @@ namespace orangedb {
             uint64_t efSearch,
             Stats &stats) {
         // Let's try super simple
-        auto W = config.nodesToExplore;
+        auto W = std::max(config.numSearchThreads, config.nodesToExplore);
         printf("efSearch %llu\n", efSearch);
         ParallelMultiQueue<NodeDistFarther> resultsPq(config.numSearchThreads * 2, efSearch);
-        std::vector<std::vector<NodeDistCloser>> candidates(config.numSearchThreads );
+        std::vector<std::vector<NodeDistCloser>> candidates(config.numSearchThreads);
         // init the candidates
         for (int i = 0; i < config.numSearchThreads ; i++) {
             candidates[i] = std::vector<NodeDistCloser>();
