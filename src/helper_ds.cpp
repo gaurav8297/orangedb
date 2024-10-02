@@ -191,16 +191,6 @@ namespace orangedb {
                 }
             }
         }
-//        // optimize if lock not available then try other locking
-//        for (int i = 0; i < queues.size(); i++) {
-//            queues[i]->lock();
-//            auto size = vals_per_queue[i].size();
-//            for (int j = 0; j < size; j++) {
-//                queues[i]->push(vals[vals_per_queue[i][j]]);
-//            }
-//            queueSizes[i].fetch_add(size);
-//            queues[i]->unlock();
-//        }
     }
 
     template<typename T>

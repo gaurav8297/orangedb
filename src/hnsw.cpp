@@ -813,6 +813,7 @@ namespace orangedb {
             vector_idx_t entrypoint,
             NodeDistCloser *nbrs,
             BitVectorVisitedTable &visited,
+            int minK,
             int maxK,
             int maxNeighboursCheck,
             Stats& stats,
@@ -850,7 +851,7 @@ namespace orangedb {
                 m++;
                 candidates.push({neighbor, candidate.second + 1});
             }
-            if (m >= maxK) {
+            if (m <= minK || m >= maxK) {
                 break;
             }
         }
@@ -1148,7 +1149,7 @@ namespace orangedb {
             for (auto &c : localCandidates) {
                 localC.emplace(c.id, c.dist);
             }
-            int iterBreak = 3;
+            int iterBreak = 2;
 
             // Implement local search
             std::vector<NodeDistCloser> nextFrontier(config.nodeExpansionPerNode + 100);
@@ -1171,6 +1172,7 @@ namespace orangedb {
                             candidate.id,
                             nextFrontier.data(),
                             localVisited,
+                            localC.empty() ? 0 : 3,
                             config.nodeExpansionPerNode,
                             128,
                             localStats,

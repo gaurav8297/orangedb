@@ -260,6 +260,7 @@ namespace orangedb {
                 vector_idx_t entrypoint,
                 NodeDistCloser *nbrs,
                 BitVectorVisitedTable &visited,
+                int minK,
                 int maxK,
                 int maxNeighboursCheck,
                 Stats &stats,
