@@ -1172,6 +1172,7 @@ namespace orangedb {
                             candidate.id,
                             nextFrontier.data(),
                             localVisited,
+                            // This value 5 should be determined by the number of threads and maxNbrs
                             localC.empty() ? 0 : 5,
                             config.nodeExpansionPerNode,
                             128,
