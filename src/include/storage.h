@@ -58,6 +58,14 @@ namespace orangedb {
             if (level == 0) {
                 numPoints = n;
             }
+
+            // iterate over all neighbors and check if they are valid
+            for (size_t i = 0; i < graphs[level].neighbors.size(); i++) {
+                if (graphs[level].neighbors[i] != INVALID_VECTOR_ID) {
+                    std::cout << "Invalid neighbor at index " << i << std::endl;
+                    throw std::runtime_error("Invalid neighbor");
+                }
+            }
         }
 
         inline vector_idx_t *get_neighbors(uint8_t level) {
