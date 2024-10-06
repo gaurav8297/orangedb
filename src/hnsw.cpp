@@ -1857,6 +1857,8 @@ namespace orangedb {
         // Print avg number of nodes in last layer
         auto nbrs = storage->get_neighbors(0);
         int count = 0;
+        printf("Number of nodes in last layer: %d\n", storage->fast_level_counters[0]);
+        printf("Max neighbors per level: %d\n", storage->max_neighbors_per_level[0]);
         for (int i = 0; i < storage->fast_level_counters[0]; i++) {
             for (int j = 0; j < storage->max_neighbors_per_level[0]; j++) {
                 if (nbrs[i * storage->max_neighbors_per_level[0] + j] != INVALID_VECTOR_ID) {
