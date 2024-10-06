@@ -1116,8 +1116,9 @@ void testParallelPriorityQueue() {
 
 void read_and_write_bvecs_file(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
+    const std::string &outBasePath = input.getCmdOption("-outBasePath");
     auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
-    auto outputVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto outputVectorPath = fmt::format("{}/base.fvecs", outBasePath);
     auto readSize = stoi(input.getCmdOption("-readSize"));
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, readSize);
