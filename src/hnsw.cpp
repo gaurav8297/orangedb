@@ -527,6 +527,8 @@ namespace orangedb {
     void HNSW::build(const float *data, size_t n) {
         if (config.loadStorage) {
             printf("yeah\n");
+            printf("pointer address: %p\n", data);
+
             const float *qq1 = data + (18530806 * storage->dim);
             for (int i = 0; i < 10; i++) {
                 printf("In build %f ", qq1[i]);
