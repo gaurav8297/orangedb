@@ -49,7 +49,7 @@ namespace orangedb {
             load_from_disk(file_path);
         }
 
-        inline void resize(uint32_t n, uint8_t level) {
+        inline void resize(vector_idx_t n, uint8_t level) {
             graphs[level].neighbors.resize(n * max_neighbors_per_level[level], INVALID_VECTOR_ID);
             if (level > 0) {
                 next_level_ids[level].resize(n);
