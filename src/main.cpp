@@ -769,14 +769,17 @@ void generateFilterGroundTruth(InputParser &input) {
     const std::string &gtPath = input.getCmdOption("-gtPath");
     auto selectivity = stof(input.getCmdOption("-selectivity"));
     const std::string &filteredMaskPath = input.getCmdOption("-filteredMaskPath");
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readBvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+
+    printf("Base vectors: %zu, Query vectors: %zu\n", baseNumVectors, queryNumVectors);
+    printf("Base dimension: %zu, Query dimension: %zu\n", baseDimension, queryDimension);
 
     auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
     memset(filteredMask, 0, queryNumVectors * baseNumVectors);
@@ -1118,7 +1121,7 @@ void read_and_write_bvecs_file(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     const std::string &outBasePath = input.getCmdOption("-outBasePath");
     auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
-    auto outputVectorPath = fmt::format("{}/base.fvecs", outBasePath);
+    auto outputVectorPath = fmt::format("{}/base.bvecs", outBasePath);
     auto readSize = stoi(input.getCmdOption("-readSize"));
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, readSize);

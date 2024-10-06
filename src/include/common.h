@@ -87,7 +87,7 @@ namespace orangedb {
         return align_x;
     }
 
-    static float *readBvecFile(const char *fName, size_t *d_out, size_t *n_out, size_t max_rows) {
+    static float *readBvecFile(const char *fName, size_t *d_out, size_t *n_out, size_t max_rows = SIZE_MAX) {
         // Open the file in binary mode
         FILE *f = fopen(fName, "rb");
         if (!f) {
