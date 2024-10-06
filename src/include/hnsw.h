@@ -41,39 +41,39 @@ namespace orangedb {
             spdlog::info("Useless Get Nbrs: {}", uselessGetNbrs);
             spdlog::info("Total Search Iterations: {}", searchIter);
             // Sort shrinkCallsPerNode in descending order and print
-            std::vector<std::pair<vector_idx_t, uint64_t>> sortedShrinkCallsPerNode(shrinkCallsPerNode.begin(),
-                                                                                    shrinkCallsPerNode.end());
-            std::sort(sortedShrinkCallsPerNode.begin(), sortedShrinkCallsPerNode.end(),
-                      [](const std::pair<vector_idx_t, uint64_t> &a, const std::pair<vector_idx_t, uint64_t> &b) {
-                          return a.second > b.second;
-                      });
-
-            // Print top 5% of the nodes
-            if (sortedShrinkCallsPerNode.empty()) {
-                return;
-            }
-            size_t size5Percent = sortedShrinkCallsPerNode.size() * 0.05;
-            size_t start = 0;
-            size_t end = size5Percent;
-            int init = 5;
-            while (end <= sortedShrinkCallsPerNode.size()) {
-                // Sum of all shrink calls
-                uint64_t totalShrinkCalls5Percent = 0;
-                for (size_t i = start; i < end; i++) {
-                    totalShrinkCalls5Percent += sortedShrinkCallsPerNode[i].second;
-                }
-                spdlog::info("Total Shrink Calls {}%-{}% of nodes: {}", init, init + 5, totalShrinkCalls5Percent);
-                spdlog::info("Avg Shrink Calls {}%-{}% of nodes: {}", init, init + 5,
-                             totalShrinkCalls5Percent / size5Percent);
-
-                if (end == sortedShrinkCallsPerNode.size()) {
-                    break;
-                }
-                start += size5Percent;
-                end += size5Percent;
-                end = std::min(end, sortedShrinkCallsPerNode.size());
-                init += 5;
-            }
+//            std::vector<std::pair<vector_idx_t, uint64_t>> sortedShrinkCallsPerNode(shrinkCallsPerNode.begin(),
+//                                                                                    shrinkCallsPerNode.end());
+//            std::sort(sortedShrinkCallsPerNode.begin(), sortedShrinkCallsPerNode.end(),
+//                      [](const std::pair<vector_idx_t, uint64_t> &a, const std::pair<vector_idx_t, uint64_t> &b) {
+//                          return a.second > b.second;
+//                      });
+//
+//            // Print top 5% of the nodes
+//            if (sortedShrinkCallsPerNode.empty()) {
+//                return;
+//            }
+//            size_t size5Percent = sortedShrinkCallsPerNode.size() * 0.05;
+//            size_t start = 0;
+//            size_t end = size5Percent;
+//            int init = 5;
+//            while (end <= sortedShrinkCallsPerNode.size()) {
+//                // Sum of all shrink calls
+//                uint64_t totalShrinkCalls5Percent = 0;
+//                for (size_t i = start; i < end; i++) {
+//                    totalShrinkCalls5Percent += sortedShrinkCallsPerNode[i].second;
+//                }
+//                spdlog::info("Total Shrink Calls {}%-{}% of nodes: {}", init, init + 5, totalShrinkCalls5Percent);
+//                spdlog::info("Avg Shrink Calls {}%-{}% of nodes: {}", init, init + 5,
+//                             totalShrinkCalls5Percent / size5Percent);
+//
+//                if (end == sortedShrinkCallsPerNode.size()) {
+//                    break;
+//                }
+//                start += size5Percent;
+//                end += size5Percent;
+//                end = std::min(end, sortedShrinkCallsPerNode.size());
+//                init += 5;
+//            }
             spdlog::info("Total Shrink Calls: {}", totalShrinkCalls);
             spdlog::info("Total Shrink Mul Calls: {}", totalShrinkMulCalls);
             spdlog::info("Total Shrink No Use: {}", totalShrinkNoUse);
