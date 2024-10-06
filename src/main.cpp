@@ -1182,17 +1182,17 @@ void calculate_dists(InputParser &input) {
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
-    calculate_dists(input);
-//    const std::string &run = input.getCmdOption("-run");
-//    if (run == "benchmark") {
-//        benchmark_hnsw_queries(input);
-//    } else if (run == "generateGT") {
-//        generateGroundTruth(input);
-//    } else if (run == "generateFilterGT") {
-//        generateFilterGroundTruth(input);
-//    } else if (run == "benchmarkFiltered") {
-//        benchmark_filtered_hnsw_queries(input);
-//    }
+//    calculate_dists(input);
+    const std::string &run = input.getCmdOption("-run");
+    if (run == "benchmark") {
+        benchmark_hnsw_queries(input);
+    } else if (run == "generateGT") {
+        generateGroundTruth(input);
+    } else if (run == "generateFilterGT") {
+        generateFilterGroundTruth(input);
+    } else if (run == "benchmarkFiltered") {
+        benchmark_filtered_hnsw_queries(input);
+    }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);

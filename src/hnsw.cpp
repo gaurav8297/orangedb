@@ -1521,6 +1521,11 @@ namespace orangedb {
         visited.set(entrypoint);
         auto neighbors = storage->get_neighbors(0);
         dc->setQuery(storage->data + (18530806 * storage->dim));
+        const float* query = storage->data + (18530806 * storage->dim);
+        //print
+        for (int i = 0; i < 10; i++) {
+            printf("query %f\n", query[i]);
+        }
         size_t begin, end;
         storage->get_neighbors_offsets(18530806, 0, begin, end);
         double totalDist = 0;
@@ -1530,7 +1535,7 @@ namespace orangedb {
                 break;
             }
             double dist;
-            dc->computeDistance(18530806, neighbor, &dist);
+            dc->computeDistance(neighbor, &dist);
             totalDist += dist;
             printf("node %d, dist %f\n", neighbor, dist);
         }

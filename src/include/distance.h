@@ -103,7 +103,7 @@ namespace orangedb {
             }
         }
 
-        inline void setQuery(const float *q) override {
+        void setQuery(const float *q) override {
             this->query = q;
         }
 
