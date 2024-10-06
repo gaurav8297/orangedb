@@ -22,11 +22,11 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 find_package(OpenMP REQUIRED)
 
 # Global compiler flags for debug and release
-#set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
-set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g")
+set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
+#set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g")
 set(CMAKE_CXX_FLAGS_RELEASE "-fopenmp -O3 -march=native")
-#set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
-set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g")
+set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
+#set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g")
 set(CMAKE_C_FLAGS_RELEASE "-fopenmp -O3 -march=native")
 
 # Add include path
