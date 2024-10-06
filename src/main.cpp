@@ -858,12 +858,13 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto alphaDecay = stof(input.getCmdOption("-alphaDecay"));
     auto k = stoi(input.getCmdOption("-k"));
     auto filterMinK = stoi(input.getCmdOption("-filterMinK"));
+    auto selectivity = stoi(input.getCmdOption("-selectivity"));
     auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
-    auto groundTruthPath = fmt::format("{}/gt.bin", basePath);
-    auto maskPath = fmt::format("{}/mask.bin", basePath);
+    auto groundTruthPath = fmt::format("{}/{}_gt.bin", selectivity, basePath);
+    auto maskPath = fmt::format("{}/{}_mask.bin", selectivity, basePath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -1156,6 +1157,8 @@ int main(int argc, char **argv) {
         generateGroundTruth(input);
     } else if (run == "generateFilterGT") {
         generateFilterGroundTruth(input);
+    } else if (run == "benchmarkFiltered") {
+        benchmark_filtered_hnsw_queries(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();

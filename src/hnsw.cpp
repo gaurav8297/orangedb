@@ -1620,11 +1620,11 @@ namespace orangedb {
                 if (filterMask[neighbor]) {
                     nbrs.push_back(neighbor);
                     visited.set(neighbor);
-                    if (nbrs.size() >= maxK) {
-                        return;
-                    }
                 }
                 candidates.push(neighbor);
+            }
+            if (nbrs.size() >= maxK) {
+                return;
             }
         }
     }
@@ -1651,6 +1651,18 @@ namespace orangedb {
             candidates.pop();
             std::vector<vector_idx_t> nbrs;
             findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, config.filterMinK, config.maxNeighboursCheck, stats);
+            if (candidates.empty() && nbrs.empty()) {
+                printf("Nbrs turn out empty!!!");
+                // Figure out how expensive this is!!
+                // Push a random masked neighbour to continue the search
+                for (auto node = 0; node < storage->numPoints; node++) {
+                    if (filterMask[node] && !visited.get(node)) {
+                        nbrs.push_back(node);
+                        break;
+                    }
+                }
+            }
+
             if (nbrs.empty()) {
                  // TODO: Maybe change the entrypoint in case no results
                  //     calculate the unvisited filtered neighbors, if above some threshold, then change the entrypoint
@@ -1692,7 +1704,7 @@ namespace orangedb {
             searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
-        searchNeighborsOnLastLevelWithFilterA(
+        searchNeighborsOnLastLevelWithFilterB(
                 &dc,
                 results,
                 nearestID,
