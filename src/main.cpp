@@ -860,11 +860,13 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto filterMinK = stoi(input.getCmdOption("-filterMinK"));
     auto selectivity = stoi(input.getCmdOption("-selectivity"));
     auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
+    bool loadFromStorage = stoi(input.getCmdOption("-loadFromDisk"));
 
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
-    auto groundTruthPath = fmt::format("{}/{}_gt.bin", selectivity, basePath);
-    auto maskPath = fmt::format("{}/{}_mask.bin", selectivity, basePath);
+    auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
+    auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
+    auto storagePath = fmt::format("{}/storage.bin", basePath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -883,7 +885,7 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
     HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck,
-                      "none", "", false, 20, 10, 1, "none");
+                      "none", storagePath, loadFromStorage, 20, 10, 1, "none");
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     hnsw.logStats();
