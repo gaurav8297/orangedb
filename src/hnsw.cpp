@@ -114,6 +114,8 @@ namespace orangedb {
                     break;
                 }
                 if (neighbor >= 100000000) {
+                    printf("Candidate %llu\n", candidate.id);
+                    printf("begin %zu, end %zu, i %zu, neighbor %llu\n", begin, end, i, neighbor);
                     printf("Level %d, neighbor %llu\n", level, neighbor);
                 }
                 if (visited.get(neighbor)) {
