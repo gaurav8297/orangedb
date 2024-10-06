@@ -658,6 +658,7 @@ void query_graph_filter(
     auto visited = VisitedTable(baseNumVectors);
     auto recall = 0.0;
     Stats stats{};
+    printf("baseNumVectors: %zu\n", baseNumVectors);
     for (size_t i = 0; i < queryNumVectors; i++) {
         auto localRecall = 0.0;
         std::priority_queue<NodeDistCloser> results;
@@ -666,6 +667,7 @@ void query_graph_filter(
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
+            printf("ID: %d, Dist: %f\n", top.id, top.dist);
             results.pop();
         }
         auto gt = gtVecs + i * k;
@@ -675,6 +677,8 @@ void query_graph_filter(
                 localRecall++;
             }
         }
+        printf("Recall: %f\n", localRecall);
+        break;
 //        printf("Recall: %f\n", localRecall);
     }
     auto recallPerQuery = recall / queryNumVectors;
