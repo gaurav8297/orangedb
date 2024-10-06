@@ -1520,7 +1520,7 @@ namespace orangedb {
         results.emplace(entrypoint, entrypointDist);
         visited.set(entrypoint);
         auto neighbors = storage->get_neighbors(0);
-        dc->setQuery(storage->data + 18530806 * storage->dim);
+        dc->setQuery(storage->data + (18530806 * storage->dim));
         size_t begin, end;
         storage->get_neighbors_offsets(18530806, 0, begin, end);
         for (size_t i = begin; i < end; i++) {

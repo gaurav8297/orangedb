@@ -1160,19 +1160,34 @@ void read_and_write_bvecs_file(InputParser &input) {
     writeBvecFile(outputVectorPath.c_str(), baseVecs, baseDimension, readSize);
 }
 
+void calculate_dists(InputParser &input) {
+    const std::string &basePath = input.getCmdOption("-basePath");
+    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    L2DistanceComputer dc(baseVecs, baseDimension, baseNumVectors);
+
+    dc.setQuery(baseVecs + (18530806 * baseDimension));
+    double dist;
+    dc.computeDistance(18530814, &dist);
+    printf("Dist: %f\n", dist);
+}
+
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
-    const std::string &run = input.getCmdOption("-run");
-    if (run == "benchmark") {
-        benchmark_hnsw_queries(input);
-    } else if (run == "generateGT") {
-        generateGroundTruth(input);
-    } else if (run == "generateFilterGT") {
-        generateFilterGroundTruth(input);
-    } else if (run == "benchmarkFiltered") {
-        benchmark_filtered_hnsw_queries(input);
-    }
+    calculate_dists(input);
+//    const std::string &run = input.getCmdOption("-run");
+//    if (run == "benchmark") {
+//        benchmark_hnsw_queries(input);
+//    } else if (run == "generateGT") {
+//        generateGroundTruth(input);
+//    } else if (run == "generateFilterGT") {
+//        generateFilterGroundTruth(input);
+//    } else if (run == "benchmarkFiltered") {
+//        benchmark_filtered_hnsw_queries(input);
+//    }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
