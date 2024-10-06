@@ -1531,8 +1531,8 @@ namespace orangedb {
             double dist;
             dc->computeDistance(neighbor, &dist);
             printf("node %d, dist %f\n", neighbor, dist);
-            return;
         }
+        return;
 
         while (!candidates.empty()) {
             auto candidate = candidates.top();
