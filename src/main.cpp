@@ -1177,12 +1177,17 @@ void calculate_dists(InputParser &input) {
     double dist2;
     dc.computeDistance(18530814, &dist2);
     printf("Dist: %f\n", dist2);
+
+    auto q = baseVecs + (18530806 * baseDimension);
+    for (int i = 0; i < 10; i++) {
+        printf("%f ", q[i]);
+    }
 }
 
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
-//    calculate_dists(input);
+    calculate_dists(input);
     const std::string &run = input.getCmdOption("-run");
     if (run == "benchmark") {
         benchmark_hnsw_queries(input);

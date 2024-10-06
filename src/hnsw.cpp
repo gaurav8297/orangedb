@@ -532,6 +532,8 @@ namespace orangedb {
             for (int i = 0; i < 10; i++) {
                 printf("In build %f ", qq[i]);
             }
+            printf("dim %d\n", storage->dim);
+            printf("numPoints %d\n", storage->numPoints);
 //            if (config.compressionType == "scalar_8bit") {
 //                storage->codes = new uint8_t[n * quantizer->codeSize];
 //                quantizer->batch_train(n, data);
