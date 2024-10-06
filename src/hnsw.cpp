@@ -1890,5 +1890,6 @@ namespace orangedb {
 //                distances += std::to_string(dist) + ",";
 //            }
 //        }
+        printf("============================================================\n");
     }
 } // namespace orangedb
