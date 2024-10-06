@@ -79,6 +79,12 @@ namespace orangedb {
         inline void computeDistance(vector_idx_t id, double *result) override {
             CHECK_ARGUMENT(id < n, fmt::format("Index out of bounds {} < {}", id, n).data());
             const float *y = data + (id * dim);
+            for (int i = 0; i < dim; i++) {
+                printf("%f ", query[i]);
+            }
+            for (int i = 0; i < dim; i++) {
+                printf("%f ", y[i]);
+            }
             simsimd_l2sq_f32(query, y, dim, result);
         }
 
@@ -116,7 +122,7 @@ namespace orangedb {
         int dim;
         int n;
 
-        float *query;
+        const float *query;
     };
 
     struct CosineDistanceComputer : public DistanceComputer {
