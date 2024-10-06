@@ -69,7 +69,6 @@ namespace orangedb {
         }
 
         inline vector_idx_t *get_neighbors(uint8_t level) {
-            printf("size of neighbors: %lu\n", graphs[level].neighbors.size());
             return graphs[level].neighbors.data();
         }
 
