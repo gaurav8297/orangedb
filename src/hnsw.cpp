@@ -113,6 +113,9 @@ namespace orangedb {
                 if (neighbor == INVALID_VECTOR_ID) {
                     break;
                 }
+                if (neighbor >= 100000000) {
+                    printf("neighbor %llu\n", neighbor);
+                }
                 if (visited.get(neighbor)) {
                     continue;
                 }
