@@ -1116,7 +1116,7 @@ void testParallelPriorityQueue() {
 
 void read_10M_vectors(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, 10000000);
     printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
