@@ -753,6 +753,7 @@ void setFilterMaskUsingSelectivity(
         float selectivity) {
     std::random_device rd;
     std::mt19937 gen(rd());
+    printf("Selectivity: %f\n", selectivity);
     std::uniform_real_distribution<float> dis(0.0, 1.0);
     for (size_t i = 0; i < queryNumVectors; i++) {
         for (size_t j = 0; j < numVectors; j++) {
