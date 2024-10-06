@@ -116,7 +116,7 @@ namespace orangedb {
         int dim;
         int n;
 
-        const float *query;
+        float *query;
     };
 
     struct CosineDistanceComputer : public DistanceComputer {
