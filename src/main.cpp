@@ -891,7 +891,7 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     if (!loadFromStorage) {
         hnsw.flushToDisk();
     }
-    hnsw.logStats();
+//    hnsw.logStats();
     query_graph_filter(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 }
 
