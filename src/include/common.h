@@ -88,7 +88,8 @@ namespace orangedb {
     }
 
     static float *readBvecFile(const char *fName, size_t *d_out, size_t *n_out, size_t max_rows) {
-        FILE *f = fopen(fName, "r");
+        // Open the file in binary mode
+        FILE *f = fopen(fName, "rb");
         if (!f) {
             fprintf(stderr, "could not open %s\n", fName);
             perror("");
@@ -107,21 +108,19 @@ namespace orangedb {
         struct stat st{};
         fstat(fileno(f), &st);
         size_t sz = st.st_size;
-        printf("sz: %lu\n", sz);
-        printf("size: %lu\n", ((d + 1) * sizeof(uint8_t)));
-        CHECK_ARGUMENT(sz % ((d + 1) * sizeof(uint8_t)) == 0, "weird file size");
+        CHECK_ARGUMENT(sz % (4 + d * sizeof(uint8_t)) == 0, "weird file size");
 
         // Calculate the total number of vectors and apply the limit
-        size_t total_n = sz / ((d + 1) * sizeof(uint8_t));  // Total number of vectors
+        size_t total_n = sz / (4 + d * sizeof(uint8_t));  // Total number of vectors
         size_t n = (total_n > max_rows) ? max_rows : total_n;  // Limit the number of vectors to max_rows
         *d_out = d;
         *n_out = n;
 
         // Allocate memory for the original uint8_t data (including dimension prefix)
-        auto *x = new uint8_t[n * (d + 1)];
+        auto *x = new uint8_t[n * (4 + d)];
         printf("x: %p\n", x);
-        size_t nr = fread(x, sizeof(uint8_t), n * (d + 1), f);
-        CHECK_ARGUMENT(nr == n * (d + 1), "could not read whole file");
+        size_t nr = fread(x, sizeof(uint8_t), n * (4 + d), f);
+        CHECK_ARGUMENT(nr == n * (4 + d), "could not read whole file");
 
         // Allocate aligned memory for the float data
         float *align_x;
@@ -131,7 +130,7 @@ namespace orangedb {
         // Convert uint8_t data to float and copy to aligned memory
         for (size_t i = 0; i < n; i++) {
             for (size_t j = 0; j < d; j++) {
-                align_x[i * d + j] = static_cast<float>(x[1 + i * (d + 1) + j]);  // Skip first byte (dimension)
+                align_x[i * d + j] = static_cast<float>(x[4 + i * (4 + d) + j]);  // Skip first 4 bytes (dimension)
             }
         }
 
