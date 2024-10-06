@@ -1168,26 +1168,31 @@ void calculate_dists(InputParser &input) {
 
     L2DistanceComputer dc(baseVecs, baseDimension, baseNumVectors);
 
-    dc.setQuery(baseVecs + (18530806 * baseDimension));
+    dc.setQuery(baseVecs + (1 * baseDimension));
     double dist;
     dc.computeDistance(18530814, &dist);
     printf("Dist: %f\n", dist);
+
+    dc.setQuery(baseVecs + (18530806 * baseDimension));
+    double dist2;
+    dc.computeDistance(18530814, &dist2);
+    printf("Dist: %f\n", dist2);
 }
 
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
-//    calculate_dists(input);
-    const std::string &run = input.getCmdOption("-run");
-    if (run == "benchmark") {
-        benchmark_hnsw_queries(input);
-    } else if (run == "generateGT") {
-        generateGroundTruth(input);
-    } else if (run == "generateFilterGT") {
-        generateFilterGroundTruth(input);
-    } else if (run == "benchmarkFiltered") {
-        benchmark_filtered_hnsw_queries(input);
-    }
+    calculate_dists(input);
+//    const std::string &run = input.getCmdOption("-run");
+//    if (run == "benchmark") {
+//        benchmark_hnsw_queries(input);
+//    } else if (run == "generateGT") {
+//        generateGroundTruth(input);
+//    } else if (run == "generateFilterGT") {
+//        generateFilterGroundTruth(input);
+//    } else if (run == "benchmarkFiltered") {
+//        benchmark_filtered_hnsw_queries(input);
+//    }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
