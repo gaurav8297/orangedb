@@ -87,6 +87,58 @@ namespace orangedb {
         return align_x;
     }
 
+    static float *readBvecFile(const char *fName, size_t *d_out, size_t *n_out, size_t max_rows) {
+        FILE *f = fopen(fName, "r");
+        if (!f) {
+            fprintf(stderr, "could not open %s\n", fName);
+            perror("");
+            abort();
+        }
+
+        // Read the dimension (first 4 bytes are the dimension in bvecs)
+        int d;
+        fread(&d, 1, sizeof(int), f);
+        CHECK_ARGUMENT((d > 0 && d < 1000000), "unreasonable dimension");
+
+        // Go back to the start of the file
+        fseek(f, 0, SEEK_SET);
+
+        // Get the file size to calculate the number of vectors
+        struct stat st{};
+        fstat(fileno(f), &st);
+        size_t sz = st.st_size;
+        CHECK_ARGUMENT(sz % ((d + 1) * sizeof(uint8_t)) == 0, "weird file size");
+
+        // Calculate the total number of vectors and apply the limit
+        size_t total_n = sz / ((d + 1) * sizeof(uint8_t));  // Total number of vectors
+        size_t n = (total_n > max_rows) ? max_rows : total_n;  // Limit the number of vectors to max_rows
+        *d_out = d;
+        *n_out = n;
+
+        // Allocate memory for the original uint8_t data (including dimension prefix)
+        auto *x = new uint8_t[n * (d + 1)];
+        printf("x: %p\n", x);
+        size_t nr = fread(x, sizeof(uint8_t), n * (d + 1), f);
+        CHECK_ARGUMENT(nr == n * (d + 1), "could not read whole file");
+
+        // Allocate aligned memory for the float data
+        float *align_x;
+        allocAligned((void **) &align_x, n * d * sizeof(float), 8 * sizeof(float));
+        printf("align_x: %p\n", align_x);
+
+        // Convert uint8_t data to float and copy to aligned memory
+        for (size_t i = 0; i < n; i++) {
+            for (size_t j = 0; j < d; j++) {
+                align_x[i * d + j] = static_cast<float>(x[1 + i * (d + 1) + j]);  // Skip first byte (dimension)
+            }
+        }
+
+        // Free original uint8_t data
+        delete[] x;
+        fclose(f);
+        return align_x;
+    }
+
     static int *readIvecFile(const char *fName, size_t *d_out, size_t *n_out) {
         return (int *) readFvecFile(fName, d_out, n_out);
     }
