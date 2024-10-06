@@ -107,6 +107,8 @@ namespace orangedb {
         struct stat st{};
         fstat(fileno(f), &st);
         size_t sz = st.st_size;
+        printf("sz: %lu\n", sz);
+        printf("size: %lu\n", ((d + 1) * sizeof(uint8_t)));
         CHECK_ARGUMENT(sz % ((d + 1) * sizeof(uint8_t)) == 0, "weird file size");
 
         // Calculate the total number of vectors and apply the limit
