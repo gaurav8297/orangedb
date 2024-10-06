@@ -638,7 +638,7 @@ void benchmark_n_simd(int64_t n) {
 
 void build_graph(HNSW &hnsw, const float *baseVecs, size_t baseNumVectors) {
     auto start = std::chrono::high_resolution_clock::now();
-    const float *qq1 = baseVecs + (18530806 * baseNumVectors);
+    const float *qq1 = baseVecs + (18530806 * 128);
     for (int i = 0; i < 10; i++) {
         printf("qq1: %f\n", qq1[i]);
     }
