@@ -779,6 +779,22 @@ void generateFilterGroundTruth(InputParser &input) {
     float *queryVecs = readBvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
 
+    // print first 2 vectors
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < baseDimension; j++) {
+            printf("%f ", baseVecs[i * baseDimension + j]);
+        }
+        printf("\n");
+    }
+
+    // print first 2 query vectors
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < queryDimension; j++) {
+            printf("%f ", queryVecs[i * queryDimension + j]);
+        }
+        printf("\n");
+    }
+
     printf("Base vectors: %zu, Query vectors: %zu\n", baseNumVectors, queryNumVectors);
     printf("Base dimension: %zu, Query dimension: %zu\n", baseDimension, queryDimension);
 
