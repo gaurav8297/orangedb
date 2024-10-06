@@ -1513,6 +1513,7 @@ namespace orangedb {
             int distCompBatchSize,
             const uint8_t *filterMask,
             orangedb::Stats &stats) {
+        printf("filterMask %d\n", filterMask[18530806]);
         std::priority_queue<NodeDistFarther> candidates;
         candidates.emplace(entrypoint, entrypointDist);
         results.emplace(entrypoint, entrypointDist);
