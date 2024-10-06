@@ -1523,6 +1523,7 @@ namespace orangedb {
         dc->setQuery(storage->data + (18530806 * storage->dim));
         size_t begin, end;
         storage->get_neighbors_offsets(18530806, 0, begin, end);
+        double totalDist = 0;
         for (size_t i = begin; i < end; i++) {
             auto neighbor = neighbors[i];
             if (neighbor == INVALID_VECTOR_ID) {
@@ -1530,8 +1531,10 @@ namespace orangedb {
             }
             double dist;
             dc->computeDistance(neighbor, &dist);
+            totalDist += dist;
             printf("node %d, dist %f\n", neighbor, dist);
         }
+        printf("totalDist %f\n", totalDist);
         return;
 
         while (!candidates.empty()) {
