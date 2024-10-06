@@ -1530,7 +1530,7 @@ namespace orangedb {
                 break;
             }
             double dist;
-            dc->computeDistance(neighbor, &dist);
+            dc->computeDistance(18530806, neighbor, &dist);
             totalDist += dist;
             printf("node %d, dist %f\n", neighbor, dist);
         }
