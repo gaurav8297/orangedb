@@ -734,6 +734,9 @@ void generateFilterGroundTruth(
         for (size_t i = 0; i < queryNumVectors; i++) {
             double dists[k];
             index.knnFiltered(k, queryVecs + i * dim, dists, gtVecs + i * k, filteredMask + i * numVectors);
+            for (int j = 0; j < k; j++) {
+                printf("GT: %llu, Dist: %f\n", gtVecs[i * k + j], dists[j]);
+            }
         }
     }
 }
@@ -807,9 +810,9 @@ void generateFilterGroundTruth(InputParser &input) {
     setFilterMaskUsingSelectivity(queryNumVectors, filteredMask, baseNumVectors, selectivity);
     generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
     // serialize gtVecs to a file
-    writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+//    writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     // serialize filteredMask to a file
-    writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
+//    writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
 }
 
 void generateGroundTruth(
@@ -895,6 +898,7 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     if (!loadFromStorage) {
         hnsw.flushToDisk();
     }
+    generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, 1, k, gtVecs);
 //    hnsw.logStats();
     query_graph_filter(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 }

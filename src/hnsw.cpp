@@ -1672,7 +1672,7 @@ namespace orangedb {
                     }
                 }
             }
-            printf("Size of nbrs %d\n", nbrs.size());
+//            printf("Size of nbrs %d\n", nbrs.size());
 
             if (nbrs.empty()) {
                  // TODO: Maybe change the entrypoint in case no results
