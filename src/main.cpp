@@ -1129,13 +1129,14 @@ void read_and_write_bvecs_file(InputParser &input) {
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
-    read_and_write_bvecs_file(input);
-//    const std::string &run = input.getCmdOption("-run");
-//    if (run == "benchmark") {
-//        benchmark_hnsw_queries(input);
-//    } else if (run == "generateGT") {
-//        generateGroundTruth(input);
-//    }
+    const std::string &run = input.getCmdOption("-run");
+    if (run == "benchmark") {
+        benchmark_hnsw_queries(input);
+    } else if (run == "generateGT") {
+        generateGroundTruth(input);
+    } else if (run == "generateFilterGT") {
+        generateFilterGroundTruth(input);
+    }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
