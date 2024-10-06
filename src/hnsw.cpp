@@ -1520,6 +1520,20 @@ namespace orangedb {
         results.emplace(entrypoint, entrypointDist);
         visited.set(entrypoint);
         auto neighbors = storage->get_neighbors(0);
+
+        size_t begin, end;
+        storage->get_neighbors_offsets(18530806, 0, begin, end);
+        for (size_t i = begin; i < end; i++) {
+            auto neighbor = neighbors[i];
+            if (neighbor == INVALID_VECTOR_ID) {
+                break;
+            }
+            double dist;
+            dc->computeDistance(neighbor, &dist);
+            printf("node %d, dist %f\n", neighbor, dist);
+            return;
+        }
+
         while (!candidates.empty()) {
             auto candidate = candidates.top();
             // TODO: Do we need to check if the results are above efSearch?
