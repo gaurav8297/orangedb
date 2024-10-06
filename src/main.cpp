@@ -1114,27 +1114,21 @@ void testParallelPriorityQueue() {
     printf("Duration: %lld ms\n", duration);
 }
 
-void read_10M_vectors(InputParser &input) {
+void read_and_write_bvecs_file(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
+    auto outputVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto readSize = stoi(input.getCmdOption("-readSize"));
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, 10000000);
-    printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, baseNumVectors);
-
-    // Print first 10 vectors
-    for (int i = 0; i < 10; i++) {
-        printf("Vector %d: ", i);
-        for (int j = 0; j < baseDimension; j++) {
-            printf("%f ", baseVecs[i * baseDimension + j]);
-        }
-        printf("\n");
-    }
+    float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, readSize);
+    printf("Base dimension: %zu, Base num vectors: %zu\n", baseDimension, readSize);
+    writeBvecFile(outputVectorPath.c_str(), baseVecs, baseDimension, readSize);
 }
 
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
-    read_10M_vectors(input);
+    read_and_write_bvecs_file(input);
 //    const std::string &run = input.getCmdOption("-run");
 //    if (run == "benchmark") {
 //        benchmark_hnsw_queries(input);

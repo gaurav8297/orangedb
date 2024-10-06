@@ -140,6 +140,41 @@ namespace orangedb {
         return align_x;
     }
 
+    static void writeBvecFile(const char *fName, const float *data, size_t d, size_t n) {
+        // Open the file in binary write mode
+        FILE *f = fopen(fName, "wb");
+        if (!f) {
+            fprintf(stderr, "could not open %s for writing\n", fName);
+            perror("");
+            abort();
+        }
+
+        // Allocate a temporary buffer for storing uint8_t values
+        auto *buffer = new uint8_t[(d + 4) * n];  // 4 bytes for dimension + d bytes for vector values per vector
+
+        // Fill the buffer with dimension + vector data
+        for (size_t i = 0; i < n; i++) {
+            // Store the dimension (4 bytes)
+            int dimension = static_cast<int>(d);
+            memcpy(&buffer[i * (d + 4)], &dimension, sizeof(int));
+
+            // Convert float data to uint8_t and store in buffer
+            for (size_t j = 0; j < d; j++) {
+                // Convert float to uint8_t (clamp to [0, 255] range)
+                float value = data[i * d + j];
+                buffer[i * (d + 4) + 4 + j] = static_cast<uint8_t>(value < 0.0f ? 0 : (value > 255.0f ? 255 : value));
+            }
+        }
+
+        // Write the buffer to the file
+        size_t bytes_written = fwrite(buffer, sizeof(uint8_t), n * (d + 4), f);
+        CHECK_ARGUMENT(bytes_written == n * (d + 4), "could not write whole file");
+
+        // Free the buffer and close the file
+        delete[] buffer;
+        fclose(f);
+    }
+
     static int *readIvecFile(const char *fName, size_t *d_out, size_t *n_out) {
         return (int *) readFvecFile(fName, d_out, n_out);
     }
