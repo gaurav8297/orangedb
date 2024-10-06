@@ -585,14 +585,15 @@ namespace orangedb {
             DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
 //            DistanceComputer *localDc = new QuantizedDistanceComputer(storage->codes, asym_dc.get(), sym_dc.get(),
 //                                                                      storage->code_size);
+            printf("size of data %zu\n", n);
             VisitedTable visited(n);
             Stats localStats = Stats();
 #pragma omp for schedule(static)
             for (int i = 0; i < n; i++) {
                 localDc->setQuery(storage->data + (i * storage->dim));
                 addNode(localDc, node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
-                if (i % 10000 == 0) {
-                    spdlog::warn("Inserted 10000!!");
+                if (i % 100000 == 0) {
+                    spdlog::warn("Inserted 100000!!");
                 }
             }
             // Merge stats
