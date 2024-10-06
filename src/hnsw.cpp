@@ -393,6 +393,9 @@ namespace orangedb {
             double distSrcDest,
             level_t level,
             Stats &stats) {
+        if (dest > 100000000) {
+            printf("src %llu, dest %llu\n", src, dest);
+        }
         auto neighbors = storage->get_neighbors(level);
         size_t begin, end;
         storage->get_neighbors_offsets(src, level, begin, end);

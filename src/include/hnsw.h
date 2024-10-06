@@ -405,7 +405,7 @@ namespace orangedb {
                 const float *infVector,
                 Stats &stats);
 
-        inline vector_idx_t getActualId(level_t level, vector_idx_t id) {
+        inline vector_idx_t getActualId(level_t level, vector_idx_t id) const {
             return level != 0 ? storage->actual_ids[level][id] : id;
         }
 
