@@ -237,6 +237,7 @@ namespace orangedb {
                 res.emplace(i, d);
             }
         }
+        printf("Size of res: %d\n", res.size());
         for (int i = 0; i < k; i++) {
             resultIds[i] = res.top().id;
             distance[i] = res.top().dist;
