@@ -1861,11 +1861,6 @@ namespace orangedb {
         printf("Max neighbors per level: %d\n", storage->max_neighbors_per_level[0]);
         for (int i = 0; i < storage->fast_level_counters[0]; i++) {
             for (int j = 0; j < storage->max_neighbors_per_level[0]; j++) {
-                if (i * storage->max_neighbors_per_level[0] + j >= storage->numPoints * storage->max_neighbors_per_level[0]) {
-                    printf("yo\n");
-                    break;
-                }
-
                 if (nbrs[i * storage->max_neighbors_per_level[0] + j] != INVALID_VECTOR_ID) {
                     count++;
                 }
