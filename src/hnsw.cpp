@@ -1514,6 +1514,7 @@ namespace orangedb {
             const uint8_t *filterMask,
             orangedb::Stats &stats) {
         printf("filterMask %d\n", filterMask[18530806]);
+        printf("visited %d\n", visited.get(18530806));
         std::priority_queue<NodeDistFarther> candidates;
         candidates.emplace(entrypoint, entrypointDist);
         results.emplace(entrypoint, entrypointDist);
