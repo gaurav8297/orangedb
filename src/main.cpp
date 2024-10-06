@@ -726,7 +726,7 @@ void generateFilterGroundTruth(
     {
         auto localDc = dc.clone();
         IndexOneNN index(localDc.get(), dim, numVectors);
-#pragma omp for schedule(dynamic, 100)
+#pragma omp for schedule(dynamic, 1)
         for (size_t i = 0; i < queryNumVectors; i++) {
             double dists[k];
             index.knnFiltered(k, queryVecs + i * dim, dists, gtVecs + i * k, filteredMask + i * numVectors);
