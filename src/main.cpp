@@ -888,6 +888,9 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
                       "none", storagePath, loadFromStorage, 20, 10, 1, "none");
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
+    if (!loadFromStorage) {
+        hnsw.flushToDisk();
+    }
     hnsw.logStats();
     query_graph_filter(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
 }
