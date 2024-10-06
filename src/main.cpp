@@ -884,6 +884,11 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
     loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
+    printf("Base num vectors: %zu\n", baseNumVectors);
+    auto q = baseVecs + (18530806 * baseDimension);
+    for (int i = 0; i < 10; i++) {
+        printf("q vec %f ", q[i]);
+    }
 
     // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
@@ -1187,7 +1192,7 @@ void calculate_dists(InputParser &input) {
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
-    calculate_dists(input);
+//    calculate_dists(input);
     const std::string &run = input.getCmdOption("-run");
     if (run == "benchmark") {
         benchmark_hnsw_queries(input);
