@@ -179,7 +179,14 @@ namespace orangedb {
             for (auto &graph : graphs) {
                 size_t neighbors_size;
                 in.read(reinterpret_cast<char *>(&neighbors_size), sizeof(neighbors_size));
-                graph.neighbors.resize(neighbors_size);
+                graph.neighbors.resize(neighbors_size, INVALID_VECTOR_ID);
+                // Read neighbors
+                for (size_t i = 0; i < neighbors_size; i++) {
+                    if (graph.neighbors[i] != INVALID_VECTOR_ID) {
+                        std::cout << "Invalid neighbor at index " << i << std::endl;
+                        throw std::runtime_error("Invalid neighbor");
+                    }
+                }
                 in.read(reinterpret_cast<char *>(graph.neighbors.data()), neighbors_size * sizeof(vector_idx_t));
             }
 

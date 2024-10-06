@@ -1865,7 +1865,7 @@ namespace orangedb {
                     printf("yo\n");
                     break;
                 }
-                
+
                 if (nbrs[i * storage->max_neighbors_per_level[0] + j] != INVALID_VECTOR_ID) {
                     count++;
                 }
