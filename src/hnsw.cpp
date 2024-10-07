@@ -526,19 +526,6 @@ namespace orangedb {
     // TODO: Add caching, thread pinning, live locks, queue with locks etc
     void HNSW::build(const float *data, size_t n) {
         if (config.loadStorage) {
-            printf("yeah\n");
-            printf("pointer address: %p\n", data);
-            const float *qq1 = data + (18530806 * storage->dim);
-            for (int i = 0; i < 10; i++) {
-                printf("In build %f ", qq1[i]);
-            }
-            storage->data = data;
-            const float *qq = storage->data + (18530806 * storage->dim);
-            for (int i = 0; i < 10; i++) {
-                printf("In build %f ", qq[i]);
-            }
-            printf("dim %d\n", storage->dim);
-            printf("numPoints %d\n", storage->numPoints);
 //            if (config.compressionType == "scalar_8bit") {
 //                storage->codes = new uint8_t[n * quantizer->codeSize];
 //                quantizer->batch_train(n, data);
@@ -605,12 +592,11 @@ namespace orangedb {
             DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
 //            DistanceComputer *localDc = new QuantizedDistanceComputer(storage->codes, asym_dc.get(), sym_dc.get(),
 //                                                                      storage->code_size);
-            printf("size of data %zu\n", n);
             VisitedTable visited(n);
             Stats localStats = Stats();
 #pragma omp for schedule(static)
-            for (int i = 0; i < n; i++) {
-                localDc->setQuery(storage->data + (i * storage->dim));
+            for (size_t i = 0; i < n; i++) {
+                localDc->setQuery(storage->data + ((size_t)i * storage->dim));
                 addNode(localDc, node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
                 if (i % 100000 == 0) {
                     spdlog::warn("Inserted 100000!!");
@@ -1525,35 +1511,11 @@ namespace orangedb {
             int distCompBatchSize,
             const uint8_t *filterMask,
             orangedb::Stats &stats) {
-        printf("filterMask %d\n", filterMask[18530806]);
-        printf("visited %d\n", visited.get(18530806));
         std::priority_queue<NodeDistFarther> candidates;
         candidates.emplace(entrypoint, entrypointDist);
         results.emplace(entrypoint, entrypointDist);
         visited.set(entrypoint);
         auto neighbors = storage->get_neighbors(0);
-        dc->setQuery(storage->data + (18530806 * storage->dim));
-        const float* query = storage->data + (18530806 * storage->dim);
-        //print
-        for (int i = 0; i < 10; i++) {
-            printf("query %f\n", query[i]);
-        }
-        size_t begin, end;
-        storage->get_neighbors_offsets(18530806, 0, begin, end);
-        double totalDist = 0;
-        for (size_t i = begin; i < end; i++) {
-            auto neighbor = neighbors[i];
-            if (neighbor == INVALID_VECTOR_ID) {
-                break;
-            }
-            double dist;
-            dc->computeDistance(neighbor, &dist);
-            totalDist += dist;
-            printf("node %d, dist %f\n", neighbor, dist);
-        }
-        printf("totalDist %f\n", totalDist);
-        return;
-
         while (!candidates.empty()) {
             auto candidate = candidates.top();
             // TODO: Do we need to check if the results are above efSearch?

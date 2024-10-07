@@ -638,11 +638,6 @@ void benchmark_n_simd(int64_t n) {
 
 void build_graph(HNSW &hnsw, float *baseVecs, size_t baseNumVectors) {
     auto start = std::chrono::high_resolution_clock::now();
-    auto qq1 = baseVecs + ((uint64_t)18530806 * 128);
-    for (int i = 0; i < 10; i++) {
-        printf("qq1: %f\n", qq1[i]);
-    }
-    printf("pointer address: %p\n", baseVecs);
     hnsw.build(baseVecs, baseNumVectors);
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
@@ -890,10 +885,6 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
     loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
     printf("Base num vectors: %zu\n", baseNumVectors);
-    auto q = baseVecs + (18530806 * baseDimension);
-    for (int i = 0; i < 10; i++) {
-        printf("q vec %f ", q[i]);
-    }
 
     // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
@@ -904,10 +895,6 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck,
                       "none", storagePath, loadFromStorage, 20, 10, 1, "none");
     HNSW hnsw(config, &rng, baseDimension);
-    auto q2 = baseVecs + (18530806 * baseDimension);
-    for (int i = 0; i < 10; i++) {
-        printf("q vec %f ", q2[i]);
-    }
     build_graph(hnsw, baseVecs, baseNumVectors);
     if (!loadFromStorage) {
         hnsw.flushToDisk();
