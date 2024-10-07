@@ -667,7 +667,6 @@ void query_graph_filter(
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
-            printf("ID: %d, Dist: %f\n", top.id, top.dist);
             results.pop();
         }
         auto gt = gtVecs + i * k;
@@ -677,9 +676,6 @@ void query_graph_filter(
                 localRecall++;
             }
         }
-        printf("Recall: %f\n", localRecall);
-        break;
-//        printf("Recall: %f\n", localRecall);
     }
     auto recallPerQuery = recall / queryNumVectors;
     stats.logStats();
