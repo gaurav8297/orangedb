@@ -904,6 +904,10 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck,
                       "none", storagePath, loadFromStorage, 20, 10, 1, "none");
     HNSW hnsw(config, &rng, baseDimension);
+    auto q2 = baseVecs + (18530806 * baseDimension);
+    for (int i = 0; i < 10; i++) {
+        printf("q vec %f ", q2[i]);
+    }
     build_graph(hnsw, baseVecs, baseNumVectors);
     if (!loadFromStorage) {
         hnsw.flushToDisk();
