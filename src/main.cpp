@@ -897,7 +897,7 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
 
     // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
-    printf("Query dimension: %zu\n", k);
+    printf("Query dimension: %zu\n", queryDimension);
 
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
