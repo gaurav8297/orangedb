@@ -730,9 +730,6 @@ void generateFilterGroundTruth(
         for (size_t i = 0; i < queryNumVectors; i++) {
             double dists[k];
             index.knnFiltered(k, queryVecs + i * dim, dists, gtVecs + i * k, filteredMask + i * numVectors);
-            for (int j = 0; j < k; j++) {
-                printf("GT: %llu, Dist: %f\n", gtVecs[i * k + j], dists[j]);
-            }
         }
     }
 }
@@ -782,22 +779,6 @@ void generateFilterGroundTruth(InputParser &input) {
     float *queryVecs = readBvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
 
-    // print first 2 vectors
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < baseDimension; j++) {
-            printf("%f ", baseVecs[i * baseDimension + j]);
-        }
-        printf("\n");
-    }
-
-    // print first 2 query vectors
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < queryDimension; j++) {
-            printf("%f ", queryVecs[i * queryDimension + j]);
-        }
-        printf("\n");
-    }
-
     printf("Base vectors: %zu, Query vectors: %zu\n", baseNumVectors, queryNumVectors);
     printf("Base dimension: %zu, Query dimension: %zu\n", baseDimension, queryDimension);
 
@@ -806,9 +787,9 @@ void generateFilterGroundTruth(InputParser &input) {
     setFilterMaskUsingSelectivity(queryNumVectors, filteredMask, baseNumVectors, selectivity);
     generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
     // serialize gtVecs to a file
-//    writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     // serialize filteredMask to a file
-//    writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
+    writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
 }
 
 void generateGroundTruth(
