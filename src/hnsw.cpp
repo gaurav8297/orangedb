@@ -526,6 +526,7 @@ namespace orangedb {
     // TODO: Add caching, thread pinning, live locks, queue with locks etc
     void HNSW::build(const float *data, size_t n) {
         if (config.loadStorage) {
+            storage->data = data;
 //            if (config.compressionType == "scalar_8bit") {
 //                storage->codes = new uint8_t[n * quantizer->codeSize];
 //                quantizer->batch_train(n, data);
