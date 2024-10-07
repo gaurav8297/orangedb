@@ -1682,10 +1682,6 @@ namespace orangedb {
                 double dist;
                 dc->computeDistance(neighbor, &dist);
                 stats.totalDistCompDuringSearch++;
-                if (candidate.id == 10417725) {
-                    printf("Neighbor %d, dist %f\n", neighbor, dist);
-                }
-
                 if (results.size() < efSearch || dist < results.top().dist) {
                     candidates.emplace(neighbor, dist);
                     results.emplace(neighbor, dist);
@@ -1718,7 +1714,7 @@ namespace orangedb {
             searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
-        searchNeighborsOnLastLevelWithFilterA(
+        searchNeighborsOnLastLevelWithFilterB(
                 &dc,
                 results,
                 nearestID,
