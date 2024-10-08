@@ -256,6 +256,12 @@ namespace orangedb {
                 int distCompBatchSize,
                 Stats &stats);
 
+        int findNaiveNeighbours(
+                vector_idx_t entrypoint,
+                NodeDistCloser *nbrs,
+                BitVectorVisitedTable &visited,
+                Stats &stats);
+
         int findNextKNeighbours(
                 vector_idx_t entrypoint,
                 NodeDistCloser *nbrs,

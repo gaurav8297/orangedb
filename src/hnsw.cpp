@@ -817,6 +817,27 @@ namespace orangedb {
         }
     }
 
+    int HNSW::findNaiveNeighbours(vector_idx_t entrypoint, NodeDistCloser *nbrs, BitVectorVisitedTable &visited,
+                                  Stats &stats) {
+        auto neighbors = storage->get_neighbors(0);
+        size_t begin, end;
+        storage->get_neighbors_offsets(entrypoint, 0, begin, end);
+        stats.totalGetNbrsCall++;
+        int m = 0;
+        for (size_t i = begin; i < end; i++) {
+            auto neighbor = neighbors[i];
+            if (neighbor == INVALID_VECTOR_ID) {
+                break;
+            }
+            if (visited.atomic_is_bit_set(neighbor)) {
+                continue;
+            }
+            visited.atomic_set_bit(neighbor);
+            nbrs[m++] = NodeDistCloser(neighbor);
+        }
+        return m;
+    }
+
     int HNSW::findNextKNeighbours(
             vector_idx_t entrypoint,
             NodeDistCloser *nbrs,
@@ -1176,16 +1197,21 @@ namespace orangedb {
                     int depth = 0;
 
                     // Maybe we need to look at candidates
-                    int nextFSize = findNextKNeighbours(
+//                    int nextFSize = findNextKNeighbours(
+//                            candidate.id,
+//                            nextFrontier.data(),
+//                            localVisited,
+//                            // This value 5 should be determined by the number of threads and maxNbrs
+//                            localC.empty() ? 0 : 5,
+//                            config.nodeExpansionPerNode,
+//                            128,
+//                            localStats,
+//                            depth);
+                    int nextFSize = findNaiveNeighbours(
                             candidate.id,
                             nextFrontier.data(),
                             localVisited,
-                            // This value 5 should be determined by the number of threads and maxNbrs
-                            localC.empty() ? 0 : 5,
-                            config.nodeExpansionPerNode,
-                            128,
-                            localStats,
-                            depth);
+                            stats);
                     localStats.avgGetNbrsDepth += depth;
                     localStats.searchIter++;
 
