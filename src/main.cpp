@@ -15,6 +15,7 @@
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
 #include <fastQ/common.h>
+#include "faiss/IndexACORN.h"
 
 using namespace orangedb;
 
@@ -774,9 +775,9 @@ void generateFilterGroundTruth(InputParser &input) {
     auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readBvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
 
     printf("Base vectors: %zu, Query vectors: %zu\n", baseNumVectors, queryNumVectors);
@@ -853,9 +854,9 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto storagePath = fmt::format("{}/storage.bin", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readBvecFile2(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readBvecFile2(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readBvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -1160,6 +1161,49 @@ void calculate_dists(InputParser &input) {
     for (int i = 0; i < 10; i++) {
         printf("%f ", q[i]);
     }
+}
+
+void benchmark_acorn(InputParser &input) {
+    const std::string &basePath = input.getCmdOption("-basePath");
+    int d = stoi(input.getCmdOption("-d"));
+    int M = stoi(input.getCmdOption("-M"));
+    int gamma = stoi(input.getCmdOption("-gamma"));
+    int M_beta = stoi(input.getCmdOption("-M_beta"));
+    auto selectivity = stoi(input.getCmdOption("-selectivity"));
+    auto k = stoi(input.getCmdOption("-k"));
+
+    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
+    auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
+    auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
+    auto storagePath = fmt::format("{}/storage.bin", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
+    loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
+    printf("Base num vectors: %zu\n", baseNumVectors);
+
+    std::vector<int> metadata(baseNumVectors);
+    for (int i = 0; i < baseNumVectors; i++) {
+        metadata[i] = (int) filteredMask[i];
+    }
+
+    // Print grond truth num vectors
+    printf("Query num vectors: %zu\n", queryNumVectors);
+    printf("Query dimension: %zu\n", baseDimension);
+    faiss::IndexACORNFlat acorn_index(d, M, gamma, metadata, M_beta);
+    printf("Building index\n");
+    auto start = std::chrono::high_resolution_clock::now();
+    acorn_index.add(baseNumVectors, baseVecs);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    printf("Building index time: %f ms\n", duration.count() / 1000.0);
 }
 
 int main(int argc, char **argv) {

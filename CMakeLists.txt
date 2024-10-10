@@ -28,19 +28,23 @@ set(CMAKE_CXX_FLAGS_RELEASE "-fopenmp -O3 -march=native")
 set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
 #set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g")
 set(CMAKE_C_FLAGS_RELEASE "-fopenmp -O3 -march=native")
+set(CMAKE_OSX_ARCHITECTURES "x86_64")
 
 # Add include path
 include_directories(${PROJECT_SOURCE_DIR}/src/include)
 include_directories(${PROJECT_SOURCE_DIR}/third_party/spdlog)
 include_directories(${PROJECT_SOURCE_DIR}/third_party/simsimd/include)
+include_directories(${PROJECT_SOURCE_DIR}/third_party/faiss)
 # Add source path
 add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/simsimd)
+add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/faiss)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
 # Add executable path
 add_executable(orangedb_main ${PROJECT_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX simsimd)
+target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX simsimd faiss)
 target_include_directories(orangedb_main PUBLIC
         ${PROJECT_SOURCE_DIR}/src/include
         ${PROJECT_SOURCE_DIR}/third_party/spdlog
-        ${PROJECT_SOURCE_DIR}/third_party/simsimd/include)
+        ${PROJECT_SOURCE_DIR}/third_party/simsimd/include
+        ${PROJECT_SOURCE_DIR}/third_party/faiss)
