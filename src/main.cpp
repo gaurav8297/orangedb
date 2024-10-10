@@ -1168,6 +1168,7 @@ void benchmark_acorn(InputParser &input) {
     int M = stoi(input.getCmdOption("-M"));
     int gamma = stoi(input.getCmdOption("-gamma"));
     int M_beta = stoi(input.getCmdOption("-M_beta"));
+    int ef_construction = stoi(input.getCmdOption("-efConstruction"));
     auto selectivity = stoi(input.getCmdOption("-selectivity"));
     auto k = stoi(input.getCmdOption("-k"));
 
@@ -1197,6 +1198,7 @@ void benchmark_acorn(InputParser &input) {
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("Query dimension: %zu\n", baseDimension);
     faiss::IndexACORNFlat acorn_index(baseDimension, M, gamma, metadata, M_beta);
+    acorn_index.acorn.efConstruction = ef_construction;
     printf("Building index\n");
     auto start = std::chrono::high_resolution_clock::now();
     acorn_index.add(baseNumVectors, baseVecs);
