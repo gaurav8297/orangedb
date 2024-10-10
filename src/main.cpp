@@ -1165,7 +1165,6 @@ void calculate_dists(InputParser &input) {
 
 void benchmark_acorn(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
-    int d = stoi(input.getCmdOption("-d"));
     int M = stoi(input.getCmdOption("-M"));
     int gamma = stoi(input.getCmdOption("-gamma"));
     int M_beta = stoi(input.getCmdOption("-M_beta"));
@@ -1197,7 +1196,7 @@ void benchmark_acorn(InputParser &input) {
     // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("Query dimension: %zu\n", baseDimension);
-    faiss::IndexACORNFlat acorn_index(d, M, gamma, metadata, M_beta);
+    faiss::IndexACORNFlat acorn_index(baseDimension, M, gamma, metadata, M_beta);
     printf("Building index\n");
     auto start = std::chrono::high_resolution_clock::now();
     acorn_index.add(baseNumVectors, baseVecs);
