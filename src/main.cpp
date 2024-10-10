@@ -1168,7 +1168,8 @@ void benchmark_acorn(InputParser &input) {
     int M = stoi(input.getCmdOption("-M"));
     int gamma = stoi(input.getCmdOption("-gamma"));
     int M_beta = stoi(input.getCmdOption("-M_beta"));
-    int ef_construction = stoi(input.getCmdOption("-efConstruction"));
+    int efSearch = stoi(input.getCmdOption("-efSearch"));
+    int nThreads = stoi(input.getCmdOption("-nThreads"));
     auto selectivity = stoi(input.getCmdOption("-selectivity"));
     auto k = stoi(input.getCmdOption("-k"));
 
@@ -1189,6 +1190,7 @@ void benchmark_acorn(InputParser &input) {
     loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
     printf("Base num vectors: %zu\n", baseNumVectors);
 
+    omp_set_num_threads(nThreads);
     std::vector<int> metadata(baseNumVectors);
     for (int i = 0; i < baseNumVectors; i++) {
         metadata[i] = (int) filteredMask[i];
@@ -1198,13 +1200,47 @@ void benchmark_acorn(InputParser &input) {
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("Query dimension: %zu\n", baseDimension);
     faiss::IndexACORNFlat acorn_index(baseDimension, M, gamma, metadata, M_beta);
-    acorn_index.acorn.efConstruction = ef_construction;
+    acorn_index.acorn.efSearch = efSearch;
     printf("Building index\n");
     auto start = std::chrono::high_resolution_clock::now();
     acorn_index.add(baseNumVectors, baseVecs);
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    printf("Building index time: %f ms\n", duration.count() / 1000.0);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    printf("Building time: %lld ms\n", duration.count());
+
+//    auto search_start = std::chrono::high_resolution_clock::now();
+//    auto recall = 0.0;
+//    for (size_t i = 0; i < queryNumVectors; i++) {
+//        auto localRecall = 0.0;
+//        auto visited = AtomicVisitedTable(baseNumVectors);
+//        std::priority_queue<NodeDistCloser> results;
+//        std::vector<NodeDistFarther> res;
+//        acorn_index.search(
+//        auto endTime = std::chrono::high_resolution_clock::now();
+//        while (!results.empty()) {
+//            auto top = results.top();
+//            res.emplace_back(top.id, top.dist);
+//            results.pop();
+//        }
+//        auto gt = gtVecs + i * k;
+//        for (auto &result: res) {
+//            if (std::find(gt, gt + k, result.id) != (gt + k)) {
+//                recall++;
+//                localRecall++;
+//            }
+//        }
+//        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+//        printf("Query time: %lld ms\n", duration);
+//        printf("Recall: %f\n", localRecall / k);
+//        break;
+//    }
+//    auto recallPerQuery = recall / queryNumVectors;
+//    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
+//    std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
+//    auto end = std::chrono::high_resolution_clock::now();
+//    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+//    std::cout << "Query time: " << duration << " ms" << std::endl;
+
 }
 
 int main(int argc, char **argv) {
