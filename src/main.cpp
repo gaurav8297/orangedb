@@ -1214,18 +1214,13 @@ void benchmark_acorn(InputParser &input) {
     auto distances = new float[k];
     auto startTime = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < queryNumVectors; i++) {
-        auto localRecall = 0.0;
         acorn_index.search(1, queryVecs + (i * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask + (i * baseNumVectors)));
-        auto endTime = std::chrono::high_resolution_clock::now();
         auto gt = gtVecs + i * k;
         for (int j = 0; j < k; j++) {
             if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
                 recall++;
-                localRecall++;
             }
         }
-        printf("Query time: %lld ms\n", duration);
-        printf("Recall: %f\n", localRecall / k);
     }
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
