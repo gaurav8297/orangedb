@@ -847,16 +847,16 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
     bool loadFromStorage = stoi(input.getCmdOption("-loadFromDisk"));
 
-    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
     auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
     auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
     auto storagePath = fmt::format("{}/storage.bin", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readBvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
