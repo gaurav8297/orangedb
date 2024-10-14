@@ -947,8 +947,8 @@ void benchmark_hnsw_queries(InputParser &input) {
     auto nodeExpansionPerNode = stoi(input.getCmdOption("-nodeExpansionPerNode"));
     auto searchParallelAlgo = input.getCmdOption("-searchParallelAlgo");
 
-    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
     auto groundTruthPath = fmt::format("{}/gt.bin", basePath);
     auto storagePath = fmt::format("{}/storage.bin", basePath);
 
@@ -1199,7 +1199,7 @@ void benchmark_acorn(InputParser &input) {
     // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("Query dimension: %zu\n", baseDimension);
-    faiss::IndexACORNFlat acorn_index(baseDimension, M, gamma, metadata, M_beta);
+    faiss::IndexACORN acorn_index(baseDimension, M, gamma, metadata, M_beta);
     acorn_index.acorn.efSearch = efSearch;
     printf("Building index\n");
     auto start = std::chrono::high_resolution_clock::now();
@@ -1208,39 +1208,31 @@ void benchmark_acorn(InputParser &input) {
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     printf("Building time: %lld ms\n", duration.count());
 
-//    auto search_start = std::chrono::high_resolution_clock::now();
-//    auto recall = 0.0;
-//    for (size_t i = 0; i < queryNumVectors; i++) {
-//        auto localRecall = 0.0;
-//        auto visited = AtomicVisitedTable(baseNumVectors);
-//        std::priority_queue<NodeDistCloser> results;
-//        std::vector<NodeDistFarther> res;
-//        acorn_index.search(
-//        auto endTime = std::chrono::high_resolution_clock::now();
-//        while (!results.empty()) {
-//            auto top = results.top();
-//            res.emplace_back(top.id, top.dist);
-//            results.pop();
-//        }
-//        auto gt = gtVecs + i * k;
-//        for (auto &result: res) {
-//            if (std::find(gt, gt + k, result.id) != (gt + k)) {
-//                recall++;
-//                localRecall++;
-//            }
-//        }
-//        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-//        printf("Query time: %lld ms\n", duration);
-//        printf("Recall: %f\n", localRecall / k);
-//        break;
-//    }
-//    auto recallPerQuery = recall / queryNumVectors;
-//    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
-//    std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
-//    auto end = std::chrono::high_resolution_clock::now();
-//    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-//    std::cout << "Query time: " << duration << " ms" << std::endl;
-
+    auto search_start = std::chrono::high_resolution_clock::now();
+    auto recall = 0.0;
+    auto labels = new faiss::idx_t[k];
+    auto distances = new float[k];
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        auto localRecall = 0.0;
+        auto startTime = std::chrono::high_resolution_clock::now();
+        acorn_index.search(1, queryVecs + (i * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask + (i * baseNumVectors)));
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto gt = gtVecs + i * k;
+        for (int j = 0; j < k; j++) {
+            if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
+                recall++;
+                localRecall++;
+            }
+        }
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+        printf("Query time: %lld ms\n", duration);
+        printf("Recall: %f\n", localRecall / k);
+        break;
+    }
+    auto recallPerQuery = recall / queryNumVectors;
+    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
+    std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
+    std::cout << "Query time: " << duration << " ms" << std::endl;
 }
 
 int main(int argc, char **argv) {
