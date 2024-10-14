@@ -1212,9 +1212,9 @@ void benchmark_acorn(InputParser &input) {
     auto recall = 0.0;
     auto labels = new faiss::idx_t[k];
     auto distances = new float[k];
+    auto startTime = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < queryNumVectors; i++) {
         auto localRecall = 0.0;
-        auto startTime = std::chrono::high_resolution_clock::now();
         acorn_index.search(1, queryVecs + (i * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask + (i * baseNumVectors)));
         auto endTime = std::chrono::high_resolution_clock::now();
         auto gt = gtVecs + i * k;
@@ -1224,15 +1224,15 @@ void benchmark_acorn(InputParser &input) {
                 localRecall++;
             }
         }
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         printf("Query time: %lld ms\n", duration);
         printf("Recall: %f\n", localRecall / k);
-        break;
     }
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     auto recallPerQuery = recall / queryNumVectors;
     std::cout << "Total Vectors: " << queryNumVectors << std::endl;
     std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
-    std::cout << "Query time: " << duration << " ms" << std::endl;
+    std::cout << "Query time: " << duration_search << " ms" << std::endl;
 }
 
 int main(int argc, char **argv) {
