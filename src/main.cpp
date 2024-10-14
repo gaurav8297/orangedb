@@ -1199,7 +1199,7 @@ void benchmark_acorn(InputParser &input) {
     // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("Query dimension: %zu\n", baseDimension);
-    faiss::IndexACORN acorn_index(baseDimension, M, gamma, metadata, M_beta);
+    faiss::IndexACORNFlat acorn_index(baseDimension, M, gamma, metadata, M_beta);
     acorn_index.acorn.efSearch = efSearch;
     printf("Building index\n");
     auto start = std::chrono::high_resolution_clock::now();
