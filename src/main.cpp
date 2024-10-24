@@ -898,15 +898,15 @@ void query_graph(
         int nodeExpansionPerNode) {
     auto start = std::chrono::high_resolution_clock::now();
     auto recall = 0.0;
+    auto visited = VisitedTable(baseNumVectors);
     Stats stats{};
     for (size_t i = 0; i < queryNumVectors; i++) {
         auto localRecall = 0.0;
-        auto visited = AtomicVisitedTable(baseNumVectors);
-        PocTaskScheduler taskScheduler(thread_count, &visited, nodeExpansionPerNode, hnsw.storage, ef_search);
+//        PocTaskScheduler taskScheduler(thread_count, &visited, nodeExpansionPerNode, hnsw.storage, ef_search);
         auto startTime = std::chrono::high_resolution_clock::now();
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
-        hnsw.searchParallel(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats, &taskScheduler);
+        hnsw.search(queryVecs + (i * queryDimension), k, ef_search, visited, results, stats);
         auto endTime = std::chrono::high_resolution_clock::now();
         while (!results.empty()) {
             auto top = results.top();
