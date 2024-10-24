@@ -808,8 +808,11 @@ void generateGroundTruth(
         IndexOneNN index(localDc.get(), dim, numVectors);
 #pragma omp for schedule(dynamic, 100)
         for (size_t i = 0; i < queryNumVectors; i++) {
+            auto start = std::chrono::high_resolution_clock::now();
             double dists[k];
             index.knn(k, queryVecs + i * dim, dists, gtVecs + i * k);
+            auto end = std::chrono::high_resolution_clock::now();
+            printf("Query time: %lld ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
         }
     }
 }
