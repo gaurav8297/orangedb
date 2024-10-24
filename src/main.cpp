@@ -923,7 +923,6 @@ void query_graph(
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         printf("Query time: %lld ms\n", duration);
         printf("Recall: %f\n", localRecall / k);
-        break;
     }
     auto recallPerQuery = recall / queryNumVectors;
     stats.logStats();
