@@ -866,10 +866,13 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto *filteredMask_temp = new vector_idx_t[queryNumVectors * baseNumVectors];
     auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
     loadFromFile(maskPath,  reinterpret_cast<uint8_t *>(filteredMask_temp), queryNumVectors * baseNumVectors * sizeof(vector_idx_t));
+
+    uint64_t sel = 0;
     for (size_t i = 0; i < queryNumVectors * baseNumVectors; i++) {
         filteredMask[i] = filteredMask_temp[i] == 1 ? 1 : 0;
+        sel += filteredMask[i];
     }
-
+    printf("Selectivity: %d\n", sel);
     printf("Base num vectors: %zu\n", baseNumVectors);
 
     // Print grond truth num vectors
