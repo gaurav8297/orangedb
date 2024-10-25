@@ -1640,7 +1640,7 @@ namespace orangedb {
                 continue;
             }
             depth = std::max(depth, candidate.second);
-            if (depth >= 3) {
+            if (depth >= 4) {
                 return (depth - 1);
             }
             visitedSet.insert(candidate.first);
@@ -1693,7 +1693,6 @@ namespace orangedb {
         while (!candidates.empty()) {
             auto candidate = candidates.top();
             if (candidate.dist > results.top().dist && results.size() >= efSearch) {
-                printf("yo");
                 break;
             }
             candidates.pop();
