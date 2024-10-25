@@ -161,6 +161,7 @@ namespace orangedb {
             candidates.pop();
             size_t begin, end;
             storage->get_neighbors_offsets(candidate.id, 0, begin, end);
+            stats.totalGetNbrsCall++;
 
             // the following version processes 4 neighbors at a time
             size_t jmax = begin;
@@ -632,7 +633,7 @@ namespace orangedb {
             VisitedTable &visited,
             std::priority_queue<NodeDistCloser> &results,
             Stats &stats) {
-        CosineDistanceComputer dc = CosineDistanceComputer(storage->data, storage->dim, storage->numPoints);
+        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
         dc.setQuery(query);
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = storage->entryPoint;
