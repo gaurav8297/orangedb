@@ -1697,7 +1697,7 @@ namespace orangedb {
             }
             candidates.pop();
             std::vector<vector_idx_t> nbrs;
-            int depth = findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 10, config.filterMinK, config.maxNeighboursCheck, candidates.empty(), stats);
+            int depth = findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 20, config.filterMinK, config.maxNeighboursCheck, candidates.empty(), stats);
             minDepth = std::min(minDepth, depth);
             maxDepth = std::max(maxDepth, depth);
             avgdepth += depth;
