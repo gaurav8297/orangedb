@@ -1736,8 +1736,8 @@ namespace orangedb {
         }
         avgdepth /= iter;
         stats.avgGetNbrsDepth = (avgdepth + 1);
-        stats.minDepth = minDepth;
-        stats.maxDepth = maxDepth;
+        stats.minDepth = minDepth + 1;
+        stats.maxDepth = maxDepth + 1;
         visited.reset();
     }
 
