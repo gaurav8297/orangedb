@@ -52,7 +52,7 @@ namespace orangedb {
 
         vector_idx_t id;
         double dist;
-        int depth = 1;
+        int depth;
 
         bool operator<(const NodeDistFarther &other) const {
             return dist > other.dist;
