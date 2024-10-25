@@ -1645,8 +1645,8 @@ namespace orangedb {
             storage->get_neighbors_offsets(candidate.first, 0, begin, end);
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
-            if (!force && nbrs.size() < minK && depth >= 3) {
-                return depth;
+            if (depth >= 3) {
+                return (depth - 1);
             }
 
             // TODO: Maybe make it prioritized, might help in correlated cases
