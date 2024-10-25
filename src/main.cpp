@@ -771,8 +771,8 @@ void generateFilterGroundTruth(InputParser &input) {
     const std::string &gtPath = input.getCmdOption("-gtPath");
     auto selectivity = stof(input.getCmdOption("-selectivity"));
     const std::string &filteredMaskPath = input.getCmdOption("-filteredMaskPath");
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -1175,8 +1175,8 @@ void benchmark_acorn(InputParser &input) {
     auto selectivity = stoi(input.getCmdOption("-selectivity"));
     auto k = stoi(input.getCmdOption("-k"));
 
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
     auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
     auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
     auto storagePath = fmt::format("{}/storage.bin", basePath);
