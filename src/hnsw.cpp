@@ -1665,9 +1665,9 @@ namespace orangedb {
                 }
                 candidates.push({neighbor, candidate.second + 1});
             }
-            if (nbrs.size() >= maxK) {
-                return depth;
-            }
+//            if (nbrs.size() >= maxK) {
+//                return depth;
+//            }
         }
         return depth;
     }
