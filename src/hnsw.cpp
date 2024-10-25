@@ -1687,7 +1687,7 @@ namespace orangedb {
         results.emplace(entrypoint, entrypointDist);
         visited.set(entrypoint);
         float avgdepth = 0;
-        int minDepth = 0;
+        int minDepth = INT_MAX;
         int maxDepth = 0;
         int iter = 0;
         while (!candidates.empty()) {
