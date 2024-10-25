@@ -1690,6 +1690,7 @@ namespace orangedb {
         int minDepth = INT_MAX;
         int maxDepth = 0;
         int iter = 0;
+        uint64_t avg_nodes = 0;
         while (!candidates.empty()) {
             auto candidate = candidates.top();
             if (candidate.dist > results.top().dist && results.size() >= efSearch) {
@@ -1698,6 +1699,7 @@ namespace orangedb {
             candidates.pop();
             std::vector<vector_idx_t> nbrs;
             int depth = findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 20, config.filterMinK, config.maxNeighboursCheck, candidates.empty(), stats);
+            avg_nodes += nbrs.size();
             minDepth = std::min(minDepth, depth);
             maxDepth = std::max(maxDepth, depth);
             avgdepth += depth;
@@ -1733,7 +1735,9 @@ namespace orangedb {
                 }
             }
         }
+        avg_nodes /= iter;
         avgdepth /= iter;
+        printf("Avg nodes %llu\n", avg_nodes);
         stats.avgGetNbrsDepth = avgdepth;
         stats.minDepth = minDepth;
         stats.maxDepth = maxDepth;
