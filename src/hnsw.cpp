@@ -1649,7 +1649,6 @@ namespace orangedb {
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
 
-
             // TODO: Maybe make it prioritized, might help in correlated cases
             for (size_t i = begin; i < end; i++) {
                 auto neighbor = neighbors[i];
