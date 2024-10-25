@@ -850,8 +850,8 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
     bool loadFromStorage = stoi(input.getCmdOption("-loadFromDisk"));
 
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
     auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
     auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
     auto storagePath = fmt::format("{}/storage.bin", basePath);
