@@ -863,8 +863,13 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    auto *filteredMask_temp = new vector_idx_t[queryNumVectors * baseNumVectors];
     auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
-    loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
+    loadFromFile(maskPath,  reinterpret_cast<uint8_t *>(filteredMask_temp), queryNumVectors * baseNumVectors * sizeof(vector_idx_t));
+    for (size_t i = 0; i < queryNumVectors * baseNumVectors; i++) {
+        filteredMask[i] = filteredMask_temp[i] == 1 ? 1 : 0;
+    }
+
     printf("Base num vectors: %zu\n", baseNumVectors);
 
     // Print grond truth num vectors
