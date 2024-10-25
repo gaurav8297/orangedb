@@ -1639,12 +1639,12 @@ namespace orangedb {
             if (visitedSet.contains(candidate.first)) {
                 continue;
             }
+            depth = std::max(depth, candidate.second);
             if (depth >= 2) {
                 return (depth - 1);
             }
             visitedSet.insert(candidate.first);
             visited.set(candidate.first);
-            depth = std::max(depth, candidate.second);
             storage->get_neighbors_offsets(candidate.first, 0, begin, end);
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
