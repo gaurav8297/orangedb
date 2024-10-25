@@ -25,6 +25,8 @@ namespace orangedb {
         uint64_t totalShrinkNoUse = 0;
         uint64_t totalGetNbrsCall = 0;
         double avgGetNbrsDepth = 0;
+        int minDepth = 0;
+        int maxDepth = 0;
         uint64_t uselessGetNbrs = 0;
         uint64_t searchIter = 0;
         std::unordered_map<vector_idx_t, uint64_t> shrinkCallsPerNode;
@@ -40,6 +42,8 @@ namespace orangedb {
             spdlog::info("Avg Get Nbrs Depth: {}", avgGetNbrsDepth);
             spdlog::info("Useless Get Nbrs: {}", uselessGetNbrs);
             spdlog::info("Total Search Iterations: {}", searchIter);
+            spdlog::info("Min Depth: {}", minDepth);
+            spdlog::info("Max Depth: {}", maxDepth);
             // Sort shrinkCallsPerNode in descending order and print
 //            std::vector<std::pair<vector_idx_t, uint64_t>> sortedShrinkCallsPerNode(shrinkCallsPerNode.begin(),
 //                                                                                    shrinkCallsPerNode.end());
@@ -90,6 +94,8 @@ namespace orangedb {
             totalShrinkNoUse = 0;
             totalGetNbrsCall = 0;
             avgGetNbrsDepth = 0;
+            minDepth = 0;
+            maxDepth = 0;
             uselessGetNbrs = 0;
             searchIter = 0;
             shrinkCallsPerNode.clear();
@@ -108,6 +114,8 @@ namespace orangedb {
                 totalShrinkNoUse += other.totalShrinkNoUse;
                 totalGetNbrsCall += other.totalGetNbrsCall;
                 avgGetNbrsDepth += other.avgGetNbrsDepth;
+                minDepth = std::min(minDepth, other.minDepth);
+                maxDepth = std::max(maxDepth, other.maxDepth);
                 uselessGetNbrs += other.uselessGetNbrs;
                 searchIter = std::max(searchIter, other.searchIter);
                 for (auto &it: other.shrinkCallsPerNode) {
