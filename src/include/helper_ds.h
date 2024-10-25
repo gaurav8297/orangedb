@@ -47,11 +47,12 @@ namespace orangedb {
     };
 
     struct NodeDistFarther {
-        explicit NodeDistFarther(vector_idx_t id = INVALID_VECTOR_ID, double dist = -1)
-                : id(id), dist(dist) {}
+        explicit NodeDistFarther(vector_idx_t id = INVALID_VECTOR_ID, double dist = -1, int depth = 1)
+                : id(id), dist(dist), depth(depth) {}
 
         vector_idx_t id;
         double dist;
+        int depth = 1;
 
         bool operator<(const NodeDistFarther &other) const {
             return dist > other.dist;

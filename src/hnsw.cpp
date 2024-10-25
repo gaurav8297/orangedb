@@ -1628,25 +1628,25 @@ namespace orangedb {
             bool force,
             Stats &stats) {
         auto neighbors = storage->get_neighbors(0);
-        std::queue<std::pair<vector_idx_t, int>> candidates;
-        candidates.push({entrypoint, 1});
+        std::priority_queue<NodeDistFarther> candidates;
+        candidates.emplace(entrypoint, 0);
         auto neighboursChecked = 0;
         std::unordered_set<vector_idx_t> visitedSet;
         int depth = 1;
         while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
-            auto candidate = candidates.front();
+            auto candidate = candidates.top();
             candidates.pop();
             size_t begin, end;
-            if (visitedSet.contains(candidate.first)) {
+            if (visitedSet.contains(candidate.id)) {
                 continue;
             }
-            depth = std::max(depth, candidate.second);
-            if (depth >= 3) {
+            depth = std::max(depth, candidate.depth);
+            if (depth >= 3 || nbrs.size() >= maxK) {
                 return (depth - 1);
             }
-            visitedSet.insert(candidate.first);
-            visited.set(candidate.first);
-            storage->get_neighbors_offsets(candidate.first, 0, begin, end);
+            visitedSet.insert(candidate.id);
+            visited.set(candidate.id);
+            storage->get_neighbors_offsets(candidate.id, 0, begin, end);
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
 
@@ -1664,7 +1664,11 @@ namespace orangedb {
                     nbrs.push_back(neighbor);
                     visited.set(neighbor);
                 }
-                candidates.push({neighbor, candidate.second + 1});
+                double dist = MAXFLOAT;
+                if (candidate.depth == 1) {
+                    dc->computeDistance(neighbor, &dist);
+                }
+                candidates.emplace(neighbor, dist, candidate.depth + 1);
             }
 //            if (nbrs.size() >= maxK) {
 //                return depth;
