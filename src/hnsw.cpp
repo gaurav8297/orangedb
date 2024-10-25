@@ -1693,6 +1693,7 @@ namespace orangedb {
         while (!candidates.empty()) {
             auto candidate = candidates.top();
             if (candidate.dist > results.top().dist && results.size() >= efSearch) {
+                printf("yo");
                 break;
             }
             candidates.pop();
