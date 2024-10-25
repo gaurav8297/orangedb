@@ -1641,7 +1641,7 @@ namespace orangedb {
                 continue;
             }
             depth = std::max(depth, candidate.depth);
-            if (depth >= 3 || nbrs.size() >= maxK) {
+            if (depth >= 3) {
                 return (depth - 1);
             }
             visitedSet.insert(candidate.id);
