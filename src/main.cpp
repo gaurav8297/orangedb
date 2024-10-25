@@ -957,8 +957,8 @@ void benchmark_hnsw_queries(InputParser &input) {
     auto nodeExpansionPerNode = stoi(input.getCmdOption("-nodeExpansionPerNode"));
     auto searchParallelAlgo = input.getCmdOption("-searchParallelAlgo");
 
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
     auto groundTruthPath = fmt::format("{}/gt.bin", basePath);
     auto storagePath = fmt::format("{}/storage.bin", basePath);
 
