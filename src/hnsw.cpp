@@ -1615,32 +1615,41 @@ namespace orangedb {
         visited.reset();
     }
 
-    void HNSW::findNextFilteredKNeighbours(
+    int HNSW::findNextFilteredKNeighbours(
             DistanceComputer *dc,
             vector_idx_t entrypoint,
             std::vector<vector_idx_t> &nbrs,
             const uint8_t *filterMask,
             orangedb::VisitedTable &visited,
+            int minK,
             int maxK,
             int maxNeighboursCheck,
+            bool force,
             Stats &stats) {
         auto neighbors = storage->get_neighbors(0);
-        std::queue<vector_idx_t> candidates;
-        candidates.push(entrypoint);
+        std::queue<std::pair<vector_idx_t, int>> candidates;
+        candidates.push({entrypoint, 0});
         auto neighboursChecked = 0;
         std::unordered_set<vector_idx_t> visitedSet;
+        int depth = 0;
         while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
             auto candidate = candidates.front();
             candidates.pop();
             size_t begin, end;
-            if (visitedSet.contains(candidate)) {
+            if (visitedSet.contains(candidate.first)) {
                 continue;
             }
-            visitedSet.insert(candidate);
-            visited.set(candidate);
-            storage->get_neighbors_offsets(candidate, 0, begin, end);
+            visitedSet.insert(candidate.first);
+            visited.set(candidate.first);
+            depth = std::max(depth, candidate.second);
+            storage->get_neighbors_offsets(candidate.first, 0, begin, end);
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
+            if (!force && nbrs.size() < minK && depth >= 2) {
+                printf("skipping\n");
+                return depth;
+            }
+
             // TODO: Maybe make it prioritized, might help in correlated cases
             for (size_t i = begin; i < end; i++) {
                 auto neighbor = neighbors[i];
@@ -1655,12 +1664,13 @@ namespace orangedb {
                     nbrs.push_back(neighbor);
                     visited.set(neighbor);
                 }
-                candidates.push(neighbor);
+                candidates.push({neighbor, candidate.second + 1});
             }
             if (nbrs.size() >= maxK) {
-                return;
+                return depth;
             }
         }
+        return depth;
     }
 
     void HNSW::searchNeighborsOnLastLevelWithFilterB(
@@ -1677,6 +1687,8 @@ namespace orangedb {
         candidates.emplace(entrypoint, entrypointDist);
         results.emplace(entrypoint, entrypointDist);
         visited.set(entrypoint);
+        float avgdepth = 0;
+        int iter = 0;
         while (!candidates.empty()) {
             auto candidate = candidates.top();
             if (candidate.dist > results.top().dist && results.size() >= efSearch) {
@@ -1684,7 +1696,8 @@ namespace orangedb {
             }
             candidates.pop();
             std::vector<vector_idx_t> nbrs;
-            findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, config.filterMinK, config.maxNeighboursCheck, stats);
+            avgdepth += findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 5, config.filterMinK, config.maxNeighboursCheck, candidates.empty(), stats);
+            iter += 1;
             if (candidates.empty() && nbrs.empty()) {
                 printf("Nbrs turn out empty!!!");
                 // Figure out how expensive this is!!
@@ -1716,6 +1729,8 @@ namespace orangedb {
                 }
             }
         }
+        avgdepth /= iter;
+        stats.avgGetNbrsDepth = (avgdepth + 1);
         visited.reset();
     }
 

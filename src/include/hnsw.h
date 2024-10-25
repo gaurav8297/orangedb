@@ -320,14 +320,16 @@ namespace orangedb {
                                                      orangedb::VisitedTable &visited, uint64_t efSearch,
                                                      int distCompBatchSize, orangedb::Stats &stats);
 
-        void findNextFilteredKNeighbours(
+        int findNextFilteredKNeighbours(
                 DistanceComputer *dc,
                 vector_idx_t entrypoint,
                 std::vector<vector_idx_t> &nbrs,
                 const uint8_t *filterMask,
                 VisitedTable &visited,
+                int minK,
                 int maxK,
                 int maxNeighboursCheck,
+                bool force,
                 Stats &stats);
 
         void searchNeighborsOnLastLevelWithFilterA(
