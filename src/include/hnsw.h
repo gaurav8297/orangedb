@@ -334,6 +334,7 @@ namespace orangedb {
                 std::vector<vector_idx_t> &nbrs,
                 const uint8_t *filterMask,
                 VisitedTable &visited,
+                std::unordered_map<vector_idx_t, int> &nbrsCount,
                 int minK,
                 int maxK,
                 int maxNeighboursCheck,

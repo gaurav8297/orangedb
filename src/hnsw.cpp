@@ -1622,6 +1622,7 @@ namespace orangedb {
             std::vector<vector_idx_t> &nbrs,
             const uint8_t *filterMask,
             orangedb::VisitedTable &visited,
+            std::unordered_map<vector_idx_t, int> &nbrsCount,
             int minK,
             int maxK,
             int maxNeighboursCheck,
@@ -1633,15 +1634,19 @@ namespace orangedb {
         auto neighboursChecked = 0;
         std::unordered_set<vector_idx_t> visitedSet;
         int depth = 1;
+        int exploredFilteredNbrCount = 0;
         while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
             auto candidate = candidates.top();
             candidates.pop();
             size_t begin, end;
+            if (nbrsCount.contains(candidate.id)) {
+                exploredFilteredNbrCount += nbrsCount[candidate.id];
+            }
             if (visitedSet.contains(candidate.id)) {
                 continue;
             }
             depth = std::max(depth, candidate.depth);
-            if (depth >= 3 || nbrs.size() >= maxK) {
+            if (depth >= 3 || exploredFilteredNbrCount >= maxK) {
                 return (depth - 1);
             }
             visitedSet.insert(candidate.id);
@@ -1651,10 +1656,14 @@ namespace orangedb {
             stats.totalGetNbrsCall++;
 
             // TODO: Maybe make it prioritized, might help in correlated cases
+            int filteredNbrCount = 0;
             for (size_t i = begin; i < end; i++) {
                 auto neighbor = neighbors[i];
                 if (neighbor == INVALID_VECTOR_ID) {
                     break;
+                }
+                if (filterMask[neighbor]) {
+                    filteredNbrCount += 1;
                 }
                 if (visited.get(neighbor)) {
                     continue;
@@ -1670,6 +1679,8 @@ namespace orangedb {
                 }
                 candidates.emplace(neighbor, dist, candidate.depth + 1);
             }
+            exploredFilteredNbrCount += filteredNbrCount;
+            nbrsCount[candidate.id] = filteredNbrCount;
 //            if (nbrs.size() >= maxK) {
 //                return depth;
 //            }
@@ -1690,6 +1701,7 @@ namespace orangedb {
         std::priority_queue<NodeDistFarther> candidates;
         candidates.emplace(entrypoint, entrypointDist);
         results.emplace(entrypoint, entrypointDist);
+        std::unordered_map<vector_idx_t, int> nbrsCount;
         visited.set(entrypoint);
         float avgdepth = 0;
         int minDepth = INT_MAX;
@@ -1706,7 +1718,8 @@ namespace orangedb {
             }
             candidates.pop();
             std::vector<vector_idx_t> nbrs;
-            int depth = findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 20, config.filterMinK,
+            int depth = findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, nbrsCount, 20,
+                                                    config.filterMinK,
                                                     config.maxNeighboursCheck, candidates.empty(), stats);
 
             if (nbrs.size() < 10) {
