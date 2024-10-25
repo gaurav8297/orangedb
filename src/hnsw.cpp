@@ -1645,7 +1645,7 @@ namespace orangedb {
             storage->get_neighbors_offsets(candidate.first, 0, begin, end);
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
-            if (depth >= 1) {
+            if (depth >= 2) {
                 return (depth - 1);
             }
 
