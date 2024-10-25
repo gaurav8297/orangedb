@@ -1628,10 +1628,10 @@ namespace orangedb {
             Stats &stats) {
         auto neighbors = storage->get_neighbors(0);
         std::queue<std::pair<vector_idx_t, int>> candidates;
-        candidates.push({entrypoint, 0});
+        candidates.push({entrypoint, 1});
         auto neighboursChecked = 0;
         std::unordered_set<vector_idx_t> visitedSet;
-        int depth = 0;
+        int depth = 1;
         while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
             auto candidate = candidates.front();
             candidates.pop();
@@ -1645,8 +1645,7 @@ namespace orangedb {
             storage->get_neighbors_offsets(candidate.first, 0, begin, end);
             neighboursChecked += 1;
             stats.totalGetNbrsCall++;
-            if (!force && nbrs.size() < minK && depth >= 2) {
-                printf("skipping\n");
+            if (!force && nbrs.size() < minK && depth >= 3) {
                 return depth;
             }
 
@@ -1698,7 +1697,7 @@ namespace orangedb {
             }
             candidates.pop();
             std::vector<vector_idx_t> nbrs;
-            int depth = findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 5, config.filterMinK, config.maxNeighboursCheck, candidates.empty(), stats);
+            int depth = findNextFilteredKNeighbours(dc, candidate.id, nbrs, filterMask, visited, 10, config.filterMinK, config.maxNeighboursCheck, candidates.empty(), stats);
             minDepth = std::min(minDepth, depth);
             maxDepth = std::max(maxDepth, depth);
             avgdepth += depth;
@@ -1735,9 +1734,9 @@ namespace orangedb {
             }
         }
         avgdepth /= iter;
-        stats.avgGetNbrsDepth = (avgdepth + 1);
-        stats.minDepth = minDepth + 1;
-        stats.maxDepth = maxDepth + 1;
+        stats.avgGetNbrsDepth = avgdepth;
+        stats.minDepth = minDepth;
+        stats.maxDepth = maxDepth;
         visited.reset();
     }
 
