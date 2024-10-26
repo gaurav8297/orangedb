@@ -655,16 +655,19 @@ void query_graph_filter(
         size_t k,
         size_t ef_search,
         size_t baseNumVectors) {
-    auto start = std::chrono::high_resolution_clock::now();
     auto visited = VisitedTable(baseNumVectors);
     auto recall = 0.0;
     Stats stats{};
-    printf("baseNumVectors: %zu\n", baseNumVectors);
+    long time = 0;
     for (size_t i = 0; i < queryNumVectors; i++) {
         auto localRecall = 0.0;
         std::priority_queue<NodeDistCloser> results;
         std::vector<NodeDistFarther> res;
+        auto start = std::chrono::high_resolution_clock::now();
         hnsw.searchWithFilter(queryVecs + (i * queryDimension), k, ef_search, visited, results, filteredMask + (i * baseNumVectors), stats);
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+        time += duration;
         while (!results.empty()) {
             auto top = results.top();
             res.emplace_back(top.id, top.dist);
@@ -683,8 +686,7 @@ void query_graph_filter(
     std::cout << "Total Vectors: " << queryNumVectors << std::endl;
     std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    std::cout << "Query time: " << duration << " ms" << std::endl;
+    std::cout << "Query time: " << time << " ms" << std::endl;
 }
 
 void enable_perf() {
@@ -835,62 +837,79 @@ void generateGroundTruth(InputParser &input) {
     writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 }
 
+std::vector<int> parseCommaSeparatedIntegers(const std::string& input) {
+    std::vector<int> numbers;
+    std::stringstream ss(input);
+    std::string temp;
+
+    while (std::getline(ss, temp, ',')) {
+        numbers.push_back(std::stoi(temp));
+    }
+
+    return numbers;
+}
+
 void benchmark_filtered_hnsw_queries(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     auto efConstruction = stoi(input.getCmdOption("-efConstruction"));
     auto M = stoi(input.getCmdOption("-M"));
-    auto efSearch = stoi(input.getCmdOption("-efSearch"));
+    auto efSearchs = parseCommaSeparatedIntegers(input.getCmdOption("-efSearch"));
     auto thread_count = stoi(input.getCmdOption("-nThreads"));
     auto minAlpha = stof(input.getCmdOption("-minAlpha"));
     auto maxAlpha = stof(input.getCmdOption("-maxAlpha"));
     auto alphaDecay = stof(input.getCmdOption("-alphaDecay"));
     auto k = stoi(input.getCmdOption("-k"));
     auto filterMinK = stoi(input.getCmdOption("-filterMinK"));
-    auto selectivity = stoi(input.getCmdOption("-selectivity"));
+    auto selectivities = parseCommaSeparatedIntegers(input.getCmdOption("-selectivity"));
     auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
     bool loadFromStorage = stoi(input.getCmdOption("-loadFromDisk"));
 
     auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
-    auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
-    auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
     auto storagePath = fmt::format("{}/storage.bin", basePath);
 
+    CHECK_ARGUMENT(efSearchs.size() == selectivities.size(), "Number of efSearchs and selectivities should be same");
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-//    auto *filteredMask_temp = new vector_idx_t[queryNumVectors * baseNumVectors];
-    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
-    loadFromFile(maskPath,  filteredMask, queryNumVectors * baseNumVectors);
 
-//    uint64_t sel = 0;
-//    for (size_t i = 0; i < queryNumVectors * baseNumVectors; i++) {
-//        filteredMask[i] = filteredMask_temp[i] == 1 ? 1 : 0;
-//        sel += filteredMask[i];
-//    }
-//    printf("Selectivity: %d\n", sel);
+
+    HNSWConfig config(M, efConstruction, 100, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck,
+                      "none", storagePath, loadFromStorage, 20, 10, 1, "none");
+    omp_set_num_threads(thread_count);
+    RandomGenerator rng(1234);
+
     printf("Base num vectors: %zu\n", baseNumVectors);
 
     // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("Query dimension: %zu\n", baseDimension);
 
-    omp_set_num_threads(thread_count);
-    RandomGenerator rng(1234);
-    HNSWConfig config(M, efConstruction, efSearch, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck,
-                      "none", storagePath, loadFromStorage, 20, 10, 1, "none");
     HNSW hnsw(config, &rng, baseDimension);
     build_graph(hnsw, baseVecs, baseNumVectors);
     if (!loadFromStorage) {
         hnsw.flushToDisk();
     }
-//    generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, 1, k, gtVecs);
-//    hnsw.logStats();
-    query_graph_filter(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch, baseNumVectors);
+    // hnsw.logStats();
+
+    int i = 0;
+    for (auto selectivity : selectivities) {
+        auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
+        auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
+        auto efSearch = efSearchs[i++];
+        printf("efSeach: %d, selectivity: %d\n", efSearch, selectivity);
+
+        auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+        loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+        auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
+        loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
+
+        query_graph_filter(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch,
+                           baseNumVectors);
+        printf("Done");
+    }
 }
 
 void query_graph(
