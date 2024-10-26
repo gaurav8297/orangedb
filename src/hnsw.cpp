@@ -1796,7 +1796,7 @@ namespace orangedb {
             searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
-        searchNeighborsOnLastLevelWithFilterB(
+        searchNeighborsOnLastLevelWithFilterA(
                 &dc,
                 results,
                 nearestID,
