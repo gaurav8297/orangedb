@@ -1629,14 +1629,17 @@ namespace orangedb {
             bool force,
             Stats &stats) {
         auto neighbors = storage->get_neighbors(0);
-        std::priority_queue<NodeDistFarther> candidates;
-        candidates.emplace(entrypoint, 0);
+//        std::priority_queue<NodeDistFarther> candidates;
+//        candidates.emplace(entrypoint, 0);
+        std::queue<NodeDistFarther> candidates;
+        candidates.emplace(entrypoint, 0, 1);
         auto neighboursChecked = 0;
         std::unordered_set<vector_idx_t> visitedSet;
         int depth = 1;
         int exploredFilteredNbrCount = 0;
         while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
-            auto candidate = candidates.top();
+//            auto candidate = candidates.top();
+            auto candidate = candidates.front();
             candidates.pop();
             size_t begin, end;
             if (nbrsCount.contains(candidate.id)) {
@@ -1673,11 +1676,11 @@ namespace orangedb {
                     nbrs.push_back(neighbor);
                     visited.set(neighbor);
                 }
-                double dist = MAXFLOAT;
-                if (candidate.depth == 1) {
-                    dc->computeDistance(neighbor, &dist);
-                }
-                candidates.emplace(neighbor, dist, candidate.depth + 1);
+//                double dist = MAXFLOAT;
+//                if (candidate.depth == 1) {
+//                    dc->computeDistance(neighbor, &dist);
+//                }
+                candidates.emplace(neighbor, 0, candidate.depth + 1);
             }
             exploredFilteredNbrCount += filteredNbrCount;
             nbrsCount[candidate.id] = filteredNbrCount;
@@ -1722,15 +1725,15 @@ namespace orangedb {
                                                     config.filterMinK,
                                                     config.maxNeighboursCheck, candidates.empty(), stats);
 
-            if (nbrs.size() < 10) {
-                nbrs_count += 1;
-            }
+//            if (nbrs.size() < 10) {
+//                nbrs_count += 1;
+//            }
             avg_nodes += nbrs.size();
             min_nodes = std::min(min_nodes, (uint64_t)nbrs.size());
             max_nodes = std::max(max_nodes, (uint64_t)nbrs.size());
             minDepth = std::min(minDepth, depth);
             maxDepth = std::max(maxDepth, depth);
-            avgdepth += depth;
+            avgdepth += (float) depth;
             iter += 1;
             if (candidates.empty() && nbrs.empty()) {
                 printf("Nbrs turn out empty!!!");
@@ -1745,18 +1748,23 @@ namespace orangedb {
             }
 //            printf("Size of nbrs %d\n", nbrs.size());
 
-            if (nbrs.empty()) {
+//            if (nbrs.empty()) {
                  // TODO: Maybe change the entrypoint in case no results
                  //     calculate the unvisited filtered neighbors, if above some threshold, then change the entrypoint
 //                 spdlog::warn("Nbrs turn out empty!!!");
+//            }
+
+            if (nbrs.size() == 0) {
+                continue;
             }
-            for (auto neighbor: nbrs) {
-                double dist;
-                dc->computeDistance(neighbor, &dist);
-                stats.totalDistCompDuringSearch++;
-                if (results.size() < efSearch || dist < results.top().dist) {
-                    candidates.emplace(neighbor, dist);
-                    results.emplace(neighbor, dist);
+
+            double distances[nbrs.size()];
+            dc->batchComputeDistances(nbrs.data(), distances, nbrs.size());
+            stats.totalDistCompDuringSearch += nbrs.size();
+            for (int i = 0; i < nbrs.size(); i++) {
+                if (results.size() < efSearch || distances[i] < results.top().dist) {
+                    candidates.emplace(nbrs[i], distances[i]);
+                    results.emplace(nbrs[i], distances[i]);
                     if (results.size() > efSearch) {
                         results.pop();
                     }
@@ -1765,11 +1773,11 @@ namespace orangedb {
         }
         avg_nodes /= iter;
         avgdepth /= iter;
-        printf("Avg nodes %llu\n", avg_nodes);
-        printf("Min nodes %llu\n", min_nodes);
-        printf("Max nodes %llu\n", max_nodes);
-        printf("Nbrs count %llu\n", nbrs_count);
-        printf("Iter %d\n", iter);
+        stats.avgNodesExplored = avg_nodes;
+        stats.minNodesExplored = min_nodes;
+        stats.maxNodesExplored = max_nodes;
+//        printf("Nbrs count %llu\n", nbrs_count);
+//        printf("Iter %d\n", iter);
         stats.avgGetNbrsDepth = avgdepth;
         stats.minDepth = minDepth;
         stats.maxDepth = maxDepth;
@@ -1796,7 +1804,7 @@ namespace orangedb {
             searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
-        searchNeighborsOnLastLevelWithFilterA(
+        searchNeighborsOnLastLevelWithFilterB(
                 &dc,
                 results,
                 nearestID,
