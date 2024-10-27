@@ -773,8 +773,8 @@ void generateFilterGroundTruth(InputParser &input) {
     const std::string &gtPath = input.getCmdOption("-gtPath");
     auto selectivity = stof(input.getCmdOption("-selectivity"));
     const std::string &filteredMaskPath = input.getCmdOption("-filteredMaskPath");
-    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -864,8 +864,8 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
     bool loadFromStorage = stoi(input.getCmdOption("-loadFromDisk"));
 
-    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
     auto storagePath = fmt::format("{}/storage.bin", basePath);
 
     CHECK_ARGUMENT(efSearchs.size() == selectivities.size(), "Number of efSearchs and selectivities should be same");
