@@ -1679,7 +1679,9 @@ namespace orangedb {
                 double dist = MAXFLOAT;
                 if (candidate.depth == 1) {
                     dc->computeDistance(neighbor, &dist);
-                    stats.totalDistCompDuringSearch++;
+                    if (!filterMask[neighbor]) {
+                        stats.totalDistCompDuringSearch++;
+                    }
                 }
                 candidates.emplace(neighbor, dist, candidate.depth + 1);
             }
