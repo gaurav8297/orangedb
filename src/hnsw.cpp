@@ -1629,17 +1629,17 @@ namespace orangedb {
             bool force,
             Stats &stats) {
         auto neighbors = storage->get_neighbors(0);
-//        std::priority_queue<NodeDistFarther> candidates;
-//        candidates.emplace(entrypoint, 0);
-        std::queue<NodeDistFarther> candidates;
-        candidates.emplace(entrypoint, 0, 1);
+        std::priority_queue<NodeDistFarther> candidates;
+        candidates.emplace(entrypoint, 0);
+//        std::queue<NodeDistFarther> candidates;
+//        candidates.emplace(entrypoint, 0, 1);
         auto neighboursChecked = 0;
         std::unordered_set<vector_idx_t> visitedSet;
         int depth = 1;
         int exploredFilteredNbrCount = 0;
         while (neighboursChecked <= maxNeighboursCheck && !candidates.empty()) {
-//            auto candidate = candidates.top();
-            auto candidate = candidates.front();
+            auto candidate = candidates.top();
+//            auto candidate = candidates.front();
             candidates.pop();
             size_t begin, end;
             if (nbrsCount.contains(candidate.id)) {
@@ -1649,7 +1649,7 @@ namespace orangedb {
                 continue;
             }
             depth = std::max(depth, candidate.depth);
-            if (depth >= 3) {
+            if (depth >= 3 || exploredFilteredNbrCount >= maxK) {
                 return (depth - 1);
             }
             visitedSet.insert(candidate.id);
@@ -1676,11 +1676,12 @@ namespace orangedb {
                     nbrs.push_back(neighbor);
                     visited.set(neighbor);
                 }
-//                double dist = MAXFLOAT;
-//                if (candidate.depth == 1) {
-//                    dc->computeDistance(neighbor, &dist);
-//                }
-                candidates.emplace(neighbor, 0, candidate.depth + 1);
+                double dist = MAXFLOAT;
+                if (candidate.depth == 1) {
+                    dc->computeDistance(neighbor, &dist);
+                    stats.totalDistCompDuringSearch++;
+                }
+                candidates.emplace(neighbor, dist, candidate.depth + 1);
             }
             exploredFilteredNbrCount += filteredNbrCount;
             nbrsCount[candidate.id] = filteredNbrCount;

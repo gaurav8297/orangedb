@@ -859,7 +859,7 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     auto maxAlpha = stof(input.getCmdOption("-maxAlpha"));
     auto alphaDecay = stof(input.getCmdOption("-alphaDecay"));
     auto k = stoi(input.getCmdOption("-k"));
-    auto filterMinK = stoi(input.getCmdOption("-filterMinK"));
+    auto filterMinK = parseCommaSeparatedIntegers(input.getCmdOption("-filterMinK"));
     auto selectivities = parseCommaSeparatedIntegers(input.getCmdOption("-selectivity"));
     auto maxNeighboursCheck = stoi(input.getCmdOption("-maxNeighboursCheck"));
     bool loadFromStorage = stoi(input.getCmdOption("-loadFromDisk"));
@@ -876,7 +876,7 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
 
 
-    HNSWConfig config(M, efConstruction, 100, minAlpha, maxAlpha, alphaDecay, filterMinK, maxNeighboursCheck,
+    HNSWConfig config(M, efConstruction, 100, minAlpha, maxAlpha, alphaDecay, 1, maxNeighboursCheck,
                       "none", storagePath, loadFromStorage, 20, 10, 1, "none");
     omp_set_num_threads(thread_count);
     RandomGenerator rng(1234);
@@ -898,17 +898,17 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     for (auto selectivity : selectivities) {
         auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
         auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
-        auto efSearch = efSearchs[i++];
-        printf("efSeach: %d, selectivity: %d\n", efSearch, selectivity);
-
+        auto efSearch = efSearchs[i];
+        printf("efSearch: %d, selectivity: %d\n", efSearch, selectivity);
+        hnsw.config.filterMinK = filterMinK[i];
         auto *gtVecs = new vector_idx_t[queryNumVectors * k];
         loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
         auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
         loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
-
         query_graph_filter(hnsw, queryVecs, filteredMask, queryNumVectors, queryDimension, gtVecs, k, efSearch,
                            baseNumVectors);
-        printf("Done");
+        printf("Done\n");
+        i++;
     }
 }
 
