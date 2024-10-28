@@ -1288,6 +1288,11 @@ void benchmark_quantization(InputParser &input) {
     double qDist;
     qdc->compute_distance(queryVecs, codes, &qDist);
     printf("Dist: %f, Quantized Dist: %f\n", dist, qDist);
+
+    for (int i = 0; i < 30; i++) {
+        printf("%f %d %f\n", baseVecs[i], codes[i], fastq::scalar_test::decode_serial(codes[i], sq.alpha[i], sq.beta[i]));
+    }
+
 }
 
 

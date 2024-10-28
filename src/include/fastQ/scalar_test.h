@@ -313,7 +313,7 @@ namespace fastq {
         class SQ8Bit {
             static constexpr size_t HISTOGRAM_NUM_BINS = 512;
         public:
-            explicit SQ8Bit(int dim, float break_point_data_ratio = 0.95f)
+            explicit SQ8Bit(int dim, float break_point_data_ratio = 0.99f)
                     : dim(dim), codeSize(dim + 4), break_point_data_ratio(break_point_data_ratio) {
                 vmin = new float[dim];
                 vdiff = new float[dim];
@@ -397,7 +397,7 @@ namespace fastq {
             int dim; // dimension of the input vectors
             size_t codeSize; // bytes per indexed vector
 
-        private:
+        public:
             float *vmin;
             float *vdiff;
 
