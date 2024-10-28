@@ -24,10 +24,10 @@ find_package(OpenMP REQUIRED)
 # Global compiler flags for debug and release
 set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
 #set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g")
-set(CMAKE_CXX_FLAGS_RELEASE "-fopenmp -O3 -march=native")
+set(CMAKE_CXX_FLAGS_RELEASE "-fopenmp -O3 -march=native -fsanitize=address -fno-omit-frame-pointer")
 set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
 #set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g")
-set(CMAKE_C_FLAGS_RELEASE "-fopenmp -O3 -march=native")
+set(CMAKE_C_FLAGS_RELEASE "-fopenmp -O3 -march=native -fsanitize=address -fno-omit-frame-pointer")
 #set(CMAKE_OSX_ARCHITECTURES "x86_64")
 
 # Add include path
