@@ -1276,7 +1276,7 @@ void benchmark_quantization(InputParser &input) {
     fastq::scalar_test::SQ8Bit sq(baseDimension);
     sq.batch_train(baseVecs, baseNumVectors);
 
-    uint8_t *codes = new uint8_t[sq.codeSize];
+    uint8_t *codes = new uint8_t[sq.codeSize * baseNumVectors];
     sq.encode(baseVecs, codes, baseNumVectors);
 
     L2DistanceComputer dc(baseVecs, baseDimension, baseNumVectors);
