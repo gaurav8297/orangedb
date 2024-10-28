@@ -205,11 +205,11 @@ namespace fastq {
             ~AsymmetricL2Sq() = default;
 
             inline void compute_distance(const float *x, const uint8_t *y, double *result) override {
-//#if SIMSIMD_TARGET_SKYLAKE
-//                compute_asym_l2sq_skylake_8bit(x, y, result, dim, alpha, beta);
-//#else
+#if SIMSIMD_TARGET_SKYLAKE
+                compute_asym_l2sq_skylake_8bit(x, y, result, dim, alpha, beta);
+#else
                 compute_asym_l2sq_serial_8bit(x, y, result, dim, alpha, beta);
-//#endif
+#endif
             }
 
         private:
