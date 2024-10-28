@@ -16,6 +16,7 @@
 #include "helper_ds.h"
 #include <fastQ/common.h>
 #include "faiss/IndexACORN.h"
+#include "fastQ/scalar_test.h"
 
 using namespace orangedb;
 
@@ -1259,22 +1260,54 @@ void benchmark_acorn(InputParser &input) {
     std::cout << "Query time: " << duration_search << " ms" << std::endl;
 }
 
+
+void benchmark_quantization(InputParser &input) {
+    const std::string &basePath = input.getCmdOption("-basePath");
+
+    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    fastq::scalar_test::SQ8Bit sq(baseDimension);
+    sq.batch_train(baseVecs, baseNumVectors);
+
+    uint8_t *codes = new uint8_t[sq.codeSize];
+    sq.encode(baseVecs, codes, baseNumVectors);
+
+    L2DistanceComputer dc(baseVecs, baseDimension, baseNumVectors);
+    dc.setQuery(queryVecs);
+    double dist;
+    dc.computeDistance(0, &dist);
+
+    auto qdc = sq.get_asym_distance_computer(fastq::scalar_test::L2_SQ);
+    double qDist;
+    qdc->compute_distance(queryVecs, codes, &qDist);
+    printf("Dist: %f, Quantized Dist: %f\n", dist, qDist);
+}
+
+
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
+    benchmark_quantization(input);
 //    calculate_dists(input);
-    const std::string &run = input.getCmdOption("-run");
-    if (run == "benchmark") {
-        benchmark_hnsw_queries(input);
-    } else if (run == "generateGT") {
-        generateGroundTruth(input);
-    } else if (run == "generateFilterGT") {
-        generateFilterGroundTruth(input);
-    } else if (run == "benchmarkFiltered") {
-        benchmark_filtered_hnsw_queries(input);
-    } else if (run == "benchmarkAcorn") {
-        benchmark_acorn(input);
-    }
+//    const std::string &run = input.getCmdOption("-run");
+//    if (run == "benchmark") {
+//        benchmark_hnsw_queries(input);
+//    } else if (run == "generateGT") {
+//        generateGroundTruth(input);
+//    } else if (run == "generateFilterGT") {
+//        generateFilterGroundTruth(input);
+//    } else if (run == "benchmarkFiltered") {
+//        benchmark_filtered_hnsw_queries(input);
+//    } else if (run == "benchmarkAcorn") {
+//        benchmark_acorn(input);
+//    }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
