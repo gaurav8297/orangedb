@@ -300,7 +300,7 @@ namespace fastq {
                 vdiff[i] -= vmin[i];
             }
 
-            determine_smallest_breakpoint(x, n, dim, vmin, vdiff, hist_num_bins, break_point_data_ratio);
+//            determine_smallest_breakpoint(x, n, dim, vmin, vdiff, hist_num_bins, break_point_data_ratio);
             // Precompute alpha and gamma, as well as their squares
             for (size_t i = 0; i < dim; i++) {
                 alpha[i] = vdiff[i] / scalar_range;
