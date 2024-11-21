@@ -1495,7 +1495,7 @@ void benchmark_pread(InputParser &input) {
             perror("pread failed");
             abort();
         }
-        simsimd_cos_f32(queryVecs, baseVecs, queryDimension, &dists[i]);
+        simsimd_cos_f32(queryVecs, baseVecs + 1, queryDimension, &dists[i]);
         free(baseVecs);
     }
     auto end = std::chrono::high_resolution_clock::now();
