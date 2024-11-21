@@ -1414,6 +1414,7 @@ void benchmark_io_uring(InputParser &input) {
     struct io_uring ring;
     setup_context(numRandomReads, &ring);
 
+    auto start = std::chrono::high_resolution_clock::now();
     struct io_uring_cqe *cqe;
 
     // Queue the reads
@@ -1430,7 +1431,6 @@ void benchmark_io_uring(InputParser &input) {
         fprintf(stderr, "io_uring_submit: %s\n", strerror(-ret));
         abort();
     }
-    auto start = std::chrono::high_resolution_clock::now();
 
     std:vector<double> dists(numRandomReads);
     for (int i = 0; i < numRandomReads; i++) {
@@ -1507,7 +1507,7 @@ void benchmark_pread(InputParser &input) {
     for (int i = 0; i < numRandomReads; i++) {
         dist += dists[i];
     }
-    printf("Total dist: %d\n", dist);
+    printf("Total dist: %f\n", dist);
     close(fd);
 }
 
