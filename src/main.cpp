@@ -1454,9 +1454,11 @@ void benchmark_io_uring(InputParser &input) {
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Duration: %lld ms\n", duration);
 
+    auto dist = 0;
     for (int i = 0; i < numRandomReads; i++) {
-        printf("%f\n", dists[i]);
+        dist += dists[i];
     }
+    printf("Total dist: %d\n", dist);
     close(fd);
 }
 
@@ -1501,9 +1503,11 @@ void benchmark_pread(InputParser &input) {
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Time: %lld ms\n", duration);
 
+    auto dist = 0;
     for (int i = 0; i < numRandomReads; i++) {
-        printf("%f\n", dists[i]);
+        dist += dists[i];
     }
+    printf("Total dist: %d\n", dist);
     close(fd);
 }
 
