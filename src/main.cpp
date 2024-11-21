@@ -1335,6 +1335,7 @@ void get_random_offsets(std::vector<std::pair<uint64_t, uint64_t>> &readInfo, ui
     rng.randomPerm(numVectors, offsets.data(), offsets.size());
     // Adjust offsets
     for (int i = 0; i < offsets.size(); i++) {
+        printf("Offset: %llu\n", offsets[i]);
         auto offset = offsets[i] * (dim + 1) * 4;
         auto size = (dim + 1) * sizeof(float);
         readInfo[i] = std::make_pair(offset, size);
