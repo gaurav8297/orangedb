@@ -1399,6 +1399,10 @@ void benchmark_io_uring(InputParser &input) {
     auto stat = get_file_stat(baseVectorPath);
     std::vector<std::pair<uint64_t, uint64_t>> readInfo(numRandomReads);
     get_random_offsets(readInfo, stat.second, stat.first);
+    // print read info
+    for (int i = 0; i < numRandomReads; i++) {
+        printf("Offset: %llu, Size: %llu\n", readInfo[i].first, readInfo[i].second);
+    }
 
     int fd = open(baseVectorPath.c_str(), O_RDONLY);
     if (fd < 0) {
