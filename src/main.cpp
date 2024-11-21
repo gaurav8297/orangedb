@@ -1448,7 +1448,7 @@ void benchmark_io_uring(InputParser &input) {
         data = static_cast<io_data *>(io_uring_cqe_get_data(cqe));
         assert(data->read == 1);
         // Actual computation
-        simsimd_cos_f32(queryVecs, reinterpret_cast<float *>(data->iov.iov_base) + 1, queryNumVectors, &dists[i]);
+        simsimd_cos_f32(queryVecs, reinterpret_cast<float *>(data->iov.iov_base), queryNumVectors, &dists[i]);
         io_uring_cqe_seen(&ring, cqe);
     }
     auto end = std::chrono::high_resolution_clock::now();
