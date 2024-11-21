@@ -18,6 +18,8 @@
 #include "faiss/IndexACORN.h"
 #include "fastQ/scalar_test.h"
 
+#include <liburing.h>
+
 using namespace orangedb;
 
 #if defined(__GNUC__)
@@ -28,6 +30,9 @@ using namespace orangedb;
 #define PRAGMA_IMPRECISE_FUNCTION_END \
     _Pragma("GCC pop_options")
 #endif
+
+
+
 
 class InputParser {
 public:
@@ -1296,23 +1301,174 @@ void benchmark_quantization(InputParser &input) {
 }
 
 
+
+void benchmark_random_pread(InputParser &input) {
+
+}
+
+std::pair<size_t, size_t> get_file_stat(const std::string &filePath) {
+    FILE *f = fopen(filePath.c_str(), "r");
+    if (!f) {
+        fprintf(stderr, "could not open %s\n", filePath.c_str());
+        perror("");
+        abort();
+    }
+    int d;
+    fread(&d, 1, sizeof(int), f);
+    CHECK_ARGUMENT((d > 0 && d < 1000000), "unreasonable dimension");
+    fseek(f, 0, SEEK_SET);
+    struct stat st{};
+    fstat(fileno(f), &st);
+    size_t sz = st.st_size;
+    size_t n = sz / ((d + 1) * 4);
+    fclose(f);
+
+    return std::pair(n, d);
+}
+
+void get_random_offsets(std::vector<std::pair<uint64_t, uint64_t>> &readInfo, uint64_t dim, uint64_t numVectors) {
+    auto now = std::chrono::system_clock::now();
+    auto seed = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    RandomGenerator rng(seed);
+    std::vector<uint64_t> offsets(readInfo.size());
+    rng.randomPerm(numVectors, offsets.data(), offsets.size());
+    // Adjust offsets
+    for (int i = 0; i < offsets.size(); i++) {
+        auto offset = offsets[i] * (dim + 1) * 4;
+        auto size = (dim + 1) * 4;
+        readInfo[i] = std::make_pair(offset, size);
+    }
+}
+
+struct io_data {
+    int read;
+    off_t first_offset, offset;
+    size_t first_len;
+    struct iovec iov;
+};
+
+static int setup_context(unsigned entries, struct io_uring *ring)
+{
+    int ret;
+    ret = io_uring_queue_init(entries, ring, 0);
+    if (ret < 0) {
+        fprintf(stderr, "queue_init: %s\n", strerror(-ret));
+        return -1;
+    }
+
+    return 0;
+}
+
+static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
+{
+    struct io_uring_sqe *sqe;
+    struct io_data *data;
+
+    data = static_cast<io_data *>(malloc(size + sizeof(*data)));
+    if (!data)
+        return 1;
+
+    sqe = io_uring_get_sqe(ring);
+    if (!sqe) {
+        free(data);
+        return 1;
+    }
+
+    data->read = 1;
+    data->offset = data->first_offset = offset;
+
+    data->iov.iov_base = data + 1;
+    data->iov.iov_len = size;
+    data->first_len = size;
+
+    io_uring_prep_readv(sqe, fd, &data->iov, 1, offset);
+    io_uring_sqe_set_data(sqe, data);
+    return 0;
+}
+
+
+void benchmark_io_uring(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    auto numRandomReads = stoi(input.getCmdOption("-numRandomReads"));
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    auto stat = get_file_stat(baseVectorPath);
+    std::vector<std::pair<uint64_t, uint64_t>> readInfo(numRandomReads);
+    get_random_offsets(readInfo, stat.second, stat.first);
+
+    int fd = open(baseVectorPath.c_str(), O_RDONLY);
+    if (fd < 0) {
+        perror("open failed");
+        abort();
+    }
+
+    struct io_uring ring;
+    setup_context(numRandomReads, &ring);
+
+    struct io_uring_cqe *cqe;
+
+    // Queue the reads
+    for (int i = 0; i < numRandomReads; i++) {
+        auto offset = readInfo[i].first;
+        auto size = readInfo[i].second;
+        if (queue_read(&ring, fd, size, offset))
+            break;
+    }
+
+    // Submit the reads
+    auto ret = io_uring_submit(&ring);
+    if (ret < 0) {
+        fprintf(stderr, "io_uring_submit: %s\n", strerror(-ret));
+        abort();
+    }
+
+    std:vector<double> dists(numRandomReads);
+    for (int i = 0; i < numRandomReads; i++) {
+        struct io_data *data;
+        ret = io_uring_wait_cqe(&ring, &cqe);
+        if (ret < 0) {
+            fprintf(stderr, "io_uring_wait_cqe: %s\n", strerror(-ret));
+            abort();
+        }
+        if (!cqe) {
+            fprintf(stderr, "cqe is NULL\n");
+            abort();
+        }
+        data = static_cast<io_data *>(io_uring_cqe_get_data(cqe));
+        assert(data->read == 1);
+        // Actual computation
+        simsimd_cos_f32(queryVecs, reinterpret_cast<float *>(data->iov.iov_base) + 1, queryNumVectors, &dists[i]);
+        io_uring_cqe_seen(&ring, cqe);
+    }
+
+    for (int i = 0; i < numRandomReads; i++) {
+        printf("%f\n", dists[i]);
+    }
+    close(fd);
+}
+
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
-    benchmark_quantization(input);
+//    benchmark_quantization(input);
 //    calculate_dists(input);
-//    const std::string &run = input.getCmdOption("-run");
-//    if (run == "benchmark") {
-//        benchmark_hnsw_queries(input);
-//    } else if (run == "generateGT") {
-//        generateGroundTruth(input);
-//    } else if (run == "generateFilterGT") {
-//        generateFilterGroundTruth(input);
-//    } else if (run == "benchmarkFiltered") {
-//        benchmark_filtered_hnsw_queries(input);
-//    } else if (run == "benchmarkAcorn") {
-//        benchmark_acorn(input);
-//    }
+    const std::string &run = input.getCmdOption("-run");
+    if (run == "benchmark") {
+        benchmark_hnsw_queries(input);
+    } else if (run == "generateGT") {
+        generateGroundTruth(input);
+    } else if (run == "generateFilterGT") {
+        generateFilterGroundTruth(input);
+    } else if (run == "benchmarkFiltered") {
+        benchmark_filtered_hnsw_queries(input);
+    } else if (run == "benchmarkAcorn") {
+        benchmark_acorn(input);
+    } else if (run == "benchmarkIoUring") {
+        benchmark_io_uring(input);
+    }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);

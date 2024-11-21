@@ -20,7 +20,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
 find_package(OpenMP REQUIRED)
-
 # Global compiler flags for debug and release
 set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
 #set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g")
@@ -39,6 +38,11 @@ include_directories(${PROJECT_SOURCE_DIR}/third_party/faiss)
 add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/simsimd)
 add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/faiss)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
+
+#set(LIBURING_DIR ${CMAKE_SOURCE_DIR}/third_party/liburing/build)
+#include_directories(${LIBURING_DIR}/include)
+# Link the liburing library
+#link_directories(${LIBURING_DIR}/lib)
 
 # Add executable path
 add_executable(orangedb_main ${PROJECT_SOURCE_DIR}/src/main.cpp)
