@@ -1368,18 +1368,29 @@ static int setup_context(int fd, unsigned entries, struct io_uring *ring)
 
 static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     struct io_uring_sqe *sqe;
     struct io_data *data;
 
     data = static_cast<io_data *>(malloc(size + sizeof(*data)));
     if (!data)
         return 1;
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    printf("Duration malloc: %lld ns\n", duration);
 
+    start = std::chrono::high_resolution_clock::now();
     sqe = io_uring_get_sqe(ring);
     if (!sqe) {
         free(data);
         return 1;
     }
+
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    printf("Duration get_sqe: %lld ns\n", duration);
+
+    start = std::chrono::high_resolution_clock::now();
 
     data->read = 1;
     data->offset = data->first_offset = offset;
@@ -1390,6 +1401,10 @@ static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
 
     io_uring_prep_readv(sqe, fd, &data->iov, 1, offset);
     io_uring_sqe_set_data(sqe, data);
+
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    printf("Duration prep_readv: %lld ns\n", duration);
     return 0;
 }
 
