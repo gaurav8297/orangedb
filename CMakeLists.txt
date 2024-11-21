@@ -39,16 +39,17 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/simsimd)
 add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/faiss)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
-#set(LIBURING_DIR ${CMAKE_SOURCE_DIR}/third_party/liburing/build)
-#include_directories(${LIBURING_DIR}/include)
+set(LIBURING_DIR ${CMAKE_SOURCE_DIR}/third_party/liburing/build)
+include_directories(${LIBURING_DIR}/include)
 # Link the liburing library
-#link_directories(${LIBURING_DIR}/lib)
+link_directories(${LIBURING_DIR}/lib)
 
 # Add executable path
 add_executable(orangedb_main ${PROJECT_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX simsimd faiss)
+target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX simsimd faiss uring)
 target_include_directories(orangedb_main PUBLIC
         ${PROJECT_SOURCE_DIR}/src/include
         ${PROJECT_SOURCE_DIR}/third_party/spdlog
         ${PROJECT_SOURCE_DIR}/third_party/simsimd/include
-        ${PROJECT_SOURCE_DIR}/third_party/faiss)
+        ${PROJECT_SOURCE_DIR}/third_party/faiss
+        ${LIBURING_DIR}/include)
