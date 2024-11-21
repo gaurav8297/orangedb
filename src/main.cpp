@@ -1424,6 +1424,9 @@ void benchmark_io_uring(InputParser &input) {
         if (queue_read(&ring, fd, size, offset))
             break;
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    printf("Duration for queuing reads: %lld ms\n", duration);
 
     // Submit the reads
     auto ret = io_uring_submit(&ring);
@@ -1450,8 +1453,8 @@ void benchmark_io_uring(InputParser &input) {
         simsimd_cos_f32(queryVecs, reinterpret_cast<float *>(data->iov.iov_base) + 1, queryDimension, &dists[i]);
         io_uring_cqe_seen(&ring, cqe);
     }
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Duration: %lld ms\n", duration);
 
     auto dist = 0;
