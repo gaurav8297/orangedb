@@ -1331,11 +1331,12 @@ void get_random_offsets(std::vector<std::pair<uint64_t, uint64_t>> &readInfo, ui
     auto seed = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
     RandomGenerator rng(seed);
     std::vector<uint64_t> offsets(readInfo.size());
+    printf("Num vectors: %llu\n", numVectors);
     rng.randomPerm(numVectors, offsets.data(), offsets.size());
     // Adjust offsets
     for (int i = 0; i < offsets.size(); i++) {
         auto offset = offsets[i] * (dim + 1) * 4;
-        auto size = (dim + 1) * 4;
+        auto size = (dim + 1) * sizeof(float);
         readInfo[i] = std::make_pair(offset, size);
     }
 }
@@ -1410,6 +1411,7 @@ void benchmark_io_uring(InputParser &input) {
 
     struct io_uring_cqe *cqe;
 
+
     // Queue the reads
     for (int i = 0; i < numRandomReads; i++) {
         auto offset = readInfo[i].first;
@@ -1424,6 +1426,7 @@ void benchmark_io_uring(InputParser &input) {
         fprintf(stderr, "io_uring_submit: %s\n", strerror(-ret));
         abort();
     }
+    auto start = std::chrono::high_resolution_clock::now();
 
     std:vector<double> dists(numRandomReads);
     for (int i = 0; i < numRandomReads; i++) {
@@ -1443,6 +1446,9 @@ void benchmark_io_uring(InputParser &input) {
         simsimd_cos_f32(queryVecs, reinterpret_cast<float *>(data->iov.iov_base) + 1, queryNumVectors, &dists[i]);
         io_uring_cqe_seen(&ring, cqe);
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    printf("Duration: %lld ms\n", duration);
 
     for (int i = 0; i < numRandomReads; i++) {
         printf("%f\n", dists[i]);
