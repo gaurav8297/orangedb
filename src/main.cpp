@@ -1450,6 +1450,53 @@ void benchmark_io_uring(InputParser &input) {
     close(fd);
 }
 
+void benchmark_pread(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    auto numRandomReads = stoi(input.getCmdOption("-numRandomReads"));
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    auto stat = get_file_stat(baseVectorPath);
+    std::vector<std::pair<uint64_t, uint64_t>> readInfo(numRandomReads);
+    get_random_offsets(readInfo, stat.second, stat.first);
+
+    int fd = open(baseVectorPath.c_str(), O_RDONLY);
+    if (fd < 0) {
+        perror("open failed");
+        abort();
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    std:vector<double> dists(numRandomReads);
+    for (int i = 0; i < numRandomReads; i++) {
+        auto offset = readInfo[i].first;
+        auto size = readInfo[i].second;
+        float *baseVecs = reinterpret_cast<float *>(malloc(size));
+        if (baseVecs == nullptr) {
+            perror("malloc failed");
+            abort();
+        }
+        auto ret = pread(fd, baseVecs, size, offset);
+        if (ret < 0) {
+            perror("pread failed");
+            abort();
+        }
+        simsimd_cos_f32(queryVecs, baseVecs, queryNumVectors, &dists[i]);
+        free(baseVecs);
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    printf("Time: %lld ms\n", duration);
+
+    for (int i = 0; i < numRandomReads; i++) {
+        printf("%f\n", dists[i]);
+    }
+    close(fd);
+}
+
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
@@ -1468,6 +1515,8 @@ int main(int argc, char **argv) {
         benchmark_acorn(input);
     } else if (run == "benchmarkIoUring") {
         benchmark_io_uring(input);
+    } else if (run == "benchmarkPread") {
+        benchmark_pread(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
