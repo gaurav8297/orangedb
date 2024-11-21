@@ -1416,7 +1416,6 @@ void benchmark_io_uring(InputParser &input) {
 
     struct io_uring_cqe *cqe;
 
-
     // Queue the reads
     for (int i = 0; i < numRandomReads; i++) {
         auto offset = readInfo[i].first;
@@ -1452,7 +1451,7 @@ void benchmark_io_uring(InputParser &input) {
         io_uring_cqe_seen(&ring, cqe);
     }
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Duration: %lld ms\n", duration);
 
     for (int i = 0; i < numRandomReads; i++) {
@@ -1499,7 +1498,7 @@ void benchmark_pread(InputParser &input) {
         free(baseVecs);
     }
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Time: %lld ms\n", duration);
 
     for (int i = 0; i < numRandomReads; i++) {
