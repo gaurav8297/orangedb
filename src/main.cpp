@@ -1352,11 +1352,23 @@ struct io_data {
 static int setup_context(int fd, unsigned entries, struct io_uring *ring)
 {
     int ret;
-    ret = io_uring_queue_init(entries, ring, 0);
+    // Enable IORING_SETUP_SQPOLL for kernel-side polling of submission queue
+    // Enable IORING_SETUP_IOPOLL for kernel-side polling of completions
+    struct io_uring_params params = {};
+    params.flags = IORING_SETUP_SQPOLL | IORING_SETUP_IOPOLL;
+    params.sq_thread_idle = 2000; // Timeout in milliseconds before sq thread goes idle
+
+    ret = io_uring_queue_init_params(entries, ring, &params);
     if (ret < 0) {
         fprintf(stderr, "queue_init: %s\n", strerror(-ret));
         return -1;
     }
+
+//    // Check if polling was successfully enabled
+//    if (!(params.features & IORING_FEAT_SQPOLL)) {
+//        fprintf(stderr, "Kernel polling not available\n");
+//        return -1;
+//    }
 
     if (io_uring_register_files(ring, &fd, 1) < 0) {
         perror("io_uring_register_files");
@@ -1399,7 +1411,10 @@ static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
     data->iov.iov_len = size;
     data->first_len = size;
 
-    io_uring_prep_readv(sqe, fd, &data->iov, 1, offset);
+    // Use fixed file descriptor for better performance
+    io_uring_prep_readv(sqe, 0, &data->iov, 1, offset);
+    // Set IOPOLL flag for this request
+    sqe->flags |= IOSQE_FIXED_FILE | IOSQE_IO_LINK;
     io_uring_sqe_set_data(sqe, data);
 
     end = std::chrono::high_resolution_clock::now();
@@ -1419,11 +1434,8 @@ void benchmark_io_uring(InputParser &input) {
     auto stat = get_file_stat(baseVectorPath);
     std::vector<std::pair<uint64_t, uint64_t>> readInfo(numRandomReads);
     get_random_offsets(readInfo, stat.second, stat.first);
-    // print read info
-    for (int i = 0; i < numRandomReads; i++) {
-        printf("Offset: %llu, Size: %llu\n", readInfo[i].first, readInfo[i].second);
-    }
 
+    // Open with O_DIRECT for potentially better performance with polling
     int fd = open(baseVectorPath.c_str(), O_RDONLY);
     if (fd < 0) {
         perror("open failed");
@@ -1433,59 +1445,76 @@ void benchmark_io_uring(InputParser &input) {
     struct io_uring ring;
     setup_context(fd, numRandomReads, &ring);
 
+    // Batch submission metrics
+    const int BATCH_SIZE = 32;
     auto start = std::chrono::high_resolution_clock::now();
     struct io_uring_cqe *cqe;
+    int pending = 0;
 
-    // Queue the reads
+    // Queue reads in batches
     for (int i = 0; i < numRandomReads; i++) {
         auto offset = readInfo[i].first;
         auto size = readInfo[i].second;
         if (queue_read(&ring, fd, size, offset))
             break;
+
+        pending++;
+
+        // Submit in batches for better performance
+        if (pending == BATCH_SIZE || i == numRandomReads - 1) {
+            auto ret = io_uring_submit(&ring);
+            if (ret < 0) {
+                fprintf(stderr, "io_uring_submit: %s\n", strerror(-ret));
+                abort();
+            }
+            pending = 0;
+        }
     }
+
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-    printf("Duration for queuing reads: %lld ms\n", duration);
+    printf("Duration for queuing and submitting reads: %lld ns\n", duration);
 
     start = std::chrono::high_resolution_clock::now();
-    // Submit the reads
-    auto ret = io_uring_submit(&ring);
-    if (ret < 0) {
-        fprintf(stderr, "io_uring_submit: %s\n", strerror(-ret));
-        abort();
-    }
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-    printf("Duration for submitting reads: %lld ms\n", duration);
+    std::vector<double> dists(numRandomReads);
 
-    start = std::chrono::high_resolution_clock::now();
-    std:vector<double> dists(numRandomReads);
+    // Process completions
     for (int i = 0; i < numRandomReads; i++) {
         struct io_data *data;
-        ret = io_uring_wait_cqe(&ring, &cqe);
+        // Use IORING_ENTER_GETEVENTS to actively poll for completions
+        auto ret = io_uring_wait_cqe_nr(&ring, &cqe, 1);
         if (ret < 0) {
             fprintf(stderr, "io_uring_wait_cqe: %s\n", strerror(-ret));
             abort();
         }
-        if (!cqe) {
-            fprintf(stderr, "cqe is NULL\n");
+
+        data = static_cast<io_data *>(io_uring_cqe_get_data(cqe));
+        if (cqe->res < 0) {
+            fprintf(stderr, "Read failed: %s\n", strerror(-cqe->res));
             abort();
         }
-        data = static_cast<io_data *>(io_uring_cqe_get_data(cqe));
+
         assert(data->read == 1);
-        // Actual computation
+        // Compute distance
         simsimd_cos_f32(queryVecs, reinterpret_cast<float *>(data->iov.iov_base) + 1, queryDimension, &dists[i]);
+
+        // Free the allocated memory
+        free(data);
         io_uring_cqe_seen(&ring, cqe);
     }
+
     end = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-    printf("Duration for read: %lld ms\n", duration);
+    printf("Duration for processing completions: %lld ns\n", duration);
 
-    auto dist = 0;
+    // Cleanup
+    auto dist_sum = 0.0;
     for (int i = 0; i < numRandomReads; i++) {
-        dist += dists[i];
+        dist_sum += dists[i];
     }
-    printf("Total dist: %d\n", dist);
+    printf("Average distance: %f\n", dist_sum / numRandomReads);
+
+    io_uring_queue_exit(&ring);
     close(fd);
 }
 
