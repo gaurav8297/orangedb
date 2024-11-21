@@ -1408,7 +1408,6 @@ static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
     return 0;
 }
 
-
 void benchmark_io_uring(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
@@ -1448,13 +1447,18 @@ void benchmark_io_uring(InputParser &input) {
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Duration for queuing reads: %lld ms\n", duration);
 
+    start = std::chrono::high_resolution_clock::now();
     // Submit the reads
     auto ret = io_uring_submit(&ring);
     if (ret < 0) {
         fprintf(stderr, "io_uring_submit: %s\n", strerror(-ret));
         abort();
     }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    printf("Duration for submitting reads: %lld ms\n", duration);
 
+    start = std::chrono::high_resolution_clock::now();
     std:vector<double> dists(numRandomReads);
     for (int i = 0; i < numRandomReads; i++) {
         struct io_data *data;
@@ -1475,7 +1479,7 @@ void benchmark_io_uring(InputParser &input) {
     }
     end = std::chrono::high_resolution_clock::now();
     duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-    printf("Duration: %lld ms\n", duration);
+    printf("Duration for read: %lld ms\n", duration);
 
     auto dist = 0;
     for (int i = 0; i < numRandomReads; i++) {
