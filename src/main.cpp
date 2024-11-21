@@ -1349,13 +1349,18 @@ struct io_data {
     struct iovec iov;
 };
 
-static int setup_context(unsigned entries, struct io_uring *ring)
+static int setup_context(int fd, unsigned entries, struct io_uring *ring)
 {
     int ret;
     ret = io_uring_queue_init(entries, ring, 0);
     if (ret < 0) {
         fprintf(stderr, "queue_init: %s\n", strerror(-ret));
         return -1;
+    }
+
+    if (io_uring_register_files(ring, &fd, 1) < 0) {
+        perror("io_uring_register_files");
+        exit(1);
     }
 
     return 0;
@@ -1412,7 +1417,7 @@ void benchmark_io_uring(InputParser &input) {
     }
 
     struct io_uring ring;
-    setup_context(numRandomReads, &ring);
+    setup_context(fd, numRandomReads, &ring);
 
     auto start = std::chrono::high_resolution_clock::now();
     struct io_uring_cqe *cqe;
