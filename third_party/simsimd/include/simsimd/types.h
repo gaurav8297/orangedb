@@ -190,7 +190,7 @@ typedef unsigned long long simsimd_u64_t;
 typedef simsimd_u64_t simsimd_size_t;
 typedef simsimd_f64_t simsimd_distance_t;
 
-#if !defined(SIMSIMD_NATIVE_F16) || SIMSIMD_NATIVE_F16
+//#if !defined(SIMSIMD_NATIVE_F16) || SIMSIMD_NATIVE_F16
 /**
  *  @brief  Half-precision floating-point type.
  *
