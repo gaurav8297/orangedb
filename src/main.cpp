@@ -1355,7 +1355,7 @@ static int setup_context(int fd, unsigned entries, struct io_uring *ring)
     // Enable IORING_SETUP_SQPOLL for kernel-side polling of submission queue
     // Enable IORING_SETUP_IOPOLL for kernel-side polling of completions
     struct io_uring_params params = {};
-    params.flags = IORING_SETUP_SQPOLL | IORING_SETUP_IOPOLL;
+    params.flags = IORING_SETUP_SQPOLL;
     params.sq_thread_idle = 2000; // Timeout in milliseconds before sq thread goes idle
 
     ret = io_uring_queue_init_params(entries, ring, &params);
@@ -1364,7 +1364,7 @@ static int setup_context(int fd, unsigned entries, struct io_uring *ring)
         return -1;
     }
 
-//    // Check if polling was successfully enabled
+    // Check if polling was successfully enabled
 //    if (!(params.features & IORING_FEAT_SQPOLL)) {
 //        fprintf(stderr, "Kernel polling not available\n");
 //        return -1;
@@ -1423,6 +1423,32 @@ static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
     return 0;
 }
 
+static int open_file(const char *file)
+{
+#ifdef __linux__
+    int fd = open(file, O_DIRECT | O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        return -1;
+    }
+    return fd;
+#elif defined(__APPLE__)
+    // macOS-specific: Open file and set F_NOCACHE
+    int fd = open(file, O_RDONLY);
+    if (fd == -1) {
+        perror("macOS open failed");
+        return 1;
+    }
+    if (fcntl(fd, F_NOCACHE, 1) == -1) {
+        perror("macOS fcntl F_NOCACHE failed");
+        close(fd);
+        return 1;
+    }
+    std::cout << "Opened file with F_NOCACHE on macOS.\n";
+    return fd;
+#endif
+}
+
 void benchmark_io_uring(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
@@ -1436,7 +1462,7 @@ void benchmark_io_uring(InputParser &input) {
     get_random_offsets(readInfo, stat.second, stat.first);
 
     // Open with O_DIRECT for potentially better performance with polling
-    int fd = open(baseVectorPath.c_str(), O_RDONLY);
+    int fd = open_file(baseVectorPath.c_str());
     if (fd < 0) {
         perror("open failed");
         abort();
@@ -1446,7 +1472,7 @@ void benchmark_io_uring(InputParser &input) {
     setup_context(fd, numRandomReads, &ring);
 
     // Batch submission metrics
-    const int BATCH_SIZE = 32;
+    const int BATCH_SIZE = 64;
     auto start = std::chrono::high_resolution_clock::now();
     struct io_uring_cqe *cqe;
     int pending = 0;
@@ -1482,7 +1508,7 @@ void benchmark_io_uring(InputParser &input) {
     for (int i = 0; i < numRandomReads; i++) {
         struct io_data *data;
         // Use IORING_ENTER_GETEVENTS to actively poll for completions
-        auto ret = io_uring_wait_cqe_nr(&ring, &cqe, 1);
+        auto ret = io_uring_wait_cqe(&ring, &cqe);
         if (ret < 0) {
             fprintf(stderr, "io_uring_wait_cqe: %s\n", strerror(-ret));
             abort();
@@ -1530,7 +1556,7 @@ void benchmark_pread(InputParser &input) {
     std::vector<std::pair<uint64_t, uint64_t>> readInfo(numRandomReads);
     get_random_offsets(readInfo, stat.second, stat.first);
 
-    int fd = open(baseVectorPath.c_str(), O_RDONLY);
+    int fd = open_file(baseVectorPath.c_str());
     if (fd < 0) {
         perror("open failed");
         abort();
