@@ -1412,7 +1412,7 @@ static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
     data->first_len = size;
 
     // Use fixed file descriptor for better performance
-    io_uring_prep_readv(sqe, 0, &data->iov, 1, offset);
+    io_uring_prep_readv(sqe, fd, &data->iov, 1, offset);
     // Set IOPOLL flag for this request
 //    sqe->flags |= IOSQE_FIXED_FILE | IOSQE_IO_LINK;
     io_uring_sqe_set_data(sqe, data);
