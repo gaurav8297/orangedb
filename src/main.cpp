@@ -1585,11 +1585,12 @@ void benchmark_pread(InputParser &input) {
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Time: %lld ms\n", duration);
 
-    auto dist = 0;
+    // Cleanup
+    auto dist_sum = 0.0;
     for (int i = 0; i < numRandomReads; i++) {
-        dist += dists[i];
+        dist_sum += dists[i];
     }
-    printf("Total dist: %f\n", dist);
+    printf("Average distance: %f\n", dist_sum / numRandomReads);
     close(fd);
 }
 
