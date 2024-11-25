@@ -1358,7 +1358,7 @@ static int setup_context(int fd, unsigned entries, struct io_uring *ring)
 //    params.flags = IORING_SETUP_SQPOLL;
 //    params.sq_thread_idle = 2000; // Timeout in milliseconds before sq thread goes idle
 
-    ret = io_uring_queue_init_params(entries, ring, &params);
+    ret = io_uring_queue_init(entries, ring, 0);
     if (ret < 0) {
         fprintf(stderr, "queue_init: %s\n", strerror(-ret));
         return -1;
