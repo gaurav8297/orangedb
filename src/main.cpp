@@ -1355,8 +1355,8 @@ static int setup_context(int fd, unsigned entries, struct io_uring *ring)
     // Enable IORING_SETUP_SQPOLL for kernel-side polling of submission queue
     // Enable IORING_SETUP_IOPOLL for kernel-side polling of completions
     struct io_uring_params params = {};
-    params.flags = IORING_SETUP_SQPOLL;
-    params.sq_thread_idle = 2000; // Timeout in milliseconds before sq thread goes idle
+//    params.flags = IORING_SETUP_SQPOLL;
+//    params.sq_thread_idle = 2000; // Timeout in milliseconds before sq thread goes idle
 
     ret = io_uring_queue_init_params(entries, ring, &params);
     if (ret < 0) {
@@ -1414,7 +1414,7 @@ static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
     // Use fixed file descriptor for better performance
     io_uring_prep_readv(sqe, 0, &data->iov, 1, offset);
     // Set IOPOLL flag for this request
-    sqe->flags |= IOSQE_FIXED_FILE | IOSQE_IO_LINK;
+//    sqe->flags |= IOSQE_FIXED_FILE | IOSQE_IO_LINK;
     io_uring_sqe_set_data(sqe, data);
 
 //    end = std::chrono::high_resolution_clock::now();
