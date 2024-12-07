@@ -1500,9 +1500,9 @@ void benchmark_io_uring(InputParser &input) {
         }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-    printf("Duration for queuing and submitting reads: %lld ns\n", duration);
+//    auto end = std::chrono::high_resolution_clock::now();
+//    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+//    printf("Duration for queuing and submitting reads: %lld ns\n", duration);
 
 //    start = std::chrono::high_resolution_clock::now();
     std::vector<double> dists(numRandomReads);
@@ -1532,8 +1532,8 @@ void benchmark_io_uring(InputParser &input) {
         io_uring_cqe_seen(&ring, cqe);
     }
 
-    end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Duration for processing completions: %lld ns\n", duration);
 
     // Cleanup
