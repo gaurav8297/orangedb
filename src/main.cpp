@@ -1550,6 +1550,7 @@ void benchmark_pread(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     auto numRandomReads = stoi(input.getCmdOption("-numRandomReads"));
+    bool useODirect = stoi(input.getCmdOption("-useODirect"));
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
@@ -1558,7 +1559,7 @@ void benchmark_pread(InputParser &input) {
     std::vector<std::pair<uint64_t, uint64_t>> readInfo(numRandomReads);
     get_random_offsets(readInfo, stat.second, stat.first);
 
-    int fd = open_file(baseVectorPath.c_str());
+    int fd = open_file(baseVectorPath.c_str(), useODirect);
     if (fd < 0) {
         perror("open failed");
         abort();
