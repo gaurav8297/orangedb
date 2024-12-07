@@ -1423,10 +1423,11 @@ static int queue_read(struct io_uring *ring, int fd, off_t size, off_t offset)
     return 0;
 }
 
-static int open_file(const char *file)
+static int open_file(const char *file, bool useODirect = true)
 {
 #ifdef __linux__
-    int fd = open(file, O_DIRECT | O_RDONLY);
+    auto flags = useODirect ? O_DIRECT | O_RDONLY : O_RDONLY;
+    int fd = open(file, flags);
     if (fd < 0) {
         perror("open");
         return -1;
@@ -1439,7 +1440,7 @@ static int open_file(const char *file)
         perror("macOS open failed");
         return 1;
     }
-    if (fcntl(fd, F_NOCACHE, 1) == -1) {
+    if (useODirect && fcntl(fd, F_NOCACHE, 1) == -1) {
         perror("macOS fcntl F_NOCACHE failed");
         close(fd);
         return 1;
@@ -1453,6 +1454,7 @@ void benchmark_io_uring(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     auto numRandomReads = stoi(input.getCmdOption("-numRandomReads"));
+    bool useODirect = stoi(input.getCmdOption("-useODirect"));
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
@@ -1462,7 +1464,7 @@ void benchmark_io_uring(InputParser &input) {
     get_random_offsets(readInfo, stat.second, stat.first);
 
     // Open with O_DIRECT for potentially better performance with polling
-    int fd = open_file(baseVectorPath.c_str());
+    int fd = open_file(baseVectorPath.c_str(), useODirect);
     if (fd < 0) {
         perror("open failed");
         abort();
