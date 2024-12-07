@@ -1455,6 +1455,7 @@ void benchmark_io_uring(InputParser &input) {
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     auto numRandomReads = stoi(input.getCmdOption("-numRandomReads"));
     bool useODirect = stoi(input.getCmdOption("-useODirect"));
+    printf("O_DIRECT: %d\n", useODirect);
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
@@ -1551,6 +1552,7 @@ void benchmark_pread(InputParser &input) {
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     auto numRandomReads = stoi(input.getCmdOption("-numRandomReads"));
     bool useODirect = stoi(input.getCmdOption("-useODirect"));
+    printf("O_DIRECT: %d\n", useODirect);
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
