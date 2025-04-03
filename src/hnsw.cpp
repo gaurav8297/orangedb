@@ -6,6 +6,7 @@
 #include <memory>
 #include <fastQ/pair_wise.h>
 #include <fastQ/scalar_8bit.h>
+#include <limits>
 
 namespace orangedb {
     HNSW::HNSW(HNSWConfig config, RandomGenerator *rg, uint16_t dim) : config(config),
@@ -1508,7 +1509,7 @@ namespace orangedb {
             Stats localStats = Stats();
             auto *infVector = new float[storage->dim];
             for (int i = 0; i < storage->dim; i++) {
-                infVector[i] = MAXFLOAT;
+                infVector[i] = std::numeric_limits<float>::max();;
             }
 
 #pragma omp for schedule(static)
@@ -1676,7 +1677,7 @@ namespace orangedb {
                     nbrs.push_back(neighbor);
                     visited.set(neighbor);
                 }
-                double dist = MAXFLOAT;
+                double dist = std::numeric_limits<double>::max();
                 if (candidate.depth == 1) {
                     dc->computeDistance(neighbor, &dist);
                     if (!filterMask[neighbor]) {

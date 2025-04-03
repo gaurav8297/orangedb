@@ -6,6 +6,7 @@
 #include <queue>
 #include <helper_ds.h>
 #include <common.h>
+#include <limits>
 
 // a bit above machine epsilon for float16
 #define EPS (1 / 1024.)
@@ -184,7 +185,7 @@ namespace orangedb {
 #pragma omp for
             for (int i = 0; i < n; i++) {
                 localDc->setQuery(queries + i * dim);
-                double minDistance = MAXFLOAT;
+                double minDistance = std::numeric_limits<double>::max();
                 vector_idx_t j = 0, minId = 0;
                 while (j + 4 < numEntries) {
                     double dists[4];
