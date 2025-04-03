@@ -1703,7 +1703,7 @@ int main(int argc, char **argv) {
     } else if (run == "benchmarkAcorn") {
         benchmark_acorn(input);
     }
-#ifdef 0
+#if 0
     else if (run == "benchmarkIoUring") {
         benchmark_io_uring(input);
     } else if (run == "benchmarkPread") {
