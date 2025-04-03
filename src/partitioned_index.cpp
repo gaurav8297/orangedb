@@ -17,7 +17,7 @@ namespace orangedb {
         centroidIndex = new IndexOneNN(new L2DistanceComputer(clustering->centroids.data(), dim, config.numCentroids), dim, config.numCentroids);
     }
 
-    void PartitionedIndex::build(const float *data, size_t n) {
+    void PartitionedIndex::build(float *data, size_t n) {
         clustering->initCentroids(data, n);
         clustering->train(data, n);
 

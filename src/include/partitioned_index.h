@@ -40,7 +40,7 @@ namespace orangedb {
     public:
         explicit PartitionedIndex(int dim, const PartitionedIndexConfig &config, RandomGenerator* rg);
 
-        void build(const float *data, size_t n);
+        void build(float *data, size_t n);
 
         int search(const float *query, uint16_t k, VisitedTable &visited, std::vector<NodeDistFarther> &results, Stats &stats);
 
