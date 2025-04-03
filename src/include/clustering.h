@@ -9,9 +9,9 @@ namespace orangedb {
     // Perform 1-NN search on the given data in parallel using OpenMP
     class IndexOneNN {
     public:
-        explicit IndexOneNN(DistanceComputer *dc, int dim, int numEntries)
+        explicit IndexOneNN(DistanceComputer *dc, int dim, int numEntries, float lambda = 0)
                 : dc(dc), dim(dim),
-                  numEntries(numEntries) {};
+                  numEntries(numEntries), lambda(lambda) {};
 
         inline void search(int n, const float *queries, float *distances, int32_t *resultIds);
 
@@ -22,6 +22,7 @@ namespace orangedb {
         DistanceComputer *dc;
         int dim;
         int numEntries;
+        float lambda;
     };
 
     // Goals:
@@ -33,11 +34,11 @@ namespace orangedb {
     // 2. No concept of weights for vectors.
     class Clustering {
     public:
-        Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize);
+        Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda = 0);
 
-        void initCentroids(int n, const float *data);
+        void initCentroids(const float *data, int n);
 
-        void train(int n, const float *data);
+        void train(float *data, int n);
 
         void assignCentroids(const float *data, int n, int32_t *assign);
 
@@ -53,7 +54,7 @@ namespace orangedb {
 
         inline void splitClusters(int *hist, float *newCentroids);
 
-        inline int sampleData(int n, const float *data, float **sampleData);
+        inline int sampleData(int n, float *data, float **sampleData);
 
     public:
         std::vector<float> centroids; // centroids (k * d)
@@ -64,6 +65,7 @@ namespace orangedb {
         int nIter; // number of iterations
         int minCentroidSize; // minimum size of a centroid. This is used to sample the training set.
         int maxCentroidSize; // maximum size of a centroid. This is used to sample the training set.
+        float lambda; // regularization parameter
 
         int seed = 1234; // seed for random number generator
     };

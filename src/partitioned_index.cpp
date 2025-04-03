@@ -18,8 +18,8 @@ namespace orangedb {
     }
 
     void PartitionedIndex::build(const float *data, size_t n) {
-        clustering->initCentroids(n, data);
-        clustering->train(n, data);
+        clustering->initCentroids(data, n);
+        clustering->train(data, n);
 
         int32_t *assign = new int32_t[n];
         clustering->assignCentroids(data, n, assign);

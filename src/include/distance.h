@@ -10,6 +10,11 @@
 using namespace std;
 
 namespace orangedb {
+    enum DistanceType {
+        L2,
+        COSINE,
+    };
+
     struct DistanceComputer {
         virtual void computeDistance(vector_idx_t id, double *result) = 0;
 

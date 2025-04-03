@@ -11,6 +11,7 @@
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
 #include <fstream>
+#include <reclustering_index.h>
 #include <fastQ/scalar_8bit.h>
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
@@ -18,7 +19,9 @@
 #include "faiss/IndexACORN.h"
 #include "fastQ/scalar_test.h"
 
+#if defined(__linux__)
 #include <liburing.h>
+#endif
 
 using namespace orangedb;
 
@@ -1297,10 +1300,7 @@ void benchmark_quantization(InputParser &input) {
     for (int i = 0; i < 30; i++) {
         printf("%f %d %f\n", baseVecs[i], codes[i], fastq::scalar_test::decode_serial(codes[i], sq.alpha[i], sq.beta[i]));
     }
-
 }
-
-
 
 void benchmark_random_pread(InputParser &input) {
 
@@ -1341,6 +1341,8 @@ void get_random_offsets(std::vector<std::pair<uint64_t, uint64_t>> &readInfo, ui
         readInfo[i] = std::make_pair(offset, size);
     }
 }
+
+#if defined(__linux__)
 
 struct io_data {
     int read;
@@ -1598,6 +1600,91 @@ void benchmark_pread(InputParser &input) {
     printf("Average distance: %f\n", dist_sum / numRandomReads);
     close(fd);
 }
+#endif
+
+void test_clustering_data(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    auto numCentroids = 400;
+    auto clustering = Clustering(baseDimension, numCentroids, 40, 150, 250, 1.0);
+    baseNumVectors = 100000;
+
+    // Init centroids and train!!
+    printf("Init centroids\n");
+    clustering.initCentroids(baseVecs, baseNumVectors);
+    printf("Train\n");
+    clustering.train(baseVecs, baseNumVectors);
+
+    auto labels = new int32_t[baseNumVectors];
+    clustering.assignCentroids(baseVecs, baseNumVectors, labels);
+
+    // Print the distribution!!
+    std::unordered_map<int, int> dist;
+    for (int i = 0; i < baseNumVectors; i++) {
+        dist[labels[i]]++;
+    }
+    for (int i = 0; i < numCentroids; i++) {
+        printf("Centroid: %d, Count: %d\n", i, dist[i]);
+    }
+
+    delete[] labels;
+    delete[] baseVecs;
+    delete[] queryVecs;
+}
+
+void benchmark_reclustering_approach(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numCentroids = stoi(input.getCmdOption("-numCentroids"));
+    const int numIters = stoi(input.getCmdOption("-numIters"));
+    const int minCentroidSize = stoi(input.getCmdOption("-minCentroidSize"));
+    const int maxCentroidSize = stoi(input.getCmdOption("-maxCentroidSize"));
+    const int nProbes = stoi(input.getCmdOption("-nProbes"));
+    const float lambda = stof(input.getCmdOption("-lambda"));
+
+    // Read dataset
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    ReclusteringIndexConfig config(numCentroids, numIters, minCentroidSize, maxCentroidSize, lambda, 0.4, L2);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    RandomGenerator rng(1234);
+    ReclusteringIndex index(baseDimension, config, &rng);
+
+    // Build index
+    index.insert(baseVecs, baseNumVectors);
+
+    // search
+    auto recall = 0;
+    for (int i = 0; i < queryNumVectors; i++) {
+        std::priority_queue<NodeDistCloser> results;
+        index.search(queryVecs + i * queryDimension, k, results, nProbes);
+        auto gt = gtVecs + i * k;
+        while (!results.empty()) {
+            auto res = results.top();
+            results.pop();
+            if (std::find(gt, gt + k, res.id) != (gt + k)) {
+                recall++;
+            }
+        }
+    }
+    std::cout << "Recall: " << recall / queryNumVectors << std::endl;
+}
 
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
@@ -1615,10 +1702,19 @@ int main(int argc, char **argv) {
         benchmark_filtered_hnsw_queries(input);
     } else if (run == "benchmarkAcorn") {
         benchmark_acorn(input);
-    } else if (run == "benchmarkIoUring") {
+    }
+#ifdef __linux__
+    else if (run == "benchmarkIoUring") {
         benchmark_io_uring(input);
     } else if (run == "benchmarkPread") {
         benchmark_pread(input);
+    }
+#endif
+    else if (run == "benchmarkClustering") {
+        test_clustering_data(input);
+    }
+    else if (run == "benchmarkReclusteringIndex") {
+        benchmark_reclustering_approach(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();

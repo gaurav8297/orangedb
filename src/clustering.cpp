@@ -11,15 +11,16 @@
 #define EPS (1 / 1024.)
 
 namespace orangedb {
-    Clustering::Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize)
+    Clustering::Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda)
             : dim(dim),
               numCentroids(numCentroids),
               nIter(nIter),
               minCentroidSize(minCentroidSize),
               maxCentroidSize(maxCentroidSize),
-              centroids(std::vector<float>(dim * numCentroids)) {};
+              centroids(std::vector<float>(dim * numCentroids)),
+              lambda(lambda) {}
 
-    void Clustering::initCentroids(int n, const float *data) {
+    void Clustering::initCentroids(const float *data, int n) {
         // TODO: Implement divide and conquer k-means++ initialization
         // For now choose the random centroids
         CHECK_ARGUMENT(n > numCentroids, "Number of vectors should be greater than number of centroids");
@@ -32,17 +33,18 @@ namespace orangedb {
         }
     }
 
-    void Clustering::train(int n, const float *data) {
+    void Clustering::train(float *data, int n) {
         // Sample data from the given data
         float *sample = nullptr;
         int nSample = sampleData(n, data, &sample);
 
-        float *dist = new float[nSample];
-        int *assign = new int32_t[nSample];
+        auto *dist = new float[nSample];
+        auto *assign = new int32_t[nSample];
         for (int i = 0; i < nIter; i++) {
+            printf("Running iteration: %d\n", i);
             // Initialize the index
             L2DistanceComputer dc = L2DistanceComputer(centroids.data(), dim, numCentroids);
-            IndexOneNN index = IndexOneNN(&dc, dim, numCentroids);
+            IndexOneNN index = IndexOneNN(&dc, dim, numCentroids, lambda);
 
             // Phase 1: Assign each vector to the nearest centroid
             index.search(nSample, sample, dist, assign);
@@ -154,11 +156,16 @@ namespace orangedb {
         }
     }
 
-    int Clustering::sampleData(int n, const float *data, float **sampleData) {
+    int Clustering::sampleData(int n, float *data, float **sampleData) {
         // Sample data from the given data
         // We will sample maxCentroidSize * numOfCentroids vectors from the data
         // We will return the sampled data and the number of vectors sampled
         int nSample = std::min(maxCentroidSize * numCentroids, n);
+        if (nSample == n) {
+            *sampleData = data;
+            return nSample;
+        }
+
         *sampleData = new float[nSample * dim];
         std::vector<vector_idx_t> perm(nSample);
         RandomGenerator rg(seed);
@@ -170,6 +177,7 @@ namespace orangedb {
     }
 
     void IndexOneNN::search(int n, const float *queries, float *distances, int32_t *resultIds) {
+        std::vector<double> hist(numEntries, 0);
 #pragma omp parallel
         {
             auto localDc = dc->clone();
@@ -183,8 +191,9 @@ namespace orangedb {
                     vector_idx_t idx[4] = {j, j + 1, j + 2, j + 3};
                     localDc->batchComputeDistances(idx, dists, 4);
                     for (int l = 0; l < 4; l++) {
-                        if (dists[l] < minDistance) {
-                            minDistance = dists[l];
+                        auto recomputedDist = dists[l] + lambda * hist[j + l];
+                        if (recomputedDist < minDistance) {
+                            minDistance = recomputedDist;
                             minId = j + l;
                         }
                     }
@@ -194,13 +203,16 @@ namespace orangedb {
                 for (vector_idx_t l = j; l < numEntries; l++) {
                     double d;
                     localDc->computeDistance(l, &d);
-                    if (d < minDistance) {
-                        minDistance = d;
+                    auto recomputedDist = d + lambda * hist[l];
+                    if (recomputedDist < minDistance) {
+                        minDistance = recomputedDist;
                         minId = l;
                     }
                 }
+
                 distances[i] = minDistance;
                 resultIds[i] = minId;
+                hist[minId]++;
             }
         }
     }
