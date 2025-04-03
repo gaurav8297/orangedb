@@ -19,7 +19,7 @@
 #include "faiss/IndexACORN.h"
 #include "fastQ/scalar_test.h"
 
-#if defined(__linux__)
+#if 0
 #include <liburing.h>
 #endif
 
@@ -1342,7 +1342,7 @@ void get_random_offsets(std::vector<std::pair<uint64_t, uint64_t>> &readInfo, ui
     }
 }
 
-#if defined(__linux__)
+#if 0
 
 struct io_data {
     int read;
@@ -1703,7 +1703,7 @@ int main(int argc, char **argv) {
     } else if (run == "benchmarkAcorn") {
         benchmark_acorn(input);
     }
-#ifdef __linux__
+#ifdef 0
     else if (run == "benchmarkIoUring") {
         benchmark_io_uring(input);
     } else if (run == "benchmarkPread") {
