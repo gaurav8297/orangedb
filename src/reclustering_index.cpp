@@ -4,7 +4,7 @@ namespace orangedb {
     ReclusteringIndex::ReclusteringIndex(int dim, const ReclusteringIndexConfig &config, RandomGenerator *rg)
         : dim(dim), config(config), rg(rg), size(0) {}
 
-    void ReclusteringIndex::insert(const float *data, size_t n) {
+    void ReclusteringIndex::insert(float *data, size_t n) {
         printf("ReclusteringIndex::insert\n");
         // Perform k means
         Clustering clustering(dim, config.numCentroids, config.nIter, config.minCentroidSize, config.maxCentroidSize,

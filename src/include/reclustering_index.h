@@ -37,7 +37,7 @@ namespace orangedb {
     public:
         explicit ReclusteringIndex(int dim, const ReclusteringIndexConfig &config, RandomGenerator* rg);
 
-        void insert(const float *data, size_t n);
+        void insert(float *data, size_t n);
 
         void performReclustering();
 
