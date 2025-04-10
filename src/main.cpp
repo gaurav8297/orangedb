@@ -812,7 +812,7 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    CosineDistanceComputer dc(vectors, dim, numVectors);
+    L2DistanceComputer dc(vectors, dim, numVectors);
 #pragma omp parallel
     {
         auto localDc = dc.clone();
@@ -1639,38 +1639,10 @@ void test_clustering_data(InputParser &input) {
     delete[] queryVecs;
 }
 
-void benchmark_reclustering_approach(InputParser &input) {
-    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
-    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
-    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
-    const int k = stoi(input.getCmdOption("-k"));
-    const int numCentroids = stoi(input.getCmdOption("-numCentroids"));
-    const int numIters = stoi(input.getCmdOption("-numIters"));
-    const int minCentroidSize = stoi(input.getCmdOption("-minCentroidSize"));
-    const int maxCentroidSize = stoi(input.getCmdOption("-maxCentroidSize"));
-    const int nProbes = stoi(input.getCmdOption("-nProbes"));
-    const float lambda = stof(input.getCmdOption("-lambda"));
-
-    // Read dataset
-    size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
-
-    size_t queryDimension, queryNumVectors;
-    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
-
-    ReclusteringIndexConfig config(numCentroids, numIters, minCentroidSize, maxCentroidSize, lambda, 0.4, L2);
-    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-
-    RandomGenerator rng(1234);
-    ReclusteringIndex index(baseDimension, config, &rng);
-
-    // Build index
-    index.insert(baseVecs, baseNumVectors);
-
+void print_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
+                  vector_idx_t *gtVecs, int nProbes) {
     // search
-    auto recall = 0;
+    double recall = 0;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
         index.search(queryVecs + i * queryDimension, k, results, nProbes);
@@ -1684,6 +1656,62 @@ void benchmark_reclustering_approach(InputParser &input) {
         }
     }
     std::cout << "Recall: " << recall / queryNumVectors << std::endl;
+}
+
+void benchmark_reclustering_approach(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const int numInserts = stoi(input.getCmdOption("-numInserts"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numCentroids = stoi(input.getCmdOption("-numCentroids"));
+    const int numIters = stoi(input.getCmdOption("-numIters"));
+    const int minCentroidSize = stoi(input.getCmdOption("-minCentroidSize"));
+    const int maxCentroidSize = stoi(input.getCmdOption("-maxCentroidSize"));
+    const int nProbes = stoi(input.getCmdOption("-nProbes"));
+    const float lambda = stof(input.getCmdOption("-lambda"));
+    const int numReclusters = stoi(input.getCmdOption("-numReclusters"));
+
+    // Read dataset
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    ReclusteringIndexConfig config(numCentroids, numIters, minCentroidSize, maxCentroidSize, lambda, 0.4, L2, numCentroids);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    RandomGenerator rng(1234);
+    ReclusteringIndex index(baseDimension, config, &rng);
+
+    auto chunkSize = baseNumVectors / numInserts;
+    printf("Chunk size: %d\n", chunkSize);
+    for (long i = 0; i < numInserts; i++) {
+        auto start = i * chunkSize;
+        auto end = (i + 1) * chunkSize;
+        if (i == (numInserts - 1)) {
+            end = baseNumVectors;
+        }
+        printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+        index.insert(baseVecs + start * baseDimension, end - start);
+    }
+    index.printStats();
+
+    printf("Recall before reclustering:\n");
+    print_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
+
+    for (int i = 0; i < numReclusters; i++) {
+        index.performReclustering();
+        printf("Recall after reclustering %d:\n", i + 1);
+        print_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
+    }
+    index.printStats();
+
+    printf("Recall after reclustering:\n");
+    print_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
 }
 
 int main(int argc, char **argv) {

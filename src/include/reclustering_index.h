@@ -24,13 +24,16 @@ namespace orangedb {
         float searchThreshold = 0.4;
         // Distance Method
         DistanceType distanceType = L2;
+        // number of centroids to recluster
+        int numReclusterCentroids = 10;
 
         ReclusteringIndexConfig(int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda,
-                                float searchThreshold, DistanceType distanceType)
-            : numCentroids(numCentroids),
-              nIter(nIter), minCentroidSize(minCentroidSize), maxCentroidSize(maxCentroidSize), lambda(lambda),
-              searchThreshold(searchThreshold), distanceType(distanceType) {
-        }
+                                float searchThreshold, DistanceType distanceType, int numReclusterCentroids)
+            : numCentroids(numCentroids), nIter(nIter), minCentroidSize(minCentroidSize),
+              maxCentroidSize(maxCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
+              distanceType(distanceType), numReclusterCentroids(numReclusterCentroids)
+        {}
+
     };
 
     class ReclusteringIndex {
@@ -41,7 +44,9 @@ namespace orangedb {
 
         void performReclustering();
 
-        int search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes);
+        void printStats();
+
+        void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes);
 
     private:
         void appendCentroids(const float *centroids, size_t n);
@@ -61,5 +66,6 @@ namespace orangedb {
         std::vector<float> centroids;
         std::vector<std::vector<float>> clusters;
         std::vector<std::vector<vector_idx_t>> vectorIds;
+        std::vector<int> reclusteringCount;
     };
 }
