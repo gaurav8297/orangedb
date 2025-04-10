@@ -1,8 +1,12 @@
 #include "include/reclustering_index.h"
 
 namespace orangedb {
-    ReclusteringIndex::ReclusteringIndex(int dim, const ReclusteringIndexConfig &config, RandomGenerator *rg)
+    ReclusteringIndex::ReclusteringIndex(int dim, ReclusteringIndexConfig config, RandomGenerator *rg)
         : dim(dim), config(config), rg(rg), size(0) {}
+
+    ReclusteringIndex::ReclusteringIndex(const std::string &file_path, RandomGenerator *rg) : rg(rg) {
+        load_from_disk(file_path);
+    }
 
     void ReclusteringIndex::insert(float *data, size_t n) {
         printf("ReclusteringIndex::insert\n");
@@ -63,10 +67,108 @@ namespace orangedb {
     void ReclusteringIndex::printStats() {
         printf("ReclusteringIndex::printStats\n");
         for (int i = 0; i < config.numCentroids; i++) {
-            printf("Centroid %d has %zu vectors\n", i, clusters[i].size() / dim);
+            printf("Centroid %d has %zu vectors and reclustered %d times\n", i, clusters[i].size() / dim, reclusteringCount[i]);
         }
     }
 
+    void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {
+        std::ofstream out(file_path, std::ios::binary);
+        if (!out) {
+            std::cerr << "Error opening file for writing: " << file_path << std::endl;
+            return;
+        }
+
+        // Write the basic fields
+        out.write(reinterpret_cast<const char *>(&dim), sizeof(dim));
+        out.write(reinterpret_cast<const char *>(&size), sizeof(size));
+
+        // Write the config
+        out.write(reinterpret_cast<const char *>(&config.numCentroids), sizeof(config.numCentroids));
+        out.write(reinterpret_cast<const char *>(&config.nIter), sizeof(config.nIter));
+        out.write(reinterpret_cast<const char *>(&config.minCentroidSize), sizeof(config.minCentroidSize));
+        out.write(reinterpret_cast<const char *>(&config.maxCentroidSize), sizeof(config.maxCentroidSize));
+        out.write(reinterpret_cast<const char *>(&config.lambda), sizeof(config.lambda));
+        out.write(reinterpret_cast<const char *>(&config.searchThreshold), sizeof(config.searchThreshold));
+        out.write(reinterpret_cast<const char *>(&config.distanceType), sizeof(config.distanceType));
+        out.write(reinterpret_cast<const char *>(&config.numReclusterCentroids), sizeof(config.numReclusterCentroids));
+
+        // Write the centroids
+        size_t centroidSize = centroids.size();
+        out.write(reinterpret_cast<const char *>(&centroidSize), sizeof(centroidSize));
+        out.write(reinterpret_cast<const char *>(centroids.data()), centroidSize * sizeof(float));
+
+        // Write the clusters
+        for (const auto &cluster : clusters) {
+            size_t clusterSize = cluster.size();
+            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
+        }
+
+        // Write the vector ids
+        for (const auto &vectorId : vectorIds) {
+            size_t vectorIdSize = vectorId.size();
+            out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
+            out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
+        }
+
+        // Write the re-clustering count
+        for (const auto &count : reclusteringCount) {
+            out.write(reinterpret_cast<const char *>(&count), sizeof(count));
+        }
+    }
+
+    void ReclusteringIndex::load_from_disk(const std::string &file_path) {
+        std::ifstream in(file_path, std::ios::binary);
+        if (!in) {
+            std::cerr << "Error opening file for reading: " << file_path << std::endl;
+            return;
+        }
+
+        // Read the basic fields
+        in.read(reinterpret_cast<char *>(&dim), sizeof(dim));
+        in.read(reinterpret_cast<char *>(&size), sizeof(size));
+
+        // Read the config
+        in.read(reinterpret_cast<char *>(&config.numCentroids), sizeof(config.numCentroids));
+        in.read(reinterpret_cast<char *>(&config.nIter), sizeof(config.nIter));
+        in.read(reinterpret_cast<char *>(&config.minCentroidSize), sizeof(config.minCentroidSize));
+        in.read(reinterpret_cast<char *>(&config.maxCentroidSize), sizeof(config.maxCentroidSize));
+        in.read(reinterpret_cast<char *>(&config.lambda), sizeof(config.lambda));
+        in.read(reinterpret_cast<char *>(&config.searchThreshold), sizeof(config.searchThreshold));
+        in.read(reinterpret_cast<char *>(&config.distanceType), sizeof(config.distanceType));
+        in.read(reinterpret_cast<char *>(&config.numReclusterCentroids), sizeof(config.numReclusterCentroids));
+
+        // Read the centroids
+        size_t centroidSize;
+        in.read(reinterpret_cast<char *>(&centroidSize), sizeof(centroidSize));
+        centroids.resize(centroidSize);
+        in.read(reinterpret_cast<char *>(centroids.data()), centroidSize * sizeof(float));
+
+        // Read the clusters
+        auto numClusters = centroidSize / dim;
+        clusters.resize(numClusters);
+        for (size_t i = 0; i < numClusters; i++) {
+            size_t clusterSize;
+            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+            clusters[i].resize(clusterSize);
+            in.read(reinterpret_cast<char *>(clusters[i].data()), clusterSize * sizeof(float));
+        }
+
+        // Read the vector ids
+        vectorIds.resize(numClusters);
+        for (size_t i = 0; i < numClusters; i++) {
+            size_t vectorIdSize;
+            in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
+            vectorIds[i].resize(vectorIdSize);
+            in.read(reinterpret_cast<char *>(vectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
+        }
+
+        // Read the re-clustering count
+        reclusteringCount.resize(numClusters);
+        for (size_t i = 0; i < numClusters; i++) {
+            in.read(reinterpret_cast<char *>(&reclusteringCount[i]), sizeof(reclusteringCount[i]));
+        }
+    }
 
     void ReclusteringIndex::performReclustering() {
         printf("ReclusteringIndex::performReclustering\n");

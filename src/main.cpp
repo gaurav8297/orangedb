@@ -1639,7 +1639,7 @@ void test_clustering_data(InputParser &input) {
     delete[] queryVecs;
 }
 
-void print_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
+double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
                   vector_idx_t *gtVecs, int nProbes) {
     // search
     double recall = 0;
@@ -1655,7 +1655,7 @@ void print_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             }
         }
     }
-    std::cout << "Recall: " << recall / queryNumVectors << std::endl;
+    return recall / queryNumVectors;
 }
 
 void benchmark_reclustering_approach(InputParser &input) {
@@ -1671,6 +1671,8 @@ void benchmark_reclustering_approach(InputParser &input) {
     const int nProbes = stoi(input.getCmdOption("-nProbes"));
     const float lambda = stof(input.getCmdOption("-lambda"));
     const int numReclusters = stoi(input.getCmdOption("-numReclusters"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
 
     // Read dataset
     size_t baseDimension, baseNumVectors;
@@ -1687,31 +1689,41 @@ void benchmark_reclustering_approach(InputParser &input) {
     RandomGenerator rng(1234);
     ReclusteringIndex index(baseDimension, config, &rng);
 
-    auto chunkSize = baseNumVectors / numInserts;
-    printf("Chunk size: %d\n", chunkSize);
-    for (long i = 0; i < numInserts; i++) {
-        auto start = i * chunkSize;
-        auto end = (i + 1) * chunkSize;
-        if (i == (numInserts - 1)) {
-            end = baseNumVectors;
+    if (readFromDisk) {
+        index = ReclusteringIndex(storagePath, &rng);
+    } else {
+        printf("Building index\n");
+        auto chunkSize = baseNumVectors / numInserts;
+        printf("Chunk size: %d\n", chunkSize);
+        for (long i = 0; i < numInserts; i++) {
+            auto start = i * chunkSize;
+            auto end = (i + 1) * chunkSize;
+            if (i == (numInserts - 1)) {
+                end = baseNumVectors;
+            }
+            printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+            index.insert(baseVecs + start * baseDimension, end - start);
         }
-        printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
-        index.insert(baseVecs + start * baseDimension, end - start);
+
+        printf("Writing index to disk\n");
+        index.flush_to_disk(storagePath);
     }
     index.printStats();
 
-    printf("Recall before reclustering:\n");
-    print_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
-
+    auto initRecall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
+    std::vector<double> recalls;
     for (int i = 0; i < numReclusters; i++) {
         index.performReclustering();
-        printf("Recall after reclustering %d:\n", i + 1);
-        print_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
+        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
+        recalls.push_back(recall);
     }
     index.printStats();
-
-    printf("Recall after reclustering:\n");
-    print_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
+    auto final_recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
+    printf("Initial Recall: %f\n", initRecall);
+    for (int i = 0; i < numReclusters; i++) {
+        printf("Recall after reclustering %d: %f\n", i, recalls[i]);
+    }
+    printf("Final Recall: %f\n", final_recall);
 }
 
 int main(int argc, char **argv) {

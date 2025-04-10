@@ -27,7 +27,10 @@ namespace orangedb {
         // number of centroids to recluster
         int numReclusterCentroids = 10;
 
-        ReclusteringIndexConfig(int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda,
+        explicit ReclusteringIndexConfig() {}
+
+
+        explicit ReclusteringIndexConfig(int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda,
                                 float searchThreshold, DistanceType distanceType, int numReclusterCentroids)
             : numCentroids(numCentroids), nIter(nIter), minCentroidSize(minCentroidSize),
               maxCentroidSize(maxCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
@@ -38,7 +41,9 @@ namespace orangedb {
 
     class ReclusteringIndex {
     public:
-        explicit ReclusteringIndex(int dim, const ReclusteringIndexConfig &config, RandomGenerator* rg);
+        explicit ReclusteringIndex(int dim, ReclusteringIndexConfig config, RandomGenerator* rg);
+
+        explicit ReclusteringIndex(const std::string &file_path, RandomGenerator* rg);
 
         void insert(float *data, size_t n);
 
@@ -46,10 +51,15 @@ namespace orangedb {
 
         void printStats();
 
+        void flush_to_disk(const std::string &file_path) const;
+
+
         void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes);
 
     private:
         void appendCentroids(const float *centroids, size_t n);
+
+        void load_from_disk(const std::string &file_path);
 
         std::unique_ptr<DistanceComputer> getDistanceComputer(const float *data, int n) const {
             if (config.distanceType == L2) {
@@ -60,7 +70,7 @@ namespace orangedb {
 
     private:
         int dim;
-        const ReclusteringIndexConfig &config;
+        ReclusteringIndexConfig config;
         size_t size;
         RandomGenerator *rg;
         std::vector<float> centroids;
