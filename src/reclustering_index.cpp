@@ -52,6 +52,7 @@ namespace orangedb {
             temp_vectorIds[assignId][idx] = i + size;
             hist[assignId]++;
         }
+
         // Store the clusters
         for (int i = 0; i < config.numCentroids; i++) {
             std::vector<float> cluster = temp_clusters[i];
@@ -59,9 +60,12 @@ namespace orangedb {
             std::vector<vector_idx_t> vectorId = temp_vectorIds[i];
             vectorIds.push_back(std::move(vectorId));
         }
+
         printf("Copying centroids\n");
         appendCentroids(clustering.centroids.data(), clustering.centroids.size());
         size += n;
+
+
     }
 
     void ReclusteringIndex::printStats() {
@@ -173,6 +177,7 @@ namespace orangedb {
     void ReclusteringIndex::performReclustering() {
         printf("ReclusteringIndex::performReclustering\n");
         // Pick a centroid with minimum reclustering count.
+        // TODO: Pick a random one from the list of centroids with minimum re-clustering count.
         int centroidId = 0;
         long minCount = std::numeric_limits<long>::max();
         for (int i = 0; i < config.numCentroids; i++) {

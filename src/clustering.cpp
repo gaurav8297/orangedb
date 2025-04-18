@@ -78,6 +78,7 @@ namespace orangedb {
         // TODO: Dist is not needed. We can optimize this.
         float *dist = new float[n];
         index.search(n, data, dist, assign);
+        delete[] dist;
     }
 
     void Clustering::computeCentroids(int n, const float *data, const int *assign, int *hist, float *newCentroids) {
@@ -212,6 +213,46 @@ namespace orangedb {
                 }
 
                 distances[i] = minDistance;
+                resultIds[i] = minId;
+                hist[minId]++;
+            }
+        }
+    }
+
+
+    void IndexOneNN::search(int n, const float *queries, int32_t *resultIds) {
+        std::vector<double> hist(numEntries, 0);
+#pragma omp parallel
+        {
+            auto localDc = dc->clone();
+#pragma omp for
+            for (int i = 0; i < n; i++) {
+                localDc->setQuery(queries + i * dim);
+                double minDistance = std::numeric_limits<double>::max();
+                vector_idx_t j = 0, minId = 0;
+                while (j + 4 < numEntries) {
+                    double dists[4];
+                    vector_idx_t idx[4] = {j, j + 1, j + 2, j + 3};
+                    localDc->batchComputeDistances(idx, dists, 4);
+                    for (int l = 0; l < 4; l++) {
+                        auto recomputedDist = dists[l] + lambda * hist[j + l];
+                        if (recomputedDist < minDistance) {
+                            minDistance = recomputedDist;
+                            minId = j + l;
+                        }
+                    }
+                    j += 4;
+                }
+
+                for (vector_idx_t l = j; l < numEntries; l++) {
+                    double d;
+                    localDc->computeDistance(l, &d);
+                    auto recomputedDist = d + lambda * hist[l];
+                    if (recomputedDist < minDistance) {
+                        minDistance = recomputedDist;
+                        minId = l;
+                    }
+                }
                 resultIds[i] = minId;
                 hist[minId]++;
             }

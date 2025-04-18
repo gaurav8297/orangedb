@@ -1,5 +1,7 @@
 #pragma once
 
+#pragma once
+
 #include <unistd.h>
 #include <vector>
 #include <clustering.h>
@@ -8,8 +10,7 @@
 
 
 namespace orangedb {
-
-    struct ReclusteringIndexConfig {
+    struct IncrementalIndexConfig {
         // The number of centroids
         int numCentroids = 10;
         // The number of iterations
@@ -24,30 +25,28 @@ namespace orangedb {
         float searchThreshold = 0.4;
         // Distance Method
         DistanceType distanceType = L2;
-        // number of centroids to recluster
-        int numReclusterCentroids = 10;
+        // Mega split threshold
+        long maxMegaClusterSize = 1000000;
 
-        explicit ReclusteringIndexConfig() {}
+        explicit IncrementalIndexConfig() {}
 
-
-        explicit ReclusteringIndexConfig(int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda,
-                                float searchThreshold, DistanceType distanceType, int numReclusterCentroids)
+        explicit IncrementalIndexConfig(int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize,
+                        float lambda, float searchThreshold, DistanceType distanceType, long maxMegaClusterSize)
             : numCentroids(numCentroids), nIter(nIter), minCentroidSize(minCentroidSize),
               maxCentroidSize(maxCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
-              distanceType(distanceType), numReclusterCentroids(numReclusterCentroids)
-        {}
+              distanceType(distanceType), maxMegaClusterSize(maxMegaClusterSize) {}
 
     };
 
-    class ReclusteringIndex {
+    class IncrementalIndex {
     public:
-        explicit ReclusteringIndex(int dim, ReclusteringIndexConfig config, RandomGenerator* rg);
+        explicit IncrementalIndex(int dim, IncrementalIndexConfig config, RandomGenerator* rg);
 
-        explicit ReclusteringIndex(const std::string &file_path, RandomGenerator* rg);
+        explicit IncrementalIndex(const std::string &file_path, RandomGenerator* rg);
 
         void insert(float *data, size_t n);
 
-        void performReclustering();
+        void fixIndex();
 
         void printStats();
 
@@ -56,9 +55,27 @@ namespace orangedb {
         void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes);
 
     private:
+        void insertFirstTime(float *data, size_t n);
+
         void appendCentroids(const float *centroids, size_t n);
 
         void load_from_disk(const std::string &file_path);
+
+        void split();
+
+        void splitMegaCluster(int megaClusterId);
+
+        void storeMegaCluster(int oldMegaClusterId, const float* newMegaCentroid, Clustering* microClustering,
+                    const float *data, const vector_idx_t *vectorIds, size_t n);
+
+        void appendMegaCluster(const float* newMegaCentroid, Clustering* microClustering,
+            const float *data, const vector_idx_t *vectorIds, size_t n);
+
+        size_t getMegaClusterSize(int megaCentroidId);
+
+        void assignMegaCentroids(const float *data, int n, int32_t *assign);
+
+        void assignMicroCentroids(const float *data, int n, const int32_t *megaAssign, int32_t *microAssign);
 
         std::unique_ptr<DistanceComputer> getDistanceComputer(const float *data, int n) const {
             if (config.distanceType == L2) {
@@ -69,16 +86,16 @@ namespace orangedb {
 
     private:
         int dim;
-        ReclusteringIndexConfig config;
+        IncrementalIndexConfig config;
         size_t size;
         RandomGenerator *rg;
 
-        // Centroid of centroids
-        std::vector<float> centroidOfCentroids;
-        std::vector<std::vector<vector_idx_t>> microCentroidIds;
-        std::vector<float> centroids;
+        // Actual data
+        std::vector<float> megaCentroids;
+        std::vector<std::vector<vector_idx_t>> megaCentroidAssignment;
+        std::vector<float> microCentroids;
         std::vector<std::vector<float>> clusters;
         std::vector<std::vector<vector_idx_t>> vectorIds;
-        std::vector<int> reclusteringCount;
     };
 }
+
