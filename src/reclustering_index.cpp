@@ -64,8 +64,6 @@ namespace orangedb {
         printf("Copying centroids\n");
         appendCentroids(clustering.centroids.data(), clustering.centroids.size());
         size += n;
-
-
     }
 
     void ReclusteringIndex::printStats() {
@@ -309,9 +307,11 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes) {
+    void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes,
+                                   ReclusteringIndexStats &stats) {
         CHECK_ARGUMENT(centroids.size() > 0, "Centroids not initialized");
         CHECK_ARGUMENT(nProbes < centroids.size(), "Number of probes should be less than number of centroids");
+        stats.numDistanceComp = 0;
 
         // TODO: Maybe parallelize it
         auto numCentroids = centroids.size() / dim;
@@ -321,6 +321,7 @@ namespace orangedb {
 
         for (int i = 0; i < numCentroids; i++) {
             dc->computeDistance(i, &dists[i]);
+            stats.numDistanceComp++;
         }
 
         // Sort the distances and get the top k indices
@@ -339,6 +340,7 @@ namespace orangedb {
             for (int j = 0; j < clusterSize; j++) {
                 double dist;
                 clusterDc->computeDistance(j, &dist);
+                stats.numDistanceComp++;
                 if (results.size() <= k || dist < results.top().dist) {
                     results.emplace(ids[j], dist);
                     if (results.size() > k) {

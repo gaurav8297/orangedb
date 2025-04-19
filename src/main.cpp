@@ -16,6 +16,8 @@
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
 #include <fastQ/common.h>
+
+#include "incremental_index.h"
 #include "faiss/IndexACORN.h"
 #include "fastQ/scalar_test.h"
 
@@ -1612,9 +1614,8 @@ void test_clustering_data(InputParser &input) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
 
-    auto numCentroids = 400;
-    auto clustering = Clustering(baseDimension, numCentroids, 40, 150, 250, 1.0);
-    baseNumVectors = 100000;
+    auto numCentroids = 10;
+    auto clustering = Clustering(baseDimension, numCentroids, 40, 150, 250, 0.0);
 
     // Init centroids and train!!
     printf("Init centroids\n");
@@ -1643,9 +1644,12 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
                   vector_idx_t *gtVecs, int nProbes) {
     // search
     double recall = 0;
+    double totalDC = 0;
+    ReclusteringIndexStats stats;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
-        index.search(queryVecs + i * queryDimension, k, results, nProbes);
+        index.search(queryVecs + i * queryDimension, k, results, nProbes, stats);
+        totalDC += stats.numDistanceComp;
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();
@@ -1655,6 +1659,8 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             }
         }
     }
+    printf("Avg Distance Computation: %f\n", totalDC / queryNumVectors);
+
     return recall / queryNumVectors;
 }
 
@@ -1726,6 +1732,100 @@ void benchmark_reclustering_approach(InputParser &input) {
     printf("Final Recall: %f\n", final_recall);
 }
 
+double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
+                  vector_idx_t *gtVecs, int nMegaProbes, int nMicroProbes) {
+    IncrementalIndexStats stats;
+    // search
+    double recall = 0;
+    for (int i = 0; i < queryNumVectors; i++) {
+        std::priority_queue<NodeDistCloser> results;
+        index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMicroProbes, stats);
+        auto gt = gtVecs + i * k;
+        while (!results.empty()) {
+            auto res = results.top();
+            results.pop();
+            if (std::find(gt, gt + k, res.id) != (gt + k)) {
+                recall++;
+            }
+        }
+    }
+    printf("Avg Distance Computation: %llu\n", stats.numDistanceComp / queryNumVectors);
+    return recall / queryNumVectors;
+}
+
+void benchmark_splitting(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const int numInserts = stoi(input.getCmdOption("-numInserts"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numCentroids = stoi(input.getCmdOption("-numCentroids"));
+    const int numIters = stoi(input.getCmdOption("-numIters"));
+    const int minCentroidSize = stoi(input.getCmdOption("-minCentroidSize"));
+    const int maxCentroidSize = stoi(input.getCmdOption("-maxCentroidSize"));
+    const int maxMegaClusterSize = stoi(input.getCmdOption("-maxMegaClusterSize"));
+    const int nMegaProbes = stoi(input.getCmdOption("-nMegaProbes"));
+    const int nMicroProbes = stoi(input.getCmdOption("-nMicroProbes"));
+    const float lambda = stof(input.getCmdOption("-lambda"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
+
+    // Read dataset
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    IncrementalIndexConfig config(numCentroids, numIters, minCentroidSize, maxCentroidSize, lambda, 0.4, L2,
+                                  maxMegaClusterSize);
+
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    RandomGenerator rng(1234);
+    IncrementalIndex index(baseDimension, config, &rng);
+
+    if (readFromDisk) {
+        index = IncrementalIndex(storagePath, &rng);
+    } else {
+        printf("Building index\n");
+        auto chunkSize = baseNumVectors / numInserts;
+        printf("Chunk size: %d\n", chunkSize);
+        for (long i = 0; i < numInserts; i++) {
+            auto start = i * chunkSize;
+            auto end = (i + 1) * chunkSize;
+            if (i == (numInserts - 1)) {
+                end = baseNumVectors;
+            }
+            printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+            index.insert(baseVecs + start * baseDimension, end - start);
+            index.split();
+        }
+
+        printf("Writing index to disk\n");
+        index.flush_to_disk(storagePath);
+    }
+    index.printStats();
+
+    auto initRecall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+        nMicroProbes);
+    // std::vector<double> recalls;
+    // for (int i = 0; i < numReclusters; i++) {
+    //     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+    //     nMicroProbes);
+    //     recalls.push_back(recall);
+    // }
+    // index.printStats();
+    // auto final_recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+    //     nMicroProbes);
+    printf("Recall: %f\n", initRecall);
+    // for (int i = 0; i < numReclusters; i++) {
+    //     printf("Recall after reclustering %d: %f\n", i, recalls[i]);
+    // }
+    // printf("Final Recall: %f\n", final_recall);
+
+}
+
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
@@ -1755,6 +1855,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkReclusteringIndex") {
         benchmark_reclustering_approach(input);
+    }
+    else if (run == "benchmarkSplitting") {
+        benchmark_splitting(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();

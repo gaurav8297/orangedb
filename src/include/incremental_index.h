@@ -10,6 +10,14 @@
 
 
 namespace orangedb {
+    struct IncrementalIndexStats {
+        uint64_t numDistanceComp = 0;
+
+        void printStats() {
+            printf("Number of distance computations: %lu\n", numDistanceComp);
+        }
+    };
+
     struct IncrementalIndexConfig {
         // The number of centroids
         int numCentroids = 10;
@@ -46,13 +54,14 @@ namespace orangedb {
 
         void insert(float *data, size_t n);
 
-        void fixIndex();
-
         void printStats();
+
+        void split();
 
         void flush_to_disk(const std::string &file_path) const;
 
-        void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes);
+        void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nMegaProbes,
+            int nMicroProbes, IncrementalIndexStats& stats);
 
     private:
         void insertFirstTime(float *data, size_t n);
@@ -60,8 +69,6 @@ namespace orangedb {
         void appendCentroids(const float *centroids, size_t n);
 
         void load_from_disk(const std::string &file_path);
-
-        void split();
 
         void splitMegaCluster(int megaClusterId);
 

@@ -9,6 +9,11 @@
 
 namespace orangedb {
 
+    struct ReclusteringIndexStats {
+        // The number of distance computations
+        uint64_t numDistanceComp = 0;
+    };
+
     struct ReclusteringIndexConfig {
         // The number of centroids
         int numCentroids = 10;
@@ -53,7 +58,8 @@ namespace orangedb {
 
         void flush_to_disk(const std::string &file_path) const;
 
-        void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes);
+        void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes,
+                    ReclusteringIndexStats &stats);
 
     private:
         void appendCentroids(const float *centroids, size_t n);

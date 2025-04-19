@@ -15,7 +15,6 @@ namespace orangedb {
         if (clusters.empty()) {
             // First time inserting data
             insertFirstTime(data, n);
-            size += n;
             return;
         }
 
@@ -37,7 +36,7 @@ namespace orangedb {
 
         // Now resize the clusters
         for (auto &[microId, size]: microHist) {
-            auto currSize = clusters[microId].size();
+            auto currSize = clusters[microId].size() / dim;
             clusters[microId].resize((currSize + size) * dim);
             vectorIds[microId].resize(currSize + size);
             microHist[microId] = currSize;
@@ -51,17 +50,40 @@ namespace orangedb {
             vectorIds[microId][currSize] = i + size;
             microHist[microId]++;
         }
+
         size += n;
     }
 
     void IncrementalIndex::split() {
         // Pick the big mega clusters that violates the threshold
         auto megaClusterToSplit = std::vector<int32_t>();
-        for (int i = 0; i < megaCentroids.size(); i++) {
+        auto megaCentroidsSize = megaCentroids.size() / dim;
+        for (int i = 0; i < megaCentroidsSize; i++) {
             auto size = getMegaClusterSize(i);
             if (size > config.maxMegaClusterSize) {
                 megaClusterToSplit.push_back(i);
             }
+        }
+
+        if (megaClusterToSplit.empty()) {
+            printf("No mega clusters to split\n");
+            return;
+        }
+
+        // Split the mega clusters
+        for (auto megaClusterId: megaClusterToSplit) {
+            // Split the mega cluster
+            splitMegaCluster(megaClusterId);
+        }
+    }
+
+    void IncrementalIndex::printStats() {
+        printf("IncrementalIndex::printStats\n");
+        // Print the number of mega clusters
+        printf("Number of mega clusters: %zu\n", megaCentroids.size() / dim);
+        printf("Number of micro clusters: %zu\n", clusters.size());
+        for (int i = 0; i < clusters.size(); i++) {
+            printf("Centroid %d has %zu vectors\n", i, clusters[i].size() / dim);
         }
     }
 
@@ -89,8 +111,8 @@ namespace orangedb {
         }
 
         // TODO: Move some vectors based on edge cases
-        auto minCentroidSize = totalVectors / 4;
-        auto maxCentroidSize = totalVectors / 2;
+        auto minCentroidSize = totalVectors / 2.1;
+        auto maxCentroidSize = totalVectors / 1.5;
         Clustering megaClustering(dim, 2, config.nIter, minCentroidSize, maxCentroidSize,
                                   0);
         megaClustering.initCentroids(temp_vectors.data(), totalVectors);
@@ -133,8 +155,10 @@ namespace orangedb {
         }
 
         // Cluster mega cluster A
-        Clustering megaClusteringA(dim, config.numCentroids, config.nIter, config.minCentroidSize,
-                                   config.maxCentroidSize, 0);
+        auto minCentroidSizeA = megaClusterASize / (config.numCentroids * 1.3);
+        auto maxCentroidSizeA = megaClusterASize / (config.numCentroids * 0.9);
+        Clustering megaClusteringA(dim, config.numCentroids, config.nIter, minCentroidSizeA,
+                                   maxCentroidSizeA, 0);
         // TODO: Maybe initialize based on previous clusters
         megaClusteringA.initCentroids(megaClusterA.data(), megaClusterASize);
         megaClusteringA.train(megaClusterA.data(), megaClusterASize);
@@ -142,14 +166,15 @@ namespace orangedb {
                          &megaClusteringA, megaClusterA.data(), megaClusterAIds.data(), megaClusterASize);
 
         // Cluster mega cluster B
-        Clustering megaClusteringB(dim, config.numCentroids, config.nIter, config.minCentroidSize,
-                                   config.maxCentroidSize,
+        auto minCentroidSizeB = megaClusterBSize / (config.numCentroids * 1.3);
+        auto maxCentroidSizeB = megaClusterBSize / (config.numCentroids * 0.9);
+        Clustering megaClusteringB(dim, config.numCentroids, config.nIter, minCentroidSizeB,
+                                   maxCentroidSizeB,
                                    0);
         megaClusteringB.initCentroids(megaClusterB.data(), megaClusterBSize);
         megaClusteringB.train(megaClusterB.data(), megaClusterBSize);
-
-        // Recluster each of them separately
-        // Update the storage
+        appendMegaCluster(megaClusteringB.centroids.data(),
+                           &megaClusteringB, megaClusterB.data(), megaClusterBIds.data(), megaClusterBSize);
     }
 
     void IncrementalIndex::storeMegaCluster(int oldMegaClusterId, const float *newMegaCentroid,
@@ -223,7 +248,6 @@ namespace orangedb {
         // Increase the size of mega centroids
         auto curSize = megaCentroids.size() / dim;
         megaCentroids.resize((curSize + 1) * dim);
-        megaCentroidAssignment.resize(curSize + 1);
         memcpy(megaCentroids.data() + (curSize * dim), newMegaCentroid, dim * sizeof(float));
 
         auto currClusterSize = clusters.size();
@@ -554,5 +578,75 @@ namespace orangedb {
             in.read(reinterpret_cast<char *>(vectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
         }
         in.close();
+    }
+
+    void IncrementalIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
+        int nMegaProbes, int nMicroProbes, IncrementalIndexStats& stats) {
+        // Find 5 closest mega centroids
+        std::vector<int32_t> megaAssign(nMegaProbes);
+        std::vector<double> megaDists(nMegaProbes);
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
+        dc->setQuery(query);
+        for (int i = 0; i < numMegaCentroids; i++) {
+            double d;
+            dc->computeDistance(i, &d);
+            stats.numDistanceComp++;
+            if (i < nMegaProbes) {
+                megaDists[i] = d;
+                megaAssign[i] = i;
+            } else {
+                auto maxId = ranges::max_element(megaDists) - megaDists.begin();
+                if (d < megaDists[maxId]) {
+                    megaDists[maxId] = d;
+                    megaAssign[maxId] = i;
+                }
+            }
+        }
+
+        auto numMicroCentroids = microCentroids.size() / dim;
+        dc = getDistanceComputer(microCentroids.data(), numMicroCentroids);
+        dc->setQuery(query);
+
+        // Now find the closest micro centroids
+        std::priority_queue<NodeDistCloser> closestMicro;
+        for (int i = 0; i < nMegaProbes; i++) {
+            auto megaId = megaAssign[i];
+            auto microIds = megaCentroidAssignment[megaId];
+            for (auto microId: microIds) {
+                double d;
+                dc->computeDistance(microId, &d);
+                stats.numDistanceComp++;
+                if (closestMicro.size() < nMicroProbes || d < closestMicro.top().dist) {
+                    closestMicro.emplace(microId, d);
+                    if (closestMicro.size() > nMicroProbes) {
+                        closestMicro.pop();
+                    }
+                }
+            }
+        }
+
+        // Now we have the closest micro centroids, let's find the closest vectors
+        while (!closestMicro.empty()) {
+            auto microId = closestMicro.top().id;
+            closestMicro.pop();
+            printf("Searching in micro cluster %llu\n", microId);
+            auto cluster = clusters[microId];
+            auto ids = vectorIds[microId];
+            auto clusterSize = ids.size();
+            auto clusterDc = getDistanceComputer(cluster.data(), clusterSize);
+            clusterDc->setQuery(query);
+            for (int j = 0; j < clusterSize; j++) {
+                double dist;
+                clusterDc->computeDistance(j, &dist);
+                stats.numDistanceComp++;
+                if (results.size() <= k || dist < results.top().dist) {
+                    results.emplace(ids[j], dist);
+                    if (results.size() > k) {
+                        results.pop();
+                    }
+                }
+            }
+        }
     }
 }
