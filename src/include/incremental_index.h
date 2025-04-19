@@ -63,6 +63,8 @@ namespace orangedb {
         void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nMegaProbes,
             int nMicroProbes, IncrementalIndexStats& stats);
 
+        double computeSilhouetteMetricOnMicroCentroids();
+
     private:
         void insertFirstTime(float *data, size_t n);
 

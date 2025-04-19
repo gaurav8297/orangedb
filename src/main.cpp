@@ -1799,7 +1799,11 @@ void benchmark_splitting(InputParser &input) {
             }
             printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
             index.insert(baseVecs + start * baseDimension, end - start);
+            auto score = index.computeSilhouetteMetricOnMicroCentroids();
+            printf("Silhouette score: %f\n", score);
             index.split();
+            score = index.computeSilhouetteMetricOnMicroCentroids();
+            printf("Silhouette score: %f\n", score);
         }
 
         printf("Writing index to disk\n");

@@ -174,7 +174,7 @@ namespace orangedb {
         megaClusteringB.initCentroids(megaClusterB.data(), megaClusterBSize);
         megaClusteringB.train(megaClusterB.data(), megaClusterBSize);
         appendMegaCluster(megaClusteringB.centroids.data(),
-                           &megaClusteringB, megaClusterB.data(), megaClusterBIds.data(), megaClusterBSize);
+                          &megaClusteringB, megaClusterB.data(), megaClusterBIds.data(), megaClusterBSize);
     }
 
     void IncrementalIndex::storeMegaCluster(int oldMegaClusterId, const float *newMegaCentroid,
@@ -483,7 +483,7 @@ namespace orangedb {
         // Write megaCentroidAssignment
         size_t megaCentroidAssignmentSize = megaCentroidAssignment.size();
         out.write(reinterpret_cast<const char *>(&megaCentroidAssignmentSize), sizeof(megaCentroidAssignmentSize));
-        for (const auto &assignment : megaCentroidAssignment) {
+        for (const auto &assignment: megaCentroidAssignment) {
             size_t assignmentSize = assignment.size();
             out.write(reinterpret_cast<const char *>(&assignmentSize), sizeof(assignmentSize));
             out.write(reinterpret_cast<const char *>(assignment.data()), assignmentSize * sizeof(vector_idx_t));
@@ -497,14 +497,14 @@ namespace orangedb {
         // Write the clusters
         size_t numClusters = clusters.size();
         out.write(reinterpret_cast<const char *>(&numClusters), sizeof(numClusters));
-        for (const auto &cluster : clusters) {
+        for (const auto &cluster: clusters) {
             size_t clusterSize = cluster.size();
             out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
             out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
         }
 
         // Write the vector ids
-        for (const auto &vectorId : vectorIds) {
+        for (const auto &vectorId: vectorIds) {
             size_t vectorIdSize = vectorId.size();
             out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
             out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
@@ -581,7 +581,7 @@ namespace orangedb {
     }
 
     void IncrementalIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
-        int nMegaProbes, int nMicroProbes, IncrementalIndexStats& stats) {
+                                  int nMegaProbes, int nMicroProbes, IncrementalIndexStats &stats) {
         // Find 5 closest mega centroids
         std::vector<int32_t> megaAssign(nMegaProbes);
         std::vector<double> megaDists(nMegaProbes);
@@ -630,7 +630,6 @@ namespace orangedb {
         while (!closestMicro.empty()) {
             auto microId = closestMicro.top().id;
             closestMicro.pop();
-            printf("Searching in micro cluster %llu\n", microId);
             auto cluster = clusters[microId];
             auto ids = vectorIds[microId];
             auto clusterSize = ids.size();
@@ -648,5 +647,62 @@ namespace orangedb {
                 }
             }
         }
+    }
+
+    // Silhouette metric to measure the quality of the clustering i.e. how well the clusters are separated
+    // How it works:
+    // 1. For each point in the dataset, compute the average distance to all other points in the same cluster (a(i)).
+    // 2. For each point in the dataset, compute the min distance to all points in the nearest cluster (b(i)).
+    // 3. For each point in the dataset, compute the silhouette score s(i) = (b(i) - a(i)) / max(a(i), b(i)).
+    // How to interpret the results:
+    // The silhouette score ranges from -1 to 1, where 1 indicates that the point is well clustered,
+    // 0 indicates that the point is on the boundary of two clusters,
+    // and -1 indicates that the point is misclassified.
+    // Note: For now we are only computing the silhouette score for the micro centroids
+    double IncrementalIndex::computeSilhouetteMetricOnMicroCentroids() {
+        // TODO: Maybe calculate the silhouette score for each mega cluster
+        auto numCentroids = microCentroids.size() / dim;
+        CHECK_ARGUMENT(numCentroids == clusters.size(), "Number of centroids must equal number of clusters");
+
+        double totalSilhouette = 0.0;
+        long long totalPoints = 0;
+
+        // Parallelize across clusters (and their points).
+#pragma omp parallel for reduction(+: totalSilhouette, totalPoints) schedule(dynamic)
+        for (int i = 0; i < numCentroids; i++) {
+            const auto &cluster = clusters[i];
+            auto numPoints = cluster.size() / dim;
+            auto dc = getDistanceComputer(cluster.data(), numPoints);
+
+            for (int j = 0; j < numPoints; j++) {
+                const float *curCluster = microCentroids.data() + i * dim;
+                dc->setQuery(curCluster);
+
+                // 1) a = distance to own centroid
+                double a = 0;
+                dc->computeDistance(j, &a);
+
+                // 2) b = min distance to any other centroid
+                double b = std::numeric_limits<double>::infinity();
+                for (int k = 0; k < numCentroids; k++) {
+                    if (k == i) continue;
+                    const float *cO = microCentroids.data() + k * dim;
+                    dc->setQuery(cO);
+                    double dist;
+                    dc->computeDistance(j, &dist);
+                    b = std::min(b, dist);
+                }
+
+                // 3) silhouette for this point
+                double m = std::max(a, b);
+                double s = (m > 0.0) ? (b - a) / m : 0.0;
+                totalSilhouette += s;
+                totalPoints += 1;
+            }
+        }
+
+        return (totalPoints > 0)
+                   ? float(totalSilhouette / double(totalPoints))
+                   : 0.0f;
     }
 }
