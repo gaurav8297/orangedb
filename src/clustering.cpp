@@ -42,7 +42,7 @@ namespace orangedb {
         auto *dist = new float[nSample];
         auto *assign = new int32_t[nSample];
         for (int i = 0; i < nIter; i++) {
-            printf("Running iteration: %d\n", i);
+            // printf("Running iteration: %d\n", i);
             // Initialize the index
             L2DistanceComputer dc = L2DistanceComputer(centroids.data(), dim, numCentroids);
             IndexOneNN index = IndexOneNN(&dc, dim, numCentroids, lambda);

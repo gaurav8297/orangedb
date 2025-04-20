@@ -237,8 +237,8 @@ namespace orangedb {
                    microClustering->centroids.data() + j * dim,
                    dim * sizeof(float));
             // Increment the reclustering counter.
-            printf("Updated cluster %d: new size = %zu, old size = %zu\n",
-                   origClusterId, clusters[origClusterId].size() / dim, oldSize);
+            // printf("Updated cluster %d: new size = %zu, old size = %zu\n",
+                   // origClusterId, clusters[origClusterId].size() / dim, oldSize);
         }
     }
 

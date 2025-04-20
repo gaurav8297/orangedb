@@ -1758,6 +1758,7 @@ void benchmark_splitting(InputParser &input) {
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
     const int numInserts = stoi(input.getCmdOption("-numInserts"));
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const int k = stoi(input.getCmdOption("-k"));
     const int numCentroids = stoi(input.getCmdOption("-numCentroids"));
     const int numIters = stoi(input.getCmdOption("-numIters"));
@@ -1777,6 +1778,7 @@ void benchmark_splitting(InputParser &input) {
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     IncrementalIndexConfig config(numCentroids, numIters, minCentroidSize, maxCentroidSize, lambda, 0.4, L2,
                                   maxMegaClusterSize);
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
