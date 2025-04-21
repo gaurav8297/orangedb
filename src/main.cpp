@@ -833,6 +833,7 @@ void generateGroundTruth(
 void generateGroundTruth(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     auto k = stoi(input.getCmdOption("-k"));
+    auto numVectors = stoi(input.getCmdOption("-numVectors"));
     const std::string &gtPath = input.getCmdOption("-gtPath");
     auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
     auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
@@ -842,7 +843,7 @@ void generateGroundTruth(InputParser &input) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
     // serialize gtVecs to a file
     writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
