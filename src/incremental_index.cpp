@@ -98,6 +98,7 @@ namespace orangedb {
             // Split the micro cluster
             splitMicroCluster(microClusterId);
         }
+        printf("Split %zu micro clusters\n", microClusterToSplit.size());
         return microClusterToSplit.size();
     }
 
@@ -332,7 +333,6 @@ namespace orangedb {
         // Append the new clusters to the clusters
         // Append the new vector ids to the vector ids
         // Append the new cluster ids to the mega cluster
-        printf("splitting micro cluster %d\n", microClusterId);
         CHECK_ARGUMENT(microClusterId < clusters.size(), "Invalid micro cluster id");
         auto megaClusterId = -1;
         // Update the mega centroid assignment by adding the new micro cluster id.
@@ -349,7 +349,8 @@ namespace orangedb {
         }
 
         auto size = clusters[microClusterId].size() / dim;
-        Clustering microClustering(dim, 2, 50, getMinCentroidSize(size, 2), getMaxCentroidSize(size, 2), 0);
+        Clustering microClustering(dim, 2, 50, getMinCentroidSize(size, 2),
+            getMaxCentroidSize(size, 2), 0);
         microClustering.initCentroids(clusters[microClusterId].data(), size);
         microClustering.train(clusters[microClusterId].data(), size);
         std::vector<int32_t> reclusterAssign(size);
@@ -362,6 +363,7 @@ namespace orangedb {
             int label = reclusterAssign[i];
             newClusterSizes[label]++;
         }
+        // TODO: Find more closer clusters and make it work!!
 
         // Allocate storage for the new clusters and vector ids.
         std::vector<std::vector<float> > newClustersData(newClusters);
@@ -402,6 +404,33 @@ namespace orangedb {
                    dim * sizeof(float));
             megaCentroidAssignment[megaClusterId].push_back(currMicroCentroidSize);
             currMicroCentroidSize++;
+        }
+    }
+
+    void IncrementalIndex::findClosestMicroCluster(const float *data, int n, float *dists,
+        int32_t *assign, float *newCentroid, int centroidId) {
+        // TODO: Make it more advanced. For now keep it simple
+        auto numMicroCentroids = microCentroids.size() / dim;
+        auto dc = getDistanceComputer(microCentroids.data(), numMicroCentroids);
+        // Find the top 10 closest micro centroids
+#pragma omp parallel
+        {
+            auto localDC = dc->clone();
+#pragma omp for
+            for (int i = 0; i < n; i++) {
+                localDC->setQuery(data + i * dim);
+                double minDistance = std::numeric_limits<double>::max();
+                vector_idx_t minId = 0;
+                for (int j = 0; j < numMicroCentroids; j++) {
+                    double d;
+                    localDC->computeDistance(j, &d);
+                    auto recomputedDist = d;
+                    if (recomputedDist < minDistance) {
+                        minDistance = recomputedDist;
+                        minId = j;
+                    }
+                }
+            }
         }
     }
 
@@ -482,9 +511,10 @@ namespace orangedb {
     void IncrementalIndex::insertFirstTime(float *data, size_t n) {
         printf("IncrementalIndex::insert\n");
         // Perform k means
-        Clustering clustering(dim, config.numCentroids, config.nIter, getMinCentroidSize(n, config.numCentroids),
-                              getMaxCentroidSize(n, config.numCentroids),
-                              config.lambda);
+        auto minCentroidSize = getMinCentroidSize(n, config.numCentroids);
+        auto maxCentroidSize = getMaxCentroidSize(n, config.numCentroids);
+        printf("minCentroidSize: %zu, maxCentroidSize: %zu\n", minCentroidSize, maxCentroidSize);
+        Clustering clustering(dim, config.numCentroids, config.nIter, minCentroidSize, maxCentroidSize, config.lambda);
 
         printf("Initialized clustering\n");
         clustering.initCentroids(data, n);

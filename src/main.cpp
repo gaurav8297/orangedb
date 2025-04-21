@@ -1801,8 +1801,8 @@ void benchmark_splitting(InputParser &input) {
             printf("processing chunk: %ld, start: %lu, end: %lu\n", i, start, end);
             index.insert(baseVecs + start * baseDimension, end - start);
             scores.push_back(index.computeSilhouetteMetricOnMicroCentroids());
-            numSplits += index.splitMicro();
-            scores.push_back(index.computeSilhouetteMetricOnMicroCentroids());
+            // numSplits += index.splitMicro();
+            // scores.push_back(index.computeSilhouetteMetricOnMicroCentroids());
         }
 
         printf("Writing index to disk\n");
