@@ -409,8 +409,8 @@ namespace orangedb {
     }
 
     void IncrementalIndex::findClosestMicroCluster(const float *data, int n, float *dists,
-        int32_t *assign, float *newCentroid, int centroidId) {
-        // TODO: Make it more advanced. For now keep it simple
+                                                   int32_t *assign, int skipMicroCentroid) {
+        // TODO: Make it more advanced and smart to reduce dc. For now keep it simple
         auto numMicroCentroids = microCentroids.size() / dim;
         auto dc = getDistanceComputer(microCentroids.data(), numMicroCentroids);
         // Find the top 10 closest micro centroids
@@ -423,13 +423,17 @@ namespace orangedb {
                 double minDistance = std::numeric_limits<double>::max();
                 vector_idx_t minId = 0;
                 for (int j = 0; j < numMicroCentroids; j++) {
+                    if (j == skipMicroCentroid) continue;
                     double d;
                     localDC->computeDistance(j, &d);
-                    auto recomputedDist = d;
-                    if (recomputedDist < minDistance) {
-                        minDistance = recomputedDist;
+                    if (d < minDistance) {
+                        minDistance = d;
                         minId = j;
                     }
+                }
+                if (dists[i] > minDistance) {
+                    dists[i] = minDistance;
+                    assign[i] = minId;
                 }
             }
         }
