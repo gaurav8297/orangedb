@@ -13,7 +13,7 @@ namespace orangedb {
                 : dc(dc), dim(dim),
                   numEntries(numEntries), lambda(lambda) {};
 
-        inline void search(int n, const float *queries, float *distances, int32_t *resultIds);
+        inline void search(int n, const float *queries, double *distances, int32_t *resultIds);
 
         inline void search(int n, const float *queries, int32_t *resultIds);
 
@@ -43,6 +43,8 @@ namespace orangedb {
         void train(float *data, int n);
 
         void assignCentroids(const float *data, int n, int32_t *assign);
+
+        void assignCentroids(const float *data, int n, double* dist, int32_t *assign);
 
         inline int getCentroid(int i, float *centroid) {
             CHECK_ARGUMENT(i < numCentroids, "Invalid centroid index");

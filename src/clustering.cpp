@@ -39,7 +39,7 @@ namespace orangedb {
         float *sample = nullptr;
         int nSample = sampleData(n, data, &sample);
 
-        auto *dist = new float[nSample];
+        auto *dist = new double[nSample];
         auto *assign = new int32_t[nSample];
         for (int i = 0; i < nIter; i++) {
             // printf("Running iteration: %d\n", i);
@@ -76,9 +76,15 @@ namespace orangedb {
 
         // Assign each vector to the nearest centroid
         // TODO: Dist is not needed. We can optimize this.
-        float *dist = new float[n];
+        auto *dist = new double[n];
         index.search(n, data, dist, assign);
         delete[] dist;
+    }
+
+    void Clustering::assignCentroids(const float *data, int n, double *dist, int32_t *assign) {
+        L2DistanceComputer dc = L2DistanceComputer(centroids.data(), dim, numCentroids);
+        IndexOneNN index = IndexOneNN(&dc, dim, numCentroids);
+        index.search(n, data, dist, assign);
     }
 
     void Clustering::computeCentroids(int n, const float *data, const int *assign, int *hist, float *newCentroids) {
@@ -178,7 +184,7 @@ namespace orangedb {
         return nSample;
     }
 
-    void IndexOneNN::search(int n, const float *queries, float *distances, int32_t *resultIds) {
+    void IndexOneNN::search(int n, const float *queries, double *distances, int32_t *resultIds) {
         std::vector<double> hist(numEntries, 0);
 #pragma omp parallel
         {

@@ -59,7 +59,7 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 
 ./orangedb/build/release/bin/orangedb_main -run benchmark -basePath /localscratch/g3sehgal.41104075.0/gist_1M -k 100 -M 64 -efConstruction 200 -efSearch 200 -nThreads 32 -minAlpha 1 -alphaDecay 0.1 -maxAlpha 1.1 -filterMinK 40 -maxNeighboursCheck 60
 
-./build/release/bin/orangedb_main -run generateGT -basePath /home/centos/orangedb/data/sift10m -k 100 -gtPath /home/centos/orangedb/data/sift10m/gt.bin
+./build/release/bin/orangedb_main -run generateGT -basePath /home/centos/orangedb/data/sift10m -k 100 -numVectors 1000000 -gtPath /home/centos/orangedb/data/sift10m/gt_new.bin
 
 ./build/release/bin/orangedb_main -run benchmarkReclusteringIndex -baseVectorPath /home/centos/orangedb/data/sift10m/base.fvecs -queryVectorPath /home/centos/orangedb/data/sift10m/query.fvecs -groundTruthPath /home/centos/orangedb/data/sift10m/gt.bin -k 100 -numInserts 1 -numCentroids 40000 -numIters 30 -minCentroidSize 150 -maxCentroidSize 300 -nProbes 100 -lambda 0 -numReclusters 0 -readFromDisk 0 -storagePath /home/centos/orangedb/data/sift10m/index.bin
 ./build/release/bin/orangedb_main -run benchmarkReclusteringIndex -baseVectorPath /home/centos/orangedb/data/sift10m/base.fvecs -queryVectorPath /home/centos/orangedb/data/sift10m/query.fvecs -groundTruthPath /home/centos/orangedb/data/sift10m/gt.bin -k 100 -numInserts 1 -numCentroids 40000 -numIters 30 -minCentroidSize 150 -maxCentroidSize 300 -nProbes 100 -lambda 0 -numReclusters 0 -readFromDisk 0 -storagePath /home/centos/orangedb/data/sift10m/index.bin

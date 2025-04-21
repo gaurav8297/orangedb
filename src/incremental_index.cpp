@@ -354,16 +354,22 @@ namespace orangedb {
         microClustering.initCentroids(clusters[microClusterId].data(), size);
         microClustering.train(clusters[microClusterId].data(), size);
         std::vector<int32_t> reclusterAssign(size);
-        microClustering.assignCentroids(clusters[microClusterId].data(), size, reclusterAssign.data());
+        auto dists = new double[size];
+        microClustering.assignCentroids(clusters[microClusterId].data(), size, dists, reclusterAssign.data());
+        findClosestMicroCluster(clusters[microClusterId].data(), size, dists, reclusterAssign.data(), microClusterId);
 
         // Partition the reclustered vectors into new clusters.
         int newClusters = microClustering.getNumCentroids();
         std::vector<int> newClusterSizes(newClusters, 0);
+        std::unordered_map<vector_idx_t, int> oldClusterVecs;
         for (size_t i = 0; i < size; i++) {
             int label = reclusterAssign[i];
+            if (label > 1) {
+                oldClusterVecs[label]++;
+                continue;
+            }
             newClusterSizes[label]++;
         }
-        // TODO: Find more closer clusters and make it work!!
 
         // Allocate storage for the new clusters and vector ids.
         std::vector<std::vector<float> > newClustersData(newClusters);
@@ -377,12 +383,28 @@ namespace orangedb {
         // Distribute the vectors into the new clusters.
         for (size_t i = 0; i < size; i++) {
             int label = reclusterAssign[i];
+            if (label > 1) continue;
             int idx = newClusterSizes[label];
             memcpy(newClustersData[label].data() + idx * dim,
                    clusters[microClusterId].data() + i * dim,
                    dim * sizeof(float));
             newClustersVectorIds[label][idx] = vectorIds[microClusterId][i];
             newClusterSizes[label]++;
+        }
+
+        // Copy left over vectors to new vectors
+        for (auto &[oldClusterId, size]: oldClusterVecs) {
+            auto currSize = clusters[oldClusterId].size() / dim;
+            clusters[oldClusterId].resize((currSize + size) * dim);
+            vectorIds[oldClusterId].resize(currSize + size);
+            auto idx = currSize;
+            for (int i = 0; i < size; i++) {
+                if (i != oldClusterId) continue;
+                memcpy(clusters[oldClusterId].data() + idx * dim,
+                    clusters[microClusterId].data() + i * dim,  dim * sizeof(float));
+                vectorIds[oldClusterId][idx] = vectorIds[microClusterId][i];
+                idx++;
+            }
         }
 
         // Update the original micro cluster with the first new cluster.
@@ -407,7 +429,7 @@ namespace orangedb {
         }
     }
 
-    void IncrementalIndex::findClosestMicroCluster(const float *data, int n, float *dists,
+    void IncrementalIndex::findClosestMicroCluster(const float *data, int n, double *dists,
                                                    int32_t *assign, int skipMicroCentroid) {
         // TODO: Make it more advanced and smart to reduce dc. For now keep it simple
         auto numMicroCentroids = microCentroids.size() / dim;

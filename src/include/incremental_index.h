@@ -78,7 +78,7 @@ namespace orangedb {
 
         void splitMicroCluster(int microClusterId);
 
-        void findClosestMicroCluster(const float *data, int n, float *dists, int32_t *assign, int skipMicroCentroid);
+        void findClosestMicroCluster(const float *data, int n, double *dists, int32_t *assign, int skipMicroCentroid);
 
         size_t getMegaClusterSize(int megaCentroidId);
 
