@@ -21,29 +21,23 @@ namespace orangedb {
     struct IncrementalIndexConfig {
         // The number of centroids
         int numCentroids = 10;
+        // Average size of the micro centroids
+        int avgMicroCentroidSize = 100;
         // The number of iterations
         int nIter = 25;
-        // The minimum size of a centroid
-        int minCentroidSize;
-        // The maximum size of a centroid
-        int maxCentroidSize;
         // Lambda parameter for clustering
         float lambda = 0;
         // The distance threshold for searching in the centroids
         float searchThreshold = 0.4;
         // Distance Method
         DistanceType distanceType = L2;
-        // Mega split threshold
-        long maxMegaClusterSize = 1000000;
 
         explicit IncrementalIndexConfig() {}
 
-        explicit IncrementalIndexConfig(int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize,
-                        float lambda, float searchThreshold, DistanceType distanceType, long maxMegaClusterSize)
-            : numCentroids(numCentroids), nIter(nIter), minCentroidSize(minCentroidSize),
-              maxCentroidSize(maxCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
-              distanceType(distanceType), maxMegaClusterSize(maxMegaClusterSize) {}
-
+        explicit IncrementalIndexConfig(int numCentroids, int nIter, int avgMicroCentroidSize,
+                        float lambda, float searchThreshold, DistanceType distanceType)
+            : numCentroids(numCentroids), nIter(nIter), lambda(lambda), searchThreshold(searchThreshold),
+              avgMicroCentroidSize(avgMicroCentroidSize), distanceType(distanceType) {}
     };
 
     class IncrementalIndex {
@@ -56,7 +50,9 @@ namespace orangedb {
 
         void printStats();
 
-        void split();
+        void splitMega();
+
+        void splitMicro();
 
         void flush_to_disk(const std::string &file_path) const;
 
@@ -80,11 +76,21 @@ namespace orangedb {
         void appendMegaCluster(const float* newMegaCentroid, Clustering* microClustering,
             const float *data, const vector_idx_t *vectorIds, size_t n);
 
+        void splitMicroCluster(int microClusterId);
+
         size_t getMegaClusterSize(int megaCentroidId);
 
         void assignMegaCentroids(const float *data, int n, int32_t *assign);
 
         void assignMicroCentroids(const float *data, int n, const int32_t *megaAssign, int32_t *microAssign);
+
+        inline int getMinCentroidSize(int numVectors, int numCentroids) const {
+            return (numVectors / numCentroids) * 0.8;
+        }
+
+        inline int getMaxCentroidSize(int numVectors, int numCentroids) const {
+            return (numVectors / numCentroids) * 1.2;
+        }
 
         std::unique_ptr<DistanceComputer> getDistanceComputer(const float *data, int n) const {
             if (config.distanceType == L2) {

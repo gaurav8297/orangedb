@@ -54,13 +54,14 @@ namespace orangedb {
         size += n;
     }
 
-    void IncrementalIndex::split() {
+    void IncrementalIndex::splitMega() {
         // Pick the big mega clusters that violates the threshold
         auto megaClusterToSplit = std::vector<int32_t>();
         auto megaCentroidsSize = megaCentroids.size() / dim;
         for (int i = 0; i < megaCentroidsSize; i++) {
             auto size = getMegaClusterSize(i);
-            if (size > config.maxMegaClusterSize) {
+            // Check if the cluster is too big
+            if (size > config.avgMicroCentroidSize * config.numCentroids * 2) {
                 megaClusterToSplit.push_back(i);
             }
         }
@@ -74,6 +75,28 @@ namespace orangedb {
         for (auto megaClusterId: megaClusterToSplit) {
             // Split the mega cluster
             splitMegaCluster(megaClusterId);
+        }
+    }
+
+    void IncrementalIndex::splitMicro() {
+        auto microClusterToSplit = std::vector<int32_t>();
+        for (int i = 0; i < clusters.size(); i++) {
+            auto size = clusters[i].size() / dim;
+            // Check if the cluster is too big
+            if (size > config.avgMicroCentroidSize * 2) {
+                microClusterToSplit.push_back(i);
+            }
+        }
+
+        if (microClusterToSplit.empty()) {
+            printf("No micro clusters to split\n");
+            return;
+        }
+
+        // Split the micro clusters
+        for (auto microClusterId: microClusterToSplit) {
+            // Split the micro cluster
+            splitMicroCluster(microClusterId);
         }
     }
 
@@ -111,9 +134,7 @@ namespace orangedb {
         }
 
         // TODO: Move some vectors based on edge cases
-        auto minCentroidSize = totalVectors / 2.1;
-        auto maxCentroidSize = totalVectors / 1.5;
-        Clustering megaClustering(dim, 2, config.nIter, minCentroidSize, maxCentroidSize,
+        Clustering megaClustering(dim, 2, 50, getMinCentroidSize(totalVectors, 2), getMaxCentroidSize(totalVectors, 2),
                                   0);
         megaClustering.initCentroids(temp_vectors.data(), totalVectors);
         megaClustering.train(temp_vectors.data(), totalVectors);
@@ -155,10 +176,8 @@ namespace orangedb {
         }
 
         // Cluster mega cluster A
-        auto minCentroidSizeA = megaClusterASize / (config.numCentroids * 1.3);
-        auto maxCentroidSizeA = megaClusterASize / (config.numCentroids * 0.9);
-        Clustering megaClusteringA(dim, config.numCentroids, config.nIter, minCentroidSizeA,
-                                   maxCentroidSizeA, 0);
+        Clustering megaClusteringA(dim, config.numCentroids, config.nIter, getMinCentroidSize(megaClusterASize, config.numCentroids),
+                                   getMaxCentroidSize(megaClusterASize, config.numCentroids), 0);
         // TODO: Maybe initialize based on previous clusters
         megaClusteringA.initCentroids(megaClusterA.data(), megaClusterASize);
         megaClusteringA.train(megaClusterA.data(), megaClusterASize);
@@ -166,10 +185,8 @@ namespace orangedb {
                          &megaClusteringA, megaClusterA.data(), megaClusterAIds.data(), megaClusterASize);
 
         // Cluster mega cluster B
-        auto minCentroidSizeB = megaClusterBSize / (config.numCentroids * 1.3);
-        auto maxCentroidSizeB = megaClusterBSize / (config.numCentroids * 0.9);
-        Clustering megaClusteringB(dim, config.numCentroids, config.nIter, minCentroidSizeB,
-                                   maxCentroidSizeB,
+        Clustering megaClusteringB(dim, config.numCentroids, config.nIter, getMinCentroidSize(megaClusterBSize, config.numCentroids),
+                                   getMaxCentroidSize(megaClusterBSize, config.numCentroids),
                                    0);
         megaClusteringB.initCentroids(megaClusterB.data(), megaClusterBSize);
         megaClusteringB.train(megaClusterB.data(), megaClusterBSize);
@@ -238,7 +255,7 @@ namespace orangedb {
                    dim * sizeof(float));
             // Increment the reclustering counter.
             // printf("Updated cluster %d: new size = %zu, old size = %zu\n",
-                   // origClusterId, clusters[origClusterId].size() / dim, oldSize);
+            // origClusterId, clusters[origClusterId].size() / dim, oldSize);
         }
     }
 
@@ -300,6 +317,85 @@ namespace orangedb {
         megaCentroidAssignment.push_back(std::move(microAssign));
     }
 
+    void IncrementalIndex::splitMicroCluster(int microClusterId) {
+        // Split into two using k means
+        // Append the new centroids to the micro centroids
+        // Append the new clusters to the clusters
+        // Append the new vector ids to the vector ids
+        // Append the new cluster ids to the mega cluster
+
+        CHECK_ARGUMENT(microClusterId < clusters.size(), "Invalid micro cluster id");
+        auto megaClusterId = -1;
+        // Update the mega centroid assignment by adding the new micro cluster id.
+        for (int i = 0; i < megaCentroidAssignment.size(); i++) {
+            auto &megaAssign = megaCentroidAssignment[i];
+            if (ranges::find(megaAssign, microClusterId) != megaAssign.end()) {
+                megaClusterId = i;
+                break;
+            }
+        }
+        if (megaClusterId == -1) {
+            printf("Invalid mega cluster id\n");
+            return;
+        }
+
+        auto size = clusters[microClusterId].size() / dim;
+        Clustering microClustering(dim, 2, 50, getMinCentroidSize(size, 2), getMaxCentroidSize(size, 2), 0);
+        microClustering.initCentroids(clusters[microClusterId].data(), size);
+        microClustering.train(clusters[microClusterId].data(), size);
+        std::vector<int32_t> reclusterAssign(size);
+        microClustering.assignCentroids(clusters[microClusterId].data(), size, reclusterAssign.data());
+        printf("Assigned new cluster labels for reclustered vectors.\n");
+
+        // Partition the reclustered vectors into new clusters.
+        int newClusters = microClustering.getNumCentroids();
+        std::vector<int> newClusterSizes(newClusters, 0);
+        for (size_t i = 0; i < size; i++) {
+            int label = reclusterAssign[i];
+            newClusterSizes[label]++;
+        }
+
+        // Allocate storage for the new clusters and vector ids.
+        std::vector<std::vector<float> > newClustersData(newClusters);
+        std::vector<std::vector<vector_idx_t> > newClustersVectorIds(newClusters);
+        for (int j = 0; j < newClusters; j++) {
+            newClustersData[j].resize(newClusterSizes[j] * dim);
+            newClustersVectorIds[j].resize(newClusterSizes[j]);
+            newClusterSizes[j] = 0; // reset for insertion
+        }
+
+        // Distribute the vectors into the new clusters.
+        for (size_t i = 0; i < size; i++) {
+            int label = reclusterAssign[i];
+            int idx = newClusterSizes[label];
+            memcpy(newClustersData[label].data() + idx * dim,
+                   clusters[microClusterId].data() + i * dim,
+                   dim * sizeof(float));
+            newClustersVectorIds[label][idx] = vectorIds[microClusterId][i];
+            newClusterSizes[label]++;
+        }
+
+        // Update the original micro cluster with the first new cluster.
+        clusters[microClusterId] = std::move(newClustersData[0]);
+        vectorIds[microClusterId] = std::move(newClustersVectorIds[0]);
+        memcpy(microCentroids.data() + microClusterId * dim,
+               microClustering.centroids.data(),
+               dim * sizeof(float));
+
+        auto currMicroCentroidSize = microCentroids.size() / dim;
+        microCentroids.resize((currMicroCentroidSize + newClusters - 1) * dim);
+
+        // For any additional clusters, append them as new micro clusters.
+        for (int j = 1; j < newClusters; j++) {
+            clusters.push_back(std::move(newClustersData[j]));
+            vectorIds.push_back(std::move(newClustersVectorIds[j]));
+            memcpy(microCentroids.data() + currMicroCentroidSize * dim,
+                   microClustering.centroids.data() + j * dim,
+                   dim * sizeof(float));
+            megaCentroidAssignment[megaClusterId].push_back(currMicroCentroidSize);
+            currMicroCentroidSize++;
+        }
+    }
 
     size_t IncrementalIndex::getMegaClusterSize(int megaCentroidId) {
         size_t size = 0;
@@ -378,7 +474,8 @@ namespace orangedb {
     void IncrementalIndex::insertFirstTime(float *data, size_t n) {
         printf("IncrementalIndex::insert\n");
         // Perform k means
-        Clustering clustering(dim, config.numCentroids, config.nIter, config.minCentroidSize, config.maxCentroidSize,
+        Clustering clustering(dim, config.numCentroids, config.nIter, getMinCentroidSize(n, config.numCentroids),
+                              getMaxCentroidSize(n, config.numCentroids),
                               config.lambda);
 
         printf("Initialized clustering\n");
@@ -468,12 +565,10 @@ namespace orangedb {
         // Write the config
         out.write(reinterpret_cast<const char *>(&config.numCentroids), sizeof(config.numCentroids));
         out.write(reinterpret_cast<const char *>(&config.nIter), sizeof(config.nIter));
-        out.write(reinterpret_cast<const char *>(&config.minCentroidSize), sizeof(config.minCentroidSize));
-        out.write(reinterpret_cast<const char *>(&config.maxCentroidSize), sizeof(config.maxCentroidSize));
+        out.write(reinterpret_cast<const char *>(&config.avgMicroCentroidSize), sizeof(config.avgMicroCentroidSize));
         out.write(reinterpret_cast<const char *>(&config.lambda), sizeof(config.lambda));
         out.write(reinterpret_cast<const char *>(&config.searchThreshold), sizeof(config.searchThreshold));
         out.write(reinterpret_cast<const char *>(&config.distanceType), sizeof(config.distanceType));
-        out.write(reinterpret_cast<const char *>(&config.maxMegaClusterSize), sizeof(config.maxMegaClusterSize));
 
         // Write the mega centroids
         size_t megaCentroidSize = megaCentroids.size();
@@ -525,12 +620,10 @@ namespace orangedb {
         // Read the config
         in.read(reinterpret_cast<char *>(&config.numCentroids), sizeof(config.numCentroids));
         in.read(reinterpret_cast<char *>(&config.nIter), sizeof(config.nIter));
-        in.read(reinterpret_cast<char *>(&config.minCentroidSize), sizeof(config.minCentroidSize));
-        in.read(reinterpret_cast<char *>(&config.maxCentroidSize), sizeof(config.maxCentroidSize));
+        in.read(reinterpret_cast<char *>(&config.avgMicroCentroidSize), sizeof(config.avgMicroCentroidSize));
         in.read(reinterpret_cast<char *>(&config.lambda), sizeof(config.lambda));
         in.read(reinterpret_cast<char *>(&config.searchThreshold), sizeof(config.searchThreshold));
         in.read(reinterpret_cast<char *>(&config.distanceType), sizeof(config.distanceType));
-        in.read(reinterpret_cast<char *>(&config.maxMegaClusterSize), sizeof(config.maxMegaClusterSize));
 
         // Read the mega centroids
         size_t megaCentroidSize;
