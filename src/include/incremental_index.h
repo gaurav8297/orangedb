@@ -88,7 +88,7 @@ namespace orangedb {
         void assignMicroCentroids(const float *data, int n, const int32_t *megaAssign, int32_t *microAssign);
 
         inline int getMinCentroidSize(int numVectors, int numCentroids) const {
-            return (numVectors / numCentroids) * 0.8;
+            return (numVectors / numCentroids) * 0.6;
         }
 
         inline int getMaxCentroidSize(int numVectors, int numCentroids) const {
