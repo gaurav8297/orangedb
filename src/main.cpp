@@ -1760,11 +1760,8 @@ void benchmark_splitting(InputParser &input) {
     const int numInserts = stoi(input.getCmdOption("-numInserts"));
     const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const int k = stoi(input.getCmdOption("-k"));
-    const int numCentroids = stoi(input.getCmdOption("-numCentroids"));
     const int numIters = stoi(input.getCmdOption("-numIters"));
-    const int minCentroidSize = stoi(input.getCmdOption("-minCentroidSize"));
-    const int maxCentroidSize = stoi(input.getCmdOption("-maxCentroidSize"));
-    const int maxMegaClusterSize = stoi(input.getCmdOption("-maxMegaClusterSize"));
+    const int avgCentroidSize = stoi(input.getCmdOption("-avgCentroidSize"));
     const int nMegaProbes = stoi(input.getCmdOption("-nMegaProbes"));
     const int nMicroProbes = stoi(input.getCmdOption("-nMicroProbes"));
     const float lambda = stof(input.getCmdOption("-lambda"));
@@ -1776,8 +1773,10 @@ void benchmark_splitting(InputParser &input) {
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
-    IncrementalIndexConfig config(numCentroids, numIters, minCentroidSize, maxCentroidSize, lambda, 0.4, L2,
-                                  maxMegaClusterSize);
+    auto chunkSize = baseNumVectors / numInserts;
+    auto numCentroids = chunkSize / avgCentroidSize;
+    printf("Chunk size: %lu, Num centroids: %lu\n", chunkSize, numCentroids);
+    IncrementalIndexConfig config(numCentroids, numIters, avgCentroidSize, lambda, 0.4, L2);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
@@ -1803,7 +1802,7 @@ void benchmark_splitting(InputParser &input) {
             index.insert(baseVecs + start * baseDimension, end - start);
             auto score = index.computeSilhouetteMetricOnMicroCentroids();
             printf("Silhouette score: %f\n", score);
-            index.split();
+            index.splitMicro();
             score = index.computeSilhouetteMetricOnMicroCentroids();
             printf("Silhouette score: %f\n", score);
         }

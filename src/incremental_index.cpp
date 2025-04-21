@@ -209,7 +209,6 @@ namespace orangedb {
         // Obtain the new cluster assignments.
         std::vector<int32_t> reclusterAssign(n);
         microClustering->assignCentroids(data, n, reclusterAssign.data());
-        printf("Assigned new cluster labels for reclustered vectors.\n");
 
         // Partition the reclustered vectors into new clusters.
         int newClusters = microClustering->getNumCentroids();
@@ -272,7 +271,6 @@ namespace orangedb {
         // Obtain the new cluster assignments.
         std::vector<int32_t> reclusterAssign(n);
         microClustering->assignCentroids(data, n, reclusterAssign.data());
-        printf("Assigned new cluster labels for reclustered vectors.\n");
 
         // Partition the reclustered vectors into new clusters.
         int newClusters = microClustering->getNumCentroids();
@@ -323,7 +321,7 @@ namespace orangedb {
         // Append the new clusters to the clusters
         // Append the new vector ids to the vector ids
         // Append the new cluster ids to the mega cluster
-
+        printf("splitting micro cluster %d\n", microClusterId);
         CHECK_ARGUMENT(microClusterId < clusters.size(), "Invalid micro cluster id");
         auto megaClusterId = -1;
         // Update the mega centroid assignment by adding the new micro cluster id.
@@ -345,7 +343,6 @@ namespace orangedb {
         microClustering.train(clusters[microClusterId].data(), size);
         std::vector<int32_t> reclusterAssign(size);
         microClustering.assignCentroids(clusters[microClusterId].data(), size, reclusterAssign.data());
-        printf("Assigned new cluster labels for reclustered vectors.\n");
 
         // Partition the reclustered vectors into new clusters.
         int newClusters = microClustering.getNumCentroids();
