@@ -1773,11 +1773,11 @@ void benchmark_splitting(InputParser &input) {
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     auto chunkSize = baseNumVectors / numInserts;
     auto numCentroids = chunkSize / avgCentroidSize;
     printf("Chunk size: %lu, Num centroids: %lu\n", chunkSize, numCentroids);
     IncrementalIndexConfig config(numCentroids, numIters, avgCentroidSize, lambda, 0.4, L2);
-    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
