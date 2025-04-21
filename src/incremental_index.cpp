@@ -78,7 +78,7 @@ namespace orangedb {
         }
     }
 
-    void IncrementalIndex::splitMicro() {
+    int IncrementalIndex::splitMicro() {
         auto microClusterToSplit = std::vector<int32_t>();
         for (int i = 0; i < clusters.size(); i++) {
             auto size = clusters[i].size() / dim;
@@ -90,7 +90,7 @@ namespace orangedb {
 
         if (microClusterToSplit.empty()) {
             printf("No micro clusters to split\n");
-            return;
+            return 0;
         }
 
         // Split the micro clusters
@@ -98,6 +98,7 @@ namespace orangedb {
             // Split the micro cluster
             splitMicroCluster(microClusterId);
         }
+        return microClusterToSplit.size();
     }
 
     void IncrementalIndex::printStats() {

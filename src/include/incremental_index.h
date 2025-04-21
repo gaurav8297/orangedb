@@ -52,7 +52,7 @@ namespace orangedb {
 
         void splitMega();
 
-        void splitMicro();
+        int splitMicro();
 
         void flush_to_disk(const std::string &file_path) const;
 

@@ -1786,31 +1786,35 @@ void benchmark_splitting(InputParser &input) {
     RandomGenerator rng(1234);
     IncrementalIndex index(baseDimension, config, &rng);
 
+    std::vector<double> scores;
+    int numSplits = 0;
     if (readFromDisk) {
         index = IncrementalIndex(storagePath, &rng);
     } else {
         printf("Building index\n");
-        auto chunkSize = baseNumVectors / numInserts;
-        printf("Chunk size: %d\n", chunkSize);
         for (long i = 0; i < numInserts; i++) {
             auto start = i * chunkSize;
             auto end = (i + 1) * chunkSize;
             if (i == (numInserts - 1)) {
                 end = baseNumVectors;
             }
-            printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+            printf("processing chunk: %ld, start: %lu, end: %lu\n", i, start, end);
             index.insert(baseVecs + start * baseDimension, end - start);
-            auto score = index.computeSilhouetteMetricOnMicroCentroids();
-            printf("Silhouette score: %f\n", score);
-            index.splitMicro();
-            score = index.computeSilhouetteMetricOnMicroCentroids();
-            printf("Silhouette score: %f\n", score);
+            scores.push_back(index.computeSilhouetteMetricOnMicroCentroids());
+            numSplits += index.splitMicro();
+            scores.push_back(index.computeSilhouetteMetricOnMicroCentroids());
         }
 
         printf("Writing index to disk\n");
         index.flush_to_disk(storagePath);
     }
     index.printStats();
+    printf("Num splits: %d\n", numSplits);
+    int iter = 0;
+    for (int i = 0; i < scores.size(); i+=2) {
+        printf("Silhouette score after %d insert and split: %f->%f\n", iter, scores[i], scores[i+1]);
+        iter += 1;
+    }
 
     auto initRecall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
         nMicroProbes);
@@ -1828,7 +1832,6 @@ void benchmark_splitting(InputParser &input) {
     //     printf("Recall after reclustering %d: %f\n", i, recalls[i]);
     // }
     // printf("Final Recall: %f\n", final_recall);
-
 }
 
 int main(int argc, char **argv) {
