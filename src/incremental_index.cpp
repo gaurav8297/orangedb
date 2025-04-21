@@ -105,9 +105,19 @@ namespace orangedb {
         // Print the number of mega clusters
         printf("Number of mega clusters: %zu\n", megaCentroids.size() / dim);
         printf("Number of micro clusters: %zu\n", clusters.size());
-        for (int i = 0; i < clusters.size(); i++) {
-            printf("Centroid %d has %zu vectors\n", i, clusters[i].size() / dim);
+        // print min, max, avg size of the clusters
+        auto minSize = std::numeric_limits<size_t>::max();
+        size_t maxSize = 0;
+        size_t avgSize = 0;
+        for (const auto & cluster : clusters) {
+            auto size = cluster.size() / dim;
+            minSize = std::min(minSize, size);
+            maxSize = std::max(maxSize, size);
+            avgSize += size;
         }
+        printf("Min size of clusters: %zu\n", minSize);
+        printf("Max size of clusters: %zu\n", maxSize);
+        printf("Avg size of clusters: %zu\n", avgSize / clusters.size());
     }
 
     void IncrementalIndex::splitMegaCluster(int megaClusterId) {
