@@ -116,7 +116,6 @@ namespace orangedb {
             minSize = std::min(minSize, size);
             maxSize = std::max(maxSize, size);
             avgSize += size;
-            printf("Cluster size: %zu\n", size);
         }
         printf("Min size of clusters: %zu\n", minSize);
         printf("Max size of clusters: %zu\n", maxSize);
