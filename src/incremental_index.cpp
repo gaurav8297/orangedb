@@ -490,7 +490,7 @@ namespace orangedb {
         std::sort(dists.begin(), dists.end(), [](auto &a, auto &b) {
             return a.second < b.second;
         });
-        int nClosest = std::min(10, (int) dists.size());
+        int nClosest = std::min(20, (int) dists.size());
         std::vector<int> closestCentroids;
         for (int i = 0; i < nClosest; i++) {
             closestCentroids.push_back(dists[i].first);
@@ -548,7 +548,6 @@ namespace orangedb {
             }
         }
     }
-
 
     void IncrementalIndex::findClosestMicroCluster(const float *data, int n, double *dists,
                                                    int32_t *assign, int skipMicroCentroid) {
