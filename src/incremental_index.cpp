@@ -120,6 +120,34 @@ namespace orangedb {
         printf("Min size of clusters: %zu\n", minSize);
         printf("Max size of clusters: %zu\n", maxSize);
         printf("Avg size of clusters: %zu\n", avgSize / clusters.size());
+        // int numMissAssignment = 0;
+        // auto dc = getDistanceComputer(microCentroids.data(), microCentroids.size() / dim);
+        // for (size_t i = 0; i < clusters.size(); ++i) {
+        //     const auto &cluster = clusters[i];
+        //     int numPoints = cluster.size() / dim;
+        //     for (int j = 0; j < numPoints; j++) {
+        //         dc->setQuery(cluster.data() + j * dim);
+        //         double assignedDist;
+        //         dc->computeDistance(i, &assignedDist);
+        //         double bestDist = std::numeric_limits<double>::max();
+        //         int bestCentroid = -1;
+        //         int numCentroids = microCentroids.size() / dim;
+        //         for (int k = 0; k < numCentroids; k++) {
+        //             double d;
+        //             dc->computeDistance(k, &d);
+        //             if (d < bestDist) {
+        //                 bestDist = d;
+        //                 bestCentroid = k;
+        //             }
+        //         }
+        //         if (bestCentroid != static_cast<int>(i)) {
+        //             printf("Vector %llu in cluster %zu mis-assigned: assigned dist=%f, best dist=%f with centroid %d\n",
+        //                    vectorIds[i][j], i, assignedDist, bestDist, bestCentroid);
+        //             numMissAssignment++;
+        //         }
+        //     }
+        // }
+        // printf("Number of mis-assigned vectors: %d\n", numMissAssignment);
     }
 
     void IncrementalIndex::splitMegaCluster(int megaClusterId) {
@@ -343,6 +371,7 @@ namespace orangedb {
                 break;
             }
         }
+
         if (megaClusterId == -1) {
             printf("Invalid mega cluster id\n");
             return;
@@ -392,15 +421,22 @@ namespace orangedb {
             newClusterSizes[label]++;
         }
 
+        auto dc = getDistanceComputer(clusters[microClusterId].data(), size);
         // Copy left over vectors to new vectors
-        for (auto &[oldClusterId, size]: oldClusterVecs) {
-            auto currSize = clusters[oldClusterId].size() / dim;
-            clusters[oldClusterId].resize((currSize + size) * dim);
-            vectorIds[oldClusterId].resize(currSize + size);
-            auto idx = currSize;
+        for (auto &[oldClusterId, newVecSize]: oldClusterVecs) {
+            auto currOldSize = clusters[oldClusterId].size() / dim;
+            clusters[oldClusterId].resize((currOldSize + newVecSize) * dim);
+            vectorIds[oldClusterId].resize(currOldSize + newVecSize);
+            auto idx = currOldSize;
             for (int i = 0; i < size; i++) {
                 int label = reclusterAssign[i];
                 if (label == oldClusterId && dists[i] == -1) {
+                    // printf("Moving vector %llu from cluster %d to cluster %d\n", vectorIds[microClusterId][i], microClusterId, oldClusterId);
+                    // double dist1, dist2, dist3;
+                    // dc->computeDistance(clusters[microClusterId].data() + i * dim, microCentroids.data() + oldClusterId * dim, &dist1);
+                    // dc->computeDistance(clusters[microClusterId].data() + i * dim, microClustering.centroids.data(), &dist2);
+                    // dc->computeDistance(clusters[microClusterId].data() + i * dim, microClustering.centroids.data() + dim, &dist3);
+                    // printf("Distance to old cluster %llu: %f, distance to new cluster: %f,%f\n", oldClusterId, dist1, dist2, dist3);
                     memcpy(clusters[oldClusterId].data() + idx * dim,
                         clusters[microClusterId].data() + i * dim,  dim * sizeof(float));
                     vectorIds[oldClusterId][idx] = vectorIds[microClusterId][i];

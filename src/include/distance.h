@@ -24,6 +24,8 @@ namespace orangedb {
 
         virtual void batchComputeDistances(vector_idx_t *ids, double *results, int size) = 0;
 
+        virtual void computeDistance(float* src, float* dest, double *result) = 0;
+
         virtual void setQuery(const float *query) = 0;
 
         virtual std::unique_ptr<DistanceComputer> clone() = 0;
@@ -54,6 +56,11 @@ namespace orangedb {
             const uint8_t *ci = data + (src * codeSize);
             const uint8_t *cj = data + (dest * codeSize);
             sym_dc->compute_distance(ci, cj, result);
+        }
+
+        void computeDistance(float *src, float *dest, double *result) override {
+            // Not implemented
+            CHECK_ARGUMENT(false, "Not implemented");
         }
 
         inline void batchComputeDistances(vector_idx_t *ids, double *results, int size) override {
@@ -102,6 +109,10 @@ namespace orangedb {
             simsimd_l2sq_f32(x, y, dim, result);
         }
 
+        void computeDistance(float *src, float *dest, double *result) override {
+            simsimd_l2sq_f32(src, dest, dim, result);
+        }
+
         inline void batchComputeDistances(vector_idx_t *ids, double *results, int size) override {
             for (int i = 0; i < size; i++) {
                 computeDistance(ids[i], &results[i]);
@@ -147,6 +158,10 @@ namespace orangedb {
             const float *x = data + (src * dim);
             const float *y = data + (dest * dim);
             simsimd_cos_f32(x, y, dim, result);
+        }
+
+        void computeDistance(float *src, float *dest, double *result) override {
+            simsimd_cos_f32(src, dest, dim, result);
         }
 
         inline void batchComputeDistances(vector_idx_t *ids, double *results, int size) override {
