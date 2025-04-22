@@ -400,11 +400,12 @@ namespace orangedb {
             auto idx = currSize;
             for (int i = 0; i < size; i++) {
                 int label = reclusterAssign[i];
-                if (label != oldClusterId) continue;
-                memcpy(clusters[oldClusterId].data() + idx * dim,
-                    clusters[microClusterId].data() + i * dim,  dim * sizeof(float));
-                vectorIds[oldClusterId][idx] = vectorIds[microClusterId][i];
-                idx++;
+                if (label == oldClusterId && dists[i] == -1) {
+                    memcpy(clusters[oldClusterId].data() + idx * dim,
+                        clusters[microClusterId].data() + i * dim,  dim * sizeof(float));
+                    vectorIds[oldClusterId][idx] = vectorIds[microClusterId][i];
+                    idx++;
+                }
             }
         }
 
