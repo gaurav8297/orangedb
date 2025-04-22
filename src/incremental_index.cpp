@@ -111,7 +111,7 @@ namespace orangedb {
         auto minSize = std::numeric_limits<size_t>::max();
         size_t maxSize = 0;
         size_t avgSize = 0;
-        for (const auto & cluster : clusters) {
+        for (const auto &cluster: clusters) {
             auto size = cluster.size() / dim;
             minSize = std::min(minSize, size);
             maxSize = std::max(maxSize, size);
@@ -216,7 +216,8 @@ namespace orangedb {
         }
 
         // Cluster mega cluster A
-        Clustering megaClusteringA(dim, config.numCentroids, config.nIter, getMinCentroidSize(megaClusterASize, config.numCentroids),
+        Clustering megaClusteringA(dim, config.numCentroids, config.nIter,
+                                   getMinCentroidSize(megaClusterASize, config.numCentroids),
                                    getMaxCentroidSize(megaClusterASize, config.numCentroids), 0);
         // TODO: Maybe initialize based on previous clusters
         megaClusteringA.initCentroids(megaClusterA.data(), megaClusterASize);
@@ -225,7 +226,8 @@ namespace orangedb {
                          &megaClusteringA, megaClusterA.data(), megaClusterAIds.data(), megaClusterASize);
 
         // Cluster mega cluster B
-        Clustering megaClusteringB(dim, config.numCentroids, config.nIter, getMinCentroidSize(megaClusterBSize, config.numCentroids),
+        Clustering megaClusteringB(dim, config.numCentroids, config.nIter,
+                                   getMinCentroidSize(megaClusterBSize, config.numCentroids),
                                    getMaxCentroidSize(megaClusterBSize, config.numCentroids),
                                    0);
         megaClusteringB.initCentroids(megaClusterB.data(), megaClusterBSize);
@@ -379,7 +381,7 @@ namespace orangedb {
 
         auto size = clusters[microClusterId].size() / dim;
         Clustering microClustering(dim, 2, 50, getMinCentroidSize(size, 2),
-            getMaxCentroidSize(size, 2), 0);
+                                   getMaxCentroidSize(size, 2), 0);
         microClustering.initCentroids(clusters[microClusterId].data(), size);
         microClustering.train(clusters[microClusterId].data(), size);
         std::vector<int32_t> reclusterAssign(size);
@@ -438,7 +440,7 @@ namespace orangedb {
                     // dc->computeDistance(clusters[microClusterId].data() + i * dim, microClustering.centroids.data() + dim, &dist3);
                     // printf("Distance to old cluster %llu: %f, distance to new cluster: %f,%f\n", oldClusterId, dist1, dist2, dist3);
                     memcpy(clusters[oldClusterId].data() + idx * dim,
-                        clusters[microClusterId].data() + i * dim,  dim * sizeof(float));
+                           clusters[microClusterId].data() + i * dim, dim * sizeof(float));
                     vectorIds[oldClusterId][idx] = vectorIds[microClusterId][i];
                     idx++;
                 }
@@ -451,6 +453,7 @@ namespace orangedb {
         memcpy(microCentroids.data() + microClusterId * dim,
                microClustering.centroids.data(),
                dim * sizeof(float));
+        moveVectorsFromClosestCentroids(microClusterId);
 
         auto currMicroCentroidSize = microCentroids.size() / dim;
         microCentroids.resize((currMicroCentroidSize + newClusters - 1) * dim);
@@ -463,9 +466,89 @@ namespace orangedb {
                    microClustering.centroids.data() + j * dim,
                    dim * sizeof(float));
             megaCentroidAssignment[megaClusterId].push_back(currMicroCentroidSize);
+            moveVectorsFromClosestCentroids(currMicroCentroidSize);
             currMicroCentroidSize++;
         }
     }
+
+    void IncrementalIndex::moveVectorsFromClosestCentroids(int centroidId) {
+        // TODO: Maybe optimize this!!
+        int numMicro = microCentroids.size() / dim;
+        if (centroidId < 0 || centroidId >= numMicro) return;
+        auto microDc = getDistanceComputer(microCentroids.data(), numMicro);
+        microDc->setQuery(microCentroids.data() + centroidId * dim);
+
+        // Compute distances from centroidId to all other centroids
+        std::vector<std::pair<int, double> > dists;
+        for (int i = 0; i < numMicro; i++) {
+            if (i == centroidId) continue;
+            double d = 0;
+            microDc->computeDistance(i, &d);
+            dists.emplace_back(i, d);
+        }
+        // Sort and choose top 10 closest centroids
+        std::sort(dists.begin(), dists.end(), [](auto &a, auto &b) {
+            return a.second < b.second;
+        });
+        int nClosest = std::min(10, (int) dists.size());
+        std::vector<int> closestCentroids;
+        for (int i = 0; i < nClosest; i++) {
+            closestCentroids.push_back(dists[i].first);
+        }
+
+        // For each closest centroid, move vectors that are closer to centroidId than to their current centroid.
+#pragma omp parallel for schedule(dynamic)
+        for (int idx = 0; idx < (int) closestCentroids.size(); idx++) {
+            int otherCentroid = closestCentroids[idx];
+            std::vector<int> indicesToMove;
+            int clusterSize = clusters[otherCentroid].size() / dim;
+            const float *targetCent = microCentroids.data() + centroidId * dim;
+            const float *otherCent = microCentroids.data() + otherCentroid * dim;
+            auto clusterDc = getDistanceComputer(clusters[otherCentroid].data(), clusterSize);
+            for (int i = 0; i < clusterSize; i++) {
+                double dToTarget = 0, dToOther = 0;
+                clusterDc->setQuery(targetCent);
+                clusterDc->computeDistance(i, &dToTarget);
+                clusterDc->setQuery(otherCent);
+                clusterDc->computeDistance(i, &dToOther);
+                if (dToTarget < dToOther) {
+                    indicesToMove.push_back(i);
+                }
+            }
+            if (!indicesToMove.empty()) {
+#pragma omp critical
+                {
+                    // First these indices vectors and vectorids to centroidId
+                    auto currentCentSize = clusters[centroidId].size() / dim;
+                    clusters[centroidId].resize((currentCentSize + indicesToMove.size()) * dim);
+                    vectorIds[centroidId].resize(currentCentSize + indicesToMove.size());
+                    for (auto i = 0; i < indicesToMove.size(); i++) {
+                        auto indexToMove = indicesToMove[i];
+                        memcpy(clusters[centroidId].data() + (currentCentSize + i) * dim,
+                               clusters[otherCentroid].data() + indexToMove * dim,
+                               dim * sizeof(float));
+                        vectorIds[centroidId][currentCentSize + i] = vectorIds[otherCentroid][indexToMove];
+                    }
+                }
+
+                // Remove moved vectors from the other centroid's cluster
+                int last = clusters[otherCentroid].size() / dim - 1;
+                for (int k = (int) indicesToMove.size() - 1; k >= 0; k--) {
+                    int indexToMove = indicesToMove[k];
+                    if (indexToMove != last) {
+                        memcpy(clusters[otherCentroid].data() + indexToMove * dim,
+                               clusters[otherCentroid].data() + last * dim,
+                               dim * sizeof(float));
+                        vectorIds[otherCentroid][indexToMove] = vectorIds[otherCentroid][last];
+                    }
+                    last--;
+                    vectorIds[otherCentroid].pop_back();
+                }
+                clusters[otherCentroid].resize((last + 1) * dim);
+            }
+        }
+    }
+
 
     void IncrementalIndex::findClosestMicroCluster(const float *data, int n, double *dists,
                                                    int32_t *assign, int skipMicroCentroid) {
