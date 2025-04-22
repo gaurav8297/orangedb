@@ -364,7 +364,7 @@ namespace orangedb {
         std::unordered_map<vector_idx_t, int> oldClusterVecs;
         for (size_t i = 0; i < size; i++) {
             int label = reclusterAssign[i];
-            if (label > 1) {
+            if (dists[i] == -1) {
                 oldClusterVecs[label]++;
                 continue;
             }
@@ -382,8 +382,8 @@ namespace orangedb {
 
         // Distribute the vectors into the new clusters.
         for (size_t i = 0; i < size; i++) {
+            if (dists[i] == -1) continue;
             int label = reclusterAssign[i];
-            if (label > 1) continue;
             int idx = newClusterSizes[label];
             memcpy(newClustersData[label].data() + idx * dim,
                    clusters[microClusterId].data() + i * dim,
@@ -399,7 +399,8 @@ namespace orangedb {
             vectorIds[oldClusterId].resize(currSize + size);
             auto idx = currSize;
             for (int i = 0; i < size; i++) {
-                if (i != oldClusterId) continue;
+                int label = reclusterAssign[i];
+                if (label != oldClusterId) continue;
                 memcpy(clusters[oldClusterId].data() + idx * dim,
                     clusters[microClusterId].data() + i * dim,  dim * sizeof(float));
                 vectorIds[oldClusterId][idx] = vectorIds[microClusterId][i];
@@ -453,7 +454,7 @@ namespace orangedb {
                     }
                 }
                 if (dists[i] > minDistance) {
-                    dists[i] = minDistance;
+                    dists[i] = -1;
                     assign[i] = minId;
                 }
             }
