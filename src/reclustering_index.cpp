@@ -2,7 +2,8 @@
 
 namespace orangedb {
     ReclusteringIndex::ReclusteringIndex(int dim, ReclusteringIndexConfig config, RandomGenerator *rg)
-        : dim(dim), config(config), rg(rg), size(0) {}
+        : dim(dim), config(config), size(0), rg(rg) {
+    }
 
     ReclusteringIndex::ReclusteringIndex(const std::string &file_path, RandomGenerator *rg) : rg(rg) {
         load_from_disk(file_path);
@@ -10,330 +11,423 @@ namespace orangedb {
 
     void ReclusteringIndex::insert(float *data, size_t n) {
         printf("ReclusteringIndex::insert\n");
-        // Perform k means
-        Clustering clustering(dim, config.numCentroids, config.nIter, config.minCentroidSize, config.maxCentroidSize,
+        // Create vectorIds
+        std::vector<vector_idx_t> vectorIds(n);
+        for (size_t i = 0; i < n; i++) {
+            vectorIds[i] = i + size;
+        }
+
+        std::vector<float> centroids;
+        std::vector<std::vector<float> > clusters;
+        std::vector<std::vector<vector_idx_t> > clusterVectorIds;
+        clusterData(data, vectorIds.data(), n, config.newMiniCentroidSize, centroids, clusters, clusterVectorIds);
+
+        // Store the mini clusters into the index buffering space
+        for (int i = 0; i < clusters.size(); i++) {
+            std::vector<float> cluster = clusters[i];
+            newMiniClusters.push_back(std::move(cluster));
+            std::vector<vector_idx_t> vectorId = clusterVectorIds[i];
+            newMiniClusterVectorIds.push_back(std::move(vectorId));
+        }
+
+        printf("Copying centroids\n");
+        auto curMiniCtrdSize = newMiniCentroids.size();
+        newMiniCentroids.resize(curMiniCtrdSize + centroids.size());
+        memcpy(newMiniCentroids.data() + curMiniCtrdSize, centroids.data(), centroids.size() * sizeof(float));
+        size += n;
+    }
+
+    void ReclusteringIndex::mergeNewMiniCentroids() {
+        if (newMiniCentroids.empty()) {
+            return;
+        }
+
+        if (megaCentroids.empty()) {
+            // Init situation, run reclustering on all miniCentroids and create mini as well as mega centroids
+            mergeNewMiniCentroidsInit();
+            return;
+        }
+
+        // Reclustering on the new mini centroids
+        // TODO: Make this process concurrent!!
+        std::vector<vector_idx_t> miniCentroidIds(newMiniCentroids.size() / dim);
+        for (size_t i = 0; i < miniCentroidIds.size(); i++) {
+            miniCentroidIds[i] = i;
+        }
+        std::vector<float> newMegaCentroids;
+        std::vector<std::vector<vector_idx_t> > newMiniClusterIds;
+        clusterData(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
+                    config.numNewMiniReclusterCentroids, newMegaCentroids, newMiniClusterIds);
+
+        for (size_t i = 0; i < (newMegaCentroids.size() / dim); i++) {
+            mergeNewMiniCentroidsBatch(newMegaCentroids.data() + i * dim,
+                                       newMiniClusterIds[i]);
+        }
+
+        // Reset all newMiniCentroids, clusters and vectorIds
+        newMiniCentroids.clear();
+        newMiniClusters.clear();
+        newMiniClusterVectorIds.clear();
+        newMiniCentroids = std::vector<float>();
+        newMiniClusters = std::vector<std::vector<float> >();
+        newMiniClusterVectorIds = std::vector<std::vector<vector_idx_t> >();
+    }
+
+    void ReclusteringIndex::mergeNewMiniCentroidsBatch(float *newMegaCentroid,
+                                                       std::vector<vector_idx_t> newMiniCentroidBatch) {
+        // Find the closest mega centroid
+        std::vector<vector_idx_t> megaAssign;
+        findKClosestMegaCentroids(newMegaCentroid, config.numMegaReclusterCentroids, megaAssign);
+
+        auto totalVecs = 0;
+        for (auto i = 0; i < newMiniCentroidBatch.size(); i++) {
+            auto cluster = newMiniClusters[newMiniCentroidBatch[i]];
+            totalVecs += (cluster.size() / dim);
+        }
+        for (auto megaCentroidId: megaAssign) {
+            auto microCentroidIds = megaMiniCentroidIds[megaCentroidId];
+            for (auto microCentroidId: microCentroidIds) {
+                auto cluster = miniClusters[microCentroidId];
+                totalVecs += (cluster.size() / dim);
+            }
+        }
+
+        // Copy actual vecs and vectorIds here
+        std::vector<float> tempData(totalVecs * dim);
+        std::vector<vector_idx_t> tempVectorIds(totalVecs);
+        size_t idx = 0;
+        for (auto i = 0; i < newMiniCentroidBatch.size(); i++) {
+            auto cluster = newMiniClusters[newMiniCentroidBatch[i]];
+            auto vectorId = newMiniClusterVectorIds[newMiniCentroidBatch[i]];
+            size_t numVectors = cluster.size() / dim;
+            memcpy(tempData.data() + idx * dim, cluster.data(), cluster.size() * sizeof(float));
+            memcpy(tempVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
+            idx += numVectors;
+        }
+        for (auto megaCentroidId: megaAssign) {
+            auto microCentroidIds = megaMiniCentroidIds[megaCentroidId];
+            for (auto microCentroidId: microCentroidIds) {
+                auto cluster = miniClusters[microCentroidId];
+                auto vectorId = miniClusterVectorIds[microCentroidId];
+                size_t numVectors = cluster.size() / dim;
+                memcpy(tempData.data() + idx * dim, cluster.data(), cluster.size() * sizeof(float));
+                memcpy(tempVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
+                idx += numVectors;
+            }
+        }
+
+        // Run mini reclustering
+        std::vector<float> newMiniCentroids;
+        std::vector<std::vector<float> > newMiniClusters;
+        std::vector<std::vector<vector_idx_t> > newMiniClusterVectorIds;
+        clusterData(tempData.data(), tempVectorIds.data(), totalVecs, config.miniCentroidSize,
+                    newMiniCentroids, newMiniClusters, newMiniClusterVectorIds);
+
+        // Run mega reclustering
+        std::vector<vector_idx_t> miniCentroidIds(newMiniCentroids.size() / dim);
+        for (size_t i = 0; i < miniCentroidIds.size(); i++) {
+            miniCentroidIds[i] = i;
+        }
+        std::vector<float> newMegaCentroids;
+        std::vector<std::vector<vector_idx_t> > newMiniClusterIds;
+        clusterData(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
+                    config.megaCentroidSize, newMegaCentroids, newMiniClusterIds);
+
+        // Append the new mini and mega centroids to the index
+        appendOrMergeCentroids(megaAssign, newMegaCentroids, newMiniClusterIds, newMiniCentroids,
+                               newMiniClusters, newMiniClusterVectorIds);
+    }
+
+    void ReclusteringIndex::mergeNewMiniCentroidsInit() {
+        // Copy all the data to temp vectors
+        size_t totalVectors = 0;
+        for (const auto &cluster: newMiniClusters) {
+            totalVectors += (cluster.size() / dim);
+        }
+
+        // Create the clustering object
+        std::vector<float> newVectors(totalVectors * dim);
+        std::vector<vector_idx_t> newVectorIds(totalVectors);
+
+        // Copy from newMiniClusters to newVectors
+        size_t idx = 0;
+        for (size_t i = 0; i < newMiniClusters.size(); i++) {
+            auto cluster = newMiniClusters[i];
+            auto vectorId = newMiniClusterVectorIds[i];
+            size_t numVectors = cluster.size() / dim;
+            memcpy(newVectors.data() + idx * dim, cluster.data(), cluster.size() * sizeof(float));
+            memcpy(newVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
+            idx += numVectors;
+        }
+
+        // Perform mini clustering
+        std::vector<float> tempMiniCentroids(totalVectors * dim);
+        std::vector<std::vector<float> > tempMiniClusters;
+        std::vector<std::vector<vector_idx_t> > tempMiniClusterVectorIds;
+        clusterData(newVectors.data(), newVectorIds.data(), totalVectors, config.miniCentroidSize,
+                    tempMiniCentroids, tempMiniClusters, tempMiniClusterVectorIds);
+
+        // Create mega centroids
+        std::vector<vector_idx_t> miniCentroidIds(tempMiniCentroids.size() / dim);
+        for (size_t i = 0; i < miniCentroidIds.size(); i++) {
+            miniCentroidIds[i] = i;
+        }
+        std::vector<float> tempMegaCentroids;
+        std::vector<std::vector<vector_idx_t> > tempMiniClusterIds;
+        clusterData(tempMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
+                    config.megaCentroidSize, tempMegaCentroids, tempMiniClusterIds);
+
+        // Move the mini and mega centroids to the index
+        megaCentroids = std::move(tempMegaCentroids);
+        megaMiniCentroidIds = std::move(tempMiniClusterIds);
+        miniCentroids = std::move(tempMiniCentroids);
+        miniClusters = std::move(tempMiniClusters);
+        miniClusterVectorIds = std::move(tempMiniClusterVectorIds);
+    }
+
+    void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                        std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
+                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        // Create the clustering object
+        auto numClusters = getNumCentroids(n, avgClusterSize);
+        if (numClusters <= 1) {
+            calcMeanCentroid(data, vectorIds, n, centroids, clusterVectorIds);
+            return;
+        }
+        Clustering clustering(dim, numClusters, config.nIter,
+                              getMinCentroidSize(n, numClusters),
+                              getMaxCentroidSize(n, numClusters),
                               config.lambda);
 
-        printf("Initialized clustering\n");
+        // Initialize the centroids
         clustering.initCentroids(data, n);
-
-        printf("Training Kmeans\n");
         clustering.train(data, n);
 
-        printf("Assigning centroids\n");
         // Assign the centroids
         std::vector<int32_t> assign(n);
         clustering.assignCentroids(data, n, assign.data());
 
         // Get the hist
-        std::vector<int> hist(config.numCentroids, 0);
+        std::vector<int> hist(numClusters, 0);
         for (int i = 0; i < n; i++) {
             hist[assign[i]]++;
         }
 
-        // TODO: Try parallelizing this!
         printf("Copying actual data\n");
         // Copy the centroids
-        std::vector<std::vector<float>> temp_clusters(config.numCentroids);
-        std::vector<std::vector<vector_idx_t>> temp_vectorIds(config.numCentroids);
-        for (int i = 0; i < config.numCentroids; i++) {
+        centroids.resize(numClusters * dim);
+        memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
+        clusters.resize(numClusters);
+        clusterVectorIds.resize(numClusters);
+        for (int i = 0; i < numClusters; i++) {
             std::vector<float> cluster(hist[i] * dim);
-            temp_clusters[i] = cluster;
+            clusters[i] = cluster;
             std::vector<vector_idx_t> vectorId(hist[i]);
-            temp_vectorIds[i] = vectorId;
+            clusterVectorIds[i] = vectorId;
             hist[i] = 0;
         }
 
         for (int i = 0; i < n; i++) {
             auto assignId = assign[i];
             auto idx = hist[assignId];
-            auto& cluster = temp_clusters[assignId];
+            auto &cluster = clusters[assignId];
             memcpy(cluster.data() + idx * dim, data + i * dim, dim * sizeof(float));
-            temp_vectorIds[assignId][idx] = i + size;
+            clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
         }
-
-        // Store the clusters
-        for (int i = 0; i < config.numCentroids; i++) {
-            std::vector<float> cluster = temp_clusters[i];
-            clusters.push_back(std::move(cluster));
-            std::vector<vector_idx_t> vectorId = temp_vectorIds[i];
-            vectorIds.push_back(std::move(vectorId));
-        }
-
-        printf("Copying centroids\n");
-        appendCentroids(clustering.centroids.data(), clustering.centroids.size());
-        size += n;
     }
 
-    void ReclusteringIndex::printStats() {
-        printf("ReclusteringIndex::printStats\n");
-        for (int i = 0; i < config.numCentroids; i++) {
-            printf("Centroid %d has %zu vectors and reclustered %d times\n", i, clusters[i].size() / dim, reclusteringCount[i]);
-        }
-    }
-
-    void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {
-        std::ofstream out(file_path, std::ios::binary);
-        if (!out) {
-            std::cerr << "Error opening file for writing: " << file_path << std::endl;
+    void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                        std::vector<float> &centroids,
+                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        // Create the clustering object
+        auto numClusters = getNumCentroids(n, avgClusterSize);
+        if (numClusters <= 1) {
+            calcMeanCentroid(data, vectorIds, n, centroids, clusterVectorIds);
             return;
         }
 
-        // Write the basic fields
-        out.write(reinterpret_cast<const char *>(&dim), sizeof(dim));
-        out.write(reinterpret_cast<const char *>(&size), sizeof(size));
+        Clustering clustering(dim, numClusters, config.nIter,
+                              getMinCentroidSize(n, numClusters),
+                              getMaxCentroidSize(n, numClusters),
+                              config.lambda);
 
-        // Write the config
-        out.write(reinterpret_cast<const char *>(&config.numCentroids), sizeof(config.numCentroids));
-        out.write(reinterpret_cast<const char *>(&config.nIter), sizeof(config.nIter));
-        out.write(reinterpret_cast<const char *>(&config.minCentroidSize), sizeof(config.minCentroidSize));
-        out.write(reinterpret_cast<const char *>(&config.maxCentroidSize), sizeof(config.maxCentroidSize));
-        out.write(reinterpret_cast<const char *>(&config.lambda), sizeof(config.lambda));
-        out.write(reinterpret_cast<const char *>(&config.searchThreshold), sizeof(config.searchThreshold));
-        out.write(reinterpret_cast<const char *>(&config.distanceType), sizeof(config.distanceType));
-        out.write(reinterpret_cast<const char *>(&config.numReclusterCentroids), sizeof(config.numReclusterCentroids));
+        // Initialize the centroids
+        clustering.initCentroids(data, n);
+        clustering.train(data, n);
 
-        // Write the centroids
-        size_t centroidSize = centroids.size();
-        out.write(reinterpret_cast<const char *>(&centroidSize), sizeof(centroidSize));
-        out.write(reinterpret_cast<const char *>(centroids.data()), centroidSize * sizeof(float));
+        // Assign the centroids
+        std::vector<int32_t> assign(n);
+        clustering.assignCentroids(data, n, assign.data());
 
-        // Write the clusters
-        for (const auto &cluster : clusters) {
-            size_t clusterSize = cluster.size();
-            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
-            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
-        }
-
-        // Write the vector ids
-        for (const auto &vectorId : vectorIds) {
-            size_t vectorIdSize = vectorId.size();
-            out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
-            out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
-        }
-
-        // Write the re-clustering count
-        for (const auto &count : reclusteringCount) {
-            out.write(reinterpret_cast<const char *>(&count), sizeof(count));
-        }
-    }
-
-    void ReclusteringIndex::load_from_disk(const std::string &file_path) {
-        std::ifstream in(file_path, std::ios::binary);
-        if (!in) {
-            std::cerr << "Error opening file for reading: " << file_path << std::endl;
-            return;
-        }
-
-        // Read the basic fields
-        in.read(reinterpret_cast<char *>(&dim), sizeof(dim));
-        in.read(reinterpret_cast<char *>(&size), sizeof(size));
-
-        // Read the config
-        in.read(reinterpret_cast<char *>(&config.numCentroids), sizeof(config.numCentroids));
-        in.read(reinterpret_cast<char *>(&config.nIter), sizeof(config.nIter));
-        in.read(reinterpret_cast<char *>(&config.minCentroidSize), sizeof(config.minCentroidSize));
-        in.read(reinterpret_cast<char *>(&config.maxCentroidSize), sizeof(config.maxCentroidSize));
-        in.read(reinterpret_cast<char *>(&config.lambda), sizeof(config.lambda));
-        in.read(reinterpret_cast<char *>(&config.searchThreshold), sizeof(config.searchThreshold));
-        in.read(reinterpret_cast<char *>(&config.distanceType), sizeof(config.distanceType));
-        in.read(reinterpret_cast<char *>(&config.numReclusterCentroids), sizeof(config.numReclusterCentroids));
-
-        // Read the centroids
-        size_t centroidSize;
-        in.read(reinterpret_cast<char *>(&centroidSize), sizeof(centroidSize));
-        centroids.resize(centroidSize);
-        in.read(reinterpret_cast<char *>(centroids.data()), centroidSize * sizeof(float));
-
-        // Read the clusters
-        auto numClusters = centroidSize / dim;
-        clusters.resize(numClusters);
-        for (size_t i = 0; i < numClusters; i++) {
-            size_t clusterSize;
-            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
-            clusters[i].resize(clusterSize);
-            in.read(reinterpret_cast<char *>(clusters[i].data()), clusterSize * sizeof(float));
-        }
-
-        // Read the vector ids
-        vectorIds.resize(numClusters);
-        for (size_t i = 0; i < numClusters; i++) {
-            size_t vectorIdSize;
-            in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
-            vectorIds[i].resize(vectorIdSize);
-            in.read(reinterpret_cast<char *>(vectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
-        }
-
-        // Read the re-clustering count
-        reclusteringCount.resize(numClusters);
-        for (size_t i = 0; i < numClusters; i++) {
-            in.read(reinterpret_cast<char *>(&reclusteringCount[i]), sizeof(reclusteringCount[i]));
-        }
-    }
-
-    void ReclusteringIndex::performReclustering() {
-        printf("ReclusteringIndex::performReclustering\n");
-        // Pick a centroid with minimum reclustering count.
-        // TODO: Pick a random one from the list of centroids with minimum re-clustering count.
-        int centroidId = 0;
-        long minCount = std::numeric_limits<long>::max();
-        for (int i = 0; i < config.numCentroids; i++) {
-            if (reclusteringCount[i] < minCount) {
-                centroidId = i;
-                minCount = reclusteringCount[i];
-            }
-        }
-        printf("Selected centroid id %d with reclustering count %ld\n", centroidId, minCount);
-
-        // Find numReclusterCentroids closest centroids.
-        std::priority_queue<NodeDistFarther> ctrdsToRecluster;
-        auto numCentroids = centroids.size() / dim;
-        auto dc = getDistanceComputer(centroids.data(), numCentroids);
-        dc->setQuery(centroids.data() + centroidId * dim);
-        ctrdsToRecluster.emplace(centroidId, 0);
-        for (int i = 0; i < numCentroids; i++) {
-            if (i == centroidId) continue;
-            double dist;
-            dc->computeDistance(i, &dist);
-            ctrdsToRecluster.emplace(i, dist);
-        }
-        printf("Computed distances from centroid %d to all others.\n", centroidId);
-
-        // Determine which clusters will be reclustered.
-        std::vector<vector_idx_t> clusterIdToRecluster;
-        vector_idx_t totalVecToRecluster = 0;
-        while (!ctrdsToRecluster.empty()) {
-            auto clusterId = ctrdsToRecluster.top();
-            ctrdsToRecluster.pop();
-            clusterIdToRecluster.push_back(clusterId.id);
-            totalVecToRecluster += clusters[clusterId.id].size() / dim;
-            if (clusterIdToRecluster.size() >= config.numReclusterCentroids) {
-                break;
-            }
-        }
-        printf("Selected %zu clusters for reclustering with a total of %llu vectors\n",
-               clusterIdToRecluster.size(), (unsigned long long) totalVecToRecluster);
-
-        // Copy all the vectors and their ids from the selected clusters into
-        // contiguous storage for reclustering.
-        std::vector<float> reclusterVectors(totalVecToRecluster * dim);
-        std::vector<vector_idx_t> reclusterVectorIds(totalVecToRecluster);
-        uint64_t currentSize = 0;
-        for (auto clusterId: clusterIdToRecluster) {
-            auto &cluster = clusters[clusterId];
-            auto &vectorId = vectorIds[clusterId];
-            memcpy(reclusterVectors.data() + (currentSize * dim),
-                   cluster.data(), cluster.size() * sizeof(float));
-            memcpy(reclusterVectorIds.data() + currentSize,
-                   vectorId.data(), vectorId.size() * sizeof(vector_idx_t));
-            currentSize += vectorId.size();
-        }
-        printf("Copied recluster vectors into contiguous storage.\n");
-
-        // Now perform reclustering on the combined vectors.
-        // The number of new clusters is set to the number of selected clusters.
-        printf("Performing reclustering on %llu vectors divided into %zu clusters.\n",
-               (unsigned long long) totalVecToRecluster, clusterIdToRecluster.size());
-        Clustering clustering(dim, clusterIdToRecluster.size(), config.nIter,
-                              config.minCentroidSize, config.maxCentroidSize, config.lambda);
-        clustering.initCentroids(reclusterVectors.data(), totalVecToRecluster);
-        printf("Initialized new centroids for reclustering.\n");
-        clustering.train(reclusterVectors.data(), totalVecToRecluster);
-        printf("Trained new centroids using k-means.\n");
-
-        // Obtain the new cluster assignments.
-        auto reclusterAssign = new int32_t[totalVecToRecluster];
-        clustering.assignCentroids(reclusterVectors.data(), totalVecToRecluster, reclusterAssign);
-        printf("Assigned new cluster labels for reclustered vectors.\n");
-
-        // Partition the reclustered vectors into new clusters.
-        int newClusters = clusterIdToRecluster.size();
-        std::vector<int> newClusterSizes(newClusters, 0);
-        for (size_t i = 0; i < totalVecToRecluster; i++) {
-            int label = reclusterAssign[i];
-            newClusterSizes[label]++;
-        }
-
-        // Prepare temporary storage for the new clusters and their vector ids.
-        std::vector<std::vector<float> > newClustersData(newClusters);
-        std::vector<std::vector<vector_idx_t> > newClustersVectorIds(newClusters);
-        for (int j = 0; j < newClusters; j++) {
-            newClustersData[j].resize(newClusterSizes[j] * dim);
-            newClustersVectorIds[j].resize(newClusterSizes[j]);
-            newClusterSizes[j] = 0; // Reset as an insertion counter.
-        }
-
-        // Split the reclustered vectors into their new cluster assignments.
-        for (size_t i = 0; i < totalVecToRecluster; i++) {
-            int label = reclusterAssign[i];
-            int idx = newClusterSizes[label];
-            memcpy(newClustersData[label].data() + idx * dim,
-                   reclusterVectors.data() + i * dim,
-                   dim * sizeof(float));
-            newClustersVectorIds[label][idx] = reclusterVectorIds[i];
-            newClusterSizes[label]++;
-        }
-        printf("Partitioned reclustered vectors into new clusters.\n");
-
-        // Update the original clusters and centroids with the results of reclustering.
-        // Each new cluster replaces the original cluster corresponding to its selection.
-        for (int j = 0; j < newClusters; j++) {
-            int origClusterId = clusterIdToRecluster[j];
-            auto oldSize = clusters[origClusterId].size() / dim;
-            clusters[origClusterId] = std::move(newClustersData[j]);
-            vectorIds[origClusterId] = std::move(newClustersVectorIds[j]);
-            // Update the centroid for this original cluster.
-            memcpy(centroids.data() + origClusterId * dim,
-                   clustering.centroids.data() + j * dim,
-                   dim * sizeof(float));
-            // Increment the reclustering counter.
-            reclusteringCount[origClusterId]++;
-            printf("Updated cluster %d: new size = %zu, old size = %zu, reclustering count = %ld\n",
-                   origClusterId, clusters[origClusterId].size() / dim, oldSize, reclusteringCount[origClusterId]);
-        }
-
-        delete[] reclusterAssign;
-        printf("Reclustering completed.\n");
-    }
-
-    void ReclusteringIndex::appendCentroids(const float *ctrds, size_t n) {
-        auto curSize = centroids.size();
-        reclusteringCount.resize(curSize + n);
-        centroids.resize(curSize + n);
-        memcpy(centroids.data() + curSize, ctrds, n * sizeof(float));
+        // Get the hist
+        std::vector<int> hist(numClusters, 0);
         for (int i = 0; i < n; i++) {
-            reclusteringCount[curSize + i] = 0;
+            hist[assign[i]]++;
+        }
+
+        printf("Copying actual data\n");
+        // Copy the centroids
+        centroids.resize(numClusters * dim);
+        memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
+        clusterVectorIds.resize(numClusters);
+        for (int i = 0; i < numClusters; i++) {
+            std::vector<vector_idx_t> vectorId(hist[i]);
+            clusterVectorIds[i] = vectorId;
+            hist[i] = 0;
+        }
+
+        for (int i = 0; i < n; i++) {
+            auto assignId = assign[i];
+            auto idx = hist[assignId];
+            clusterVectorIds[assignId][idx] = vectorIds[i];
+            hist[assignId]++;
         }
     }
 
-    void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes,
-                                   ReclusteringIndexStats &stats) {
-        CHECK_ARGUMENT(centroids.size() > 0, "Centroids not initialized");
-        CHECK_ARGUMENT(nProbes < centroids.size(), "Number of probes should be less than number of centroids");
-        stats.numDistanceComp = 0;
+    void ReclusteringIndex::calcMeanCentroid(float *data, vector_idx_t *vectorIds, int n, std::vector<float> &centroids,
+                                             std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        // Calculate mean over all vectors and copy the vectorIds directly
+        centroids.resize(dim);
+        memset(centroids.data(), 0, dim * sizeof(float));
+        // TODO: Maybe do this using simd at some point
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < dim; j++) {
+                centroids[j] += data[i * dim + j];
+            }
+        }
+        auto norm = 1.0f / n;
+        for (int j = 0; j < dim; j++) {
+            centroids[j] *= norm;
+        }
+        clusterVectorIds.resize(1);
+        clusterVectorIds[0].resize(n);
+        for (int i = 0; i < n; i++) {
+            clusterVectorIds[0][i] = vectorIds[i];
+        }
+    }
 
-        // TODO: Maybe parallelize it
-        auto numCentroids = centroids.size() / dim;
-        auto dc = getDistanceComputer(centroids.data(), numCentroids);
-        dc->setQuery(query);
-        std::vector<double> dists(numCentroids);
-
-        for (int i = 0; i < numCentroids; i++) {
-            dc->computeDistance(i, &dists[i]);
-            stats.numDistanceComp++;
+    void ReclusteringIndex::appendOrMergeCentroids(std::vector<vector_idx_t> oldMegaCentroids,
+                                                   std::vector<float> &newMegaCentroids,
+                                                   std::vector<std::vector<vector_idx_t> > &miniCentroidIds,
+                                                   std::vector<float> &newMiniCentroids,
+                                                   std::vector<std::vector<float> > &newMiniClusters,
+                                                   std::vector<std::vector<vector_idx_t> > &newMiniClusterVectorIds) {
+        // Try to copy inplace if possible otherwise append
+        std::vector<vector_idx_t> oldMiniClusterIds;
+        for (const int currMegaId: oldMegaCentroids) {
+            for (const auto &megaMiniId: megaMiniCentroidIds[currMegaId]) {
+                oldMiniClusterIds.push_back(megaMiniId);
+            }
         }
 
-        // Sort the distances and get the top k indices
-        std::vector<int> indices(numCentroids);
-        std::iota(indices.begin(), indices.end(), 0);
-        std::sort(indices.begin(), indices.end(), [&dists](int i1, int i2) { return dists[i1] < dists[i2]; });
+        // Copy the mini centroids, clusters and vector ids and fix the miniClusterIds
+        std::unordered_map<vector_idx_t, vector_idx_t> newToOldCentroidIdMap;
+        auto newMiniCentroidsSize = newMiniCentroids.size() / dim;
+        auto miniCentroidsSize = std::min(newMiniCentroidsSize, oldMiniClusterIds.size());
+        for (int i = 0; i < miniCentroidsSize; i++) {
+            auto oldCentroidId = oldMiniClusterIds[i];
+            // Copy the centroid
+            memcpy(miniCentroids.data() + oldCentroidId * dim, newMiniCentroids.data() + i * dim, dim * sizeof(float));
+            // Move the cluster
+            auto currCluster = newMiniClusters[i];
+            auto currVectorId = newMiniClusterVectorIds[i];
+            miniClusters[oldCentroidId] = std::move(currCluster);
+            miniClusterVectorIds[oldCentroidId] = std::move(currVectorId);
+            newToOldCentroidIdMap[i] = oldCentroidId;
+        }
 
-        for (int i = 0; i < nProbes; i++) {
-            auto centroidId = indices[i];
-            auto cluster = clusters[centroidId];
-            auto ids = vectorIds[centroidId];
-            CHECK_ARGUMENT((cluster.size() / dim) == ids.size() , "Clusters and vector ids should be same");
+        if (newMiniCentroidsSize > miniCentroidsSize) {
+            // Append the new mini centroids
+            auto currentSize = miniCentroids.size() / dim;
+            miniCentroids.resize((currentSize + newMiniCentroidsSize - miniCentroidsSize) * dim);
+            memcpy(miniCentroids.data() + currentSize * dim, newMiniCentroids.data() + miniCentroidsSize * dim,
+                   (newMiniCentroidsSize - miniCentroidsSize) * dim * sizeof(float));
+
+            // Append the new clusters
+            miniClusters.resize(currentSize + newMiniCentroidsSize - miniCentroidsSize);
+            miniClusterVectorIds.resize(currentSize + newMiniCentroidsSize - miniCentroidsSize);
+            auto idx = 0;
+            for (auto i = miniCentroidsSize; i < newMiniCentroidsSize; i++) {
+                auto currCluster = newMiniClusters[i];
+                auto currVectorId = newMiniClusterVectorIds[i];
+                miniClusters[currentSize + idx] = std::move(currCluster);
+                miniClusterVectorIds[currentSize + idx] = std::move(currVectorId);
+                newToOldCentroidIdMap[i] = currentSize + idx;
+                idx++;
+            }
+        }
+
+        // Upadate the ids in miniCentroidIds using the newToOldCentroidIdMap
+        for (int i = 0; i < miniCentroidIds.size(); i++) {
+            auto &ids = miniCentroidIds[i];
+            for (auto &id: ids) {
+                id = newToOldCentroidIdMap[id];
+            }
+        }
+
+        // Copy the mega clusters
+        auto inplaceMegaCentroidSize = oldMegaCentroids.size();
+        auto newMegaCentroidSize = newMegaCentroids.size() / dim;
+        auto centroidSize = std::min(inplaceMegaCentroidSize, newMegaCentroidSize);
+        for (int i = 0; i < centroidSize; i++) {
+            auto currMegaId = oldMegaCentroids[i];
+            memcpy(megaCentroids.data() + currMegaId * dim, newMegaCentroids.data() + i * dim, dim * sizeof(float));
+
+            // Move the miniCentroidIds
+            megaMiniCentroidIds[currMegaId] = std::move(miniCentroidIds[i]);
+        }
+        if (newMegaCentroidSize > inplaceMegaCentroidSize) {
+            // Append the new mega centroids
+            auto currentSize = megaCentroids.size() / dim;
+            megaCentroids.resize((currentSize + newMegaCentroidSize - inplaceMegaCentroidSize) * dim);
+            memcpy(megaCentroids.data() + currentSize * dim, newMegaCentroids.data() + inplaceMegaCentroidSize * dim,
+                   (newMegaCentroidSize - inplaceMegaCentroidSize) * dim * sizeof(float));
+
+            // Move the miniCentroidIds
+            megaMiniCentroidIds.resize(currentSize + newMegaCentroidSize - inplaceMegaCentroidSize);
+            auto idx = 0;
+            for (auto i = inplaceMegaCentroidSize; i < newMegaCentroidSize; i++) {
+                auto currMegaId = oldMegaCentroids[i];
+                megaMiniCentroidIds[currentSize + idx] = std::move(miniCentroidIds[currMegaId]);
+                idx++;
+            }
+        }
+    }
+
+    void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
+                                   int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats) {
+        // Find 5 closest mega centroids
+        std::vector<vector_idx_t> megaAssign;
+        findKClosestMegaCentroids(query, nMegaProbes, megaAssign);
+
+        auto numMicroCentroids = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMicroCentroids);
+        dc->setQuery(query);
+
+        // Now find the closest micro centroids
+        std::priority_queue<NodeDistCloser> closestMicro;
+        for (auto megaId : megaAssign) {
+            auto microIds = megaMiniCentroidIds[megaId];
+            for (auto microId: microIds) {
+                double d;
+                dc->computeDistance(microId, &d);
+                stats.numDistanceComp++;
+                if (closestMicro.size() < nMicroProbes || d < closestMicro.top().dist) {
+                    closestMicro.emplace(microId, d);
+                    if (closestMicro.size() > nMicroProbes) {
+                        closestMicro.pop();
+                    }
+                }
+            }
+        }
+
+        // Now we have the closest micro centroids, let's find the closest vectors
+        while (!closestMicro.empty()) {
+            auto microId = closestMicro.top().id;
+            closestMicro.pop();
+            auto cluster = miniClusters[microId];
+            auto ids = miniClusterVectorIds[microId];
             auto clusterSize = ids.size();
             auto clusterDc = getDistanceComputer(cluster.data(), clusterSize);
             clusterDc->setQuery(query);
@@ -348,6 +442,229 @@ namespace orangedb {
                     }
                 }
             }
+        }
+    }
+
+    void ReclusteringIndex::findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids) {
+        std::priority_queue<NodeDistCloser> closestMicro;
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
+        dc->setQuery(query);
+        for (int i = 0; i < numMegaCentroids; i++) {
+            double d;
+            dc->computeDistance(i, &d);
+            if (closestMicro.size() < k || d < closestMicro.top().dist) {
+                closestMicro.emplace(i, d);
+                if (closestMicro.size() > k) {
+                    closestMicro.pop();
+                }
+            }
+        }
+
+        // Copy the ids to vector
+        while (!closestMicro.empty()) {
+            auto microId = closestMicro.top().id;
+            closestMicro.pop();
+            ids.push_back(microId);
+        }
+    }
+
+    void ReclusteringIndex::printStats() {
+        printf("ReclusteringIndex::printStats\n");
+        // Print the number of mega clusters
+        printf("Number of mega clusters: %zu\n", megaCentroids.size() / dim);
+        printf("Number of mini clusters: %zu\n", miniCentroids.size() / dim);
+        // print min, max, avg size of the clusters
+        auto minSize = std::numeric_limits<size_t>::max();
+        size_t maxSize = 0;
+        size_t avgSize = 0;
+        for (const auto &cluster: miniClusters) {
+            auto size = cluster.size() / dim;
+            minSize = std::min(minSize, size);
+            maxSize = std::max(maxSize, size);
+            avgSize += size;
+        }
+        printf("Min size of clusters: %zu\n", minSize);
+        printf("Max size of clusters: %zu\n", maxSize);
+        printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
+    }
+
+    void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {
+        std::ofstream out(file_path, std::ios::binary);
+        if (!out) {
+            std::cerr << "Error opening file for writing: " << file_path << std::endl;
+            return;
+        }
+
+        // Write the basic fields
+        out.write(reinterpret_cast<const char *>(&dim), sizeof(dim));
+        out.write(reinterpret_cast<const char *>(&size), sizeof(size));
+
+        // Write the config
+        out.write(reinterpret_cast<const char *>(&config.nIter), sizeof(config.nIter));
+        out.write(reinterpret_cast<const char *>(&config.megaCentroidSize), sizeof(config.megaCentroidSize));
+        out.write(reinterpret_cast<const char *>(&config.miniCentroidSize), sizeof(config.miniCentroidSize));
+        out.write(reinterpret_cast<const char *>(&config.newMiniCentroidSize), sizeof(config.newMiniCentroidSize));
+        out.write(reinterpret_cast<const char *>(&config.lambda), sizeof(config.lambda));
+        out.write(reinterpret_cast<const char *>(&config.searchThreshold), sizeof(config.searchThreshold));
+        out.write(reinterpret_cast<const char *>(&config.distanceType), sizeof(config.distanceType));
+        out.write(reinterpret_cast<const char *>(&config.numMegaReclusterCentroids),
+                  sizeof(config.numMegaReclusterCentroids));
+        out.write(reinterpret_cast<const char *>(&config.numNewMiniReclusterCentroids),
+                  sizeof(config.numNewMiniReclusterCentroids));
+
+        // Write mega centroids
+        size_t megaCentroidSize = megaCentroids.size();
+        out.write(reinterpret_cast<const char *>(&megaCentroidSize), sizeof(megaCentroidSize));
+        out.write(reinterpret_cast<const char *>(megaCentroids.data()), megaCentroidSize * sizeof(float));
+
+        // Write megaMiniCentroidIds
+        size_t megaMiniCentroidIdsSize = megaMiniCentroidIds.size();
+        out.write(reinterpret_cast<const char *>(&megaMiniCentroidIdsSize), sizeof(megaMiniCentroidIdsSize));
+        for (const auto &ids: megaMiniCentroidIds) {
+            size_t idsSize = ids.size();
+            out.write(reinterpret_cast<const char *>(&idsSize), sizeof(idsSize));
+            out.write(reinterpret_cast<const char *>(ids.data()), idsSize * sizeof(vector_idx_t));
+        }
+
+        // Write megaClusteringScore
+        size_t megaClusteringScoreSize = megaClusteringScore.size();
+        out.write(reinterpret_cast<const char *>(&megaClusteringScoreSize), sizeof(megaClusteringScoreSize));
+        out.write(reinterpret_cast<const char *>(megaClusteringScore.data()), megaClusteringScoreSize * sizeof(double));
+
+        // Write the miniCentroids
+        size_t miniCentroidSize = miniCentroids.size();
+        out.write(reinterpret_cast<const char *>(&miniCentroidSize), sizeof(miniCentroidSize));
+        out.write(reinterpret_cast<const char *>(miniCentroids.data()), miniCentroidSize * sizeof(float));
+
+        // Write the miniClusters
+        for (const auto &cluster: miniClusters) {
+            size_t clusterSize = cluster.size();
+            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
+        }
+
+        // Write the mini cluster vector ids
+        for (const auto &vectorId: miniClusterVectorIds) {
+            size_t vectorIdSize = vectorId.size();
+            out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
+            out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
+        }
+
+        // Write new mini centroids
+        size_t newMiniCentroidSize = newMiniCentroids.size();
+        out.write(reinterpret_cast<const char *>(&newMiniCentroidSize), sizeof(newMiniCentroidSize));
+        out.write(reinterpret_cast<const char *>(newMiniCentroids.data()), newMiniCentroidSize * sizeof(float));
+
+        // Write newMiniClusters
+        for (const auto &cluster: newMiniClusters) {
+            size_t clusterSize = cluster.size();
+            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
+        }
+
+        // Write newMiniClusterVectorIds
+        for (const auto &vectorId: newMiniClusterVectorIds) {
+            size_t vectorIdSize = vectorId.size();
+            out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
+            out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
+        }
+    }
+
+    void ReclusteringIndex::load_from_disk(const std::string &file_path) {
+        std::ifstream in(file_path, std::ios::binary);
+        if (!in) {
+            std::cerr << "Error opening file for reading: " << file_path << std::endl;
+            return;
+        }
+
+        // Read basic fields
+        in.read(reinterpret_cast<char *>(&dim), sizeof(dim));
+        in.read(reinterpret_cast<char *>(&size), sizeof(size));
+
+        // Read config (order same as flush_to_disk)
+        in.read(reinterpret_cast<char *>(&config.nIter), sizeof(config.nIter));
+        in.read(reinterpret_cast<char *>(&config.megaCentroidSize), sizeof(config.megaCentroidSize));
+        in.read(reinterpret_cast<char *>(&config.miniCentroidSize), sizeof(config.miniCentroidSize));
+        in.read(reinterpret_cast<char *>(&config.newMiniCentroidSize), sizeof(config.newMiniCentroidSize));
+        in.read(reinterpret_cast<char *>(&config.lambda), sizeof(config.lambda));
+        in.read(reinterpret_cast<char *>(&config.searchThreshold), sizeof(config.searchThreshold));
+        in.read(reinterpret_cast<char *>(&config.distanceType), sizeof(config.distanceType));
+        in.read(reinterpret_cast<char *>(&config.numMegaReclusterCentroids), sizeof(config.numMegaReclusterCentroids));
+        in.read(reinterpret_cast<char *>(&config.numNewMiniReclusterCentroids),
+                sizeof(config.numNewMiniReclusterCentroids));
+
+        // Read mega centroids
+        size_t megaCentroidsCount;
+        in.read(reinterpret_cast<char *>(&megaCentroidsCount), sizeof(megaCentroidsCount));
+        megaCentroids.resize(megaCentroidsCount);
+        in.read(reinterpret_cast<char *>(megaCentroids.data()), megaCentroidsCount * sizeof(float));
+
+        // Read megaMiniCentroidIds
+        size_t megaMiniCentroidIdsCount;
+        in.read(reinterpret_cast<char *>(&megaMiniCentroidIdsCount), sizeof(megaMiniCentroidIdsCount));
+        megaMiniCentroidIds.resize(megaMiniCentroidIdsCount);
+        for (size_t i = 0; i < megaMiniCentroidIdsCount; i++) {
+            size_t idsSize;
+            in.read(reinterpret_cast<char *>(&idsSize), sizeof(idsSize));
+            megaMiniCentroidIds[i].resize(idsSize);
+            in.read(reinterpret_cast<char *>(megaMiniCentroidIds[i].data()), idsSize * sizeof(vector_idx_t));
+        }
+
+        // Read megaClusteringScore
+        size_t megaClusteringScoreCount;
+        in.read(reinterpret_cast<char *>(&megaClusteringScoreCount), sizeof(megaClusteringScoreCount));
+        megaClusteringScore.resize(megaClusteringScoreCount);
+        in.read(reinterpret_cast<char *>(megaClusteringScore.data()), megaClusteringScoreCount * sizeof(double));
+
+        // Read mini centroids
+        size_t miniCentroidsCount;
+        in.read(reinterpret_cast<char *>(&miniCentroidsCount), sizeof(miniCentroidsCount));
+        miniCentroids.resize(miniCentroidsCount);
+        in.read(reinterpret_cast<char *>(miniCentroids.data()), miniCentroidsCount * sizeof(float));
+
+        // Derive mini clusters count from mini centroids (each cluster is one centroid)
+        size_t miniClustersCount = miniCentroidsCount / dim;
+        miniClusters.resize(miniClustersCount);
+        for (size_t i = 0; i < miniClustersCount; i++) {
+            size_t clusterSize;
+            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+            miniClusters[i].resize(clusterSize);
+            in.read(reinterpret_cast<char *>(miniClusters[i].data()), clusterSize * sizeof(float));
+        }
+
+        // Read mini cluster vector ids (same count as mini clusters)
+        miniClusterVectorIds.resize(miniClustersCount);
+        for (size_t i = 0; i < miniClustersCount; i++) {
+            size_t vectorIdSize;
+            in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
+            miniClusterVectorIds[i].resize(vectorIdSize);
+            in.read(reinterpret_cast<char *>(miniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
+        }
+
+        // Read new mini centroids
+        size_t newMiniCentroidsCount;
+        in.read(reinterpret_cast<char *>(&newMiniCentroidsCount), sizeof(newMiniCentroidsCount));
+        newMiniCentroids.resize(newMiniCentroidsCount);
+        in.read(reinterpret_cast<char *>(newMiniCentroids.data()), newMiniCentroidsCount * sizeof(float));
+
+        // Derive new mini clusters count from new mini centroids
+        size_t newMiniClustersCount = newMiniCentroidsCount / dim;
+        newMiniClusters.resize(newMiniClustersCount);
+        for (size_t i = 0; i < newMiniClustersCount; i++) {
+            size_t clusterSize;
+            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+            newMiniClusters[i].resize(clusterSize);
+            in.read(reinterpret_cast<char *>(newMiniClusters[i].data()), clusterSize * sizeof(float));
+        }
+
+        // Read new mini cluster vector ids (same count as new mini clusters)
+        newMiniClusterVectorIds.resize(newMiniClustersCount);
+        for (size_t i = 0; i < newMiniClustersCount; i++) {
+            size_t vectorIdSize;
+            in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
+            newMiniClusterVectorIds[i].resize(vectorIdSize);
+            in.read(reinterpret_cast<char *>(newMiniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
         }
     }
 }

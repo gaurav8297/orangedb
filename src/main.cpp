@@ -1642,15 +1642,13 @@ void test_clustering_data(InputParser &input) {
 }
 
 double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
-                  vector_idx_t *gtVecs, int nProbes) {
+                  vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes) {
     // search
     double recall = 0;
-    double totalDC = 0;
     ReclusteringIndexStats stats;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
-        index.search(queryVecs + i * queryDimension, k, results, nProbes, stats);
-        totalDC += stats.numDistanceComp;
+        index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats);
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();
@@ -1660,8 +1658,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             }
         }
     }
-    printf("Avg Distance Computation: %f\n", totalDC / queryNumVectors);
-
+    printf("Avg Distance Computation: %llu\n", stats.numDistanceComp / queryNumVectors);
     return recall / queryNumVectors;
 }
 
@@ -1671,13 +1668,15 @@ void benchmark_reclustering_approach(InputParser &input) {
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
     const int numInserts = stoi(input.getCmdOption("-numInserts"));
     const int k = stoi(input.getCmdOption("-k"));
-    const int numCentroids = stoi(input.getCmdOption("-numCentroids"));
     const int numIters = stoi(input.getCmdOption("-numIters"));
-    const int minCentroidSize = stoi(input.getCmdOption("-minCentroidSize"));
-    const int maxCentroidSize = stoi(input.getCmdOption("-maxCentroidSize"));
-    const int nProbes = stoi(input.getCmdOption("-nProbes"));
+    const int megaCentroidSize = stoi(input.getCmdOption("-megaCentroidSize"));
+    const int miniCentroidSize = stoi(input.getCmdOption("-miniCentroidSize"));
+    const int newMiniCentroidSize = stoi(input.getCmdOption("-newMiniCentroidSize"));
     const float lambda = stof(input.getCmdOption("-lambda"));
-    const int numReclusters = stoi(input.getCmdOption("-numReclusters"));
+    const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
+    const int numNewMiniReclusterCentroids = stoi(input.getCmdOption("-numNewMiniReclusterCentroids"));
+    const int nMegaProbes = stoi(input.getCmdOption("-nMegaProbes"));
+    const int nMiniProbes = stoi(input.getCmdOption("-nMiniProbes"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
 
@@ -1688,7 +1687,8 @@ void benchmark_reclustering_approach(InputParser &input) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
 
-    ReclusteringIndexConfig config(numCentroids, numIters, minCentroidSize, maxCentroidSize, lambda, 0.4, L2, numCentroids);
+    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, newMiniCentroidSize, lambda, 0.4, L2,
+                                   numMegaReclusterCentroids, numNewMiniReclusterCentroids);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -1710,6 +1710,9 @@ void benchmark_reclustering_approach(InputParser &input) {
             }
             printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
             index.insert(baseVecs + start * baseDimension, end - start);
+
+            printf("performing merging of mega centroids\n");
+            index.mergeNewMiniCentroids();
         }
 
         printf("Writing index to disk\n");
@@ -1717,20 +1720,8 @@ void benchmark_reclustering_approach(InputParser &input) {
     }
     index.printStats();
 
-    auto initRecall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
-    std::vector<double> recalls;
-    for (int i = 0; i < numReclusters; i++) {
-        index.performReclustering();
-        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
-        recalls.push_back(recall);
-    }
-    index.printStats();
-    auto final_recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nProbes);
-    printf("Initial Recall: %f\n", initRecall);
-    for (int i = 0; i < numReclusters; i++) {
-        printf("Recall after reclustering %d: %f\n", i, recalls[i]);
-    }
-    printf("Final Recall: %f\n", final_recall);
+    auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
+    printf("Recall: %f\n", recall);
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,

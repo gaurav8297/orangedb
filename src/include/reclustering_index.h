@@ -15,33 +15,36 @@ namespace orangedb {
     };
 
     struct ReclusteringIndexConfig {
-        // The number of centroids
-        int numCentroids = 10;
         // The number of iterations
-        int nIter = 25;
-        // The minimum size of a centroid
-        int minCentroidSize;
-        // The maximum size of a centroid
-        int maxCentroidSize;
+        int nIter = 40;
+        // The minimum size of a mega centroid
+        int megaCentroidSize = 1000;
+        // The minimum size of a mini centroid
+        int miniCentroidSize = 500;
+        // New miniCentroidSize
+        int newMiniCentroidSize = 100;
         // Lambda parameter for clustering
         float lambda = 0;
         // The distance threshold for searching in the centroids
         float searchThreshold = 0.4;
         // Distance Method
         DistanceType distanceType = L2;
-        // number of centroids to recluster
-        int numReclusterCentroids = 10;
+        // number of mega centroids to recluster
+        int numMegaReclusterCentroids = 10;
+        // number of new mini centroids consider for reclustering
+        int numNewMiniReclusterCentroids = 100;
 
-        explicit ReclusteringIndexConfig() {}
+        explicit ReclusteringIndexConfig() = default;
 
-
-        explicit ReclusteringIndexConfig(int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda,
-                                float searchThreshold, DistanceType distanceType, int numReclusterCentroids)
-            : numCentroids(numCentroids), nIter(nIter), minCentroidSize(minCentroidSize),
-              maxCentroidSize(maxCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
-              distanceType(distanceType), numReclusterCentroids(numReclusterCentroids)
-        {}
-
+        explicit ReclusteringIndexConfig(const int nIter, const int megaCentroidSize, const int miniCentroidSize,
+                                         const int newMiniCentroidSize, const float lambda, const float searchThreshold,
+                                         const DistanceType distanceType, const int numMegaReclusterCentroids,
+                                         const int numNewMiniReclusterCentroids)
+            : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
+              newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
+              distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
+              numNewMiniReclusterCentroids(numNewMiniReclusterCentroids) {
+        }
     };
 
     class ReclusteringIndex {
@@ -52,17 +55,58 @@ namespace orangedb {
 
         void insert(float *data, size_t n);
 
-        void performReclustering();
+        void mergeNewMiniCentroids();
+
+        void reclusterSparseMegaCentroids();
 
         void printStats();
 
         void flush_to_disk(const std::string &file_path) const;
 
-        void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results, int nProbes,
-                    ReclusteringIndexStats &stats);
+        void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
+                    int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
 
     private:
-        void appendCentroids(const float *centroids, size_t n);
+        void mergeNewMiniCentroidsBatch(float *megaCentroid, std::vector<vector_idx_t> newMiniCentroidBatch);
+
+        void mergeNewMiniCentroidsInit();
+
+        void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                         std::vector<float>& centroids, std::vector<std::vector<float>>& clusters,
+                         std::vector<std::vector<vector_idx_t>> &clusterVectorIds);
+
+        void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                 std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds);
+
+        void calcMeanCentroid(float *data, vector_idx_t *vectorIds, int n, std::vector<float> &centroids,
+                          std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
+
+        void appendOrMergeCentroids(std::vector<vector_idx_t> oldMegaCentroids, std::vector<float> &newMegaCentroids,
+                                    std::vector<std::vector<vector_idx_t> > &miniClusterIds,
+                                    std::vector<float> &newMiniCentroids,
+                                    std::vector<std::vector<float> > &newMiniClusters,
+                                    std::vector<std::vector<vector_idx_t> > &newMiniClusterVectorIds);
+
+        void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids);
+
+        inline int getNumCentroids(int numVectors, int avgClusterSize) const {
+            double ret =  (double)numVectors / avgClusterSize;
+            int val = (int)ret;
+            if (ret - val > 0.6) {
+                val++;
+            }
+            return val;
+        }
+
+        inline int getMinCentroidSize(int numVectors, int numCentroids) const {
+            // 50% of the average size
+            return (numVectors / numCentroids) * 0.5;
+        }
+
+        inline int getMaxCentroidSize(int numVectors, int numCentroids) const {
+            // 120% of the average size such all vecs are used during reclustering
+            return (numVectors / numCentroids) * 1.2;
+        }
 
         void load_from_disk(const std::string &file_path);
 
@@ -79,12 +123,17 @@ namespace orangedb {
         size_t size;
         RandomGenerator *rg;
 
-        // Centroid of centroids
-        std::vector<float> centroidOfCentroids;
-        std::vector<std::vector<vector_idx_t>> microCentroidIds;
-        std::vector<float> centroids;
-        std::vector<std::vector<float>> clusters;
-        std::vector<std::vector<vector_idx_t>> vectorIds;
-        std::vector<int> reclusteringCount;
+        // Mini and mega centroids
+        std::vector<float> megaCentroids;
+        std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
+        std::vector<double> megaClusteringScore;
+        std::vector<float> miniCentroids;
+        std::vector<std::vector<float>> miniClusters;
+        std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
+
+        // New Mini centroids (Buffering space)
+        std::vector<float> newMiniCentroids;
+        std::vector<std::vector<float>> newMiniClusters;
+        std::vector<std::vector<vector_idx_t>> newMiniClusterVectorIds;
     };
 }
