@@ -1667,6 +1667,7 @@ void benchmark_reclustering_approach(InputParser &input) {
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
     const int numInserts = stoi(input.getCmdOption("-numInserts"));
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const int k = stoi(input.getCmdOption("-k"));
     const int numIters = stoi(input.getCmdOption("-numIters"));
     const int megaCentroidSize = stoi(input.getCmdOption("-megaCentroidSize"));
@@ -1686,6 +1687,7 @@ void benchmark_reclustering_approach(InputParser &input) {
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, newMiniCentroidSize, lambda, 0.4, L2,
                                    numMegaReclusterCentroids, numNewMiniReclusterCentroids);
