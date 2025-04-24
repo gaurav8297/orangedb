@@ -388,8 +388,7 @@ namespace orangedb {
             megaMiniCentroidIds.resize(currentSize + newMegaCentroidSize - inplaceMegaCentroidSize);
             auto idx = 0;
             for (auto i = inplaceMegaCentroidSize; i < newMegaCentroidSize; i++) {
-                auto currMegaId = oldMegaCentroids[i];
-                megaMiniCentroidIds[currentSize + idx] = std::move(miniCentroidIds[currMegaId]);
+                megaMiniCentroidIds[currentSize + idx] = std::move(miniCentroidIds[i]);
                 idx++;
             }
         }
