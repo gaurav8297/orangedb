@@ -247,8 +247,10 @@ namespace orangedb {
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids,
                                         std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+
         // Create the clustering object
         auto numClusters = getNumCentroids(n, avgClusterSize);
+        printf("Performing reclustering on %lu vectors with %d clusters\n", n, numClusters);
         if (numClusters <= 1) {
             calcMeanCentroid(data, vectorIds, n, centroids, clusterVectorIds);
             return;
