@@ -448,15 +448,7 @@ namespace orangedb {
             megaMiniCentroidIds[currMegaId] = std::move(newMiniClusterIds[i]);
         }
 
-        auto lastCentroidId = megaCentroids.size() - 1;
-        // If the new mega centroid smaller than oldMegaCentroidIds.size()
-        for (int i = numNewMegaCentroids; i < oldMegaCentroidSize; i++) {
-            // Copy from last to i
-            auto currMegaId = oldMegaCentroidIds[i];
-            memcpy(megaCentroids.data() + currMegaId * dim, megaCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
-            megaMiniCentroidIds[currMegaId] = std::move(megaMiniCentroidIds[lastCentroidId]);
-            lastCentroidId--;
-        }
+
 
         if (numNewMegaCentroids > oldMegaCentroidSize) {
             // Append the new mega centroids
@@ -472,6 +464,19 @@ namespace orangedb {
                 megaMiniCentroidIds[currentSize + idx] = std::move(newMiniClusterIds[i]);
                 idx++;
             }
+        } else {
+            auto lastCentroidId = megaCentroids.size() - 1;
+            // If the new mega centroid smaller than oldMegaCentroidIds.size()
+            for (int i = numNewMegaCentroids; i < oldMegaCentroidSize; i++) {
+                // Copy from last to i
+                auto currMegaId = oldMegaCentroidIds[i];
+                memcpy(megaCentroids.data() + currMegaId * dim, megaCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
+                megaMiniCentroidIds[currMegaId] = std::move(megaMiniCentroidIds[lastCentroidId]);
+                lastCentroidId--;
+            }
+            // Resize the mega centroids
+            megaCentroids.resize((lastCentroidId + 1) * dim);
+            megaMiniCentroidIds.resize(lastCentroidId + 1);
         }
     }
 
