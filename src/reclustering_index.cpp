@@ -250,7 +250,7 @@ namespace orangedb {
 
         // Create the clustering object
         auto numClusters = getNumCentroids(n, avgClusterSize);
-        printf("Performing reclustering on %lu vectors with %d clusters\n", n, numClusters);
+        printf("Performing reclustering on %d vectors with %d clusters\n", n, numClusters);
         if (numClusters <= 1) {
             calcMeanCentroid(data, vectorIds, n, centroids, clusterVectorIds);
             return;
