@@ -754,7 +754,6 @@ void search_neighbors_to_add(
         for (size_t i = begin; i < end; i++) {
             // auto [nodeId, metadata] = hnsw.neighbors[i]; // storage_idx_t, int
             auto nodeId = hnsw.neighbors[i];
-            auto metadata = hnsw.metadata[nodeId];
             // storage_idx_t nodeId = hnsw.neighbors[i];
             if (nodeId < 0)
                 break;
@@ -826,7 +825,6 @@ void greedy_update_nearest(
 
         for (size_t i = begin; i < end; i++) {
             auto v = hnsw.neighbors[i];
-            auto metadata = hnsw.metadata[v];
             if (v < 0) {
                 break;
             }
@@ -1058,7 +1056,7 @@ void ACORN::add_with_locks(
     float d_nearest = ptdis(nearest);
 
     // needed for backtracking in hybrid search - TODO DEPRECATED, remove backtracking things
-    std::vector<storage_idx_t> ep_per_level(max_level); // idx of nearest node per level
+    std::vector<storage_idx_t> ep_per_level(max_level + 1); // idx of nearest node per level
     ep_per_level[level] = nearest;
 
     for (; level > pt_level; level--) {

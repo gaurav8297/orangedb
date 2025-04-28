@@ -21,6 +21,8 @@
 #include <faiss/utils/Heap.h>
 #include <faiss/utils/random.h>
 
+#include "DistanceComputer.h"
+
 namespace faiss {
 
 /** Implementation of the Hierarchical Navigable Small World
@@ -236,6 +238,33 @@ struct HNSW {
             float* D,
             VisitedTable& vt,
             const SearchParametersHNSW* params = nullptr) const;
+
+    /// Navix Hybrid Search!!!
+
+    HNSWStats navix_one_hop();
+
+    HNSWStats navix_directed();
+
+    HNSWStats navix_full_two_hop();
+
+    void navix_add_filtered_nodes_to_candidates(
+        DistanceComputer &qdis,
+        int k,
+        MinimaxHeap &candidates,
+        idx_t *I,
+        float *D,
+        VisitedTable &vt,
+        char* filter_id_map,
+        int num_of_nodes);
+
+    HNSWStats navix_hybrid_search(
+            DistanceComputer &qdis,
+            int k,
+            idx_t *I,
+            float *D,
+            VisitedTable &vt,
+            char* filter_id_map,
+            const SearchParametersHNSW *params = nullptr) const;
 
     /// search only in level 0 from a given vertex
     void search_level_0(

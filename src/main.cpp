@@ -12,6 +12,7 @@
 #include "include/partitioned_index.h"
 #include <fstream>
 #include <reclustering_index.h>
+#include <faiss/index_io.h>
 #include <fastQ/scalar_8bit.h>
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
@@ -1205,57 +1206,59 @@ void calculate_dists(InputParser &input) {
 }
 
 void benchmark_acorn(InputParser &input) {
-    const std::string &basePath = input.getCmdOption("-basePath");
+    const std::string &vectorPath = input.getCmdOption("-vectorPath");
+    const std::string &queryPath = input.getCmdOption("-queryPath");
+    const std::string &gtPath = input.getCmdOption("-gtPath");
+    const std::string &maskPath = input.getCmdOption("-maskPath");
+    int k = stoi(input.getCmdOption("-k"));
     int M = stoi(input.getCmdOption("-M"));
     int gamma = stoi(input.getCmdOption("-gamma"));
     int M_beta = stoi(input.getCmdOption("-M_beta"));
     int efSearch = stoi(input.getCmdOption("-efSearch"));
     int nThreads = stoi(input.getCmdOption("-nThreads"));
-    auto selectivity = stoi(input.getCmdOption("-selectivity"));
-    auto k = stoi(input.getCmdOption("-k"));
-
-    auto baseVectorPath = fmt::format("{}/base.bvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.bvecs", basePath);
-    auto groundTruthPath = fmt::format("{}/{}_gt.bin", basePath, selectivity);
-    auto maskPath = fmt::format("{}/{}_mask.bin", basePath, selectivity);
-    auto storagePath = fmt::format("{}/storage.bin", basePath);
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(vectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    loadFromFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
     loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
     printf("Base num vectors: %zu\n", baseNumVectors);
-
-    omp_set_num_threads(nThreads);
     std::vector<int> metadata(baseNumVectors);
     for (int i = 0; i < baseNumVectors; i++) {
         metadata[i] = (int) filteredMask[i];
     }
-
-    // Print grond truth num vectors
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("Query dimension: %zu\n", baseDimension);
-    faiss::IndexACORNFlat acorn_index(baseDimension, M, gamma, metadata, M_beta);
-    acorn_index.acorn.efSearch = efSearch;
-    printf("Building index\n");
-    auto start = std::chrono::high_resolution_clock::now();
-    acorn_index.add(baseNumVectors, baseVecs);
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    printf("Building time: %lld ms\n", duration.count());
-
-    auto search_start = std::chrono::high_resolution_clock::now();
+    auto index = faiss::IndexACORNFlat(baseDimension, M, gamma, metadata, M_beta);
+    faiss::IndexACORNFlat* acorn_index = &index;
+    acorn_index->acorn.efSearch = efSearch;
+    if (!readFromDisk) {
+        omp_set_num_threads(nThreads);
+        // Print grond truth num vectors
+        printf("Building index\n");
+        auto start = std::chrono::high_resolution_clock::now();
+        acorn_index->add(baseNumVectors, baseVecs);
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        printf("Building time: %lld ms\n", duration.count());
+        printf("Writing the index on disk!");
+        faiss::write_index(acorn_index, storagePath.c_str());
+    } else {
+        acorn_index = dynamic_cast<faiss::IndexACORNFlat *>(faiss::read_index(storagePath.c_str()));
+        acorn_index->acorn.efSearch = efSearch;
+    }
     auto recall = 0.0;
     auto labels = new faiss::idx_t[k];
     auto distances = new float[k];
     auto startTime = std::chrono::high_resolution_clock::now();
     for (size_t i = 0; i < queryNumVectors; i++) {
-        acorn_index.search(1, queryVecs + (i * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask + (i * baseNumVectors)));
+        acorn_index->search(1, queryVecs + (i * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask + (i * baseNumVectors)));
         auto gt = gtVecs + i * k;
         for (int j = 0; j < k; j++) {
             if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
@@ -1608,6 +1611,11 @@ void benchmark_pread(InputParser &input) {
 void test_clustering_data(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const int clusterSize = stoi(input.getCmdOption("-clusterSize"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int nProbes = stoi(input.getCmdOption("-nProbes"));
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -1615,7 +1623,12 @@ void test_clustering_data(InputParser &input) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
 
-    auto numCentroids = 10;
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+    int numCentroids = numVectors / clusterSize;
     auto clustering = Clustering(baseDimension, numCentroids, 40, 150, 250, 0.0);
 
     // Init centroids and train!!
@@ -1627,14 +1640,25 @@ void test_clustering_data(InputParser &input) {
     auto labels = new int32_t[baseNumVectors];
     clustering.assignCentroids(baseVecs, baseNumVectors, labels);
 
-    // Print the distribution!!
-    std::unordered_map<int, int> dist;
+    // Print the distribution interms of avg, min, max cluster size
+    std::vector<size_t> clusterSizeHist(numCentroids, 0);
     for (int i = 0; i < baseNumVectors; i++) {
-        dist[labels[i]]++;
+        clusterSizeHist[labels[i]]++;
     }
-    for (int i = 0; i < numCentroids; i++) {
-        printf("Centroid: %d, Count: %d\n", i, dist[i]);
+    auto minSize = std::numeric_limits<size_t>::max();
+    size_t maxSize = 0;
+    size_t avgSize = 0;
+    for (const auto &clusterSize: clusterSizeHist) {
+        minSize = std::min(minSize, clusterSize);
+        maxSize = std::max(maxSize, clusterSize);
+        avgSize += clusterSize;
     }
+    printf("Min size of clusters: %zu\n", minSize);
+    printf("Max size of clusters: %zu\n", maxSize);
+    printf("Avg size of clusters: %zu\n", avgSize / numCentroids);
+
+    // Run search by first finding nProbes centroids and then searching in those
+    // TODO
 
     delete[] labels;
     delete[] baseVecs;

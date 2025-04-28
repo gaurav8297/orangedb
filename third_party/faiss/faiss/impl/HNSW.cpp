@@ -1643,7 +1643,6 @@ HNSWStats HNSW::search(
         int ndis_upper = 0;
         for (int level = max_level; level >= 1; level--) {
             ndis_upper += greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
-            
         }
         stats.n3 += ndis_upper;
         // stats.n_upper += ndis_upper;
@@ -1728,6 +1727,55 @@ HNSWStats HNSW::search(
     }
 
     return stats;
+}
+
+void HNSW::navix_add_filtered_nodes_to_candidates(DistanceComputer &qdis, int k, MinimaxHeap &candidates, idx_t *I, float *D,
+                                                  VisitedTable &vt, char *filter_id_map, int num_of_nodes) {
+
+    auto num_nodes = nb_per_level[0];
+    int c = 0;
+    for (int p_id = 0; p_id < num_nodes; p_id++) {
+        if (filter_id_map[p_id] == 1) {
+            float dist = qdis(p_id);
+            candidates.push(p_id, dist);
+            faiss::maxheap_push(k, D, I, dist, p_id);
+            vt.set(p_id);
+            c++;
+        }
+        if (c == )
+    }
+}
+
+HNSWStats HNSW::navix_hybrid_search(
+    DistanceComputer &qdis,
+    int k,
+    idx_t *I,
+    float *D,
+    VisitedTable &vt,
+    char *filter_id_map,
+    const SearchParametersHNSW *params) const {
+    HNSWStats stats;
+    if (entry_point == -1) {
+        return stats;
+    }
+
+    // First search on the upper layer!!
+    storage_idx_t nearest = entry_point;
+    float d_nearest = qdis(nearest);
+
+    int ndis_upper = 0;
+    for (int level = max_level; level >= 1; level--) {
+        ndis_upper += greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+    }
+    stats.n3 += ndis_upper;
+    int ef = std::max(efSearch, k);
+
+    MinimaxHeap candidates(ef);
+    candidates.push(nearest, d_nearest);
+
+    navix_add_filtered_nodes_to_candidates(qdis, candidates, I, D, vt, filter_id_map);
+
+    search_from_candidates(*this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
 }
 
 // hybrid search TODO

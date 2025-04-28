@@ -11,12 +11,13 @@ namespace orangedb {
 
     void ReclusteringIndex::insert(float *data, size_t n) {
         printf("ReclusteringIndex::insert\n");
-        // Create vectorIds
+        // Create the vector ids
         std::vector<vector_idx_t> vectorIds(n);
         for (size_t i = 0; i < n; i++) {
             vectorIds[i] = i + size;
         }
 
+        // Run clustering to create mini clusters
         std::vector<float> centroids;
         std::vector<std::vector<float> > clusters;
         std::vector<std::vector<vector_idx_t> > clusterVectorIds;
@@ -30,14 +31,16 @@ namespace orangedb {
             newMiniClusterVectorIds.push_back(std::move(vectorId));
         }
 
-        printf("Copying centroids\n");
         auto curMiniCtrdSize = newMiniCentroids.size();
         newMiniCentroids.resize(curMiniCtrdSize + centroids.size());
         memcpy(newMiniCentroids.data() + curMiniCtrdSize, centroids.data(), centroids.size() * sizeof(float));
         size += n;
+
+        printf("Added %lu new mini centroids!\n", newMiniCentroids.size() / dim);
     }
 
     void ReclusteringIndex::mergeNewMiniCentroids() {
+        printf("ReclusteringIndex::mergeNewMiniCentroids\n");
         if (newMiniCentroids.empty()) {
             return;
         }
@@ -48,6 +51,7 @@ namespace orangedb {
             return;
         }
 
+        auto startTime = std::chrono::high_resolution_clock::now();
         // Reclustering on the new mini centroids
         // TODO: Make this process concurrent!!
         std::vector<vector_idx_t> miniCentroidIds(newMiniCentroids.size() / dim);
@@ -71,6 +75,10 @@ namespace orangedb {
         newMiniCentroids = std::vector<float>();
         newMiniClusters = std::vector<std::vector<float> >();
         newMiniClusterVectorIds = std::vector<std::vector<vector_idx_t> >();
+
+        auto endTime = std::chrono::high_resolution_clock::now();
+        printf("Reclustering took %lld ms\n",
+            std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count());
     }
 
     void ReclusteringIndex::mergeNewMiniCentroidsBatch(float *newMegaCentroid,
@@ -213,7 +221,6 @@ namespace orangedb {
             hist[assign[i]]++;
         }
 
-        printf("Copying actual data\n");
         // Copy the centroids
         centroids.resize(numClusters * dim);
         memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
@@ -266,7 +273,6 @@ namespace orangedb {
             hist[assign[i]]++;
         }
 
-        printf("Copying actual data\n");
         // Copy the centroids
         centroids.resize(numClusters * dim);
         memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
