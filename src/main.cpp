@@ -1614,6 +1614,8 @@ void test_clustering_data(InputParser &input) {
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
     const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const int clusterSize = stoi(input.getCmdOption("-clusterSize"));
+    const int nIter = stoi(input.getCmdOption("-nIter"));
+    const float lambda = stof(input.getCmdOption("-lambda"));
     const int k = stoi(input.getCmdOption("-k"));
     const int nProbes = stoi(input.getCmdOption("-nProbes"));
 
@@ -1629,7 +1631,9 @@ void test_clustering_data(InputParser &input) {
 
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     int numCentroids = numVectors / clusterSize;
-    auto clustering = Clustering(baseDimension, numCentroids, 40, 150, 250, 0.0);
+    int minCentroidSize = (numVectors / numCentroids) * 0.5;
+    int maxCentroidSize = (numVectors / numCentroids) * 1.2;
+    auto clustering = Clustering(baseDimension, numCentroids, nIter, minCentroidSize, maxCentroidSize, lambda);
 
     // Init centroids and train!!
     printf("Init centroids\n");
@@ -1658,43 +1662,60 @@ void test_clustering_data(InputParser &input) {
     printf("Avg size of clusters: %zu\n", avgSize / numCentroids);
 
     // Run search by first finding nProbes centroids and then searching in those
-    // FIX this code!!
+    double totalDC = 0.0;
+    double recall = 0.0;
+    auto centroidDc = L2DistanceComputer(clustering.centroids.data(), baseDimension, clustering.getNumCentroids());
     for (size_t i = 0; i < queryNumVectors; i++) {
         // Find the nearest nProbes centroids for the current query
-        std::vector<std::pair<int, float>> centroidDistances;
+        centroidDc.setQuery(queryVecs + i * queryDimension);
+        std::priority_queue<NodeDistCloser> closestCentroids;
         for (int j = 0; j < numCentroids; j++) {
-            float dist = 0.0f;
-            for (size_t d = 0; d < baseDimension; d++) {
-                float diff = queryVecs[i * queryDimension + d] - clustering.centroids[j * baseDimension + d];
-                dist += diff * diff;
+            double dist;
+            centroidDc.computeDistance(j, &dist);
+            totalDC++;
+            if (closestCentroids.size() < nProbes || dist < closestCentroids.top().dist) {
+                closestCentroids.emplace(j, dist);
+                if (closestCentroids.size() > nProbes) {
+                    closestCentroids.pop();
+                }
             }
-            centroidDistances.push_back({j, dist});
         }
-        std::nth_element(centroidDistances.begin(), centroidDistances.begin() + nProbes, centroidDistances.end(),
-                         [](auto a, auto b) { return a.second < b.second; });
+
         // Search within base vectors belonging to the selected centroids
-        float bestDist = std::numeric_limits<float>::max();
-        int bestId = -1;
-        for (int p = 0; p < nProbes; p++) {
-            int centroidIdx = centroidDistances[p].first;
+        std::priority_queue<NodeDistCloser> results;
+        while (!closestCentroids.empty()) {
+            auto closestCentroidId = closestCentroids.top();
+            closestCentroids.pop();
             // Iterate over all base vectors and check if assigned to this centroid
             for (size_t v = 0; v < baseNumVectors; v++) {
-                if (labels[v] == centroidIdx) {
-                    float dist = 0.0f;
-                    for (size_t d = 0; d < baseDimension; d++) {
-                        float diff = queryVecs[i * queryDimension + d] - baseVecs[v * baseDimension + d];
-                        dist += diff * diff;
-                    }
-                    if (dist < bestDist) {
-                        bestDist = dist;
-                        bestId = static_cast<int>(v);
+                if (labels[v] == closestCentroidId.id) {
+                    double dist;
+                    centroidDc.computeDistance(queryVecs + i * queryDimension, baseVecs + v * baseDimension, &dist);
+                    totalDC++;
+                    if (results.size() < k || dist < results.top().dist) {
+                        results.emplace(v, dist);
+                        if (results.size() > k) {
+                            results.pop();
+                        }
                     }
                 }
             }
         }
-        printf("Query %zu, Best vector id: %d, Distance: %f\n", i, bestId, bestDist);
+
+        // Calculate recall
+        auto gt = gtVecs + i * k;
+        while (!results.empty()) {
+            auto res = results.top();
+            results.pop();
+            if (std::find(gt, gt + k, res.id) != (gt + k)) {
+                recall++;
+            }
+        }
     }
 
+    // Print avg distance computation and recall
+    printf("Avg Distance Computation: %f\n", totalDC / queryNumVectors);
+    printf("Recall: %f\n", recall / queryNumVectors);
     delete[] labels;
     delete[] baseVecs;
     delete[] queryVecs;

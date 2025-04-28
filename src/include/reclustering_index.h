@@ -95,7 +95,6 @@ namespace orangedb {
         void appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds, std::vector<float> &newMegaCentroids,
                                        std::vector<std::vector<vector_idx_t> > &newMiniClusterIds);
 
-
         void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids);
 
         inline int getNumCentroids(int numVectors, int avgClusterSize) const {
