@@ -52,6 +52,7 @@ namespace orangedb {
         }
 
         auto startTime = std::chrono::high_resolution_clock::now();
+        auto numMegaCentroids = megaCentroids.size() / dim;
         // Reclustering on the new mini centroids
         // TODO: Make this process concurrent!!
         std::vector<vector_idx_t> miniCentroidIds(newMiniCentroids.size() / dim);
@@ -60,12 +61,18 @@ namespace orangedb {
         }
         std::vector<float> newMegaCentroids;
         std::vector<std::vector<vector_idx_t> > newMiniClusterIds;
-        clusterData(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
-                    config.numNewMiniReclusterCentroids, newMegaCentroids, newMiniClusterIds);
-
-        for (size_t i = 0; i < (newMegaCentroids.size() / dim); i++) {
-            mergeNewMiniCentroidsBatch(newMegaCentroids.data() + i * dim,
-                                       newMiniClusterIds[i]);
+        if (numMegaCentroids > config.numMegaReclusterCentroids * 3) {
+            clusterData(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
+                        config.numNewMiniReclusterCentroids, newMegaCentroids, newMiniClusterIds);
+            for (size_t i = 0; i < (newMegaCentroids.size() / dim); i++) {
+                mergeNewMiniCentroidsBatch(newMegaCentroids.data() + i * dim,
+                                           newMiniClusterIds[i]);
+            }
+        } else {
+            calcMeanCentroid(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
+                              newMegaCentroids, newMiniClusterIds);
+            mergeNewMiniCentroidsBatch(newMegaCentroids.data(),
+                                           newMiniClusterIds[0]);
         }
 
         // Reset all newMiniCentroids, clusters and vectorIds
