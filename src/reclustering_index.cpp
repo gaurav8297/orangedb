@@ -218,7 +218,7 @@ namespace orangedb {
         }
 
         // Take all the micro centroids and copy into temp storage
-        std::vector<float> tempMiniCentroids(totalVec);
+        std::vector<float> tempMiniCentroids(totalVec * dim);
         std::vector<vector_idx_t> tempMiniCentroidIds(totalVec);
         int idx = 0;
         for (auto megaId: oldMegaCentroidIds) {
