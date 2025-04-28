@@ -71,6 +71,8 @@ namespace orangedb {
 
         void mergeNewMiniCentroidsInit();
 
+        void resetInputBuffer();
+
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                          std::vector<float>& centroids, std::vector<std::vector<float>>& clusters,
                          std::vector<std::vector<vector_idx_t>> &clusterVectorIds);

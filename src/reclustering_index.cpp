@@ -69,12 +69,7 @@ namespace orangedb {
         }
 
         // Reset all newMiniCentroids, clusters and vectorIds
-        newMiniCentroids.clear();
-        newMiniClusters.clear();
-        newMiniClusterVectorIds.clear();
-        newMiniCentroids = std::vector<float>();
-        newMiniClusters = std::vector<std::vector<float> >();
-        newMiniClusterVectorIds = std::vector<std::vector<vector_idx_t> >();
+        resetInputBuffer();
 
         auto endTime = std::chrono::high_resolution_clock::now();
         printf("Reclustering took %lld ms\n",
@@ -191,7 +186,20 @@ namespace orangedb {
         miniCentroids = std::move(tempMiniCentroids);
         miniClusters = std::move(tempMiniClusters);
         miniClusterVectorIds = std::move(tempMiniClusterVectorIds);
+
+        // Reset input buffer!
+        resetInputBuffer();
     }
+
+    void ReclusteringIndex::resetInputBuffer() {
+        newMiniCentroids.clear();
+        newMiniClusters.clear();
+        newMiniClusterVectorIds.clear();
+        newMiniCentroids = std::vector<float>();
+        newMiniClusters = std::vector<std::vector<float> >();
+        newMiniClusterVectorIds = std::vector<std::vector<vector_idx_t> >();
+    }
+
 
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
