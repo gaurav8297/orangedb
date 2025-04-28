@@ -438,7 +438,6 @@ namespace orangedb {
                                                       std::vector<std::vector<vector_idx_t> > &newMiniClusterIds) {
         auto numNewMegaCentroids = newMegaCentroids.size() / dim;
         printf("numNewMegaCentroids: %zu, oldMegaCentroidIds: %zu\n", numNewMegaCentroids, oldMegaCentroidIds.size());
-        assert(numNewMegaCentroids >= oldMegaCentroidIds.size());
         auto oldMegaCentroidSize = oldMegaCentroidIds.size();
         auto centroidSize = std::min(oldMegaCentroidSize, numNewMegaCentroids);
         for (int i = 0; i < centroidSize; i++) {
@@ -448,6 +447,17 @@ namespace orangedb {
             // Move the miniCentroidIds
             megaMiniCentroidIds[currMegaId] = std::move(newMiniClusterIds[i]);
         }
+
+        auto lastCentroidId = megaCentroids.size() - 1;
+        // If the new mega centroid smaller than oldMegaCentroidIds.size()
+        for (int i = numNewMegaCentroids; i < oldMegaCentroidSize; i++) {
+            // Copy from last to i
+            auto currMegaId = oldMegaCentroidIds[i];
+            memcpy(megaCentroids.data() + currMegaId * dim, megaCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
+            megaMiniCentroidIds[currMegaId] = std::move(megaMiniCentroidIds[lastCentroidId]);
+            lastCentroidId--;
+        }
+
         if (numNewMegaCentroids > oldMegaCentroidSize) {
             // Append the new mega centroids
             auto currentSize = megaCentroids.size() / dim;
