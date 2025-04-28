@@ -83,6 +83,19 @@ namespace orangedb {
             std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count());
     }
 
+    void ReclusteringIndex::reclusterAllMegaCentroids() {
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        if (numMegaCentroids == 0) {
+            return;
+        }
+
+        std::vector<vector_idx_t> megaCentroidIds(numMegaCentroids);
+        for (size_t i = 0; i < numMegaCentroids; i++) {
+            megaCentroidIds[i] = i;
+        }
+        reclusterMegaCentroids(megaCentroidIds);
+    }
+
     void ReclusteringIndex::mergeNewMiniCentroidsBatch(float *newMegaCentroid,
                                                        std::vector<vector_idx_t> newMiniCentroidBatch) {
         // Find the closest mega centroid
@@ -171,8 +184,8 @@ namespace orangedb {
         }
 
         // Perform mini clustering
-        std::vector<float> tempMiniCentroids(totalVectors * dim);
-        std::vector<std::vector<float> > tempMiniClusters;
+        std::vector<float> tempMiniCentroids;
+        std::vector<std::vector<float>> tempMiniClusters;
         std::vector<std::vector<vector_idx_t> > tempMiniClusterVectorIds;
         clusterData(newVectors.data(), newVectorIds.data(), totalVectors, config.miniCentroidSize,
                     tempMiniCentroids, tempMiniClusters, tempMiniClusterVectorIds);
@@ -196,6 +209,33 @@ namespace orangedb {
 
         // Reset input buffer!
         resetInputBuffer();
+    }
+
+    void ReclusteringIndex::reclusterMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds) {
+        auto totalVec = 0;
+        for (auto megaId: oldMegaCentroidIds) {
+            totalVec += megaMiniCentroidIds[megaId].size();
+        }
+
+        // Take all the micro centroids and copy into temp storage
+        std::vector<float> tempMiniCentroids(totalVec);
+        std::vector<vector_idx_t> tempMiniCentroidIds(totalVec);
+        int idx = 0;
+        for (auto megaId: oldMegaCentroidIds) {
+            for (auto miniId: megaMiniCentroidIds[megaId]) {
+                memcpy(tempMiniCentroids.data() + idx * dim, miniCentroids.data() + miniId * dim, sizeof(float) * dim);
+                tempMiniCentroidIds[idx] = miniId;
+                idx++;
+            }
+        }
+
+        // Cluster data and write the mega and micro back again
+        std::vector<float> tempMegaCentroids;
+        std::vector<std::vector<vector_idx_t>> tempMiniClusterIds;
+        clusterData(tempMiniCentroids.data(), tempMiniCentroidIds.data(), totalVec, config.megaCentroidSize, tempMegaCentroids, tempMiniClusterIds);
+
+        // Append back to mini centroids
+        appendOrMergeMegaCentroids(oldMegaCentroidIds, tempMegaCentroids, tempMiniClusterIds);
     }
 
     void ReclusteringIndex::resetInputBuffer() {
@@ -383,36 +423,42 @@ namespace orangedb {
         }
 
         // Upadate the ids in miniCentroidIds using the newToOldCentroidIdMap
-        for (int i = 0; i < miniCentroidIds.size(); i++) {
-            auto &ids = miniCentroidIds[i];
+        for (auto & ids : miniCentroidIds) {
             for (auto &id: ids) {
                 id = newToOldCentroidIdMap[id];
             }
         }
 
         // Copy the mega clusters
-        auto inplaceMegaCentroidSize = oldMegaCentroids.size();
-        auto newMegaCentroidSize = newMegaCentroids.size() / dim;
-        auto centroidSize = std::min(inplaceMegaCentroidSize, newMegaCentroidSize);
+        appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
+    }
+
+    void ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,
+                                                      std::vector<float> &newMegaCentroids,
+                                                      std::vector<std::vector<vector_idx_t> > &newMiniClusterIds) {
+        auto numNewMegaCentroids = newMegaCentroids.size() / dim;
+        assert(numNewMegaCentroids >= oldMegaCentroidIds.size());
+        auto oldMegaCentroidSize = oldMegaCentroidIds.size();
+        auto centroidSize = std::min(oldMegaCentroidSize, numNewMegaCentroids);
         for (int i = 0; i < centroidSize; i++) {
-            auto currMegaId = oldMegaCentroids[i];
+            auto currMegaId = oldMegaCentroidIds[i];
             memcpy(megaCentroids.data() + currMegaId * dim, newMegaCentroids.data() + i * dim, dim * sizeof(float));
 
             // Move the miniCentroidIds
-            megaMiniCentroidIds[currMegaId] = std::move(miniCentroidIds[i]);
+            megaMiniCentroidIds[currMegaId] = std::move(newMiniClusterIds[i]);
         }
-        if (newMegaCentroidSize > inplaceMegaCentroidSize) {
+        if (numNewMegaCentroids > oldMegaCentroidSize) {
             // Append the new mega centroids
             auto currentSize = megaCentroids.size() / dim;
-            megaCentroids.resize((currentSize + newMegaCentroidSize - inplaceMegaCentroidSize) * dim);
-            memcpy(megaCentroids.data() + currentSize * dim, newMegaCentroids.data() + inplaceMegaCentroidSize * dim,
-                   (newMegaCentroidSize - inplaceMegaCentroidSize) * dim * sizeof(float));
+            megaCentroids.resize((currentSize + numNewMegaCentroids - oldMegaCentroidSize) * dim);
+            memcpy(megaCentroids.data() + currentSize * dim, newMegaCentroids.data() + oldMegaCentroidSize * dim,
+                   (numNewMegaCentroids - oldMegaCentroidSize) * dim * sizeof(float));
 
             // Move the miniCentroidIds
-            megaMiniCentroidIds.resize(currentSize + newMegaCentroidSize - inplaceMegaCentroidSize);
+            megaMiniCentroidIds.resize(currentSize + numNewMegaCentroids - oldMegaCentroidSize);
             auto idx = 0;
-            for (auto i = inplaceMegaCentroidSize; i < newMegaCentroidSize; i++) {
-                megaMiniCentroidIds[currentSize + idx] = std::move(miniCentroidIds[i]);
+            for (auto i = oldMegaCentroidSize; i < numNewMegaCentroids; i++) {
+                megaMiniCentroidIds[currentSize + idx] = std::move(newMiniClusterIds[i]);
                 idx++;
             }
         }
@@ -510,6 +556,7 @@ namespace orangedb {
         printf("Min size of clusters: %zu\n", minSize);
         printf("Max size of clusters: %zu\n", maxSize);
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
+        printf("Total number of vectors: %zu/%zu\n", avgSize, size);
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {

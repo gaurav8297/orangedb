@@ -1658,7 +1658,42 @@ void test_clustering_data(InputParser &input) {
     printf("Avg size of clusters: %zu\n", avgSize / numCentroids);
 
     // Run search by first finding nProbes centroids and then searching in those
-    // TODO
+    // FIX this code!!
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        // Find the nearest nProbes centroids for the current query
+        std::vector<std::pair<int, float>> centroidDistances;
+        for (int j = 0; j < numCentroids; j++) {
+            float dist = 0.0f;
+            for (size_t d = 0; d < baseDimension; d++) {
+                float diff = queryVecs[i * queryDimension + d] - clustering.centroids[j * baseDimension + d];
+                dist += diff * diff;
+            }
+            centroidDistances.push_back({j, dist});
+        }
+        std::nth_element(centroidDistances.begin(), centroidDistances.begin() + nProbes, centroidDistances.end(),
+                         [](auto a, auto b) { return a.second < b.second; });
+        // Search within base vectors belonging to the selected centroids
+        float bestDist = std::numeric_limits<float>::max();
+        int bestId = -1;
+        for (int p = 0; p < nProbes; p++) {
+            int centroidIdx = centroidDistances[p].first;
+            // Iterate over all base vectors and check if assigned to this centroid
+            for (size_t v = 0; v < baseNumVectors; v++) {
+                if (labels[v] == centroidIdx) {
+                    float dist = 0.0f;
+                    for (size_t d = 0; d < baseDimension; d++) {
+                        float diff = queryVecs[i * queryDimension + d] - baseVecs[v * baseDimension + d];
+                        dist += diff * diff;
+                    }
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestId = static_cast<int>(v);
+                    }
+                }
+            }
+        }
+        printf("Query %zu, Best vector id: %d, Distance: %f\n", i, bestId, bestDist);
+    }
 
     delete[] labels;
     delete[] baseVecs;
@@ -1747,6 +1782,9 @@ void benchmark_reclustering_approach(InputParser &input) {
     index.printStats();
 
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
+    printf("Recall: %f\n", recall);
+    index.reclusterAllMegaCentroids();
+    recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
     printf("Recall: %f\n", recall);
 }
 
