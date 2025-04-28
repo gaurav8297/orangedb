@@ -1783,9 +1783,9 @@ void benchmark_reclustering_approach(InputParser &input) {
 
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
     printf("Recall: %f\n", recall);
-    // index.reclusterAllMegaCentroids();
-    // recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
-    // printf("Recall: %f\n", recall);
+    index.reclusterAllMegaCentroids();
+    recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
+    printf("Recall: %f\n", recall);
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,

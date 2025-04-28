@@ -388,6 +388,7 @@ namespace orangedb {
         // Copy the mini centroids, clusters and vector ids and fix the miniClusterIds
         std::unordered_map<vector_idx_t, vector_idx_t> newToOldCentroidIdMap;
         auto newMiniCentroidsSize = newMiniCentroids.size() / dim;
+        assert(oldMiniClusterIds.size() <= newMiniCentroidsSize);
         auto miniCentroidsSize = std::min(newMiniCentroidsSize, oldMiniClusterIds.size());
         for (int i = 0; i < miniCentroidsSize; i++) {
             auto oldCentroidId = oldMiniClusterIds[i];
