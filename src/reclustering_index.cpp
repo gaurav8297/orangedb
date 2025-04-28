@@ -437,6 +437,7 @@ namespace orangedb {
                                                       std::vector<float> &newMegaCentroids,
                                                       std::vector<std::vector<vector_idx_t> > &newMiniClusterIds) {
         auto numNewMegaCentroids = newMegaCentroids.size() / dim;
+        printf("numNewMegaCentroids: %zu, oldMegaCentroidIds: %zu\n", numNewMegaCentroids, oldMegaCentroidIds.size());
         assert(numNewMegaCentroids >= oldMegaCentroidIds.size());
         auto oldMegaCentroidSize = oldMegaCentroidIds.size();
         auto centroidSize = std::min(oldMegaCentroidSize, numNewMegaCentroids);
