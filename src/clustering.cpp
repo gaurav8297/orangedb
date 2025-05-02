@@ -35,6 +35,8 @@ namespace orangedb {
     }
 
     void Clustering::train(float *data, int n) {
+        printf("Training numCentroids: %d, nIter: %d, minCentroidSize: %d, maxCentroidSize: %d\n",
+               numCentroids, nIter, minCentroidSize, maxCentroidSize);
         // Sample data from the given data
         float *sample = nullptr;
         int nSample = sampleData(n, data, &sample);

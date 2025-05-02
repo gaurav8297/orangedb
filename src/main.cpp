@@ -21,6 +21,7 @@
 #include "incremental_index.h"
 #include "faiss/IndexACORN.h"
 #include "fastQ/scalar_test.h"
+#include "faiss/IndexPQ.h"
 
 #if 0
 #include <liburing.h>
@@ -1609,6 +1610,7 @@ void benchmark_pread(InputParser &input) {
 #endif
 
 void test_clustering_data(InputParser &input) {
+    // TODO: Replace with FAISS IVF FLAT
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
@@ -1909,6 +1911,58 @@ void benchmark_splitting(InputParser &input) {
     //     printf("Recall after reclustering %d: %f\n", i, recalls[i]);
     // }
     // printf("Final Recall: %f\n", final_recall);
+}
+
+void benchmark_quantized_dc(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const int n = stoi(input.getCmdOption("-n"));
+
+    // Read dataset
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    faiss::IndexPQ indexPQ(baseDimension, 8, 8, faiss::MetricType::METRIC_L2);
+
+    printf("Training index\n");
+    indexPQ.train(baseNumVectors, baseVecs);
+
+    printf("Adding base vectors\n");
+    indexPQ.add(baseNumVectors, baseVecs);
+
+    printf("Computing symmetric distances\n");
+    auto dc = indexPQ.get_FlatCodesDistanceComputer();
+    dc->set_query(queryVecs);
+    auto start = std::chrono::high_resolution_clock::now();
+    double dist = 0;
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < baseNumVectors; j++) {
+            dist += dc->symmetric_dis(0, j);
+        }
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    printf("Symmetric Distance: %f\n", dist);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    // Number of distance computations per sec
+    printf("Symmetric Distance computation time: %lld ms\n", duration.count());
+    printf("Symmetric Distance computation per sec: %f\n", (n * baseNumVectors) / (duration.count() / 1000.0));
+
+    printf("Computing asymmetric distances\n");
+    start = std::chrono::high_resolution_clock::now();
+    dist = 0;
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < baseNumVectors; j++) {
+            dist += dc(j);
+        }
+    }
+    end = std::chrono::high_resolution_clock::now();
+    printf("Asymmetric Distance: %f\n", dist);
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    // Number of distance computations per sec
+    printf("Asymmetric Distance computation time: %lld ms\n", duration.count());
+    printf("Asymmetric Distance computation per sec: %f\n", (n * baseNumVectors) / (duration.count() / 1000.0));
 }
 
 int main(int argc, char **argv) {

@@ -421,6 +421,21 @@ namespace orangedb {
                 newToOldCentroidIdMap[i] = currentSize + idx;
                 idx++;
             }
+        } else {
+            auto lastCentroidId = (miniCentroids.size() / dim) - 1;
+            // If the new mini centroid smaller than oldMiniClusterIds.size()
+            for (int i = newMiniCentroidsSize; i < oldMiniClusterIds.size(); i++) {
+                // Copy from last to i
+                auto currCentroidId = oldMiniClusterIds[i];
+                memcpy(miniCentroids.data() + currCentroidId * dim, miniCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
+                miniClusters[currCentroidId] = std::move(miniClusters[lastCentroidId]);
+                miniClusterVectorIds[currCentroidId] = std::move(miniClusterVectorIds[lastCentroidId]);
+                lastCentroidId--;
+            }
+            // Resize the mini centroids
+            miniCentroids.resize((lastCentroidId + 1) * dim);
+            miniClusters.resize(lastCentroidId + 1);
+            miniClusterVectorIds.resize(lastCentroidId + 1);
         }
 
         // Upadate the ids in miniCentroidIds using the newToOldCentroidIdMap
@@ -432,6 +447,35 @@ namespace orangedb {
 
         // Copy the mega clusters
         appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
+    }
+
+    void ReclusteringIndex::calcScoreForMegaCluster(int megaClusterId) {
+        auto miniCentroids = megaMiniCentroidIds[megaClusterId];
+
+
+        double totalSilhouette = 0.0;
+        long long totalPoints = 0;
+    }
+
+    void ReclusteringIndex::calcScoreForMiniCluster(int megaClusterId, int miniClusterId) {
+        // Find 5 closest mega centroids
+        std::vector<vector_idx_t> megaAssign(5);
+        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 5, megaAssign);
+
+        // Collect centroids to check for silhouette
+        std::vector<vector_idx_t> miniCentroidIds;
+        for (auto megaId: megaAssign) {
+            auto microIds = megaMiniCentroidIds[megaId];
+            for (auto microId: microIds) {
+                miniCentroidIds.push_back(microId);
+            }
+        }
+
+        // Calculate the silhouette score
+        double totalSilhouette = 0.0;
+        long long totalPoints = 0;
+
+        // TODO
     }
 
     void ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,

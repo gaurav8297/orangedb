@@ -97,6 +97,10 @@ namespace orangedb {
 
         void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids);
 
+        void calcScoreForMegaCluster(int megaClusterId);
+
+        void calcScoreForMiniCluster(int megaClusterId, int miniClusterId);
+
         inline int getNumCentroids(int numVectors, int avgClusterSize) const {
             double ret =  (double)numVectors / avgClusterSize;
             int val = (int)ret;
