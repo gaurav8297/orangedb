@@ -1954,7 +1954,7 @@ void benchmark_quantized_dc(InputParser &input) {
     dist = 0;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < baseNumVectors; j++) {
-            dist += dc(j);
+            dist += (*dc)(j);
         }
     }
     end = std::chrono::high_resolution_clock::now();
