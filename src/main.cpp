@@ -1998,6 +1998,9 @@ int main(int argc, char **argv) {
     else if (run == "benchmarkSplitting") {
         benchmark_splitting(input);
     }
+    else if (run == "benchmarkQuantized") {
+        benchmark_quantized_dc(input);
+    }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
