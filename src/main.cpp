@@ -1918,6 +1918,8 @@ void benchmark_quantized_dc(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const int n = stoi(input.getCmdOption("-n"));
+    const int M = stoi(input.getCmdOption("-M"));
+    const int nBits = stoi(input.getCmdOption("-nBits"));
 
     // Read dataset
     size_t baseDimension, baseNumVectors;
@@ -1925,7 +1927,7 @@ void benchmark_quantized_dc(InputParser &input) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
 
-    faiss::IndexPQ indexPQ(baseDimension, 8, 8, faiss::MetricType::METRIC_L2);
+    faiss::IndexPQ indexPQ(baseDimension, M, nBits, faiss::MetricType::METRIC_L2);
 
     printf("Training index\n");
     indexPQ.train(baseNumVectors, baseVecs);
