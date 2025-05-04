@@ -13,6 +13,7 @@
 #include <fstream>
 #include <reclustering_index.h>
 #include <faiss/index_io.h>
+#include <faiss/utils/distances.h>
 #include <fastQ/scalar_8bit.h>
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
@@ -1933,6 +1934,7 @@ void benchmark_quantized_dc(InputParser &input) {
     indexPQ.add(baseNumVectors, baseVecs);
 
     printf("Computing symmetric distances\n");
+    indexPQ.pq.compute_sdc_table();
     auto dc = indexPQ.get_FlatCodesDistanceComputer();
     dc->set_query(queryVecs);
     auto start = std::chrono::high_resolution_clock::now();
@@ -1963,6 +1965,23 @@ void benchmark_quantized_dc(InputParser &input) {
     // Number of distance computations per sec
     printf("Asymmetric Distance computation time: %lld ms\n", duration.count());
     printf("Asymmetric Distance computation per sec: %f\n", (n * baseNumVectors) / (duration.count() / 1000.0));
+
+    // Run normal distance computation
+    printf("Computing non quantized distances\n");
+    start = std::chrono::high_resolution_clock::now();
+    dist = 0;
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < baseNumVectors; j++) {
+            dist += faiss::fvec_L2sqr(queryVecs, baseVecs + j * baseDimension, baseDimension);
+        }
+    }
+    end = std::chrono::high_resolution_clock::now();
+    printf("Actual Distance: %f\n", dist);
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    // Number of distance computations per sec
+    printf("Total Distance Computations: %lu\n", n * baseNumVectors);
+    printf("Actual Distance computation time: %lld ms\n", duration.count());
+    printf("Actual Distance computation per sec: %f\n", (n * baseNumVectors) / (duration.count() / 1000.0));
 }
 
 int main(int argc, char **argv) {
