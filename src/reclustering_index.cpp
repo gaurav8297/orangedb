@@ -83,6 +83,15 @@ namespace orangedb {
             std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count());
     }
 
+    void ReclusteringIndex::reclusterMegaCentroids(int n) {
+        printf("ReclusteringIndex::reclusterMegaCentroids\n");
+        if (megaCentroids.empty()) {
+            return;
+        }
+
+        // Run reclustering on the mega centroids
+    }
+
     void ReclusteringIndex::reclusterAllMegaCentroids() {
         auto numMegaCentroids = megaCentroids.size() / dim;
         if (numMegaCentroids == 0) {
@@ -449,33 +458,107 @@ namespace orangedb {
         appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
     }
 
-    void ReclusteringIndex::calcScoreForMegaCluster(int megaClusterId) {
-        auto miniCentroids = megaMiniCentroidIds[megaClusterId];
-
-
-        double totalSilhouette = 0.0;
-        long long totalPoints = 0;
+    void ReclusteringIndex::storeScoreForMegaClusters() {
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        megaClusteringScore.resize(numMegaCentroids);
+        for (auto i = 0; i < numMegaCentroids; i++) {
+            megaClusteringScore[i] = calcScoreForMegaCluster(i);
+        }
     }
 
-    void ReclusteringIndex::calcScoreForMiniCluster(int megaClusterId, int miniClusterId) {
+    double ReclusteringIndex::calcScoreForMegaCluster(int megaClusterId) {
+        auto miniCentroidIds = megaMiniCentroidIds[megaClusterId];
+
+        double avgMiniScore = 0.0;
+#pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
+        for (int i = 0; i < miniCentroidIds.size(); i++) {
+            double s = calcScoreForMiniCluster(miniCentroidIds[i]);
+            avgMiniScore += s;
+        }
+
+        double avgMegaScore = 0.0;
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
+#pragma omp parallel for reduction(+: avgMegaScore, totalPoints) schedule(dynamic)
+        for (auto miniCentroidId: miniCentroidIds) {
+            dc->setQuery(miniCentroids.data() + miniCentroidId * dim);
+
+            // 1) a = distance to own centroid
+            double a = 0;
+            dc->computeDistance(megaClusterId, &a);
+
+            // 2) b = min distance to any other centroid
+            double b = std::numeric_limits<double>::infinity();
+            for (int j = 0; j < numMegaCentroids; j++) {
+                if (j == megaClusterId) continue;
+                double dist;
+                dc->computeDistance(j, &dist);
+                b = std::min(b, dist);
+            }
+
+            // 3) silhouette for this point
+            double m = std::max(a, b);
+            double s = (m > 0.0) ? (b - a) / m : 0.0;
+            avgMegaScore += s;
+        }
+
+        avgMegaScore /= miniCentroidIds.size();
+        avgMiniScore /= miniCentroidIds.size();
+
+        // Weight the mega silhouette score more than the mini silhouette score
+        return 0.2 * avgMegaScore + 0.8 * avgMiniScore;
+    }
+
+    double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {
         // Find 5 closest mega centroids
-        std::vector<vector_idx_t> megaAssign(5);
-        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 5, megaAssign);
+        std::vector<vector_idx_t> megaAssign(10);
+        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 10, megaAssign);
 
         // Collect centroids to check for silhouette
-        std::vector<vector_idx_t> miniCentroidIds;
+        std::vector<vector_idx_t> closestMiniCentroidIds;
         for (auto megaId: megaAssign) {
-            auto microIds = megaMiniCentroidIds[megaId];
-            for (auto microId: microIds) {
-                miniCentroidIds.push_back(microId);
+            auto miniIds = megaMiniCentroidIds[megaId];
+            for (auto miniId: miniIds) {
+                closestMiniCentroidIds.push_back(miniId);
             }
         }
 
         // Calculate the silhouette score
         double totalSilhouette = 0.0;
         long long totalPoints = 0;
+        auto numMiniCentroids = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
+        auto& curMiniCluster = miniClusters[miniClusterId];
+        auto numPoints = curMiniCluster.size() / dim;
 
-        // TODO
+// #pragma omp parallel for reduction(+: totalSilhouette, totalPoints) schedule(dynamic)
+        for (int i = 0; i < numPoints; i++) {
+            const float *curPoint = curMiniCluster.data() + i * dim;
+            dc->setQuery(curPoint);
+
+            // 1) a = distance to own centroid
+            double a = 0;
+            dc->computeDistance(miniClusterId, &a);
+
+            // 2) b = min distance to any other centroid
+            double b = std::numeric_limits<double>::infinity();
+            for (int j = 0; j < closestMiniCentroidIds.size(); j++) {
+                if (j == miniClusterId) continue;
+                double dist;
+                dc->computeDistance(closestMiniCentroidIds[j], &dist);
+                b = std::min(b, dist);
+            }
+
+            // 3) silhouette for this point
+            double m = std::max(a, b);
+            double s = (m > 0.0) ? (b - a) / m : 0.0;
+            totalSilhouette += s;
+            totalPoints += 1;
+        }
+
+        return (totalPoints > 0)
+                   ? totalSilhouette / double(totalPoints)
+                   : 0.0;
     }
 
     void ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,
@@ -616,6 +699,12 @@ namespace orangedb {
         printf("Max size of clusters: %zu\n", maxSize);
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
+
+        // Print score for mega clusters
+        int i = 0;
+        for (const auto &megaScore: megaClusteringScore) {
+            printf("Mega cluster %d score: %f\n", i++, megaScore);
+        }
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {

@@ -1803,6 +1803,8 @@ void benchmark_reclustering_approach(InputParser &input) {
         printf("Writing index to disk\n");
         index.flush_to_disk(storagePath);
     }
+
+    index.storeScoreForMegaClusters();
     index.printStats();
 
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
@@ -1810,6 +1812,9 @@ void benchmark_reclustering_approach(InputParser &input) {
     index.reclusterAllMegaCentroids();
     recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
     printf("Recall: %f\n", recall);
+
+    index.storeScoreForMegaClusters();
+    index.printStats();
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,

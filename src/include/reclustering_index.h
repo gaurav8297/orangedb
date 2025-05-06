@@ -57,8 +57,12 @@ namespace orangedb {
 
         void mergeNewMiniCentroids();
 
+        void reclusterMegaCentroids(int n);
+
         // void reclusterSparseMegaCentroids();
         void reclusterAllMegaCentroids();
+
+        void storeScoreForMegaClusters();
 
         void printStats();
 
@@ -97,9 +101,9 @@ namespace orangedb {
 
         void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids);
 
-        void calcScoreForMegaCluster(int megaClusterId);
+        double calcScoreForMegaCluster(int megaClusterId);
 
-        void calcScoreForMiniCluster(int megaClusterId, int miniClusterId);
+        double calcScoreForMiniCluster(int miniClusterId);
 
         inline int getNumCentroids(int numVectors, int avgClusterSize) const {
             double ret =  (double)numVectors / avgClusterSize;
