@@ -89,7 +89,85 @@ namespace orangedb {
             return;
         }
 
-        // Run reclustering on the mega centroids
+        // Find smallest score mega centroids
+        std::vector<vector_idx_t> megaCentroidIds;
+        std::vector<double> scores;
+        for (int i = 0; i < megaCentroids.size() / dim; i++) {
+            megaCentroidIds.push_back(i);
+            scores.push_back(megaClusteringScore[i]);
+        }
+
+        // Sort mega centroids ids based on score
+        std::sort(megaCentroidIds.begin(), megaCentroidIds.end(),
+                  [&scores](int a, int b) { return scores[a] < scores[b]; });
+    }
+
+    void ReclusteringIndex::reclusterFullMegaCentroid(int megaIdToRecluster) {
+        // Find the closest mega centroid
+        std::vector<vector_idx_t> megaAssign;
+        findKClosestMegaCentroids(megaCentroids.data() + (megaIdToRecluster * dim),
+                                  config.numExistingMegaReclusterCentroids, megaAssign);
+        assert(std::find(megaAssign.begin(), megaAssign.end(), megaIdToRecluster) != megaAssign.end());
+
+        // Take all the existing mini centroids and merge them
+        auto totalVecs = 0;
+        for (auto megaCentroidId: megaAssign) {
+            auto microCentroidIds = megaMiniCentroidIds[megaCentroidId];
+            for (auto microCentroidId: microCentroidIds) {
+                auto cluster = miniClusters[microCentroidId];
+                totalVecs += (cluster.size() / dim);
+            }
+        }
+
+        // Copy actual vecs and vectorIds here
+        std::vector<float> tempData(totalVecs * dim);
+        std::vector<vector_idx_t> tempVectorIds(totalVecs);
+        size_t idx = 0;
+        for (auto megaCentroidId: megaAssign) {
+            auto microCentroidIds = megaMiniCentroidIds[megaCentroidId];
+            for (auto microCentroidId: microCentroidIds) {
+                auto cluster = miniClusters[microCentroidId];
+                auto vectorId = miniClusterVectorIds[microCentroidId];
+                size_t numVectors = cluster.size() / dim;
+                memcpy(tempData.data() + idx * dim, cluster.data(), cluster.size() * sizeof(float));
+                memcpy(tempVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
+                idx += numVectors;
+            }
+        }
+
+        // Run mini reclustering
+        std::vector<float> newMiniCentroids;
+        std::vector<std::vector<float> > newMiniClusters;
+        std::vector<std::vector<vector_idx_t> > newMiniClusterVectorIds;
+        clusterData(tempData.data(), tempVectorIds.data(), totalVecs, config.miniCentroidSize,
+                    newMiniCentroids, newMiniClusters, newMiniClusterVectorIds);
+
+        // Run mega reclustering
+        std::vector<vector_idx_t> miniCentroidIds(newMiniCentroids.size() / dim);
+        for (size_t i = 0; i < miniCentroidIds.size(); i++) {
+            miniCentroidIds[i] = i;
+        }
+        std::vector<float> newMegaCentroids;
+        std::vector<std::vector<vector_idx_t> > newMiniClusterIds;
+        clusterData(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
+                    config.megaCentroidSize, newMegaCentroids, newMiniClusterIds);
+
+        // Append the new mini and mega centroids to the index
+        appendOrMergeCentroids(megaAssign, newMegaCentroids, newMiniClusterIds, newMiniCentroids,
+                               newMiniClusters, newMiniClusterVectorIds);
+    }
+
+    vector_idx_t ReclusteringIndex::getWorstMegaCentroid() {
+        vector_idx_t worstMegaCentroid = 0;
+        double worstScore = std::numeric_limits<double>::max();
+        for (int i = 0; i < megaClusteringScore.size(); i++) {
+            if (megaClusteringScore[i] < worstScore) {
+                worstScore = megaClusteringScore[i];
+                worstMegaCentroid = i;
+            }
+        }
+
+        return worstMegaCentroid;
     }
 
     void ReclusteringIndex::reclusterAllMegaCentroids() {
@@ -380,7 +458,7 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::appendOrMergeCentroids(std::vector<vector_idx_t> oldMegaCentroids,
+    std::vector<vector_idx_t> ReclusteringIndex::appendOrMergeCentroids(std::vector<vector_idx_t> oldMegaCentroids,
                                                    std::vector<float> &newMegaCentroids,
                                                    std::vector<std::vector<vector_idx_t> > &miniCentroidIds,
                                                    std::vector<float> &newMiniCentroids,
@@ -455,7 +533,7 @@ namespace orangedb {
         }
 
         // Copy the mega clusters
-        appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
+        return appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
     }
 
     void ReclusteringIndex::storeScoreForMegaClusters() {
@@ -471,15 +549,15 @@ namespace orangedb {
 
         double avgMiniScore = 0.0;
 #pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
-        for (int i = 0; i < miniCentroidIds.size(); i++) {
-            double s = calcScoreForMiniCluster(miniCentroidIds[i]);
+        for (auto miniCentroidId : miniCentroidIds) {
+            double s = calcScoreForMiniCluster(miniCentroidId);
             avgMiniScore += s;
         }
 
         double avgMegaScore = 0.0;
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
-#pragma omp parallel for reduction(+: avgMegaScore, totalPoints) schedule(dynamic)
+#pragma omp parallel for reduction(+: avgMegaScore) schedule(dynamic)
         for (auto miniCentroidId: miniCentroidIds) {
             dc->setQuery(miniCentroids.data() + miniCentroidId * dim);
 
@@ -561,9 +639,10 @@ namespace orangedb {
                    : 0.0;
     }
 
-    void ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,
+    std::vector<vector_idx_t> ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,
                                                       std::vector<float> &newMegaCentroids,
                                                       std::vector<std::vector<vector_idx_t> > &newMiniClusterIds) {
+        std::vector<vector_idx_t> updatedMegaCentroids;
         auto numNewMegaCentroids = newMegaCentroids.size() / dim;
         printf("numNewMegaCentroids: %zu, oldMegaCentroidIds: %zu\n", numNewMegaCentroids, oldMegaCentroidIds.size());
         auto oldMegaCentroidSize = oldMegaCentroidIds.size();
@@ -574,6 +653,7 @@ namespace orangedb {
 
             // Move the miniCentroidIds
             megaMiniCentroidIds[currMegaId] = std::move(newMiniClusterIds[i]);
+            updatedMegaCentroids.push_back(currMegaId);
         }
 
         if (numNewMegaCentroids > oldMegaCentroidSize) {
@@ -588,6 +668,7 @@ namespace orangedb {
             auto idx = 0;
             for (auto i = oldMegaCentroidSize; i < numNewMegaCentroids; i++) {
                 megaMiniCentroidIds[currentSize + idx] = std::move(newMiniClusterIds[i]);
+                updatedMegaCentroids.push_back(currentSize + idx);
                 idx++;
             }
         } else {
@@ -598,12 +679,16 @@ namespace orangedb {
                 auto currMegaId = oldMegaCentroidIds[i];
                 memcpy(megaCentroids.data() + currMegaId * dim, megaCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
                 megaMiniCentroidIds[currMegaId] = std::move(megaMiniCentroidIds[lastCentroidId]);
+                megaClusteringScore[currMegaId] = megaClusteringScore[lastCentroidId];
                 lastCentroidId--;
             }
             // Resize the mega centroids
             megaCentroids.resize((lastCentroidId + 1) * dim);
             megaMiniCentroidIds.resize(lastCentroidId + 1);
+            megaClusteringScore.resize(lastCentroidId + 1);
         }
+
+        return updatedMegaCentroids;
     }
 
     void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,

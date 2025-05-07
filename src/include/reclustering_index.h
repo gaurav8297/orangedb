@@ -33,6 +33,8 @@ namespace orangedb {
         int numMegaReclusterCentroids = 10;
         // number of new mini centroids consider for reclustering
         int numNewMiniReclusterCentroids = 100;
+        // number of existing mega centroids to consider for reclustering
+        int numExistingMegaReclusterCentroids = 5;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -72,6 +74,10 @@ namespace orangedb {
                     int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
 
     private:
+        vector_idx_t getWorstMegaCentroid();
+
+        void reclusterFullMegaCentroid(int megaClusterId);
+
         void mergeNewMiniCentroidsBatch(float *megaCentroid, std::vector<vector_idx_t> newMiniCentroidBatch);
 
         void mergeNewMiniCentroidsInit();
@@ -90,13 +96,13 @@ namespace orangedb {
         void calcMeanCentroid(float *data, vector_idx_t *vectorIds, int n, std::vector<float> &centroids,
                           std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
 
-        void appendOrMergeCentroids(std::vector<vector_idx_t> oldMegaCentroids, std::vector<float> &newMegaCentroids,
+        std::vector<vector_idx_t> appendOrMergeCentroids(std::vector<vector_idx_t> oldMegaCentroids, std::vector<float> &newMegaCentroids,
                                     std::vector<std::vector<vector_idx_t> > &miniClusterIds,
                                     std::vector<float> &newMiniCentroids,
                                     std::vector<std::vector<float> > &newMiniClusters,
                                     std::vector<std::vector<vector_idx_t> > &newMiniClusterVectorIds);
 
-        void appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds, std::vector<float> &newMegaCentroids,
+        std::vector<vector_idx_t> appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds, std::vector<float> &newMegaCentroids,
                                        std::vector<std::vector<vector_idx_t> > &newMiniClusterIds);
 
         void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids);
