@@ -174,7 +174,7 @@ namespace iRangeGraph
             }
         }
 
-        void LoadGroundtruth(const int *data, int k)
+        void LoadGroundtruth(const uint64_t *data, int k)
         {
             query_K = k;
             groundtruth[0].resize(query_nb);

@@ -21,6 +21,7 @@
 
 #include "construction.h"
 #include "incremental_index.h"
+#include "iRG_search.h"
 #include "utils.h"
 #include "faiss/IndexACORN.h"
 #include "faiss/IndexHNSW.h"
@@ -1425,6 +1426,7 @@ void benchmark_irangegraph(InputParser &input) {
     int nThreads = stoi(input.getCmdOption("-nThreads"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
+    const std::string &outputPath = input.getCmdOption("-outputPath");
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(vectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -1438,17 +1440,22 @@ void benchmark_irangegraph(InputParser &input) {
     printf("Query num vectors: %zu\n", queryNumVectors);
     printf("Query dimension: %zu\n", baseDimension);
 
+    iRangeGraph::DataLoader storage;
+    storage.LoadData(baseVecs, baseNumVectors, baseDimension);
+    storage.LoadQuery(queryVecs, queryNumVectors, baseDimension);
+    storage.LoadGroundtruth(gtVecs, k);
+    auto query_range = get_range(reinterpret_cast<char *>(filteredMask), baseNumVectors);
+    storage.LoadQueryRange(query_range.first, query_range.second);
+
     if (!readFromDisk) {
-        iRangeGraph::DataLoader storage;
-        storage.LoadData(baseVecs, baseNumVectors, baseDimension);
         iRangeGraph::iRangeGraph_Build<float> index(&storage, M, efConstruction);
         index.max_threads = nThreads;
         index.buildandsave(storagePath);
-    } else {
-        // Do Nothing for now
     }
 
-    // Search later on!!
+    iRangeGraph::iRangeGraph_Search<float> searchIndex("", storagePath, &storage, M);
+    std::vector<int> efSearches = {efSearch};
+    searchIndex.search(efSearches, outputPath, M);
 }
 
 void fvec_to_fbin(InputParser &input) {

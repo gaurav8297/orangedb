@@ -39,15 +39,17 @@ namespace iRangeGraph
 
         iRangeGraph_Search(std::string vectorfilename, std::string edgefilename, DataLoader *store, int M) : storage(store)
         {
-            std::ifstream vectorfile(vectorfilename, std::ios::in | std::ios::binary);
-            if (!vectorfile.is_open())
-                throw Exception("cannot open " + vectorfilename);
+            // std::ifstream vectorfile(vectorfilename, std::ios::in | std::ios::binary);
+            // if (!vectorfile.is_open())
+            //     throw Exception("cannot open " + vectorfilename);
             std::ifstream edgefile(edgefilename, std::ios::in | std::ios::binary);
             if (!edgefile.is_open())
                 throw Exception("cannot open " + edgefilename);
 
-            vectorfile.read((char *)&max_elements_, sizeof(int));
-            vectorfile.read((char *)&dim_, sizeof(int));
+            max_elements_ = storage->data_nb;
+            // vectorfile.read((char *)&max_elements_, sizeof(int));
+            dim_ = storage->Dim;
+            // vectorfile.read((char *)&dim_, sizeof(int));
 
             tree = new SegmentTree(max_elements_);
             tree->BuildTree(tree->root);
@@ -86,11 +88,12 @@ namespace iRangeGraph
 
                 char *data = getDataByInternalId(pid);
                 // vectorfile.read(data, data_size_);
-                vectorfile.read(data, dim_ * sizeof(float));
+                memcpy(data, storage->data_points[pid].data(), dim_ * sizeof(float));
+                // vectorfile.read(data, dim_ * sizeof(float));
             }
 
             edgefile.close();
-            vectorfile.close();
+            // vectorfile.close();
             std::cout << "load index finished ..." << std::endl;
         }
 
