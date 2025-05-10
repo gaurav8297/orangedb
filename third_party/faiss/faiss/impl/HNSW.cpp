@@ -1187,7 +1187,7 @@ void HNSW::add_with_locks(
     float d_nearest = ptdis(nearest);
 
     // needed for backtracking in hybrid search
-    std::vector<storage_idx_t> ep_per_level(max_level); // idx of nearest node per level
+    std::vector<storage_idx_t> ep_per_level(max_level + 1); // idx of nearest node per level
     ep_per_level[level] = nearest;
 
     // std::cout << "--add_with_locks here2" << std::endl;
@@ -1729,54 +1729,357 @@ HNSWStats HNSW::search(
     return stats;
 }
 
-// void HNSW::navix_add_filtered_nodes_to_candidates(DistanceComputer &qdis, int k, MinimaxHeap &candidates, idx_t *I, float *D,
-//                                                   VisitedTable &vt, char *filter_id_map, int num_of_nodes) {
-//
-//     auto num_nodes = nb_per_level[0];
-//     int c = 0;
-//     for (int p_id = 0; p_id < num_nodes; p_id++) {
-//         if (filter_id_map[p_id] == 1) {
-//             float dist = qdis(p_id);
-//             candidates.push(p_id, dist);
-//             faiss::maxheap_push(k, D, I, dist, p_id);
-//             vt.set(p_id);
-//             c++;
-//         }
-//         if (c == )
-//     }
-// }
-//
-// HNSWStats HNSW::navix_hybrid_search(
-//     DistanceComputer &qdis,
-//     int k,
-//     idx_t *I,
-//     float *D,
-//     VisitedTable &vt,
-//     char *filter_id_map,
-//     const SearchParametersHNSW *params) const {
-//     HNSWStats stats;
-//     if (entry_point == -1) {
-//         return stats;
-//     }
-//
-//     // First search on the upper layer!!
-//     storage_idx_t nearest = entry_point;
-//     float d_nearest = qdis(nearest);
-//
-//     int ndis_upper = 0;
-//     for (int level = max_level; level >= 1; level--) {
-//         ndis_upper += greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
-//     }
-//     stats.n3 += ndis_upper;
-//     int ef = std::max(efSearch, k);
-//
-//     MinimaxHeap candidates(ef);
-//     candidates.push(nearest, d_nearest);
-//
-//     navix_add_filtered_nodes_to_candidates(qdis, candidates, I, D, vt, filter_id_map);
-//
-//     search_from_candidates(*this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
-// }
+void HNSW::navix_one_hop(
+    size_t begin,
+    size_t end,
+    DistanceComputer &qdis,
+    int k,
+    MinimaxHeap &candidates,
+    idx_t *I,
+    float *D,
+    VisitedTable &vt,
+    const char *filter_id_map,
+    int &nres,
+    HNSWStats &stats) const {
+    for (size_t j = begin; j < end; ++j) {
+        int v1 = neighbors[j];
+        if (filter_id_map[v1] && !vt.get(v1)) {
+            float dist = qdis(v1);
+            stats.ndis++;
+            vt.set(v1);
+            candidates.push(v1, dist);
+            navix_push_to_results(k, D, I, dist, v1, nres);
+        }
+    }
+}
+
+void HNSW::navix_directed(
+    size_t begin,
+    size_t end,
+    DistanceComputer &qdis,
+    int k,
+    MinimaxHeap &candidates,
+    idx_t *I,
+    float *D,
+    VisitedTable &vt,
+    const char *filter_id_map,
+    int filter_nbrs_to_find,
+    int &nres,
+    HNSWStats &stats) const {
+    std::priority_queue<NodeDistFarther> nbrs_to_explore;
+
+    // First Hop Neighbors
+    int visited_set_size = 0;
+    for (size_t j = begin; j < end; ++j) {
+        auto v1 = neighbors[j];
+        auto is_masked = filter_id_map[v1];
+        if (is_masked) {
+            visited_set_size++;
+        }
+
+        if (vt.get(v1)) {
+            continue;
+        }
+
+        float dist = qdis(v1);
+        stats.ndis++;
+        if (is_masked) {
+            vt.set(v1);
+            candidates.push(v1, dist);
+            navix_push_to_results(k, D, I, dist, v1, nres);
+        }
+        nbrs_to_explore.emplace(dist, v1);
+    }
+
+    while (!nbrs_to_explore.empty()) {
+        auto nbrs = nbrs_to_explore.top();
+        nbrs_to_explore.pop();
+
+        if (visited_set_size >= filter_nbrs_to_find) {
+            break;
+        }
+        if (vt.get(nbrs.id)) {
+            continue;
+        }
+        vt.set(nbrs.id);
+
+        size_t second_begin, second_end;
+        neighbor_range(nbrs.id, 0, &second_begin, &second_end);
+
+        for (size_t j = second_begin; j < second_end; ++j) {
+            int v2 = neighbors[j];
+            if (v2 < 0) {
+                second_end = j;
+                break;
+            }
+
+            vt.prefetch(v2);
+            prefetch_L3(filter_id_map + v2);
+        }
+
+        for (size_t j = second_begin; j < second_end; ++j) {
+            auto v2 = neighbors[j];
+            auto filter_mask = filter_id_map[v2];
+            if (filter_mask) {
+                visited_set_size++;
+            }
+            if (vt.get(v2)) {
+                continue;
+            }
+            if (filter_id_map[v2]) {
+                float dist = qdis(v2);
+                stats.ndis++;
+                candidates.push(v2, dist);
+                navix_push_to_results(k, D, I, dist, v2, nres);
+                vt.set(v2);
+            }
+        }
+    }
+}
+
+void HNSW::navix_blind(
+    size_t begin,
+    size_t end,
+    DistanceComputer &qdis,
+    int k,
+    MinimaxHeap &candidates,
+    idx_t *I,
+    float *D,
+    VisitedTable &vt,
+    const char *filter_id_map,
+    int filter_nbrs_to_find,
+    int &nres,
+    HNSWStats &stats) const {
+    std::queue<idx_t> nbrs_to_explore;
+    // std::unordered_set<idx_t> visitedSet;
+
+    // First Hop Neighbors
+    int visited_set_size = 0;
+    for (size_t j = begin; j < end; ++j) {
+        auto v1 = neighbors[j];
+        auto is_masked = filter_id_map[v1];
+        if (is_masked) {
+            visited_set_size++;
+        }
+
+        if (vt.get(v1)) {
+            continue;
+        }
+
+        if (is_masked) {
+            float dist = qdis(v1);
+            stats.ndis++;
+            vt.set(v1);
+            candidates.push(v1, dist);
+            navix_push_to_results(k, D, I, dist, v1, nres);
+        }
+        nbrs_to_explore.push(v1);
+    }
+
+    while (!nbrs_to_explore.empty()) {
+        auto nbr = nbrs_to_explore.front();
+        nbrs_to_explore.pop();
+
+        if (visited_set_size >= filter_nbrs_to_find) {
+            break;
+        }
+        if (vt.get(nbr)) {
+            continue;
+        }
+        vt.set(nbr);
+
+        size_t second_begin, second_end;
+        neighbor_range(nbr, 0, &second_begin, &second_end);
+
+        for (size_t j = second_begin; j < second_end; ++j) {
+            int v2 = neighbors[j];
+            if (v2 < 0) {
+                second_end = j;
+                break;
+            }
+            vt.prefetch(v2);
+            prefetch_L3(filter_id_map + v2);
+        }
+
+        for (size_t j = second_begin; j < second_end; ++j) {
+            auto v2 = neighbors[j];
+            auto filter_mask = filter_id_map[v2];
+            if (filter_mask) {
+                visited_set_size++;
+            }
+            if (vt.get(v2)) {
+                continue;
+            }
+            if (filter_id_map[v2]) {
+                float dist = qdis(v2);
+                stats.ndis++;
+                candidates.push(v2, dist);
+                navix_push_to_results(k, D, I, dist, v2, nres);
+                vt.set(v2);
+            }
+        }
+    }
+}
+
+void HNSW::navix_full_two_hop(
+    size_t begin,
+    size_t end,
+    DistanceComputer &qdis,
+    int k,
+    MinimaxHeap &candidates,
+    idx_t *I,
+    float *D,
+    VisitedTable &vt,
+    const char *filter_id_map,
+    int &nres,
+    HNSWStats &stats) const {
+    for (size_t i = begin; i < end; i++) {
+        auto v1 = neighbors[i];
+        if (filter_id_map[v1]) {
+            vt.set(v1);
+            float dist = qdis(v1);
+            stats.ndis++;
+            candidates.push(v1, dist);
+            navix_push_to_results(k, D, I, dist, v1, nres);
+        }
+
+        size_t second_begin, second_end;
+        neighbor_range(v1, 0, &second_begin, &second_end);
+
+        for (size_t j = second_begin; j < second_end; ++j) {
+            int v2 = neighbors[j];
+            if (v2 < 0) {
+                second_end = j;
+                break;
+            }
+            vt.prefetch(v2);
+            prefetch_L3(filter_id_map + v2);
+        }
+
+        for (size_t j = second_begin; j < second_end; ++j) {
+            auto v2 = neighbors[j];
+            if (filter_id_map[v2]) {
+                vt.set(v2);
+                float dist = qdis(v2);
+                stats.ndis++;
+                candidates.push(v2, dist);
+                navix_push_to_results(k, D, I, dist, v2, nres);
+            }
+        }
+    }
+}
+
+void HNSW::navix_add_filtered_nodes_to_candidates(DistanceComputer &qdis, int k, MinimaxHeap &candidates, idx_t *I, float *D,
+                                                  VisitedTable &vt, const char *filter_id_map, int num_of_nodes) const {
+    // Add some random filtered nodes to candidates and results pq
+    auto num_nodes = nb_per_level[0];
+    int count = 0;
+    for (int p_id = 0; p_id < num_nodes; p_id++) {
+        if (filter_id_map[p_id]) {
+            float dist = qdis(p_id);
+            candidates.push(p_id, dist);
+            maxheap_push(k, D, I, dist, p_id);
+            vt.set(p_id);
+            count++;
+        }
+        if (count == num_of_nodes) {
+            return;
+        }
+    }
+}
+
+HNSWStats HNSW::navix_hybrid_search(
+    DistanceComputer &qdis,
+    int k,
+    idx_t *I,
+    float *D,
+    VisitedTable &vt,
+    const char *filter_id_map,
+    const SearchParametersHNSW *params) const {
+    HNSWStats stats;
+    if (entry_point == -1) {
+        return stats;
+    }
+
+    // Initialize the vector indices array
+
+    // First search on the upper layer!!
+    storage_idx_t nearest = entry_point;
+    float d_nearest = qdis(nearest);
+
+    int ndis_upper = 0;
+    for (int level = max_level; level >= 1; level--) {
+        ndis_upper += greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+    }
+    stats.n3 += ndis_upper;
+    stats.ndis += ndis_upper;
+    int ef = std::max(efSearch, k);
+
+    // Add the nearest node to the candidates and results pq
+    MinimaxHeap candidates(ef);
+    candidates.push(nearest, d_nearest);
+    if (filter_id_map[nearest]) {
+        maxheap_push(k, D, I, d_nearest, nearest);
+        vt.set(nearest);
+    }
+
+    // Add some random filtered nodes to candidates and results pq
+    navix_add_filtered_nodes_to_candidates(qdis, k, candidates, I, D, vt, filter_id_map, 10);
+
+    int nres = 0;
+    while (candidates.size() > 0) {
+        float cand_dist = 0;
+        int candidate = candidates.pop_min(&cand_dist);
+
+        // tricky stopping condition: there are more that ef
+        // distances that are processed already that are smaller
+        // than cand_dist
+
+        if (nres >= efSearch && cand_dist > D[0]) {
+            // debug("%s\n", "n_dis_below >= efSearch BREAK cond reached");
+            break;
+        }
+
+        size_t begin, end;
+        neighbor_range(candidate, 0, &begin, &end);
+
+        // Try prefetching!!
+        for (size_t j = begin; j < end; ++j) {
+            int v1 = neighbors[j];
+            if (v1 < 0) {
+             end = j;
+             break;
+            }
+            vt.prefetch(v1);
+            prefetch_L3(filter_id_map + v1);
+        }
+
+        // Calculate local selectivity
+        auto total_nbrs = end - begin;
+        double filtered_nbrs = 0;
+        for (size_t j = begin; j < end; ++j) {
+            int v1 = neighbors[j];
+            if (filter_id_map[v1]) {
+                filtered_nbrs++;
+            }
+        }
+        double local_selectivity = filtered_nbrs / total_nbrs;
+        auto estimated_full_two_hop_distance_comp = (total_nbrs * filtered_nbrs + filtered_nbrs) * 0.4;
+        auto estimated_directed_distance_comp = total_nbrs + (total_nbrs - filtered_nbrs);
+        if (local_selectivity >= 0.5) {
+            // One Hop
+            navix_one_hop(begin, end, qdis, k, candidates, I, D, vt, filter_id_map, nres, stats);
+        } else if (estimated_full_two_hop_distance_comp > estimated_directed_distance_comp) {
+            // Directed Two Hop
+            navix_directed(begin, end, qdis, k, candidates, I, D, vt, filter_id_map, total_nbrs * 0.8, nres, stats);
+        } else {
+            // Blind Two Hop
+            // navix_blind(begin, end, qdis, k, candidates, I, D, vt, filter_id_map, total_nbrs, nres, stats);
+            navix_full_two_hop(begin, end, qdis, k, candidates, I, D, vt, filter_id_map, nres, stats);
+        }
+    }
+    return stats;
+}
 
 // hybrid search TODO
 HNSWStats HNSW::hybrid_search(

@@ -191,6 +191,51 @@ namespace orangedb {
         return (int *) readFvecFile(fName, d_out, n_out);
     }
 
+    static float* readFbinFile(const char *fName, size_t *d_out, size_t *n_out) {
+        FILE *f = fopen(fName, "rb");
+        if (!f) {
+            fprintf(stderr, "could not open %s\n", fName);
+            perror("");
+            abort();
+        }
+        // Read num of vecs
+        int n_int;
+        fread(&n_int, sizeof(int), 1, f);
+        // Read dimension
+        int d_int;
+        fread(&d_int, sizeof(int), 1, f);
+        *d_out = d_int;
+        *n_out = n_int;
+
+        auto *x = new float[n_int * d_int];
+        size_t bytes_read = fread(x, sizeof(float), n_int * d_int, f);
+        CHECK_ARGUMENT(bytes_read == n_int * d_int, "could not read whole file");
+
+        fclose(f);
+        return x;
+    }
+
+    static void writeFbinFile(const char *fName, const float *data, size_t d, size_t n) {
+        FILE *f = fopen(fName, "wb");
+        if (!f) {
+            fprintf(stderr, "could not open %s for writing\n", fName);
+            perror("");
+            abort();
+        }
+        // Write num of vecs
+        int n_int = static_cast<int>(n);
+        fwrite(&n_int, sizeof(int), 1, f);
+        // Write dimension
+        int d_int = static_cast<int>(d);
+        fwrite(&d_int, sizeof(int), 1, f);
+        // Write data
+        size_t bytes_written = fwrite(data, sizeof(float), n * d, f);
+        CHECK_ARGUMENT(bytes_written == n * d, "could not write whole file");
+
+        // Close the file
+        fclose(f);
+    }
+
     struct RandomGenerator {
         RandomGenerator(int seed) : mt(seed) {};
 

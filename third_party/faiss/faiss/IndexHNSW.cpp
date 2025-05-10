@@ -574,6 +574,23 @@ void IndexHNSW::search(
     // printf("done with search\n");
 }
 
+void IndexHNSW::navix_search(
+    const float *query,
+    idx_t k,
+    float *distances,
+    idx_t *labels,
+    const char *filter_id_map,
+    VisitedTable& vt,
+    HNSWStats& stats,
+    const SearchParameters *params_in) const {
+    int efSearch = hnsw.efSearch;
+    DistanceComputer* dis = storage_distance_computer(storage);
+    dis->set_query(query);
+    maxheap_heapify(k, distances, labels);
+    auto new_stats = hnsw.navix_hybrid_search(*dis, k, labels, distances, vt, filter_id_map, nullptr);
+    stats.ndis += new_stats.ndis;
+    maxheap_reorder(k, distances, labels);
+}
 
 void IndexHNSW::partition_search(
         idx_t n,

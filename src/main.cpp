@@ -21,6 +21,7 @@
 
 #include "incremental_index.h"
 #include "faiss/IndexACORN.h"
+#include "faiss/IndexHNSW.h"
 #include "fastQ/scalar_test.h"
 #include "faiss/IndexPQ.h"
 
@@ -1207,6 +1208,46 @@ void calculate_dists(InputParser &input) {
     }
 }
 
+int tuneEfByStep(std::function<double(int)> getRecall,
+                 double targetLow,
+                 double targetHigh,
+                 int efMin = 1,
+                 int efMax = 1024,
+                 int step = 50) {
+    int ef = efMin;
+    double recall = getRecall(ef);
+
+    // If already inside target range, done.
+    if (recall >= targetLow) {
+        return ef;
+    }
+
+    // if efMax is unable to reach targetLow, return efMax
+    recall = getRecall(efMax);
+    if (recall <= targetLow) {
+        return efMax;
+    }
+
+    // Keep track to detect no‐change loops
+    int prevEf = -1;
+    while (ef != prevEf) {
+        prevEf = ef;
+
+        if (recall < targetLow) ef = std::min(ef + step, efMax);
+        else if (recall > targetHigh) ef = std::max(ef - step, efMin);
+        else break; // inside range
+
+        // Recompute recall at new ef
+        recall = getRecall(ef);
+    }
+
+    // Final check
+    if (recall >= targetLow && recall <= targetHigh) {
+        return ef;
+    }
+    return efMax; // no suitable ef found in [efMin,efMax]
+}
+
 void benchmark_acorn(InputParser &input) {
     const std::string &vectorPath = input.getCmdOption("-vectorPath");
     const std::string &queryPath = input.getCmdOption("-queryPath");
@@ -1276,6 +1317,86 @@ void benchmark_acorn(InputParser &input) {
     std::cout << "Query time: " << duration_search << " ms" << std::endl;
 }
 
+void benchmark_navix(InputParser &input) {
+    const std::string &vectorPath = input.getCmdOption("-vectorPath");
+    const std::string &queryPath = input.getCmdOption("-queryPath");
+    const std::string &gtPath = input.getCmdOption("-gtPath");
+    const std::string &maskPath = input.getCmdOption("-maskPath");
+    int k = stoi(input.getCmdOption("-k"));
+    int M = stoi(input.getCmdOption("-M"));
+    int efSearch = stoi(input.getCmdOption("-efSearch"));
+    int nThreads = stoi(input.getCmdOption("-nThreads"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(vectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
+    loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
+    printf("Query num vectors: %zu\n", queryNumVectors);
+    printf("Query dimension: %zu\n", baseDimension);
+    auto index = faiss::IndexHNSWFlat(baseDimension, M, 1);
+    faiss::IndexHNSWFlat* hnsw_index = &index;
+    hnsw_index->hnsw.efSearch = efSearch;
+    if (!readFromDisk) {
+        omp_set_num_threads(nThreads);
+        // Print grond truth num vectors
+        printf("Building index\n");
+        auto start = std::chrono::high_resolution_clock::now();
+        hnsw_index->add(baseNumVectors, baseVecs);
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        printf("Building time: %lld ms\n", duration.count());
+        printf("Writing the index on disk!");
+        faiss::write_index(hnsw_index, storagePath.c_str());
+    } else {
+        hnsw_index = dynamic_cast<faiss::IndexHNSWFlat *>(faiss::read_index(storagePath.c_str()));
+        hnsw_index->hnsw.efSearch = efSearch;
+    }
+
+    auto recall = 0.0;
+    auto labels = new faiss::idx_t[k];
+    auto distances = new float[k];
+    faiss::VisitedTable visited(hnsw_index->ntotal);
+    faiss::HNSWStats stats;
+    auto startTime = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        hnsw_index->navix_search(queryVecs + (i * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask + (i * baseNumVectors)), visited, stats);
+        auto gt = gtVecs + i * k;
+        for (int j = 0; j < k; j++) {
+            if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
+                recall++;
+            }
+        }
+        visited.advance();
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    auto recallPerQuery = recall / queryNumVectors;
+    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
+    std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
+    std::cout << "Query time: " << duration_search << " ms" << std::endl;
+}
+
+void benchmark_irangegraph(InputParser &input) {
+
+}
+
+void fvec_to_fbin(InputParser &input) {
+    const std::string &vectorPath = input.getCmdOption("-vectorPath");
+    const std::string &queryPath = input.getCmdOption("-queryPath");
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(vectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    writeFbinFile(queryPath.c_str(), baseVecs, baseDimension, baseNumVectors);
+}
 
 void benchmark_quantization(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
@@ -1745,7 +1866,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     return recall / queryNumVectors;
 }
 
-void benchmark_reclustering_approach(InputParser &input) {
+void benchmark_reclustering_index(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
@@ -1815,6 +1936,69 @@ void benchmark_reclustering_approach(InputParser &input) {
 
     index.storeScoreForMegaClusters();
     index.printStats();
+}
+
+void benchmark_reclustering_algorithm(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const int numInserts = stoi(input.getCmdOption("-numInserts"));
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numIters = stoi(input.getCmdOption("-numIters"));
+    const int megaCentroidSize = stoi(input.getCmdOption("-megaCentroidSize"));
+    const int miniCentroidSize = stoi(input.getCmdOption("-miniCentroidSize"));
+    const float lambda = stof(input.getCmdOption("-lambda"));
+    const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
+    const int nMegaProbes = stoi(input.getCmdOption("-nMegaProbes"));
+    const int nMiniProbes = stoi(input.getCmdOption("-nMiniProbes"));
+    const int maxLevels = stoi(input.getCmdOption("-maxLevels"));
+    const bool fast = stoi(input.getCmdOption("-fast"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
+
+    // Read dataset
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+
+    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, L2,
+                                   numMegaReclusterCentroids, 0);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    RandomGenerator rng(1234);
+    ReclusteringIndex index(baseDimension, config, &rng);
+
+    if (readFromDisk) {
+        index = ReclusteringIndex(storagePath, &rng);
+    } else {
+        printf("Building index\n");
+        auto chunkSize = baseNumVectors / numInserts;
+        printf("Chunk size: %d\n", chunkSize);
+        for (long i = 0; i < numInserts; i++) {
+            auto start = i * chunkSize;
+            auto end = (i + 1) * chunkSize;
+            if (i == (numInserts - 1)) {
+                end = baseNumVectors;
+            }
+            printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+            index.naiveInsert(baseVecs + start * baseDimension, end - start);
+        }
+        printf("Writing index to disk\n");
+        index.flush_to_disk(storagePath);
+    }
+
+    for (int level = 0; level < maxLevels; level++) {
+        index.recluster(numMegaReclusterCentroids, fast);
+        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+                                 nMiniProbes);
+        printf("Level: %d, Recall: %f\n", level, recall);
+    }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
@@ -2019,13 +2203,19 @@ int main(int argc, char **argv) {
         test_clustering_data(input);
     }
     else if (run == "benchmarkReclusteringIndex") {
-        benchmark_reclustering_approach(input);
+        benchmark_reclustering_index(input);
     }
     else if (run == "benchmarkSplitting") {
         benchmark_splitting(input);
     }
     else if (run == "benchmarkQuantized") {
         benchmark_quantized_dc(input);
+    }
+    else if (run == "benchmarkReclusteringAlgorithm") {
+        benchmark_reclustering_algorithm(input);
+    }
+    else if (run == "benchmarkNavix") {
+        benchmark_navix(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();

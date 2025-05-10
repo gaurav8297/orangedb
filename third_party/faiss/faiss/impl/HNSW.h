@@ -241,30 +241,86 @@ struct HNSW {
 
     /// Navix Hybrid Search!!!
 
-    // HNSWStats navix_one_hop();
-    //
-    // HNSWStats navix_directed();
-    //
-    // HNSWStats navix_full_two_hop();
-    //
-    // void navix_add_filtered_nodes_to_candidates(
-    //     DistanceComputer &qdis,
-    //     int k,
-    //     MinimaxHeap &candidates,
-    //     idx_t *I,
-    //     float *D,
-    //     VisitedTable &vt,
-    //     char* filter_id_map,
-    //     int num_of_nodes);
-    //
-    // HNSWStats navix_hybrid_search(
-    //         DistanceComputer &qdis,
-    //         int k,
-    //         idx_t *I,
-    //         float *D,
-    //         VisitedTable &vt,
-    //         char* filter_id_map,
-    //         const SearchParametersHNSW *params = nullptr) const;
+    inline void navix_push_to_results(int k, float *D, idx_t *I, float dist, idx_t v, int &nres) const {
+        if (nres < k) {
+            faiss::maxheap_push(++nres, D, I, dist, v);
+        } else if (dist < D[0]) {
+            faiss::maxheap_replace_top(nres, D, I, dist, v);
+        }
+    }
+
+    inline void navix_one_hop(
+        size_t begin,
+        size_t end,
+        DistanceComputer &qdis,
+        int k,
+        MinimaxHeap &candidates,
+        idx_t *I,
+        float *D,
+        VisitedTable &vt,
+        const char *filter_id_map,
+        int &nres,
+        HNSWStats &stats) const;
+
+    inline void navix_directed(
+        size_t begin,
+        size_t end,
+        DistanceComputer &qdis,
+        int k,
+        MinimaxHeap &candidates,
+        idx_t *I,
+        float *D,
+        VisitedTable &vt,
+        const char *filter_id_map,
+        int filter_nbrs_to_find,
+        int &nres,
+        HNSWStats &stats) const;
+
+    inline void navix_blind(
+        size_t begin,
+        size_t end,
+        DistanceComputer &qdis,
+        int k,
+        MinimaxHeap &candidates,
+        idx_t *I,
+        float *D,
+        VisitedTable &vt,
+        const char *filter_id_map,
+        int filter_nbrs_to_find,
+        int &nres,
+        HNSWStats &stats) const;
+
+    inline void navix_full_two_hop(
+        size_t begin,
+        size_t end,
+        DistanceComputer &qdis,
+        int k,
+        MinimaxHeap &candidates,
+        idx_t *I,
+        float *D,
+        VisitedTable &vt,
+        const char *filter_id_map,
+        int &nres,
+        HNSWStats &stats) const;
+
+    inline void navix_add_filtered_nodes_to_candidates(
+        DistanceComputer &qdis,
+        int k,
+        MinimaxHeap &candidates,
+        idx_t *I,
+        float *D,
+        VisitedTable &vt,
+        const char* filter_id_map,
+        int num_of_nodes) const;
+
+    HNSWStats navix_hybrid_search(
+            DistanceComputer &qdis,
+            int k,
+            idx_t *I,
+            float *D,
+            VisitedTable &vt,
+            const char* filter_id_map,
+            const SearchParametersHNSW *params = nullptr) const;
 
     /// search only in level 0 from a given vertex
     void search_level_0(

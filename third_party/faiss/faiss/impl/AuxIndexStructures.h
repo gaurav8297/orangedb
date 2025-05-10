@@ -21,6 +21,8 @@
 #include <faiss/MetricType.h>
 #include <faiss/impl/platform_macros.h>
 
+#include "prefetch.h"
+
 namespace faiss {
 
 /** The objective is to have a simple result structure while
@@ -177,6 +179,11 @@ struct VisitedTable {
     /// get flag #no
     bool get(int no) const {
         return visited[no] == visno;
+    }
+
+    // prefech for avx
+    void prefetch(int no) {
+        prefetch_L3(visited.data() + no);
     }
 
     /// reset all flags to false

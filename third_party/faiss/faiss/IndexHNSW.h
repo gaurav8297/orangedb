@@ -99,6 +99,17 @@ struct IndexHNSW : Index {
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
 
+    /// navix search
+    void navix_search(
+            const float* query,
+            idx_t k,
+            float* distances,
+            idx_t* labels,
+            const char* filter_id_map,
+            VisitedTable &vt,
+            HNSWStats& stats,
+            const SearchParameters* params = nullptr) const;
+
     // assume equality predicates only
     void partition_search(
             idx_t n,

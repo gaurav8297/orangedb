@@ -57,9 +57,13 @@ namespace orangedb {
 
         void insert(float *data, size_t n);
 
+        void naiveInsert(float *data, size_t n);
+
         void mergeNewMiniCentroids();
 
         void reclusterMegaCentroids(int n);
+
+        void recluster(int n, bool fast = false);
 
         // void reclusterSparseMegaCentroids();
         void reclusterAllMegaCentroids();
@@ -76,13 +80,17 @@ namespace orangedb {
     private:
         vector_idx_t getWorstMegaCentroid();
 
-        void reclusterFullMegaCentroid(int megaClusterId);
+        void reclusterFullMegaCentroids(std::vector<vector_idx_t> megaClusterIds);
+
+        void reclusterFastMegaCentroids(std::vector<vector_idx_t> megaClusterIds);
+
+        void reclusterFullMegaCentroid(vector_idx_t megaClusterId);
 
         void mergeNewMiniCentroidsBatch(float *megaCentroid, std::vector<vector_idx_t> newMiniCentroidBatch);
 
         void mergeNewMiniCentroidsInit();
 
-        void reclusterMegaCentroids(std::vector<vector_idx_t> megaCentroids);
+        void reclusterOnlyMegaCentroids(std::vector<vector_idx_t> megaCentroids);
 
         void resetInputBuffer();
 

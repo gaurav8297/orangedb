@@ -74,6 +74,7 @@ namespace orangedb {
         int minCentroidSize; // minimum size of a centroid. This is used to sample the training set.
         int maxCentroidSize; // maximum size of a centroid. This is used to sample the training set.
         float lambda; // regularization parameter
+        bool debugMode = false;
 
         int seed = 1234; // seed for random number generator
     };
