@@ -2280,6 +2280,9 @@ int main(int argc, char **argv) {
     else if (run == "benchmarkNavix") {
         benchmark_navix(input);
     }
+    else if (run == "benchmarkIRangeGraph") {
+        benchmark_irangegraph(input);
+    }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
 //    benchmark_n_simd(5087067004);
