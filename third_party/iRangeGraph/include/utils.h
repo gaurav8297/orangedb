@@ -80,6 +80,18 @@ namespace iRangeGraph
             infile.close();
         }
 
+        void LoadQuery(const float *data, int data_num, int dim)
+        {
+            query_nb = data_num;
+            Dim = dim;
+            query_points.resize(query_nb);
+            for (int i = 0; i < query_nb; i++)
+            {
+                query_points[i].resize(Dim);
+                std::memcpy(query_points[i].data(), data + i * Dim, Dim * sizeof(float));
+            }
+        }
+
         // Used only when computing groundtruth and constructing index. Do not use this to load data for search process
         void LoadData(std::string filename)
         {
@@ -95,6 +107,18 @@ namespace iRangeGraph
                 infile.read((char *)data_points[i].data(), Dim * sizeof(float));
             }
             infile.close();
+        }
+
+        void LoadData(const float* data, int data_num, int dim)
+        {
+            data_nb = data_num;
+            Dim = dim;
+            data_points.resize(data_nb);
+            for (int i = 0; i < data_nb; i++)
+            {
+                data_points[i].resize(Dim);
+                std::memcpy(data_points[i].data(), data + i * Dim, Dim * sizeof(float));
+            }
         }
 
         // By default generation, 0.bin~9.bin denotes 2^0~2^-9 range fractions, 17.bin denotes mixed range fraction.
@@ -122,6 +146,14 @@ namespace iRangeGraph
             }
         }
 
+        void LoadQueryRange(const int ql, const int qr)
+        {
+            for (int i = 0; i < query_nb; i++)
+            {
+                query_range[0].emplace_back(ql, qr);
+            }
+        }
+
         // 0.bin~9.bin correspond to groundtruth for 2^0~2^-9 range fractions, 17.bin for mixed fraction
         void LoadGroundtruth(std::string fileprefix)
         {
@@ -139,6 +171,16 @@ namespace iRangeGraph
                     infile.read((char *)groundtruth[suffix][i].data(), query_K * sizeof(int));
                 }
                 infile.close();
+            }
+        }
+
+        void LoadGroundtruth(const int *data, int k)
+        {
+            query_K = k;
+            groundtruth[0].resize(query_nb);
+            for (int i = 0; i < query_nb; i++)
+            {
+                groundtruth[0].emplace_back(std::vector<int>(data + i * query_K, data + (i + 1) * query_K));
             }
         }
     };

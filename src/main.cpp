@@ -19,7 +19,9 @@
 #include "helper_ds.h"
 #include <fastQ/common.h>
 
+#include "construction.h"
 #include "incremental_index.h"
+#include "utils.h"
 #include "faiss/IndexACORN.h"
 #include "faiss/IndexHNSW.h"
 #include "fastQ/scalar_test.h"
@@ -1384,8 +1386,69 @@ void benchmark_navix(InputParser &input) {
     std::cout << "Query time: " << duration_search << " ms" << std::endl;
 }
 
-void benchmark_irangegraph(InputParser &input) {
+std::pair<int, int> get_range(const char* filteredMask, int n) {
+    auto start = 0;
+    auto end = 0;
+    for (int i = 0; i < n; i++) {
+        if (filteredMask[i] == 1) {
+            start = i;
+            break;
+        }
+    }
 
+    for (int i = n - 1; i >= 0; i--) {
+        if (filteredMask[i] == 1) {
+            end = i;
+            break;
+        }
+    }
+
+    // Validate between start and end there's no 0
+    for (int i = start; i <= end; i++) {
+        if (filteredMask[i] == 0) {
+            throw std::runtime_error("Invalid range");
+        }
+    }
+
+    return std::make_pair(start, end);
+}
+
+void benchmark_irangegraph(InputParser &input) {
+    const std::string &vectorPath = input.getCmdOption("-vectorPath");
+    const std::string &queryPath = input.getCmdOption("-queryPath");
+    const std::string &gtPath = input.getCmdOption("-gtPath");
+    const std::string &maskPath = input.getCmdOption("-maskPath");
+    int k = stoi(input.getCmdOption("-k"));
+    int M = stoi(input.getCmdOption("-M"));
+    int efSearch = stoi(input.getCmdOption("-efSearch"));
+    int efConstruction = stoi(input.getCmdOption("-efConstruction"));
+    int nThreads = stoi(input.getCmdOption("-nThreads"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(vectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
+    loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
+    printf("Query num vectors: %zu\n", queryNumVectors);
+    printf("Query dimension: %zu\n", baseDimension);
+
+    if (!readFromDisk) {
+        iRangeGraph::DataLoader storage;
+        storage.LoadData(baseVecs, baseNumVectors, baseDimension);
+        iRangeGraph::iRangeGraph_Build<float> index(&storage, M, efConstruction);
+        index.max_threads = nThreads;
+        index.buildandsave(storagePath);
+    } else {
+        // Do Nothing for now
+    }
+
+    // Search later on!!
 }
 
 void fvec_to_fbin(InputParser &input) {
