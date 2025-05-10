@@ -117,7 +117,7 @@ namespace iRangeGraph
             for (int i = 0; i < data_nb; i++)
             {
                 data_points[i].resize(Dim);
-                std::memcpy(data_points[i].data(), data + i * Dim, Dim * sizeof(float));
+                memcpy(data_points[i].data(), data + i * Dim, Dim * sizeof(float));
             }
         }
 
@@ -177,10 +177,21 @@ namespace iRangeGraph
         void LoadGroundtruth(const uint64_t *data, int k)
         {
             query_K = k;
-            groundtruth[0].resize(query_nb);
-            for (int i = 0; i < query_nb; i++)
-            {
-                groundtruth[0].emplace_back(std::vector<int>(data + i * query_K, data + (i + 1) * query_K));
+
+            // Assuming groundtruth[0] is a std::vector<std::vector<int>>
+            auto& gt = groundtruth[0];
+            gt.clear();
+            gt.reserve(query_nb);
+
+            for (int i = 0; i < query_nb; ++i) {
+                std::vector<int> row;
+                row.reserve(query_K);
+                for (int j = 0; j < query_K; ++j) {
+                    // explicit cast from uint64_t → int
+                    row.push_back(static_cast<int>( data[i * query_K + j] ));
+                }
+                gt.push_back(std::move(row));
+                std::printf("hello\n");
             }
         }
     };
