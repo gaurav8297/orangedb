@@ -2023,7 +2023,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int nMegaProbes = stoi(input.getCmdOption("-nMegaProbes"));
     const int nMiniProbes = stoi(input.getCmdOption("-nMiniProbes"));
     const int iterations = stoi(input.getCmdOption("-iterations"));
-    const bool fast = stoi(input.getCmdOption("-fast"));
+    // const bool fast = stoi(input.getCmdOption("-fast"));
+    const int numQueries = stoi(input.getCmdOption("-numQueries"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
 
@@ -2033,6 +2034,7 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, L2,

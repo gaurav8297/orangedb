@@ -88,3 +88,6 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 
 ./build/release/bin/orangedb_main -run benchmarkIRangeGraph -vectorPath /home/centos/orangedb/data/gist/base.fvecs -queryPath /home/centos/vector_dataset/gist/bench_data/queries.fvecs -gtPath /home/centos/vector_dataset/gist/bench_data/gt.bin -maskPath /home/centos/vector_dataset/gist/bench_data/mask_30.bin -k 100 -M 32 -efSearch 120 -efConstruction 200 -nThreads 32 -readFromDisk 0 -storagePath /home/centos/orangedb/data/gist/irangegraph_index.bin -outputPath /home/centos/orangedb/data/gist/irangegraph_search.out
 
+./build/release/bin/orangedb_main -run benchmarkFastReclustering -baseVectorPath /home/centos/orangedb/data/sift10m/base.fvecs -queryVectorPath /home/centos/orangedb/data/sift10m/query.fvecs -groundTruthPath /home/centos/orangedb/data/sift10m/gt.bin -k 100 -numInserts 10 -numVectors 10000000 -numIters 20 -megaCentroidSize 500 -miniCentroidSize 500 -iterations 20 -fast 0 -lambda 0 -nMegaProbes 4 -nMiniProbes 40 -readFromDisk 0 -storagePath /Users/gaurav.sehgal/work/orangedb/data/gist/reclustering_fast_index.bin
+
+./build/release/bin/orangedb_main -run generateGT -basePath /home/centos/vector_dataset/sift10m -k 100 -gtPath /home/centos/vector_dataset/sift10m/gt.bin
