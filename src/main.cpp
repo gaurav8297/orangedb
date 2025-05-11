@@ -2008,7 +2008,7 @@ void benchmark_reclustering_index(InputParser &input) {
     index.printStats();
 }
 
-void benchmark_reclustering_algorithm(InputParser &input) {
+void benchmark_fast_reclustering(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
@@ -2019,10 +2019,10 @@ void benchmark_reclustering_algorithm(InputParser &input) {
     const int megaCentroidSize = stoi(input.getCmdOption("-megaCentroidSize"));
     const int miniCentroidSize = stoi(input.getCmdOption("-miniCentroidSize"));
     const float lambda = stof(input.getCmdOption("-lambda"));
-    const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
+    // const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
     const int nMegaProbes = stoi(input.getCmdOption("-nMegaProbes"));
     const int nMiniProbes = stoi(input.getCmdOption("-nMiniProbes"));
-    const int maxLevels = stoi(input.getCmdOption("-maxLevels"));
+    const int iterations = stoi(input.getCmdOption("-iterations"));
     const bool fast = stoi(input.getCmdOption("-fast"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
@@ -2036,7 +2036,7 @@ void benchmark_reclustering_algorithm(InputParser &input) {
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, L2,
-                                   numMegaReclusterCentroids, 0);
+                                   0, 0);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -2063,11 +2063,11 @@ void benchmark_reclustering_algorithm(InputParser &input) {
         index.flush_to_disk(storagePath);
     }
 
-    for (int level = 0; level < maxLevels; level++) {
-        index.recluster(numMegaReclusterCentroids, fast);
+    for (int iter = 0; iter < iterations; iter++) {
+        index.reclusterFast();
         auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
-        printf("Level: %d, Recall: %f\n", level, recall);
+        printf("Iteration: %d, Recall: %f\n", iter, recall);
     }
 }
 
@@ -2281,8 +2281,8 @@ int main(int argc, char **argv) {
     else if (run == "benchmarkQuantized") {
         benchmark_quantized_dc(input);
     }
-    else if (run == "benchmarkReclusteringAlgorithm") {
-        benchmark_reclustering_algorithm(input);
+    else if (run == "benchmarkFastReclustering") {
+        benchmark_fast_reclustering(input);
     }
     else if (run == "benchmarkNavix") {
         benchmark_navix(input);

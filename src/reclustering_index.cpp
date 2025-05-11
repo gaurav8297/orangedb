@@ -114,6 +114,15 @@ namespace orangedb {
         }
     }
 
+    void ReclusteringIndex::reclusterFast() {
+        // List all mega centroids
+        std::vector<vector_idx_t> megaClusterIds(megaCentroids.size() / dim);
+        for (size_t i = 0; i < megaClusterIds.size(); i++) {
+            megaClusterIds[i] = i;
+        }
+        reclusterFastMegaCentroids(megaClusterIds);
+    }
+
     void ReclusteringIndex::mergeNewMiniCentroids() {
         printf("ReclusteringIndex::mergeNewMiniCentroids\n");
         if (newMiniCentroids.empty()) {
@@ -236,11 +245,11 @@ namespace orangedb {
         reclusterOnlyMegaCentroids(megaClusterIds);
         // Now recluster miniCentroids within the mega centroids
         for (auto megaCentroidId: megaClusterIds) {
-            reclusterFullMegaCentroid(megaCentroidId);
+            reclusterInternalMegaCentroid(megaCentroidId);
         }
     }
 
-    void ReclusteringIndex::reclusterFullMegaCentroid(vector_idx_t megaClusterId) {
+    void ReclusteringIndex::reclusterInternalMegaCentroid(vector_idx_t megaClusterId) {
         // Take all the existing mini centroids and merge them
         auto totalVecs = 0;
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];

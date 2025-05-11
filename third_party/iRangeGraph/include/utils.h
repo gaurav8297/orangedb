@@ -188,10 +188,9 @@ namespace iRangeGraph
                 row.reserve(query_K);
                 for (int j = 0; j < query_K; ++j) {
                     // explicit cast from uint64_t → int
-                    row.push_back(static_cast<int>( data[i * query_K + j] ));
+                    row.push_back(static_cast<int>(data[i * query_K + j]));
                 }
                 gt.push_back(std::move(row));
-                std::printf("hello\n");
             }
         }
     };
