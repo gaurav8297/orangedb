@@ -80,6 +80,15 @@ namespace orangedb {
             newMegaCentroid,
             miniClusterIds);
 
+        // Validate something
+        for (size_t i = 0; i < miniClusterIds.size(); i++) {
+            for (size_t j = 0; j < miniClusterIds[i].size(); j++) {
+                if (miniClusterIds[i][j] >= 394) {
+                    printf("Hell yea!");
+                }
+            }
+        }
+
         // Copy the new mega centroids
         auto curMegaClusterSize = megaCentroids.size() / dim;
         auto newMegaClusterSize = newMegaCentroid.size() / dim;
@@ -91,6 +100,7 @@ namespace orangedb {
             megaMiniCentroidIds[curMegaClusterSize + i] = std::move(miniClusterIds[i]);
         }
         // TODO: Store the score
+        megaClusteringScore.resize(curMegaClusterSize + newMegaClusterSize);
     }
 
     void ReclusteringIndex::recluster(int n, bool fast) {
@@ -243,8 +253,13 @@ namespace orangedb {
 
     void ReclusteringIndex::reclusterFastMegaCentroids(std::vector<vector_idx_t> megaClusterIds) {
         reclusterOnlyMegaCentroids(megaClusterIds);
+        // It's possible that after reclustering the mega centroids has reduced in size.
+        std::vector<vector_idx_t> newMegaClusterIds(megaCentroids.size() / dim);
+        for (size_t i = 0; i < newMegaClusterIds.size(); i++) {
+            newMegaClusterIds[i] = i;
+        }
         // Now recluster miniCentroids within the mega centroids
-        for (auto megaCentroidId: megaClusterIds) {
+        for (auto megaCentroidId: newMegaClusterIds) {
             reclusterInternalMegaCentroid(megaCentroidId);
         }
     }
@@ -283,7 +298,7 @@ namespace orangedb {
         for (size_t i = 0; i < newMiniCentroidIds[0].size(); i++) {
             newMiniCentroidIds[0][i] = i;
         }
-        std::vector<float> newMegaCentroids;
+        std::vector<float> newMegaCentroids(dim);
         memcpy(newMegaCentroids.data(), megaCentroids.data() + megaClusterId * dim,
                dim * sizeof(float));
 
@@ -648,6 +663,7 @@ namespace orangedb {
                 idx++;
             }
         } else {
+            std::unordered_map<vector_idx_t, vector_idx_t> mappedMiniClusterIds;
             auto lastCentroidId = (miniCentroids.size() / dim) - 1;
             // If the new mini centroid smaller than oldMiniClusterIds.size()
             for (int i = newMiniCentroidsSize; i < oldMiniClusterIds.size(); i++) {
@@ -656,7 +672,17 @@ namespace orangedb {
                 memcpy(miniCentroids.data() + currCentroidId * dim, miniCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
                 miniClusters[currCentroidId] = std::move(miniClusters[lastCentroidId]);
                 miniClusterVectorIds[currCentroidId] = std::move(miniClusterVectorIds[lastCentroidId]);
+                mappedMiniClusterIds[lastCentroidId] = currCentroidId;
                 lastCentroidId--;
+            }
+            // Update mega mini centroid ids
+            for (auto &ids : megaMiniCentroidIds) {
+                for (auto &id: ids) {
+                    auto it = mappedMiniClusterIds.find(id);
+                    if (it != mappedMiniClusterIds.end()) {
+                        id = it->second;
+                    }
+                }
             }
             // Resize the mini centroids
             miniCentroids.resize((lastCentroidId + 1) * dim);
@@ -668,9 +694,6 @@ namespace orangedb {
         for (auto & ids : miniCentroidIds) {
             for (auto &id: ids) {
                 id = newToOldCentroidIdMap[id];
-                if (id == 400) {
-                    printf("ssss");
-                }
             }
         }
 

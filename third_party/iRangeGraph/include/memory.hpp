@@ -32,7 +32,9 @@ namespace memory
             }
             int sz = (n * sizeof(T) + (1 << 21) - 1) >> 21 << 21;
             ptr = (T *)std::aligned_alloc(1 << 21, sz);
+#if defined(__linux__)
             madvise(ptr, sz, MADV_HUGEPAGE);
+#endif
             return ptr;
         }
         void deallocate(T *, int) { free(ptr); }
