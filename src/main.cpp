@@ -2064,13 +2064,16 @@ void benchmark_fast_reclustering(InputParser &input) {
         printf("Writing index to disk\n");
         index.flush_to_disk(storagePath);
     }
-
-    for (int iter = 0; iter < iterations; iter++) {
-        index.reclusterFast();
-        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+    auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
-        printf("Iteration: %d, Recall: %f\n", iter, recall);
-    }
+    printf("Recall: %f\n", recall);
+
+    // for (int iter = 0; iter < iterations; iter++) {
+    //     index.reclusterFast();
+    //     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+    //                              nMiniProbes);
+    //     printf("Iteration: %d, Recall: %f\n", iter, recall);
+    // }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
