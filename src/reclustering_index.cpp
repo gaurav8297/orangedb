@@ -80,15 +80,6 @@ namespace orangedb {
             newMegaCentroid,
             miniClusterIds);
 
-        // Validate something
-        for (size_t i = 0; i < miniClusterIds.size(); i++) {
-            for (size_t j = 0; j < miniClusterIds[i].size(); j++) {
-                if (miniClusterIds[i][j] >= 394) {
-                    printf("Hell yea!");
-                }
-            }
-        }
-
         // Copy the new mega centroids
         auto curMegaClusterSize = megaCentroids.size() / dim;
         auto newMegaClusterSize = newMegaCentroid.size() / dim;
