@@ -91,3 +91,6 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 ./build/release/bin/orangedb_main -run benchmarkFastReclustering -baseVectorPath /home/centos/vector_dataset/sift10m/base.fvecs -queryVectorPath /home/centos/vector_dataset/sift10m/query.fvecs -groundTruthPath /home/centos/vector_dataset/sift10m/gt.bin -k 100 -numInserts 10 -numVectors 10000000 -numIters 20 -megaCentroidSize 500 -miniCentroidSize 500 -iterations 20 -fast 0 -lambda 0 -nMegaProbes 4 -nMiniProbes 40 -nQueries 50 -readFromDisk 0 -storagePath /Users/gaurav.sehgal/work/orangedb/data/gist/reclustering_fast_index.bin
 
 ./build/release/bin/orangedb_main -run generateGT -basePath /home/centos/vector_dataset/sift10m -numVectors 10000000 -k 100 -gtPath /home/centos/vector_dataset/sift10m/gt.bin
+
+./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/sift10m/base.fvecs -queryVectorPath /home/centos/vector_dataset/sift10m/query.fvecss -groundTruthPath /home/centos/vector_dataset/sift10m/gt.bin -k 100 -numVectors 100000000 -nIter 30 -nThreads 32 -numQueries 50 -clusterSize 500 -nProbes 20
+

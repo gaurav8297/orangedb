@@ -1962,6 +1962,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     } else {
         index = dynamic_cast<faiss::IndexIVFFlat *>(faiss::read_index(storagePath.c_str()));
     }
+    omp_set_num_threads(1);
     index->nprobe = nProbes;
     auto recall = 0.0;
     auto labels = new faiss::idx_t[k];
@@ -1980,7 +1981,9 @@ void benchmark_faiss_clustering(InputParser &input) {
     auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     auto recallPerQuery = recall / queryNumVectors;
     std::cout << "Total Vectors: " << queryNumVectors << std::endl;
+    std::cout << "Num of centroids: " << numCentroids << std::endl;
     std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
+    std::cout << "Avg Distances comps: " << faiss::indexIVF_stats.ndis / queryNumVectors << std::endl;
     std::cout << "Query time: " << duration_search << " ms" << std::endl;
 }
 
