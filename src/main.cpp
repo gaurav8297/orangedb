@@ -25,6 +25,7 @@
 #include "utils.h"
 #include "faiss/IndexACORN.h"
 #include "faiss/IndexHNSW.h"
+#include "faiss/IndexIVFFlat.h"
 #include "fastQ/scalar_test.h"
 #include "faiss/IndexPQ.h"
 
@@ -1915,6 +1916,74 @@ void test_clustering_data(InputParser &input) {
     delete[] queryVecs;
 }
 
+void benchmark_faiss_clustering(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const int clusterSize = stoi(input.getCmdOption("-clusterSize"));
+    const int nIter = stoi(input.getCmdOption("-nIter"));
+    const int nThreads = stoi(input.getCmdOption("-nThreads"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numQueries = stoi(input.getCmdOption("-numQueries"));
+    const int nProbes = stoi(input.getCmdOption("-nProbes"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
+
+    // Read dataset
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+    queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
+
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    auto quantizer = faiss::IndexFlatL2(baseDimension);
+    auto numCentroids = baseNumVectors / clusterSize;
+    faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, faiss::METRIC_L2);
+    faiss::IndexIVFFlat* index = &idx;
+    index->cp.niter = nIter;
+    if (!readFromDisk) {
+        omp_set_num_threads(nThreads);
+        // Print grond truth num vectors
+        printf("Building index\n");
+        auto start = std::chrono::high_resolution_clock::now();
+        index->train(baseNumVectors, baseVecs);
+        index->add(baseNumVectors, baseVecs);
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        printf("Building time: %lld ms\n", duration.count());
+        printf("Writing the index on disk!");
+        faiss::write_index(index, storagePath.c_str());
+    } else {
+        index = dynamic_cast<faiss::IndexIVFFlat *>(faiss::read_index(storagePath.c_str()));
+    }
+    index->nprobe = nProbes;
+    auto recall = 0.0;
+    auto labels = new faiss::idx_t[k];
+    auto distances = new float[k];
+    auto startTime = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        index->search(1, queryVecs + (i * baseDimension), k, distances, labels);
+        auto gt = gtVecs + i * k;
+        for (int j = 0; j < k; j++) {
+            if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
+                recall++;
+            }
+        }
+    }
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    auto recallPerQuery = recall / queryNumVectors;
+    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
+    std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
+    std::cout << "Query time: " << duration_search << " ms" << std::endl;
+}
+
 double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
                   vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes) {
     // search
@@ -2294,6 +2363,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkIRangeGraph") {
         benchmark_irangegraph(input);
+    }
+    else if (run == "benchmarkFaissClustering") {
+        benchmark_faiss_clustering(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
