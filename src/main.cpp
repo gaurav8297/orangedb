@@ -1920,7 +1920,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     // search
     double recall = 0;
     ReclusteringIndexStats stats;
-    printf("Num Queries: %zu\n", queryNumVectors);
+    printf("Num Queries: %zu, k: %d\n", queryNumVectors, k);
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
         index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats);
