@@ -92,6 +92,7 @@ namespace orangedb {
         }
         // TODO: Store the score
         megaClusteringScore.resize(curMegaClusterSize + newMegaClusterSize);
+        size += n;
     }
 
     void ReclusteringIndex::recluster(int n, bool fast) {
