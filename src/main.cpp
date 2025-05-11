@@ -1927,6 +1927,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();
+            printf("Result: %llu\n", res.id);
             results.pop();
             if (std::find(gt, gt + k, res.id) != (gt + k)) {
                 recall++;
