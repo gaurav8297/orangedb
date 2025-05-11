@@ -1920,21 +1920,18 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     // search
     double recall = 0;
     ReclusteringIndexStats stats;
-    printf("Num Queries: %zu, k: %d\n", queryNumVectors, k);
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
         index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats);
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();
-            printf("Result: %llu\n", res.id);
             results.pop();
             if (std::find(gt, gt + k, res.id) != (gt + k)) {
                 recall++;
             }
         }
     }
-    printf("Recall: %f\n", recall);
     printf("Avg Distance Computation: %llu\n", stats.numDistanceComp / queryNumVectors);
     return recall / queryNumVectors;
 }
@@ -2071,12 +2068,12 @@ void benchmark_fast_reclustering(InputParser &input) {
                                  nMiniProbes);
     printf("Recall: %f\n", recall);
 
-    // for (int iter = 0; iter < iterations; iter++) {
-    //     index.reclusterFast();
-    //     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-    //                              nMiniProbes);
-    //     printf("Iteration: %d, Recall: %f\n", iter, recall);
-    // }
+    for (int iter = 0; iter < iterations; iter++) {
+        index.reclusterFast();
+        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+                                 nMiniProbes);
+        printf("Iteration: %d, Recall: %f\n", iter, recall);
+    }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
