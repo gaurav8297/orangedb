@@ -1920,6 +1920,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     // search
     double recall = 0;
     ReclusteringIndexStats stats;
+    printf("Num Queries: %zu\n", queryNumVectors);
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
         index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats);
@@ -1932,6 +1933,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             }
         }
     }
+    printf("Recall: %f\n", recall);
     printf("Avg Distance Computation: %llu\n", stats.numDistanceComp / queryNumVectors);
     return recall / queryNumVectors;
 }
