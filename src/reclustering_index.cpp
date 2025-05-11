@@ -850,6 +850,12 @@ namespace orangedb {
 
     void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
                                    int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats) {
+
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto numMiniCentroids = miniCentroids.size() / dim;
+        nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
+        nMicroProbes = std::min(nMicroProbes, (int)numMiniCentroids);
+
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
         findKClosestMegaCentroids(query, nMegaProbes, megaAssign);
