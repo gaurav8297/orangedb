@@ -672,6 +672,10 @@ namespace orangedb {
             for (int i = newMiniCentroidsSize; i < oldMiniClusterIds.size(); i++) {
                 // Copy from last to i
                 auto currCentroidId = oldMiniClusterIds[i];
+                if (currCentroidId > lastCentroidId) {
+                    // No need to delete from megaMiniCentroidIds since it'll be taken care when we append mega centroids.
+                    continue;
+                }
                 memcpy(miniCentroids.data() + currCentroidId * dim, miniCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
                 miniClusters[currCentroidId] = std::move(miniClusters[lastCentroidId]);
                 miniClusterVectorIds[currCentroidId] = std::move(miniClusterVectorIds[lastCentroidId]);
