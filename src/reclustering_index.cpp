@@ -260,7 +260,9 @@ namespace orangedb {
         // Take all the existing mini centroids and merge them
         auto totalVecs = 0;
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
+        auto miniClusterSize = miniClusters.size();
         for (auto microCentroidId: microCentroidIds) {
+            assert(microCentroidId < miniClusterSize);
             auto cluster = miniClusters[microCentroidId];
             totalVecs += (cluster.size() / dim);
         }
