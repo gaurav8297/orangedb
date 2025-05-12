@@ -261,12 +261,13 @@ namespace orangedb {
         auto totalVecs = 0;
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
         auto miniClusterSize = miniClusters.size();
+        auto actualMiniClusterSize = miniCentroids.size() / dim;
         for (auto microCentroidId: microCentroidIds) {
             if (microCentroidId >= miniClusterSize) {
                 // Print some details
                 printf("ReclusteringIndex::reclusterInternalMegaCentroid: "
-                       "microCentroidId: %d, miniClusterSize: %d\n",
-                       microCentroidId, miniClusterSize);
+                       "microCentroidId: %d, miniClusterSize: %d, actualMiniClusterSize: %d\n",
+                       microCentroidId, miniClusterSize, actualMiniClusterSize);
             }
 
             assert(microCentroidId < miniClusterSize);
