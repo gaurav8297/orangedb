@@ -2004,7 +2004,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             }
         }
     }
-    printf("Avg Distance Computation: %llu\n", stats.numDistanceComp / queryNumVectors);
+    printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
     return recall / queryNumVectors;
 }
 
@@ -2139,6 +2139,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
     printf("Recall: %f\n", recall);
+    index.printStats();
 
     for (int iter = 0; iter < iterations; iter++) {
         index.reclusterFast();

@@ -11,7 +11,14 @@ namespace orangedb {
 
     struct ReclusteringIndexStats {
         // The number of distance computations
-        uint64_t numDistanceComp = 0;
+        uint64_t numDistanceCompForSearch = 0;
+
+        // The number of distance computations for reclustering
+        uint64_t numDistanceCompForRecluster = 0;
+
+        // Total data written to disk. This will help us measure write amplification.
+        uint64_t totalDataWrittenBySystem = 0;
+        uint64_t totalDataWrittenByUser = 0;
     };
 
     struct ReclusteringIndexConfig {

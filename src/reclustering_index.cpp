@@ -192,7 +192,7 @@ namespace orangedb {
         // // Find the closest mega centroid
         // std::vector<vector_idx_t> megaAssign;
         // findKClosestMegaCentroids(megaCentroids.data() + (megaIdToRecluster * dim),
-        //                           config.numExistingMegaReclusterCentroids, megaAssign);
+        // config.numExistingMegaReclusterCentroids, megaAssign);
         // assert(std::find(megaAssign.begin(), megaAssign.end(), megaIdToRecluster) != megaAssign.end());
 
         // Take all the existing mini centroids and merge them
@@ -262,6 +262,13 @@ namespace orangedb {
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
         auto miniClusterSize = miniClusters.size();
         for (auto microCentroidId: microCentroidIds) {
+            if (microCentroidId >= miniClusterSize) {
+                // Print some details
+                printf("ReclusteringIndex::reclusterInternalMegaCentroid: "
+                       "microCentroidId: %d, miniClusterSize: %d\n",
+                       microCentroidId, miniClusterSize);
+            }
+
             assert(microCentroidId < miniClusterSize);
             auto cluster = miniClusters[microCentroidId];
             totalVecs += (cluster.size() / dim);
@@ -853,7 +860,6 @@ namespace orangedb {
 
     void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
                                    int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats) {
-
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
         nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
@@ -874,7 +880,7 @@ namespace orangedb {
             for (auto microId: microIds) {
                 double d;
                 dc->computeDistance(microId, &d);
-                stats.numDistanceComp++;
+                stats.numDistanceCompForSearch++;
                 if (closestMicro.size() < nMicroProbes || d < closestMicro.top().dist) {
                     closestMicro.emplace(microId, d);
                     if (closestMicro.size() > nMicroProbes) {
@@ -896,7 +902,7 @@ namespace orangedb {
             for (int j = 0; j < clusterSize; j++) {
                 double dist;
                 clusterDc->computeDistance(j, &dist);
-                stats.numDistanceComp++;
+                stats.numDistanceCompForSearch++;
                 if (results.size() <= k || dist < results.top().dist) {
                     results.emplace(ids[j], dist);
                     if (results.size() > k) {
