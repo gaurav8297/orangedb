@@ -676,6 +676,7 @@ namespace orangedb {
                 miniClusters[currCentroidId] = std::move(miniClusters[lastCentroidId]);
                 miniClusterVectorIds[currCentroidId] = std::move(miniClusterVectorIds[lastCentroidId]);
                 mappedMiniClusterIds[lastCentroidId] = currCentroidId;
+                printf("Removing mini centroid %d with miniCentroid %d\n", lastCentroidId, currCentroidId);
                 lastCentroidId--;
             }
             // Update mega mini centroid ids
