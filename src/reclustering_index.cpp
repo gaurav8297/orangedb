@@ -672,8 +672,13 @@ namespace orangedb {
             for (int i = newMiniCentroidsSize; i < oldMiniClusterIds.size(); i++) {
                 // Copy from last to i
                 auto currCentroidId = oldMiniClusterIds[i];
+                while (std::find(oldMiniClusterIds.begin() + newMiniCentroidsSize, oldMiniClusterIds.end(), lastCentroidId) != oldMiniClusterIds.end()) {
+                    printf("Removing mini centroid %d\n", lastCentroidId);
+                    lastCentroidId--;
+                }
                 if (currCentroidId > lastCentroidId) {
                     // No need to delete from megaMiniCentroidIds since it'll be taken care when we append mega centroids.
+                    printf("Already removed mini centroid %d, lastCentroidId %d\n", currCentroidId, lastCentroidId);
                     continue;
                 }
                 memcpy(miniCentroids.data() + currCentroidId * dim, miniCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
@@ -851,6 +856,14 @@ namespace orangedb {
             for (int i = numNewMegaCentroids; i < oldMegaCentroidSize; i++) {
                 // Copy from last to i
                 auto currMegaId = oldMegaCentroidIds[i];
+                // Fix the lastCentroidId before fixing currMegaId
+                while (std::find(oldMegaCentroidIds.begin() + numNewMegaCentroids, oldMegaCentroidIds.end(), lastCentroidId) != oldMegaCentroidIds.end()) {
+                    lastCentroidId--;
+                }
+                if (currMegaId > lastCentroidId) {
+                    continue;
+                }
+
                 memcpy(megaCentroids.data() + currMegaId * dim, megaCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
                 megaMiniCentroidIds[currMegaId] = std::move(megaMiniCentroidIds[lastCentroidId]);
                 megaClusteringScore[currMegaId] = megaClusteringScore[lastCentroidId];
