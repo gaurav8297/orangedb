@@ -92,5 +92,5 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 
 ./build/release/bin/orangedb_main -run generateGT -basePath /home/centos/vector_dataset/sift10m -numVectors 10000000 -k 100 -gtPath /home/centos/vector_dataset/sift10m/gt.bin
 
-./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/sift10m/base.fvecs -queryVectorPath /home/centos/vector_dataset/sift10m/query.fvecss -groundTruthPath /home/centos/vector_dataset/sift10m/gt.bin -k 100 -numVectors 100000000 -nIter 30 -nThreads 32 -numQueries 50 -clusterSize 500 -nProbes 20
+./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/sift10m/base.fvecs -queryVectorPath /home/centos/vector_dataset/sift10m/query.fvecss -groundTruthPath /home/centos/vector_dataset/sift10m/gt.bin -k 100 -numVectors 100000000 -nIter 30 -nThreads 32 -numQueries 50 -clusterSize 500 -nProbes 20 -readFromDisk 0 -storagePath  /home/centos/vector_dataset/sift10m/faiss_ivf_flat_index.bin
 

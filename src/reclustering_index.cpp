@@ -486,7 +486,7 @@ namespace orangedb {
                                         std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
         // Create the clustering object
         auto numClusters = getNumCentroids(n, avgClusterSize);
-        printf("Performing mini-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
+        // printf("Performing mini-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
         if (numClusters <= 1) {
             calcMeanCentroid(data, vectorIds, n, centroids, clusterVectorIds);
             return;
@@ -539,7 +539,7 @@ namespace orangedb {
 
         // Create the clustering object
         auto numClusters = getNumCentroids(n, avgClusterSize);
-        printf("Performing mega-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
+        // printf("Performing mega-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
         if (numClusters <= 1) {
             calcMeanCentroid(data, vectorIds, n, centroids, clusterVectorIds);
             return;
@@ -801,7 +801,7 @@ namespace orangedb {
                                                       std::vector<std::vector<vector_idx_t> > &newMiniClusterIds) {
         std::vector<vector_idx_t> updatedMegaCentroids;
         auto numNewMegaCentroids = newMegaCentroids.size() / dim;
-        printf("numNewMegaCentroids: %zu, oldMegaCentroidIds: %zu\n", numNewMegaCentroids, oldMegaCentroidIds.size());
+        // printf("numNewMegaCentroids: %zu, oldMegaCentroidIds: %zu\n", numNewMegaCentroids, oldMegaCentroidIds.size());
         auto oldMegaCentroidSize = oldMegaCentroidIds.size();
         auto centroidSize = std::min(oldMegaCentroidSize, numNewMegaCentroids);
         for (int i = 0; i < centroidSize; i++) {
