@@ -663,6 +663,7 @@ namespace orangedb {
                 miniClusters[currentSize + idx] = std::move(currCluster);
                 miniClusterVectorIds[currentSize + idx] = std::move(currVectorId);
                 newToOldCentroidIdMap[i] = currentSize + idx;
+                printf("Adding new mini centroid %d\n", currentSize + idx);
                 idx++;
             }
         } else {
