@@ -35,6 +35,7 @@ namespace orangedb {
         newMiniCentroids.resize(curMiniCtrdSize + centroids.size());
         memcpy(newMiniCentroids.data() + curMiniCtrdSize, centroids.data(), centroids.size() * sizeof(float));
         size += n;
+        updateTotalDataWrittenByUser(n);
 
         printf("Added %lu new mini centroids!\n", newMiniCentroids.size() / dim);
     }
@@ -93,6 +94,7 @@ namespace orangedb {
         // TODO: Store the score
         megaClusteringScore.resize(curMegaClusterSize + newMegaClusterSize);
         size += n;
+        updateTotalDataWrittenByUser(n);
     }
 
     void ReclusteringIndex::recluster(int n, bool fast) {
@@ -252,7 +254,6 @@ namespace orangedb {
         }
         // Now recluster miniCentroids within the mega centroids
         for (auto megaCentroidId: newMegaClusterIds) {
-            printf("Running reclusterInternalMegaCentroid on megaCentroidId: %d\n", megaCentroidId);
             reclusterInternalMegaCentroid(megaCentroidId);
         }
     }
@@ -264,13 +265,6 @@ namespace orangedb {
         auto miniClusterSize = miniClusters.size();
         auto actualMiniClusterSize = miniCentroids.size() / dim;
         for (auto microCentroidId: microCentroidIds) {
-            if (microCentroidId >= miniClusterSize) {
-                // Print some details
-                printf("ReclusteringIndex::reclusterInternalMegaCentroid: "
-                       "microCentroidId: %d, miniClusterSize: %d, actualMiniClusterSize: %d\n",
-                       microCentroidId, miniClusterSize, actualMiniClusterSize);
-            }
-
             assert(microCentroidId < miniClusterSize);
             auto cluster = miniClusters[microCentroidId];
             totalVecs += (cluster.size() / dim);
@@ -542,6 +536,7 @@ namespace orangedb {
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
         }
+        stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
     }
 
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -591,6 +586,7 @@ namespace orangedb {
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
         }
+        stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
     }
 
     void ReclusteringIndex::calcMeanCentroid(float *data, vector_idx_t *vectorIds, int n, std::vector<float> &centroids,
@@ -621,6 +617,7 @@ namespace orangedb {
                                                    std::vector<float> &newMiniCentroids,
                                                    std::vector<std::vector<float> > &newMiniClusters,
                                                    std::vector<std::vector<vector_idx_t> > &newMiniClusterVectorIds) {
+        updateTotalDataWrittenBySystem({}, newMiniClusterVectorIds);
         // Try to copy inplace if possible otherwise append
         std::vector<vector_idx_t> oldMiniClusterIds;
         for (const int currMegaId: oldMegaCentroids) {
@@ -663,7 +660,6 @@ namespace orangedb {
                 miniClusters[currentSize + idx] = std::move(currCluster);
                 miniClusterVectorIds[currentSize + idx] = std::move(currVectorId);
                 newToOldCentroidIdMap[i] = currentSize + idx;
-                printf("Adding new mini centroid %d\n", currentSize + idx);
                 idx++;
             }
         } else {
@@ -674,12 +670,10 @@ namespace orangedb {
                 // Copy from last to i
                 auto currCentroidId = oldMiniClusterIds[i];
                 while (std::find(oldMiniClusterIds.begin() + newMiniCentroidsSize, oldMiniClusterIds.end(), lastCentroidId) != oldMiniClusterIds.end()) {
-                    printf("Removing mini centroid %d\n", lastCentroidId);
                     lastCentroidId--;
                 }
                 if (currCentroidId > lastCentroidId) {
                     // No need to delete from megaMiniCentroidIds since it'll be taken care when we append mega centroids.
-                    printf("Already removed mini centroid %d, lastCentroidId %d\n", currCentroidId, lastCentroidId);
                     continue;
                 }
                 memcpy(miniCentroids.data() + currCentroidId * dim, miniCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
@@ -821,6 +815,7 @@ namespace orangedb {
     std::vector<vector_idx_t> ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,
                                                       std::vector<float> &newMegaCentroids,
                                                       std::vector<std::vector<vector_idx_t> > &newMiniClusterIds) {
+        updateTotalDataWrittenBySystem(newMiniClusterIds, {});
         std::vector<vector_idx_t> updatedMegaCentroids;
         auto numNewMegaCentroids = newMegaCentroids.size() / dim;
         // printf("numNewMegaCentroids: %zu, oldMegaCentroidIds: %zu\n", numNewMegaCentroids, oldMegaCentroidIds.size());
@@ -877,6 +872,23 @@ namespace orangedb {
         }
 
         return updatedMegaCentroids;
+    }
+
+    void ReclusteringIndex::updateTotalDataWrittenBySystem(const std::vector<std::vector<vector_idx_t>> &newMiniClusterIds,
+                                                           const std::vector<std::vector<vector_idx_t>>
+                                                           &newMiniClusterVectorIds) {
+        auto totalVecsWritten = newMiniClusterIds.size();
+        for (const auto& ids: newMiniClusterIds) {
+            totalVecsWritten += ids.size();
+        }
+        for (const auto& ids: newMiniClusterVectorIds) {
+            totalVecsWritten += ids.size();
+        }
+        stats.totalDataWrittenBySystem += totalVecsWritten * dim * sizeof(float);
+    }
+
+    void ReclusteringIndex::updateTotalDataWrittenByUser(const size_t n) {
+        stats.totalDataWrittenByUser += n * dim * sizeof(float);
     }
 
     void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
@@ -979,10 +991,10 @@ namespace orangedb {
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
 
         // Print score for mega clusters
-        int i = 0;
-        for (const auto &megaScore: megaClusteringScore) {
-            printf("Mega cluster %d score: %f\n", i++, megaScore);
-        }
+        // int i = 0;
+        // for (const auto &megaScore: megaClusteringScore) {
+        //     printf("Mega cluster %d score: %f\n", i++, megaScore);
+        // }
 
         // Print avg score for mega clusters
         double avgMegaScore = 0.0;
@@ -991,6 +1003,10 @@ namespace orangedb {
         }
         avgMegaScore /= megaClusteringScore.size();
         printf("Avg mega cluster score: %f\n", avgMegaScore);
+
+        // Print stats
+        printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
+        printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {

@@ -319,5 +319,84 @@ namespace iRangeGraph
                 outfile.close();
             }
         }
+
+        struct iRangeGraphRes {
+            std::vector<int> HOP;
+            std::vector<int> DCO;
+            std::vector<float> QPS;
+            std::vector<float> RECALL;
+            std::vector<float> latency;
+        };
+
+        std::vector<iRangeGraphRes> search_new(std::vector<int> &SearchEF, int edge_limit)
+        {
+            std::vector<iRangeGraphRes> results;
+
+            for (auto range : storage->query_range)
+            {
+                int suffix = range.first;
+                std::vector<std::vector<int>> &gt = storage->groundtruth[suffix];
+
+                std::vector<int> HOP;
+                std::vector<int> DCO;
+                std::vector<float> QPS;
+                std::vector<float> RECALL;
+                std::vector<float> latency;
+
+                std::cout << "suffix = " << suffix << std::endl;
+                for (auto ef : SearchEF)
+                {
+                    int tp = 0;
+                    float searchtime = 0;
+
+                    metric_hops = 0;
+                    metric_distance_computations = 0;
+
+                    for (int i = 0; i < storage->query_nb; i++)
+                    {
+                        auto rp = range.second[i];
+                        int ql = rp.first, qr = rp.second;
+
+                        timeval t1, t2;
+                        gettimeofday(&t1, NULL);
+                        std::vector<TreeNode *> filterednodes = tree->range_filter(tree->root, ql, qr);
+                        std::priority_queue<PFI> res = TopDown_nodeentries_search(filterednodes, storage->query_points[i].data(), ef, storage->query_K, ql, qr, edge_limit);
+                        gettimeofday(&t2, NULL);
+                        auto duration = GetTime(t1, t2);
+                        searchtime += duration;
+                        std::map<int, int> record;
+                        while (res.size())
+                        {
+                            auto x = res.top().second;
+                            res.pop();
+                            if (record.count(x))
+                                throw Exception("repetitive search results");
+                            record[x] = 1;
+                            if (std::find(gt[i].begin(), gt[i].end(), x) != gt[i].end())
+                                tp++;
+                        }
+                    }
+
+                    float recall = 1.0 * tp / storage->query_nb / storage->query_K;
+                    float qps = storage->query_nb / searchtime;
+                    float dco = metric_distance_computations * 1.0 / storage->query_nb;
+                    float hop = metric_hops * 1.0 / storage->query_nb;
+
+                    HOP.emplace_back(hop);
+                    DCO.emplace_back(dco);
+                    QPS.emplace_back(qps);
+                    RECALL.emplace_back(recall);
+                    latency.emplace_back(searchtime);
+                }
+                iRangeGraphRes res;
+                res.HOP = HOP;
+                res.DCO = DCO;
+                res.QPS = QPS;
+                res.RECALL = RECALL;
+                res.latency = latency;
+                results.emplace_back(res);
+            }
+            return results;
+        }
     };
 }

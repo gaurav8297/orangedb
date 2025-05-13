@@ -12,9 +12,11 @@ namespace orangedb {
     struct ReclusteringIndexStats {
         // The number of distance computations
         uint64_t numDistanceCompForSearch = 0;
+        uint64_t totalQueries = 0;
 
         // The number of distance computations for reclustering
         uint64_t numDistanceCompForRecluster = 0;
+        uint64_t totalReclusters = 0;
 
         // Total data written to disk. This will help us measure write amplification.
         uint64_t totalDataWrittenBySystem = 0;
@@ -74,7 +76,6 @@ namespace orangedb {
 
         void reclusterFast();
 
-        // void reclusterSparseMegaCentroids();
         void reclusterAllMegaCentroids();
 
         void storeScoreForMegaClusters();
@@ -121,6 +122,11 @@ namespace orangedb {
 
         std::vector<vector_idx_t> appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds, std::vector<float> &newMegaCentroids,
                                        std::vector<std::vector<vector_idx_t> > &newMiniClusterIds);
+
+        inline void updateTotalDataWrittenBySystem(const std::vector<std::vector<vector_idx_t>> &newMiniClusterIds,
+                                                   const std::vector<std::vector<vector_idx_t>> &newMiniClusterVectorIds);
+
+        inline void updateTotalDataWrittenByUser(const size_t n);
 
         void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids);
 
@@ -174,5 +180,8 @@ namespace orangedb {
         std::vector<float> newMiniCentroids;
         std::vector<std::vector<float>> newMiniClusters;
         std::vector<std::vector<vector_idx_t>> newMiniClusterVectorIds;
+
+        // Stats
+        ReclusteringIndexStats stats;
     };
 }

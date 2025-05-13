@@ -18,6 +18,7 @@
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
 #include <fastQ/common.h>
+#include <nlohmann/json.hpp>
 
 #include "construction.h"
 #include "incremental_index.h"
@@ -869,6 +870,18 @@ std::vector<int> parseCommaSeparatedIntegers(const std::string& input) {
     return numbers;
 }
 
+std::vector<std::string> parseCommaSeparated(const std::string& input) {
+    std::vector<std::string> res;
+    std::stringstream ss(input);
+    std::string temp;
+
+    while (std::getline(ss, temp, ',')) {
+        res.push_back(temp);
+    }
+
+    return res;
+}
+
 void benchmark_filtered_hnsw_queries(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     auto efConstruction = stoi(input.getCmdOption("-efConstruction"));
@@ -1220,6 +1233,7 @@ int tuneEfByStep(std::function<double(int)> getRecall,
                  int step = 50) {
     int ef = efMin;
     double recall = getRecall(ef);
+    printf("ef: %d, recall: %f\n", ef, recall);
 
     // If already inside target range, done.
     if (recall >= targetLow) {
@@ -1243,6 +1257,7 @@ int tuneEfByStep(std::function<double(int)> getRecall,
 
         // Recompute recall at new ef
         recall = getRecall(ef);
+        printf("ef: %d, recall: %f\n", ef, recall);
     }
 
     // Final check
@@ -1252,39 +1267,72 @@ int tuneEfByStep(std::function<double(int)> getRecall,
     return efMax; // no suitable ef found in [efMin,efMax]
 }
 
+void populate_mask_and_gt_paths(const std::string &basePath, const std::vector<std::string> &sels,
+                         std::vector<std::string> &maskPaths,
+                         std::vector<std::string> &gtPath, std::string &queryPath) {
+    // Parse the selectivities and efS strings
+    for (const auto &sel : sels) {
+        auto maskPath = fmt::format("{}/mask_{}.bin", basePath, sel);
+        auto gtPathStr = fmt::format("{}/gt_{}.bin", basePath, sel);
+        maskPaths.push_back(maskPath);
+        gtPath.push_back(gtPathStr);
+    }
+    // Generate the query path
+    queryPath = fmt::format("{}/queries.fvecs", basePath);
+}
+
+void write_json_result(const std::string &basePath, const std::string config, const int totalQueries, const double searchTime,
+                       const double recall, const int efSearch, const std::string selectivity) {
+     std::string jsonPath = fmt::format("{}/output_{}_{}.json", basePath, selectivity, config);
+    nlohmann::json J;
+    J["total_queries"] = totalQueries;
+    J["avg_execution_time_ms"] = searchTime;
+    J["recall_percentage"] = recall * 100;
+    J["selectivity"] = stof(selectivity);
+    J["efSearch"] = efSearch;
+
+    // Write the JSON object to a file
+    std::ofstream ofs(jsonPath);
+    ofs << J.dump(4);
+    ofs.close();
+    std::cout << "Results written to " << jsonPath << std::endl;
+}
+
 void benchmark_acorn(InputParser &input) {
-    const std::string &vectorPath = input.getCmdOption("-vectorPath");
-    const std::string &queryPath = input.getCmdOption("-queryPath");
-    const std::string &gtPath = input.getCmdOption("-gtPath");
-    const std::string &maskPath = input.getCmdOption("-maskPath");
+    const std::string &dataPath = input.getCmdOption("-dataPath");
+    const std::string &basePath = input.getCmdOption("-basePath");
+    const std::vector<std::string> sels = parseCommaSeparated(input.getCmdOption("-sels"));
+    const std::vector<int> efS = parseCommaSeparatedIntegers(input.getCmdOption("-efS"));
+    const int autoEf = stoi(input.getCmdOption("-autoEf"));
     int k = stoi(input.getCmdOption("-k"));
     int M = stoi(input.getCmdOption("-M"));
     int gamma = stoi(input.getCmdOption("-gamma"));
     int M_beta = stoi(input.getCmdOption("-M_beta"));
-    int efSearch = stoi(input.getCmdOption("-efSearch"));
     int nThreads = stoi(input.getCmdOption("-nThreads"));
+    float minRecall = stof(input.getCmdOption("-minRecall"));
+    float maxRecall = stof(input.getCmdOption("-maxRecall"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
+    std::vector<std::string> maskPaths, gtPath;
+    std::string queryPath;
+    populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPath, queryPath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(vectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(dataPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+
+    // First build the index
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
-    loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
-    printf("Base num vectors: %zu\n", baseNumVectors);
+    auto *filteredMask = new uint8_t[baseNumVectors];
+    loadFromFile(maskPaths[0], filteredMask, baseNumVectors);
     std::vector<int> metadata(baseNumVectors);
     for (int i = 0; i < baseNumVectors; i++) {
         metadata[i] = (int) filteredMask[i];
     }
-    printf("Query num vectors: %zu\n", queryNumVectors);
-    printf("Query dimension: %zu\n", baseDimension);
     auto index = faiss::IndexACORNFlat(baseDimension, M, gamma, metadata, M_beta);
     faiss::IndexACORNFlat* acorn_index = &index;
-    acorn_index->acorn.efSearch = efSearch;
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
         // Print grond truth num vectors
@@ -1298,27 +1346,69 @@ void benchmark_acorn(InputParser &input) {
         faiss::write_index(acorn_index, storagePath.c_str());
     } else {
         acorn_index = dynamic_cast<faiss::IndexACORNFlat *>(faiss::read_index(storagePath.c_str()));
-        acorn_index->acorn.efSearch = efSearch;
     }
-    auto recall = 0.0;
-    auto labels = new faiss::idx_t[k];
-    auto distances = new float[k];
-    auto startTime = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < queryNumVectors; i++) {
-        acorn_index->search(1, queryVecs + (i * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask + (i * baseNumVectors)));
-        auto gt = gtVecs + i * k;
-        for (int j = 0; j < k; j++) {
-            if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
-                recall++;
+
+    // Todo: Write the time to build the index
+
+    // Now perform search for each selectivity
+    for (int i = 0; i < sels.size(); i++) {
+        auto& selectivity = sels[i];
+        printf("Selectivity: %s\n", selectivity.c_str());
+        auto efSearch = efS[i];
+        auto& maskPathStr = maskPaths[i];
+        auto& gtPathStr = gtPath[i];
+        loadFromFile(gtPathStr, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+        loadFromFile(maskPathStr, filteredMask, baseNumVectors);
+
+        printf("efSearch: %d, selectivity: %s\n", efSearch, sels[i].c_str());
+        if (autoEf) {
+            auto ef = tuneEfByStep([&](int ef) {
+                acorn_index->acorn.efSearch = ef;
+                auto labels = new faiss::idx_t[k];
+                auto distances = new float[k];
+                auto recall = 0.0;
+                for (size_t j = 0; j < queryNumVectors; j++) {
+                    acorn_index->search(1, queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask));
+                    auto gt = gtVecs + j * k;
+                    for (int m = 0; m < k; m++) {
+                        if (std::find(gt, gt + k, labels[m]) != (gt + k)) {
+                            recall++;
+                        }
+                    }
+                }
+                auto recallPerQuery = recall / queryNumVectors;
+                return recallPerQuery / k;
+            }, minRecall, maxRecall);
+            acorn_index->acorn.efSearch = ef;
+        } else {
+            acorn_index->acorn.efSearch = efSearch;
+        }
+
+        // Run the benchmark
+        auto recall = 0.0;
+        auto labels = new faiss::idx_t[k];
+        auto distances = new float[k];
+        long durationPerQuery = 0;
+        for (size_t j = 0; j < queryNumVectors; j++) {
+            auto startTime = std::chrono::high_resolution_clock::now();
+            acorn_index->search(1, queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask));
+            auto endTime = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+            durationPerQuery += duration;
+            auto gt = gtVecs + j * k;
+            for (int m = 0; m < k; m++) {
+                if (std::find(gt, gt + k, labels[m]) != (gt + k)) {
+                    recall++;
+                }
             }
         }
+        auto config = fmt::format("acorn_{}", gamma);
+        write_json_result(basePath, config, queryNumVectors, (double) durationPerQuery / queryNumVectors,
+                          recall / (queryNumVectors * k), efSearch, selectivity);
     }
-    auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    auto recallPerQuery = recall / queryNumVectors;
-    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
-    std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
-    std::cout << "Query time: " << duration_search << " ms" << std::endl;
+
+    delete[] filteredMask;
+    delete[] gtVecs;
 }
 
 void benchmark_navix(InputParser &input) {
