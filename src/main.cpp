@@ -1351,6 +1351,7 @@ void benchmark_acorn(InputParser &input) {
         faiss::write_index(acorn_index, storagePath.c_str());
     } else {
         acorn_index = dynamic_cast<faiss::IndexACORNFlat *>(faiss::read_index(storagePath.c_str()));
+        acorn_index->metric_type = faiss::METRIC_INNER_PRODUCT;
     }
     omp_set_num_threads(1);
 
