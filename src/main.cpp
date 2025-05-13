@@ -1315,6 +1315,7 @@ void benchmark_acorn(InputParser &input) {
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const std::string &resultPath = input.getCmdOption("-resultPath");
+    const int useIp = stoi(input.getCmdOption("-useIp"));
     std::vector<std::string> maskPaths, gtPath;
     std::string queryPath;
     populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPath, queryPath);
@@ -1335,7 +1336,7 @@ void benchmark_acorn(InputParser &input) {
     for (int i = 0; i < baseNumVectors; i++) {
         metadata[i] = (int) filteredMask[i];
     }
-    auto index = faiss::IndexACORNFlat(baseDimension, M, gamma, metadata, M_beta);
+    auto index = faiss::IndexACORNFlat(baseDimension, M, gamma, metadata, M_beta, faiss::METRIC_INNER_PRODUCT);
     faiss::IndexACORNFlat* acorn_index = &index;
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
