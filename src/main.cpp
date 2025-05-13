@@ -1324,6 +1324,8 @@ void benchmark_acorn(InputParser &input) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    printf("Base num vectors: %zu\n", baseNumVectors);
+    printf("Query num vectors: %zu\n", queryNumVectors);
 
     // First build the index
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
@@ -1349,6 +1351,7 @@ void benchmark_acorn(InputParser &input) {
     } else {
         acorn_index = dynamic_cast<faiss::IndexACORNFlat *>(faiss::read_index(storagePath.c_str()));
     }
+    omp_set_num_threads(1);
 
     // Todo: Write the time to build the index
 
