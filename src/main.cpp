@@ -810,7 +810,7 @@ void generateFilterGroundTruth(InputParser &input) {
     loadFromFile(filteredMaskPath, filteredMask, baseNumVectors);
     // Calculate selectivity from filteredMask
     size_t numFiltered = 0;
-    for (int i = 0; i < queryNumVectors; i++) {
+    for (int i = 0; i < baseNumVectors; i++) {
         if (filteredMask[i] == 1) {
             numFiltered++;
         }
