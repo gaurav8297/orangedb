@@ -1359,6 +1359,8 @@ void benchmark_acorn(InputParser &input) {
         auto efSearch = efS[i];
         auto& maskPathStr = maskPaths[i];
         auto& gtPathStr = gtPath[i];
+        printf("gtPath: %s\n", gtPathStr.c_str());
+        printf("maskPath: %s\n", maskPathStr.c_str());
         loadFromFile(gtPathStr, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
         loadFromFile(maskPathStr, filteredMask, baseNumVectors);
 
@@ -1380,7 +1382,7 @@ void benchmark_acorn(InputParser &input) {
                 }
                 auto recallPerQuery = recall / queryNumVectors;
                 return recallPerQuery / k;
-            }, minRecall, maxRecall);
+            }, minRecall, maxRecall, 100, 1000, 50);
             acorn_index->acorn.efSearch = ef;
         } else {
             acorn_index->acorn.efSearch = efSearch;
