@@ -1439,31 +1439,39 @@ void benchmark_acorn(InputParser &input) {
 }
 
 void benchmark_navix(InputParser &input) {
-    const std::string &vectorPath = input.getCmdOption("-vectorPath");
-    const std::string &queryPath = input.getCmdOption("-queryPath");
-    const std::string &gtPath = input.getCmdOption("-gtPath");
-    const std::string &maskPath = input.getCmdOption("-maskPath");
+    const std::string &dataPath = input.getCmdOption("-dataPath");
+    const std::string &basePath = input.getCmdOption("-basePath");
+    const std::vector<std::string> sels = parseCommaSeparated(input.getCmdOption("-sels"));
+    const std::vector<int> efS = parseCommaSeparatedIntegers(input.getCmdOption("-efS"));
+    const int autoEf = stoi(input.getCmdOption("-autoEf"));
     int k = stoi(input.getCmdOption("-k"));
     int M = stoi(input.getCmdOption("-M"));
-    int efSearch = stoi(input.getCmdOption("-efSearch"));
+    int efConstruction = stoi(input.getCmdOption("-efConstruction"));
     int nThreads = stoi(input.getCmdOption("-nThreads"));
+    float minRecall = stof(input.getCmdOption("-minRecall"));
+    float maxRecall = stof(input.getCmdOption("-maxRecall"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
+    const std::string &resultPath = input.getCmdOption("-resultPath");
+    const int useIp = stoi(input.getCmdOption("-useIp"));
+    std::vector<std::string> maskPaths, gtPath;
+    std::string queryPath;
+    populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPath, queryPath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(vectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(dataPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
-    loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
+    printf("Base num vectors: %zu\n", baseNumVectors);
     printf("Query num vectors: %zu\n", queryNumVectors);
-    printf("Query dimension: %zu\n", baseDimension);
+
+    // First build the index
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    auto *filteredMask = new uint8_t[baseNumVectors];
     auto index = faiss::IndexHNSWFlat(baseDimension, M, 1);
     faiss::IndexHNSWFlat* hnsw_index = &index;
-    hnsw_index->hnsw.efSearch = efSearch;
+    hnsw_index->hnsw.efConstruction = efConstruction;
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
         // Print grond truth num vectors
@@ -1477,32 +1485,81 @@ void benchmark_navix(InputParser &input) {
         faiss::write_index(hnsw_index, storagePath.c_str());
     } else {
         hnsw_index = dynamic_cast<faiss::IndexHNSWFlat *>(faiss::read_index(storagePath.c_str()));
-        hnsw_index->hnsw.efSearch = efSearch;
+        hnsw_index->hnsw.efConstruction = efConstruction;
     }
 
-    auto recall = 0.0;
-    auto labels = new faiss::idx_t[k];
-    auto distances = new float[k];
-    faiss::VisitedTable visited(hnsw_index->ntotal);
-    faiss::HNSWStats stats;
-    auto startTime = std::chrono::high_resolution_clock::now();
-    for (size_t i = 0; i < queryNumVectors; i++) {
-        hnsw_index->navix_search(queryVecs + (i * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask + (i * baseNumVectors)), visited, stats);
-        auto gt = gtVecs + i * k;
-        for (int j = 0; j < k; j++) {
-            if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
-                recall++;
-            }
+    omp_set_num_threads(1);
+
+    // Todo: Write the time to build the index
+
+    // Now perform search for each selectivity
+    for (int i = 0; i < sels.size(); i++) {
+        auto& selectivity = sels[i];
+        printf("Selectivity: %s\n", selectivity.c_str());
+        auto efSearch = efS[i];
+        auto& maskPathStr = maskPaths[i];
+        auto& gtPathStr = gtPath[i];
+        printf("gtPath: %s\n", gtPathStr.c_str());
+        printf("maskPath: %s\n", maskPathStr.c_str());
+        loadFromFile(gtPathStr, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+        loadFromFile(maskPathStr, filteredMask, baseNumVectors);
+
+        printf("efSearch: %d, selectivity: %s\n", efSearch, sels[i].c_str());
+        if (autoEf) {
+            auto ef = tuneEfByStep([&](int ef) {
+                hnsw_index->hnsw.efSearch = ef;
+                faiss::VisitedTable visited(hnsw_index->ntotal);
+                faiss::HNSWStats stats;
+                auto labels = new faiss::idx_t[k];
+                auto distances = new float[k];
+                auto recall = 0.0;
+                for (size_t j = 0; j < queryNumVectors; j++) {
+                    hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    auto gt = gtVecs + j * k;
+                    for (int m = 0; m < k; m++) {
+                        if (std::find(gt, gt + k, labels[m]) != (gt + k)) {
+                            recall++;
+                        }
+                    }
+                    visited.advance();
+                }
+                printf("Recall: %f\n", recall);
+                auto recallPerQuery = recall / queryNumVectors;
+                return recallPerQuery / k;
+            }, minRecall, maxRecall, 100, 1500, 50);
+            hnsw_index->hnsw.efSearch = ef;
+        } else {
+            hnsw_index->hnsw.efSearch = efSearch;
         }
-        visited.advance();
+
+        // Run the benchmark
+        auto recall = 0.0;
+        auto labels = new faiss::idx_t[k];
+        auto distances = new float[k];
+        faiss::VisitedTable visited(hnsw_index->ntotal);
+        faiss::HNSWStats stats;
+        long durationPerQuery = 0;
+        for (size_t j = 0; j < queryNumVectors; j++) {
+            auto startTime = std::chrono::high_resolution_clock::now();
+            hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            auto endTime = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
+            durationPerQuery += duration;
+            auto gt = gtVecs + j * k;
+            for (int m = 0; m < k; m++) {
+                if (std::find(gt, gt + k, labels[m]) != (gt + k)) {
+                    recall++;
+                }
+            }
+            visited.advance();
+        }
+        auto config = fmt::format("navix_{}", M);
+        write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6,
+                          recall / (queryNumVectors * k), efSearch, selectivity);
     }
 
-    auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    auto recallPerQuery = recall / queryNumVectors;
-    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
-    std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
-    std::cout << "Query time: " << duration_search << " ms" << std::endl;
+    delete[] filteredMask;
+    delete[] gtVecs;
 }
 
 std::pair<int, int> get_range(const char* filteredMask, int n) {
