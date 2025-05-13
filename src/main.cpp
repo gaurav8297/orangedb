@@ -1383,6 +1383,7 @@ void benchmark_acorn(InputParser &input) {
                         }
                     }
                 }
+                printf("Recall: %f\n", recall);
                 auto recallPerQuery = recall / queryNumVectors;
                 return recallPerQuery / k;
             }, minRecall, maxRecall, 100, 1000, 50);
