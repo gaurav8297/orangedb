@@ -224,11 +224,6 @@ void acorn_add_vertices(
 
                     acorn.add_with_locks(*dis, pt_level, pt_id, locks, vt);
 
-                    // Print the nodes ingested
-                    if (i % 50000 == 0) {
-                        printf("Ingested 50K nodes!");
-                    }
-
                     if (prev_display >= 0 && i - i0 > prev_display + 10000) {
                         prev_display = i - i0;
                         printf("  %d / %d\r", i - i0, i1 - i0);

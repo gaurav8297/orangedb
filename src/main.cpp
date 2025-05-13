@@ -1233,7 +1233,7 @@ int tuneEfByStep(std::function<double(int)> getRecall,
                  int step = 50) {
     int ef = efMin;
     double recall = getRecall(ef);
-    printf("ef: %d, recall: %f\n", ef, recall);
+    printf("efMin: %d, recall: %f\n", ef, recall);
 
     // If already inside target range, done.
     if (recall >= targetLow) {
@@ -1242,6 +1242,7 @@ int tuneEfByStep(std::function<double(int)> getRecall,
 
     // if efMax is unable to reach targetLow, return efMax
     recall = getRecall(efMax);
+    printf("efMax: %d, recall: %f\n", efMax, recall);
     if (recall <= targetLow) {
         return efMax;
     }
@@ -1313,6 +1314,7 @@ void benchmark_acorn(InputParser &input) {
     float maxRecall = stof(input.getCmdOption("-maxRecall"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
+    const std::string &resultPath = input.getCmdOption("-resultPath");
     std::vector<std::string> maskPaths, gtPath;
     std::string queryPath;
     populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPath, queryPath);
@@ -1393,7 +1395,7 @@ void benchmark_acorn(InputParser &input) {
             auto startTime = std::chrono::high_resolution_clock::now();
             acorn_index->search(1, queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask));
             auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
             durationPerQuery += duration;
             auto gt = gtVecs + j * k;
             for (int m = 0; m < k; m++) {
@@ -1403,7 +1405,7 @@ void benchmark_acorn(InputParser &input) {
             }
         }
         auto config = fmt::format("acorn_{}", gamma);
-        write_json_result(basePath, config, queryNumVectors, (double) durationPerQuery / queryNumVectors,
+        write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6,
                           recall / (queryNumVectors * k), efSearch, selectivity);
     }
 
