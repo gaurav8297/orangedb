@@ -1464,12 +1464,13 @@ void benchmark_navix(InputParser &input) {
     float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     printf("Base num vectors: %zu\n", baseNumVectors);
+    printf("Base dimension: %zu\n", baseDimension);
     printf("Query num vectors: %zu\n", queryNumVectors);
 
     // First build the index
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     auto *filteredMask = new uint8_t[baseNumVectors];
-    auto index = faiss::IndexHNSWFlat(baseDimension, 32, 1);
+    auto index = faiss::IndexHNSWFlat(baseDimension, M, 1);
     faiss::IndexHNSWFlat* hnsw_index = &index;
     hnsw_index->hnsw.efConstruction = efConstruction;
     if (!readFromDisk) {
