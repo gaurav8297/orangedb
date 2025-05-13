@@ -1386,7 +1386,7 @@ void benchmark_acorn(InputParser &input) {
                 printf("Recall: %f\n", recall);
                 auto recallPerQuery = recall / queryNumVectors;
                 return recallPerQuery / k;
-            }, minRecall, maxRecall, 100, 1000, 50);
+            }, minRecall, maxRecall, 100, 10000, 50);
             acorn_index->acorn.efSearch = ef;
         } else {
             acorn_index->acorn.efSearch = efSearch;
