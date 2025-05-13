@@ -1469,7 +1469,7 @@ void benchmark_navix(InputParser &input) {
     // First build the index
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     auto *filteredMask = new uint8_t[baseNumVectors];
-    auto index = faiss::IndexHNSWFlat(baseDimension, 32, 1, faiss::METRIC_INNER_PRODUCT);
+    auto index = faiss::IndexHNSWFlat(baseDimension, 32, 1);
     faiss::IndexHNSWFlat* hnsw_index = &index;
     hnsw_index->hnsw.efConstruction = efConstruction;
     if (!readFromDisk) {
@@ -1487,7 +1487,7 @@ void benchmark_navix(InputParser &input) {
     } else {
         hnsw_index = dynamic_cast<faiss::IndexHNSWFlat *>(faiss::read_index(storagePath.c_str()));
         hnsw_index->hnsw.efConstruction = efConstruction;
-        hnsw_index->metric_type = faiss::METRIC_INNER_PRODUCT;
+        // hnsw_index->metric_type = faiss::METRIC_INNER_PRODUCT;
     }
 
     omp_set_num_threads(1);
