@@ -2071,7 +2071,7 @@ HNSWStats HNSW::navix_hybrid_search(
             navix_one_hop(begin, end, qdis, k, candidates, I, D, vt, filter_id_map, nres, stats);
         } else if (estimated_full_two_hop_distance_comp > estimated_directed_distance_comp) {
             // Directed Two Hop
-            navix_directed(begin, end, qdis, k, candidates, I, D, vt, filter_id_map, total_nbrs * 0.8, nres, stats);
+            navix_directed(begin, end, qdis, k, candidates, I, D, vt, filter_id_map, total_nbrs, nres, stats);
         } else {
             // Blind Two Hop
             // navix_blind(begin, end, qdis, k, candidates, I, D, vt, filter_id_map, total_nbrs, nres, stats);

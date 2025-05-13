@@ -1469,7 +1469,7 @@ void benchmark_navix(InputParser &input) {
     // First build the index
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     auto *filteredMask = new uint8_t[baseNumVectors];
-    auto index = faiss::IndexHNSWFlat(baseDimension, M, 1, faiss::METRIC_INNER_PRODUCT);
+    auto index = faiss::IndexHNSWFlat(baseDimension, 32, 1, faiss::METRIC_INNER_PRODUCT);
     faiss::IndexHNSWFlat* hnsw_index = &index;
     hnsw_index->hnsw.efConstruction = efConstruction;
     if (!readFromDisk) {
@@ -1477,6 +1477,7 @@ void benchmark_navix(InputParser &input) {
         // Print grond truth num vectors
         printf("Building index\n");
         auto start = std::chrono::high_resolution_clock::now();
+        hnsw_index->train(baseNumVectors, baseVecs);
         hnsw_index->add(baseNumVectors, baseVecs);
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -1515,7 +1516,8 @@ void benchmark_navix(InputParser &input) {
                 auto distances = new float[k];
                 auto recall = 0.0;
                 for (size_t j = 0; j < queryNumVectors; j++) {
-                    hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    // hnsw_index->search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    hnsw_index->search(1, queryVecs + (j * baseDimension), k, distances, labels);
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
                         if (std::find(gt, gt + k, labels[m]) != (gt + k)) {
