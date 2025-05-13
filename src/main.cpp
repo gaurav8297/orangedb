@@ -744,7 +744,7 @@ void generateFilterGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    L2DistanceComputer dc(vectors, dim, numVectors);
+    CosineDistanceComputer dc(vectors, dim, numVectors);
 #pragma omp parallel
     {
         auto localDc = dc.clone();
@@ -752,7 +752,7 @@ void generateFilterGroundTruth(
 #pragma omp for schedule(static)
         for (size_t i = 0; i < queryNumVectors; i++) {
             double dists[k];
-            index.knnFiltered(k, queryVecs + i * dim, dists, gtVecs + i * k, filteredMask + i * numVectors);
+            index.knnFiltered(k, queryVecs + i * dim, dists, gtVecs + i * k, filteredMask);
         }
     }
 }
@@ -791,10 +791,9 @@ void generateFilterGroundTruth(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     auto k = stoi(input.getCmdOption("-k"));
     const std::string &gtPath = input.getCmdOption("-gtPath");
-    auto selectivity = stof(input.getCmdOption("-selectivity"));
-    const std::string &filteredMaskPath = input.getCmdOption("-filteredMaskPath");
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
+    const std::string &filteredMaskPath = input.getCmdOption("-maskPath");
+    auto baseVectorPath = fmt::format("{}/new_base.fvecs", basePath);
+    auto queryVectorPath = fmt::format("{}/uncorrelated/queries.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -805,14 +804,24 @@ void generateFilterGroundTruth(InputParser &input) {
     printf("Base vectors: %zu, Query vectors: %zu\n", baseNumVectors, queryNumVectors);
     printf("Base dimension: %zu, Query dimension: %zu\n", baseDimension, queryDimension);
 
-    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
-    memset(filteredMask, 0, queryNumVectors * baseNumVectors);
-    setFilterMaskUsingSelectivity(queryNumVectors, filteredMask, baseNumVectors, selectivity);
+    auto *filteredMask = new uint8_t[baseNumVectors];
+    // memset(filteredMask, 0, queryNumVectors * baseNumVectors);
+    // setFilterMaskUsingSelectivity(queryNumVectors, filteredMask, baseNumVectors, selectivity);
+    loadFromFile(filteredMaskPath, filteredMask, baseNumVectors);
+    // Calculate selectivity from filteredMask
+    size_t numFiltered = 0;
+    for (int i = 0; i < queryNumVectors; i++) {
+        if (filteredMask[i] == 1) {
+            numFiltered++;
+        }
+    }
+    float selectivity = (float) numFiltered / baseNumVectors;
+    printf("Selectivity: %f\n", selectivity);
     generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
     // serialize gtVecs to a file
     writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     // serialize filteredMask to a file
-    writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
+    // writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
 }
 
 void generateGroundTruth(
@@ -1228,44 +1237,52 @@ void calculate_dists(InputParser &input) {
 int tuneEfByStep(std::function<double(int)> getRecall,
                  double targetLow,
                  double targetHigh,
-                 int efMin = 1,
-                 int efMax = 1024,
-                 int step = 50) {
-    int ef = efMin;
-    double recall = getRecall(ef);
-    printf("efMin: %d, recall: %f\n", ef, recall);
-
-    // If already inside target range, done.
-    if (recall >= targetLow) {
-        return ef;
+                 int efMin = 100,
+                 int efMax = 1000,
+                 int step  = 50) {
+    // 1) Evaluate at efMin
+    double recallMin = getRecall(efMin);
+    printf("efMin: %d, recall: %f\n", efMin, recallMin);
+    if (recallMin >= targetLow && recallMin <= targetHigh) {
+        return efMin;
     }
 
-    // if efMax is unable to reach targetLow, return efMax
-    recall = getRecall(efMax);
-    printf("efMax: %d, recall: %f\n", efMax, recall);
-    if (recall <= targetLow) {
+    // 2) Evaluate at efMax
+    double recallMax = getRecall(efMax);
+    printf("efMax: %d, recall: %f\n", efMax, recallMax);
+    // If even efMax is below your lower bound, just return efMax (best you can do)
+    if (recallMax < targetLow) {
+        return efMax;
+    }
+    // Or if efMax falls in range, return it immediately
+    if (recallMax >= targetLow && recallMax <= targetHigh) {
         return efMax;
     }
 
-    // Keep track to detect no‐change loops
+    // 3) Step through [efMin, efMax]
+    int ef     = efMin;
+    double rec = recallMin;
     int prevEf = -1;
     while (ef != prevEf) {
         prevEf = ef;
 
-        if (recall < targetLow) ef = std::min(ef + step, efMax);
-        else if (recall > targetHigh) ef = std::max(ef - step, efMin);
-        else break; // inside range
+        // if too low, step up; if too high, step down
+        if (rec < targetLow)        ef = std::min(ef + step, efMax);
+        else if (rec > targetHigh)  ef = std::max(ef - step, efMin);
+        else                         break;  // in the sweet spot
 
-        // Recompute recall at new ef
-        recall = getRecall(ef);
-        printf("ef: %d, recall: %f\n", ef, recall);
+        rec = getRecall(ef);
+        printf("ef: %d, recall: %f\n", ef, rec);
     }
 
-    // Final check
-    if (recall >= targetLow && recall <= targetHigh) {
+    // final check
+    if (rec >= targetLow && rec <= targetHigh) {
         return ef;
     }
-    return efMax; // no suitable ef found in [efMin,efMax]
+
+    // fallback: return efMax because we know recallMax > targetHigh
+    // (you could also return 'ef' here if you prefer the last tried value)
+    return efMax;
 }
 
 void populate_mask_and_gt_paths(const std::string &basePath, const std::vector<std::string> &sels,
