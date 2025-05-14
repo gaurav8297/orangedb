@@ -1992,6 +1992,7 @@ void test_clustering_data(InputParser &input) {
     const float lambda = stof(input.getCmdOption("-lambda"));
     const int k = stoi(input.getCmdOption("-k"));
     const int nProbes = stoi(input.getCmdOption("-nProbes"));
+    const int numThreads = stoi(input.getCmdOption("-numThreads"));
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -2003,6 +2004,7 @@ void test_clustering_data(InputParser &input) {
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 
+    omp_set_num_threads(numThreads);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     int numCentroids = numVectors / clusterSize;
     int minCentroidSize = (numVectors / numCentroids) * 0.5;
@@ -2321,6 +2323,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                                  nMiniProbes);
     printf("Recall: %f\n", recall);
     index.printStats();
+    index.storeScoreForMegaClusters();
 
     for (int iter = 0; iter < iterations; iter++) {
         index.reclusterAllMegaCentroids();
@@ -2335,10 +2338,10 @@ void benchmark_fast_reclustering(InputParser &input) {
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
         printf("After micro reclustering, iteration: %d, recall: %f\n", iter, recall);
+        index.printStats();
         // printf("Flushing to disk\n");
         // index.flush_to_disk(storagePath);
     }
-    index.printStats();
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
