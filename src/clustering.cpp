@@ -46,7 +46,7 @@ namespace orangedb {
         for (int i = 0; i < nIter; i++) {
             // printf("Running iteration: %d\n", i);
             // Initialize the index
-            L2DistanceComputer dc = L2DistanceComputer(centroids.data(), dim, numCentroids);
+            CosineDistanceComputer dc = CosineDistanceComputer(centroids.data(), dim, numCentroids);
             IndexOneNN index = IndexOneNN(&dc, dim, numCentroids, lambda);
 
             // Phase 1: Assign each vector to the nearest centroid
@@ -73,7 +73,7 @@ namespace orangedb {
 
     void Clustering::assignCentroids(const float *data, int n, int32_t *assign) {
         // Initialize the index
-        L2DistanceComputer dc = L2DistanceComputer(centroids.data(), dim, numCentroids);
+        CosineDistanceComputer dc = CosineDistanceComputer(centroids.data(), dim, numCentroids);
         IndexOneNN index = IndexOneNN(&dc, dim, numCentroids);
 
         // Assign each vector to the nearest centroid
@@ -84,7 +84,7 @@ namespace orangedb {
     }
 
     void Clustering::assignCentroids(const float *data, int n, double *dist, int32_t *assign) {
-        L2DistanceComputer dc = L2DistanceComputer(centroids.data(), dim, numCentroids);
+        CosineDistanceComputer dc = CosineDistanceComputer(centroids.data(), dim, numCentroids);
         IndexOneNN index = IndexOneNN(&dc, dim, numCentroids);
         index.search(n, data, dist, assign);
     }
