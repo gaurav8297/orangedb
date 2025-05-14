@@ -2004,6 +2004,9 @@ void test_clustering_data(InputParser &input) {
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 
+    // Check if baseVec is okay!!
+
+
     omp_set_num_threads(numThreads);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     printf("baseNumVectors: %d, baseDimension: %d\n", baseNumVectors, baseDimension);
