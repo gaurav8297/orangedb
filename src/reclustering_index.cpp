@@ -145,6 +145,9 @@ namespace orangedb {
                     numMegaCentroids, megaMegaCentroids, megaMegaCentroidIds);
 
         for (const auto & megaMegaCentroidId : megaMegaCentroidIds) {
+            if (megaMegaCentroidId.size() == 0) {
+                continue;
+            }
             reclusterFullMegaCentroids(megaMegaCentroidId);
         }
     }
