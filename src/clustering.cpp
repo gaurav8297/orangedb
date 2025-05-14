@@ -190,6 +190,7 @@ namespace orangedb {
 
     void IndexOneNN::search(int n, const float *queries, double *distances, int32_t *resultIds) {
         std::vector<double> hist(numEntries, 0);
+        printf("n = %d, dim = %d\n", n, dim);
         for (int i = n-1; i >= 0; i--) {
             auto query = queries + i * dim;
             printf("Query %d: ", i);
