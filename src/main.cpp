@@ -2000,6 +2000,16 @@ void test_clustering_data(InputParser &input) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
 
+    for (int i = baseNumVectors-1; i >= 0; i--) {
+        auto query = baseVecs + i * baseDimension;
+        printf("Query %d: ", i);
+        for (int m = 0; m < 10; m++) {
+            printf("%f ", query[m]);
+        }
+        printf("\n");
+        break;
+    }
+
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
