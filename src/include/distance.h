@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <unistd.h>
 #include <unordered_set>
 #include <memory>
@@ -141,6 +142,7 @@ namespace orangedb {
 
         inline void computeDistance(vector_idx_t id, double *result) override {
             CHECK_ARGUMENT(id < n, fmt::format("Index out of bounds {} < {}", id, n).data());
+            assert(id < n);
             const float *y = data + (id * dim);
             simsimd_cos_f32(query, y, dim, result);
         }
