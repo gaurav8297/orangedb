@@ -849,17 +849,16 @@ void generateGroundTruth(
 }
 
 void generateGroundTruth(InputParser &input) {
-    const std::string &basePath = input.getCmdOption("-basePath");
+    const std::string &basePath = input.getCmdOption("-dataPath");
+    const std::string &queryPath = input.getCmdOption("-queryPath");
     auto k = stoi(input.getCmdOption("-k"));
     auto numVectors = stoi(input.getCmdOption("-numVectors"));
     const std::string &gtPath = input.getCmdOption("-gtPath");
-    auto baseVectorPath = fmt::format("{}/base.fvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/query.fvecs", basePath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readFvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readFvecFile(basePath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readFvecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
@@ -1479,7 +1478,7 @@ void benchmark_navix(InputParser &input) {
         // Print grond truth num vectors
         printf("Building index\n");
         auto start = std::chrono::high_resolution_clock::now();
-        hnsw_index->train(baseNumVectors, baseVecs);
+        // hnsw_index->train(baseNumVectors, baseVecs);
         hnsw_index->add(baseNumVectors, baseVecs);
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -1514,19 +1513,20 @@ void benchmark_navix(InputParser &input) {
                 hnsw_index->hnsw.efSearch = ef;
                 faiss::VisitedTable visited(hnsw_index->ntotal);
                 faiss::HNSWStats stats;
-                auto labels = new faiss::idx_t[k];
-                auto distances = new float[k];
+
                 auto recall = 0.0;
                 for (size_t j = 0; j < queryNumVectors; j++) {
+                    auto labels = new faiss::idx_t[k];
+                    auto distances = new float[k];
                     // hnsw_index->search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
                     hnsw_index->search(1, queryVecs + (j * baseDimension), k, distances, labels);
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
-                        if (std::find(gt, gt + k, labels[m]) != (gt + k)) {
+                        if (std::find(gt, gt + k, (vector_idx_t)labels[m]) != (gt + k)) {
                             recall++;
                         }
                     }
-                    visited.advance();
+                    // visited.advance();
                 }
                 printf("Recall: %f\n", recall);
                 auto recallPerQuery = recall / queryNumVectors;

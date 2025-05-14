@@ -1169,7 +1169,6 @@ void HNSW::add_with_locks(
             for (int i=0; i <= max_level; i++){
                 nb_per_level[i] = nb_per_level[i] + 1;
             }
-            
         }
         // std::cout << "--add_with_locks here0.3" << std::endl;
     }

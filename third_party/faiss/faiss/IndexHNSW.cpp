@@ -508,6 +508,7 @@ void IndexHNSW::search(
         FAISS_THROW_IF_NOT_MSG(params, "params type invalid");
         efSearch = params->efSearch;
     }
+    printf("efSearch: %d\n", efSearch);
     size_t n1 = 0, n2 = 0, n3 = 0, ndis = 0, nreorder = 0;
 
     idx_t check_period =
