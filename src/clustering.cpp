@@ -39,6 +39,15 @@ namespace orangedb {
         //        numCentroids, nIter, minCentroidSize, maxCentroidSize);
         // Sample data from the given data
         printf("Running reclustering on %d vectors with %d centroids\n", n, numCentroids);
+        for (int i = n-1; i >= 0; i--) {
+            auto query = data + i * dim;
+            printf("Query %d: ", i);
+            for (int m = 0; m < 10; m++) {
+                printf("%f ", query[m]);
+            }
+            printf("\n");
+            break;
+        }
         float *sample = nullptr;
         int nSample = sampleData(n, data, &sample);
 
