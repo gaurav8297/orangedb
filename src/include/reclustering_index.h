@@ -76,6 +76,8 @@ namespace orangedb {
 
         void reclusterFast();
 
+        void reclusterFull(int n);
+
         void reclusterAllMegaCentroids();
 
         void storeScoreForMegaClusters();

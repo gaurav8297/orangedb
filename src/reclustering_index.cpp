@@ -75,12 +75,14 @@ namespace orangedb {
         // Create the mega centroids just by taking the mean
         std::vector<float> newMegaCentroid;
         std::vector<std::vector<vector_idx_t> > miniClusterIds;
-        calcMeanCentroid(
-            newMiniCentroids.data(),
-            newMiniClusterIds.data(),
-            newMiniClusterIds.size(),
-            newMegaCentroid,
-            miniClusterIds);
+        // calcMeanCentroid(
+        //     newMiniCentroids.data(),
+        //     newMiniClusterIds.data(),
+        //     newMiniClusterIds.size(),
+        //     newMegaCentroid,
+        //     miniClusterIds);
+        clusterData(newMiniCentroids.data(), newMiniClusterIds.data(), newMiniClusterIds.size(),
+                    config.megaCentroidSize, newMegaCentroid, miniClusterIds);
 
         // Copy the new mega centroids
         auto curMegaClusterSize = megaCentroids.size() / dim;
@@ -126,6 +128,10 @@ namespace orangedb {
             megaClusterIds[i] = i;
         }
         reclusterFastMegaCentroids(megaClusterIds);
+    }
+
+    void ReclusteringIndex::reclusterFull(int n) {
+
     }
 
     void ReclusteringIndex::mergeNewMiniCentroids() {
