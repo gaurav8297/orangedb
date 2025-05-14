@@ -38,6 +38,7 @@ namespace orangedb {
         // printf("Training numCentroids: %d, nIter: %d, minCentroidSize: %d, maxCentroidSize: %d\n",
         //        numCentroids, nIter, minCentroidSize, maxCentroidSize);
         // Sample data from the given data
+        printf("Running reclustering on %d vectors with %d centroids\n", n, numCentroids);
         float *sample = nullptr;
         int nSample = sampleData(n, data, &sample);
 
@@ -173,6 +174,7 @@ namespace orangedb {
         int nSample = std::min(maxCentroidSize * numCentroids, n);
         if (nSample == n) {
             *sampleData = data;
+            printf("No need to sample data. Using all the data\n");
             return nSample;
         }
 
