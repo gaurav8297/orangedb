@@ -2029,6 +2029,15 @@ void test_clustering_data(InputParser &input) {
     printf("Init centroids\n");
     clustering.initCentroids(baseVecs, baseNumVectors);
     printf("Train\n");
+    for (int i = baseNumVectors-1; i >= 0; i--) {
+        auto query = baseVecs + i * baseDimension;
+        printf("Query %d: ", i);
+        for (int m = 0; m < 10; m++) {
+            printf("%f ", query[m]);
+        }
+        printf("\n");
+        break;
+    }
     clustering.train(baseVecs, baseNumVectors);
 
     auto labels = new int32_t[baseNumVectors];
