@@ -38,16 +38,6 @@ namespace orangedb {
         // printf("Training numCentroids: %d, nIter: %d, minCentroidSize: %d, maxCentroidSize: %d\n",
         //        numCentroids, nIter, minCentroidSize, maxCentroidSize);
         // Sample data from the given data
-        printf("Running reclustering on %d vectors with %d centroids\n", n, numCentroids);
-        for (int i = n-1; i >= 0; i--) {
-            auto query = data + ((size_t)i) * ((size_t)dim);
-            printf("Query %d: ", i);
-            for (int m = 0; m < 10; m++) {
-                printf("%f ", query[m]);
-            }
-            printf("\n");
-            break;
-        }
         float *sample = nullptr;
         int nSample = sampleData(n, data, &sample);
 
@@ -112,7 +102,7 @@ namespace orangedb {
             size_t c1 = (numCentroids * (rank + 1)) / nt;
 
             // compute the new centroids
-            for (int i = 0; i < n; i++) {
+            for (size_t i = 0; i < n; i++) {
                 int c = assign[i];
                 if (c0 <= c && c < c1) {
                     auto centroid = newCentroids + c * dim;
@@ -141,15 +131,15 @@ namespace orangedb {
 
     void Clustering::splitClusters(int *hist, float *newCentroids) {
         // Split the big clusters
-        for (int small = 0; small < numCentroids; small++) {
+        for (size_t small = 0; small < numCentroids; small++) {
             // skip the clusters that are already large enough
             if (hist[small] > minCentroidSize) {
                 continue;
             }
 
             // find the biggest cluster
-            int big = 0;
-            for (int j = 1; j < numCentroids; j++) {
+            size_t big = 0;
+            for (size_t j = 1; j < numCentroids; j++) {
                 if (hist[j] > hist[big]) {
                     big = j;
                 }
@@ -191,7 +181,7 @@ namespace orangedb {
         std::vector<vector_idx_t> perm(nSample);
         RandomGenerator rg(seed);
         rg.randomPerm(n, perm.data(), nSample);
-        for (int i = 0; i < nSample; i++) {
+        for (size_t i = 0; i < nSample; i++) {
             memcpy(*sampleData + i * dim, data + perm[i] * dim, dim * sizeof(float));
         }
         return nSample;
@@ -199,20 +189,11 @@ namespace orangedb {
 
     void IndexOneNN::search(int n, const float *queries, double *distances, int32_t *resultIds) {
         std::vector<double> hist(numEntries, 0);
-        printf("n = %d, dim = %d\n", n, dim);
-        for (int i = n-1; i >= 0; i--) {
-            auto query = queries + i * dim;
-            printf("Query %d: ", i);
-            for (int m = 0; m < 10; m++) {
-                printf("%f ", query[m]);
-            }
-            printf("\n");
-        }
 #pragma omp parallel
         {
             auto localDc = dc->clone();
 #pragma omp for
-            for (int i = 0; i < n; i++) {
+            for (size_t i = 0; i < n; i++) {
                 localDc->setQuery(queries + i * dim);
                 double minDistance = std::numeric_limits<double>::max();
                 vector_idx_t j = 0, minId = 0;
@@ -254,7 +235,7 @@ namespace orangedb {
         {
             auto localDc = dc->clone();
 #pragma omp for
-            for (int i = 0; i < n; i++) {
+            for (size_t i = 0; i < n; i++) {
                 localDc->setQuery(queries + i * dim);
                 double minDistance = std::numeric_limits<double>::max();
                 vector_idx_t j = 0, minId = 0;
