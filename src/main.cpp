@@ -832,7 +832,7 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    L2DistanceComputer dc(vectors, dim, numVectors);
+    CosineDistanceComputer dc(vectors, dim, numVectors);
 #pragma omp parallel
     {
         auto localDc = dc.clone();
