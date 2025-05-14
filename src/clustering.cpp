@@ -196,6 +196,12 @@ namespace orangedb {
 #pragma omp for
             for (int i = 0; i < n; i++) {
                 localDc->setQuery(queries + i * dim);
+                printf("Query %d: ", i);
+                for (int m = 0; m < 10; m++) {
+                    printf("%f ", queries[i * dim + m]);
+                }
+                printf("\n");
+
                 double minDistance = std::numeric_limits<double>::max();
                 vector_idx_t j = 0, minId = 0;
                 while (j + 4 < numEntries) {
