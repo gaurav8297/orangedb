@@ -2006,6 +2006,7 @@ void test_clustering_data(InputParser &input) {
 
     omp_set_num_threads(numThreads);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+    printf("baseNumVectors: %d, baseDimension: %d\n", baseNumVectors, baseDimension);
     int numCentroids = numVectors / clusterSize;
     int minCentroidSize = (numVectors / numCentroids) * 0.5;
     int maxCentroidSize = (numVectors / numCentroids) * 1.2;
