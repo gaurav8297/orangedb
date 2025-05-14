@@ -190,18 +190,20 @@ namespace orangedb {
 
     void IndexOneNN::search(int n, const float *queries, double *distances, int32_t *resultIds) {
         std::vector<double> hist(numEntries, 0);
+        for (int i = n-1; i >= 0; i--) {
+            auto query = queries + i * dim;
+            printf("Query %d: ", i);
+            for (int m = 0; m < 10; m++) {
+                printf("%f ", query[m]);
+            }
+            printf("\n");
+        }
 #pragma omp parallel
         {
             auto localDc = dc->clone();
 #pragma omp for
             for (int i = 0; i < n; i++) {
                 localDc->setQuery(queries + i * dim);
-                printf("Query %d: ", i);
-                for (int m = 0; m < 10; m++) {
-                    printf("%f ", queries[i * dim + m]);
-                }
-                printf("\n");
-
                 double minDistance = std::numeric_limits<double>::max();
                 vector_idx_t j = 0, minId = 0;
                 while (j + 4 < numEntries) {
@@ -238,15 +240,6 @@ namespace orangedb {
 
     void IndexOneNN::search(int n, const float *queries, int32_t *resultIds) {
         std::vector<double> hist(numEntries, 0);
-        for (int i = n-1; i >= 0; i--) {
-            auto query = queries + i * dim;
-            printf("Query %d: ", i);
-            for (int m = 0; m < 10; m++) {
-                printf("%f ", query[m]);
-            }
-            printf("\n");
-        }
-
 #pragma omp parallel
         {
             auto localDc = dc->clone();
