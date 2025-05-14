@@ -2278,6 +2278,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int numQueries = stoi(input.getCmdOption("-numQueries"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
+    const int numThreads = stoi(input.getCmdOption("-numThreads"));
+    omp_set_num_threads(numThreads);
 
     // Read dataset
     size_t baseDimension, baseNumVectors;
@@ -2288,7 +2290,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
-    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, L2,
+    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, COSINE,
                                    0, 0);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
@@ -2326,8 +2328,9 @@ void benchmark_fast_reclustering(InputParser &input) {
                                  nMiniProbes);
         printf("Iteration: %d, Recall: %f\n", iter, recall);
         printf("Flushing to disk\n");
-        index.flush_to_disk(storagePath);
+        // index.flush_to_disk(storagePath);
     }
+    index.printStats();
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
