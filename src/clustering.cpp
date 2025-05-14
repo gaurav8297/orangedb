@@ -238,6 +238,15 @@ namespace orangedb {
 
     void IndexOneNN::search(int n, const float *queries, int32_t *resultIds) {
         std::vector<double> hist(numEntries, 0);
+        for (int i = 0; i < n; i++) {
+            auto query = queries + i * dim;
+            printf("Query %d: ", i);
+            for (int m = 0; m < 10; m++) {
+                printf("%f ", query[m]);
+            }
+            printf("\n");
+        }
+
 #pragma omp parallel
         {
             auto localDc = dc->clone();
