@@ -130,8 +130,23 @@ namespace orangedb {
         reclusterFastMegaCentroids(megaClusterIds);
     }
 
-    void ReclusteringIndex::reclusterFull(int n) {
+    void ReclusteringIndex::reclusterFull(int numMegaCentroids) {
+        // List all mega centroids
+        std::vector<vector_idx_t> megaClusterIds(megaCentroids.size() / dim);
+        for (size_t i = 0; i < megaClusterIds.size(); i++) {
+            megaClusterIds[i] = i;
+        }
+        // reclusterOnlyMegaCentroids(megaClusterIds);
 
+        // Create Mega Mega centroids
+        std::vector<float> megaMegaCentroids;
+        std::vector<std::vector<vector_idx_t>> megaMegaCentroidIds;
+        clusterData(megaCentroids.data(), megaClusterIds.data(), megaClusterIds.size(),
+                    numMegaCentroids, megaMegaCentroids, megaMegaCentroidIds);
+
+        for (const auto & megaMegaCentroidId : megaMegaCentroidIds) {
+            reclusterFullMegaCentroids(megaMegaCentroidId);
+        }
     }
 
     void ReclusteringIndex::mergeNewMiniCentroids() {
@@ -205,10 +220,14 @@ namespace orangedb {
         // assert(std::find(megaAssign.begin(), megaAssign.end(), megaIdToRecluster) != megaAssign.end());
 
         // Take all the existing mini centroids and merge them
+        printf("ReclusteringIndex::reclusterFullMegaCentroids on %lu mega centroids\n",
+               megaClusterIds.size());
         auto totalVecs = 0;
         for (auto megaCentroidId: megaClusterIds) {
             auto microCentroidIds = megaMiniCentroidIds[megaCentroidId];
+            auto miniClusterSize = miniClusters.size();
             for (auto microCentroidId: microCentroidIds) {
+                assert(microCentroidId < miniClusterSize);
                 auto cluster = miniClusters[microCentroidId];
                 totalVecs += (cluster.size() / dim);
             }
@@ -253,7 +272,7 @@ namespace orangedb {
     }
 
     void ReclusteringIndex::reclusterFastMegaCentroids(std::vector<vector_idx_t> megaClusterIds) {
-        reclusterOnlyMegaCentroids(megaClusterIds);
+        // reclusterOnlyMegaCentroids(megaClusterIds);
         // It's possible that after reclustering the mega centroids has reduced in size.
         std::vector<vector_idx_t> newMegaClusterIds(megaCentroids.size() / dim);
         for (size_t i = 0; i < newMegaClusterIds.size(); i++) {
@@ -270,7 +289,6 @@ namespace orangedb {
         auto totalVecs = 0;
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
         auto miniClusterSize = miniClusters.size();
-        auto actualMiniClusterSize = miniCentroids.size() / dim;
         for (auto microCentroidId: microCentroidIds) {
             assert(microCentroidId < miniClusterSize);
             auto cluster = miniClusters[microCentroidId];

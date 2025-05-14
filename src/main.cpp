@@ -2270,7 +2270,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int megaCentroidSize = stoi(input.getCmdOption("-megaCentroidSize"));
     const int miniCentroidSize = stoi(input.getCmdOption("-miniCentroidSize"));
     const float lambda = stof(input.getCmdOption("-lambda"));
-    // const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
+    const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
     const int nMegaProbes = stoi(input.getCmdOption("-nMegaProbes"));
     const int nMiniProbes = stoi(input.getCmdOption("-nMiniProbes"));
     const int iterations = stoi(input.getCmdOption("-iterations"));
@@ -2326,12 +2326,15 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.reclusterAllMegaCentroids();
         auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                          nMiniProbes);
-        printf("Iteration: %d, Recall: %f\n", iter, recall);
-
-        index.reclusterFast();
+        printf("After reclustering only  mega centroids, iteration: %d, recall: %f\n", iter, recall);
+        if (numMegaReclusterCentroids == 1) {
+            index.reclusterFast();
+        } else {
+            index.reclusterFull(numMegaReclusterCentroids);
+        }
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
-        printf("Iteration: %d, Recall: %f\n", iter, recall);
+        printf("After micro reclustering, iteration: %d, recall: %f\n", iter, recall);
         // printf("Flushing to disk\n");
         // index.flush_to_disk(storagePath);
     }
