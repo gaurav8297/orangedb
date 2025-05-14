@@ -1472,6 +1472,7 @@ void benchmark_navix(InputParser &input) {
     auto *filteredMask = new uint8_t[baseNumVectors];
     auto index = faiss::IndexHNSWFlat(baseDimension, M, 1);
     faiss::IndexHNSWFlat* hnsw_index = &index;
+    hnsw_index->verbose = true;
     hnsw_index->hnsw.efConstruction = efConstruction;
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
