@@ -2323,11 +2323,16 @@ void benchmark_fast_reclustering(InputParser &input) {
     index.printStats();
 
     for (int iter = 0; iter < iterations; iter++) {
-        index.reclusterFast();
+        index.reclusterAllMegaCentroids();
         auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+                         nMiniProbes);
+        printf("Iteration: %d, Recall: %f\n", iter, recall);
+
+        index.reclusterFast();
+        recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
         printf("Iteration: %d, Recall: %f\n", iter, recall);
-        printf("Flushing to disk\n");
+        // printf("Flushing to disk\n");
         // index.flush_to_disk(storagePath);
     }
     index.printStats();

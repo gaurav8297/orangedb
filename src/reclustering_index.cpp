@@ -71,6 +71,7 @@ namespace orangedb {
             miniClusterVectorIds[curMiniClusterSize + i] = std::move(newMiniClusterVectorIds[i]);
         }
 
+        // TODO: Fix this
         // Create the mega centroids just by taking the mean
         std::vector<float> newMegaCentroid;
         std::vector<std::vector<vector_idx_t> > miniClusterIds;
