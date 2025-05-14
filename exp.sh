@@ -96,6 +96,7 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 
 ./build/release/bin/orangedb_main -run benchmarkClustering -baseVectorPath /home/centos/vector_dataset/wiki/base.fvecs -queryVectorPath /home/centos/vector_dataset/wiki/uncorrelated/queries.fvecs -groundTruthPath /home/centos/vector_dataset/wiki/gt.bin -k 100 -numVectors 100000000 -nIter 10 -clusterSize 500 -lambda 0 -nProbes 60 -numThreads 64
 
+./build/release/bin/orangedb_main -run generateGT -dataPath /home/centos/vector_dataset/wiki/random_base.fvecs -queryPath /home/centos/vector_dataset/wiki/uncorrelated/queries.fvecs -numVectors 100000000 -k 100 -gtPath /home/centos/vector_dataset/wiki/random_gt.bin
 
 ./build/release/bin/orangedb_main -run benchmarkAcorn -dataPath /home/centos/vector_dataset/arxiv/base.fvecs -basePath /home/centos/vector_dataset/arxiv/uncorrelated -sels 1,3,5,10,20,30,40,50,75,90 -efS 100,100,100,100,100,100,100,100,100,100 -autoEf 1 -k 100 -M 64 -gamma 1 -M_beta 128 -efSearch 300 -nThreads 32 -minRecall 0.950 -maxRecall 0.955 -readFromDisk 0 -storagePath /home/centos/vector_dataset/arxiv/acorn_1_index.bin -resultPath /home/centos/vector_dataset/arxiv/results
 
