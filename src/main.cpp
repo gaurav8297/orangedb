@@ -2325,6 +2325,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     printf("Recall: %f\n", recall);
     index.printStats();
     index.storeScoreForMegaClusters();
+    index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
         index.reclusterAllMegaCentroids();
@@ -2339,7 +2340,10 @@ void benchmark_fast_reclustering(InputParser &input) {
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
         printf("After micro reclustering, iteration: %d, recall: %f\n", iter, recall);
+        printf("Recalculating scores\n");
+        index.storeScoreForMegaClusters();
         index.printStats();
+        printf("Done with iteration: %d\n", iter);
         // printf("Flushing to disk\n");
         // index.flush_to_disk(storagePath);
     }
