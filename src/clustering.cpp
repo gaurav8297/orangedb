@@ -173,7 +173,7 @@ namespace orangedb {
         int nSample = std::min(maxCentroidSize * numCentroids, n);
         if (nSample == n) {
             *sampleData = data;
-            printf("No need to sample data. Using all the data\n");
+            // printf("No need to sample data. Using all the data\n");
             return nSample;
         }
 
