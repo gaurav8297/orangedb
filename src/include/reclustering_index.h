@@ -78,6 +78,8 @@ namespace orangedb {
 
         void reclusterFull(int n);
 
+        void reclusterBasedOnScore(int n);
+
         void reclusterAllMegaCentroids();
 
         void storeScoreForMegaClusters();
@@ -92,7 +94,7 @@ namespace orangedb {
     private:
         vector_idx_t getWorstMegaCentroid();
 
-        void reclusterFullMegaCentroids(std::vector<vector_idx_t> megaClusterIds);
+        std::vector<vector_idx_t> reclusterFullMegaCentroids(std::vector<vector_idx_t> megaClusterIds);
 
         void reclusterFastMegaCentroids(std::vector<vector_idx_t> megaClusterIds);
 

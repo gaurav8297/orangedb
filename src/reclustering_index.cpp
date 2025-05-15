@@ -152,6 +152,26 @@ namespace orangedb {
         }
     }
 
+    void ReclusteringIndex::reclusterBasedOnScore(int n) {
+        auto totalClusterSize = 0;
+        auto megaClusterSize = megaCentroids.size() / dim;
+        while (totalClusterSize <= megaClusterSize) {
+            auto worstMegaClusterId = getWorstMegaCentroid();
+            // Find the closest mega centroid
+            std::vector<vector_idx_t> megaAssign;
+            findKClosestMegaCentroids(megaCentroids.data() + (worstMegaClusterId * dim), n, megaAssign);
+            if (megaAssign.empty()) {
+                continue;
+            }
+            auto newMegaIds = reclusterFullMegaCentroids(megaAssign);
+            // Recalculate score for megaAssign
+            for (auto megaId: newMegaIds) {
+                megaClusteringScore[megaId] = calcScoreForMegaCluster(megaId);
+            }
+            totalClusterSize += megaAssign.size();
+        }
+    }
+
     void ReclusteringIndex::mergeNewMiniCentroids() {
         printf("ReclusteringIndex::mergeNewMiniCentroids\n");
         if (newMiniCentroids.empty()) {
@@ -215,7 +235,7 @@ namespace orangedb {
                   [&scores](int a, int b) { return scores[a] < scores[b]; });
     }
 
-    void ReclusteringIndex::reclusterFullMegaCentroids(std::vector<vector_idx_t> megaClusterIds) {
+    std::vector<vector_idx_t> ReclusteringIndex::reclusterFullMegaCentroids(std::vector<vector_idx_t> megaClusterIds) {
         // // Find the closest mega centroid
         // std::vector<vector_idx_t> megaAssign;
         // findKClosestMegaCentroids(megaCentroids.data() + (megaIdToRecluster * dim),
@@ -270,7 +290,7 @@ namespace orangedb {
                     config.megaCentroidSize, newMegaCentroids, newMiniClusterIds);
 
         // Append the new mini and mega centroids to the index
-        appendOrMergeCentroids(megaClusterIds, newMegaCentroids, newMiniClusterIds, newMiniCentroids,
+        return appendOrMergeCentroids(megaClusterIds, newMegaCentroids, newMiniClusterIds, newMiniCentroids,
                                newMiniClusters, newMiniClusterVectorIds);
     }
 

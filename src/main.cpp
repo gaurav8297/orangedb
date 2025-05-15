@@ -2275,6 +2275,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int miniCentroidSize = stoi(input.getCmdOption("-miniCentroidSize"));
     const float lambda = stof(input.getCmdOption("-lambda"));
     const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
+    const int reclusterOnScore = stoi(input.getCmdOption("-reclusterOnScore"));
     const int nMegaProbes = stoi(input.getCmdOption("-nMegaProbes"));
     const int nMiniProbes = stoi(input.getCmdOption("-nMiniProbes"));
     const int iterations = stoi(input.getCmdOption("-iterations"));
@@ -2336,7 +2337,11 @@ void benchmark_fast_reclustering(InputParser &input) {
         if (numMegaReclusterCentroids == 1) {
             index.reclusterFast();
         } else {
-            index.reclusterFull(numMegaReclusterCentroids);
+            if (reclusterOnScore) {
+                index.reclusterBasedOnScore(numMegaReclusterCentroids);
+            } else {
+                index.reclusterFull(numMegaReclusterCentroids);
+            }
         }
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
