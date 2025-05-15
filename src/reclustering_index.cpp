@@ -1117,6 +1117,14 @@ namespace orangedb {
             out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
             out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
         }
+
+        // Write stats
+        out.write(reinterpret_cast<const char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
+        out.write(reinterpret_cast<const char *>(&stats.totalQueries), sizeof(stats.totalQueries));
+        out.write(reinterpret_cast<const char *>(&stats.numDistanceCompForRecluster), sizeof(stats.numDistanceCompForRecluster));
+        out.write(reinterpret_cast<const char *>(&stats.totalReclusters), sizeof(stats.totalReclusters));
+        out.write(reinterpret_cast<const char *>(&stats.totalDataWrittenBySystem), sizeof(stats.totalDataWrittenBySystem));
+        out.write(reinterpret_cast<const char *>(&stats.totalDataWrittenByUser), sizeof(stats.totalDataWrittenByUser));
     }
 
     void ReclusteringIndex::load_from_disk(const std::string &file_path) {
@@ -1214,5 +1222,13 @@ namespace orangedb {
             newMiniClusterVectorIds[i].resize(vectorIdSize);
             in.read(reinterpret_cast<char *>(newMiniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
         }
+
+        // Read stats
+        in.read(reinterpret_cast<char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
+        in.read(reinterpret_cast<char *>(&stats.totalQueries), sizeof(stats.totalQueries));
+        in.read(reinterpret_cast<char *>(&stats.numDistanceCompForRecluster), sizeof(stats.numDistanceCompForRecluster));
+        in.read(reinterpret_cast<char *>(&stats.totalReclusters), sizeof(stats.totalReclusters));
+        in.read(reinterpret_cast<char *>(&stats.totalDataWrittenBySystem), sizeof(stats.totalDataWrittenBySystem));
+        in.read(reinterpret_cast<char *>(&stats.totalDataWrittenByUser), sizeof(stats.totalDataWrittenByUser));
     }
 }
