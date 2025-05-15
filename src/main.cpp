@@ -2263,6 +2263,7 @@ void benchmark_reclustering_index(InputParser &input) {
 }
 
 void benchmark_fast_reclustering(InputParser &input) {
+    setvbuf(stdout, NULL, _IONBF, 0);
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
