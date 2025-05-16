@@ -1428,7 +1428,7 @@ void benchmark_acorn(InputParser &input) {
                 }
             }
         }
-        printf("Duration: %lld ms\n", ((double) durationPerQuery / queryNumVectors) * 1e-6);
+        printf("Duration: %f ms\n", ((double) durationPerQuery / queryNumVectors) * 1e-6);
         auto config = fmt::format("acorn_{}", gamma);
         write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6,
                           recall / (queryNumVectors * k), efSearch, selectivity);
