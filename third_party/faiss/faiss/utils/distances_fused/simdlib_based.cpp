@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -62,7 +62,7 @@ void kernel(
         const float* const __restrict y,
         const float* const __restrict y_transposed,
         const size_t ny,
-        SingleBestResultHandler<CMax<float, int64_t>>& res,
+        Top1BlockResultHandler<CMax<float, int64_t>>& res,
         const float* __restrict y_norms,
         const size_t i) {
     const size_t ny_p =
@@ -73,7 +73,7 @@ void kernel(
 
     // prefetch the next point
 #if defined(__AVX2__)
-    _mm_prefetch(xd_0 + DIM * sizeof(float), _MM_HINT_NTA);
+    _mm_prefetch((const char*)(xd_0 + DIM * sizeof(float)), _MM_HINT_NTA);
 #endif
 
     // load a single point from x
@@ -226,7 +226,7 @@ void exhaustive_L2sqr_fused_cmax(
         const float* const __restrict y,
         size_t nx,
         size_t ny,
-        SingleBestResultHandler<CMax<float, int64_t>>& res,
+        Top1BlockResultHandler<CMax<float, int64_t>>& res,
         const float* __restrict y_norms) {
     // BLAS does not like empty matrices
     if (nx == 0 || ny == 0) {
@@ -270,7 +270,7 @@ void exhaustive_L2sqr_fused_cmax(
                 x, y, y_transposed.data(), ny, res, y_norms, i);
     }
 
-    // Does nothing for SingleBestResultHandler, but
+    // Does nothing for Top1BlockResultHandler, but
     // keeping the call for the consistency.
     res.end_multiple();
     InterruptCallback::check();
@@ -284,7 +284,7 @@ bool exhaustive_L2sqr_fused_cmax_simdlib(
         size_t d,
         size_t nx,
         size_t ny,
-        SingleBestResultHandler<CMax<float, int64_t>>& res,
+        Top1BlockResultHandler<CMax<float, int64_t>>& res,
         const float* y_norms) {
     // Process only cases with certain dimensionalities.
     // An acceptable dimensionality value is limited by the number of
@@ -299,13 +299,49 @@ bool exhaustive_L2sqr_fused_cmax_simdlib(
         return true;                                             \
     }
 
+    // faiss/benchs/bench_quantizer.py was used for benchmarking
+    // and tuning 2nd and 3rd parameters values.
+    // Basically, the larger the values for 2nd and 3rd parameters are,
+    // the faster the execution is, but the more SIMD registers are needed.
+    // This can be compensated with L1 cache, this is why this
+    // code might operate with more registers than available
+    // because of concurrent ports operations for ALU and LOAD/STORE.
+
+#if defined(__AVX2__)
+    // It was possible to tweak these parameters on x64 machine.
     switch (d) {
+        DISPATCH(1, 6, 1)
+        DISPATCH(2, 6, 1)
+        DISPATCH(3, 6, 1)
+        DISPATCH(4, 8, 1)
+        DISPATCH(5, 8, 1)
+        DISPATCH(6, 8, 1)
+        DISPATCH(7, 8, 1)
+        DISPATCH(8, 8, 1)
+        DISPATCH(9, 8, 1)
+        DISPATCH(10, 8, 1)
+        DISPATCH(11, 8, 1)
+        DISPATCH(12, 8, 1)
+        DISPATCH(13, 6, 1)
+        DISPATCH(14, 6, 1)
+        DISPATCH(15, 6, 1)
+        DISPATCH(16, 6, 1)
+    }
+#else
+    // Please feel free to alter 2nd and 3rd parameters if you have access
+    // to ARM-based machine so that you are able to benchmark this code.
+    // Or to enable other dimensions.
+    switch (d) {
+        DISPATCH(1, 4, 2)
         DISPATCH(2, 2, 2)
         DISPATCH(3, 2, 2)
         DISPATCH(4, 2, 1)
+        DISPATCH(5, 1, 1)
         DISPATCH(6, 1, 1)
+        DISPATCH(7, 1, 1)
         DISPATCH(8, 1, 1)
     }
+#endif
 
     return false;
 #undef DISPATCH

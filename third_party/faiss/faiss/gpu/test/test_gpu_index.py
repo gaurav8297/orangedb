@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -6,13 +6,13 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import math
-import time
 import unittest
 import numpy as np
 import faiss
 from faiss.contrib import datasets
 from faiss.contrib import ivf_tools
 from faiss.contrib.evaluation import knn_intersection_measure
+
 
 class TestIVFSearchPreassigned(unittest.TestCase):
     def test_ivfflat_search_preassigned(self):
@@ -24,7 +24,9 @@ class TestIVFSearchPreassigned(unittest.TestCase):
         nprobe = 10
         k = 50
 
-        idx_gpu = faiss.GpuIndexIVFFlat(res, d, nlist)
+        config = faiss.GpuIndexIVFFlatConfig()
+        config.use_cuvs = False
+        idx_gpu = faiss.GpuIndexIVFFlat(res, d, nlist, faiss.METRIC_L2, config)
         idx_gpu.nprobe = nprobe
 
         rs = np.random.RandomState(567)
@@ -56,7 +58,9 @@ class TestIVFSearchPreassigned(unittest.TestCase):
         nprobe = 5
         k = 50
 
-        idx_gpu = faiss.GpuIndexIVFPQ(res, d, nlist, 4, 8)
+        config = faiss.GpuIndexIVFPQConfig()
+        config.use_cuvs = False
+        idx_gpu = faiss.GpuIndexIVFPQ(res, d, nlist, 4, 8, faiss.METRIC_L2, config)
         idx_gpu.nprobe = nprobe
 
         rs = np.random.RandomState(567)
@@ -136,7 +140,8 @@ class TestIVFPluggableCoarseQuantizer(unittest.TestCase):
 
         # construct a GPU index using the same trained coarse quantizer
         # from the CPU index
-        idx_gpu = faiss.GpuIndexIVFFlat(res, q, d, nlist, faiss.METRIC_L2)
+        config = faiss.GpuIndexIVFFlatConfig()
+        idx_gpu = faiss.GpuIndexIVFFlat(res, q, d, nlist, faiss.METRIC_L2, config)
         assert(idx_gpu.is_trained)
         idx_gpu.add(xb)
 
@@ -150,7 +155,8 @@ class TestIVFPluggableCoarseQuantizer(unittest.TestCase):
         self.assertGreaterEqual((i_g == i_c).sum(), i_g.size * 0.9)
         self.assertTrue(np.allclose(d_g, d_c, rtol=5e-5, atol=5e-5))
 
-    def test_ivfsq_cpu_coarse(self):
+
+    def test_ivfsq_pu_coarse(self):
         res = faiss.StandardGpuResources()
         d = 128
         nb = 5000
@@ -189,7 +195,7 @@ class TestIVFPluggableCoarseQuantizer(unittest.TestCase):
 
         self.assertGreaterEqual(knn_intersection_measure(i_c, i_g), 0.9)
 
-        self.assertTrue(np.allclose(d_g, d_c, rtol=5e-5, atol=5e-5))
+        self.assertTrue(np.allclose(d_g, d_c, rtol=2e-4, atol=2e-4))
 
     def test_ivfpq_cpu_coarse(self):
         res = faiss.StandardGpuResources()
@@ -226,8 +232,10 @@ class TestIVFPluggableCoarseQuantizer(unittest.TestCase):
 
         # construct a GPU index using the same trained coarse quantizer
         # from the CPU index
+        config = faiss.GpuIndexIVFPQConfig()
+        config.use_cuvs = False
         idx_gpu = faiss.GpuIndexIVFPQ(
-            res, idx_coarse_cpu, d, nlist_lvl_2, 4, 8)
+            res, idx_coarse_cpu, d, nlist_lvl_2, 4, 8, faiss.METRIC_L2, config)
         assert(not idx_gpu.is_trained)
 
         idx_gpu.train(xb)
@@ -406,6 +414,7 @@ class TestIVFIndices(unittest.TestCase):
 
         # Store values using 32-bit indices instead
         config.indicesOptions = faiss.INDICES_32_BIT
+        config.use_cuvs = False
         idx = faiss.GpuIndexIVFFlat(res, d, nlist, faiss.METRIC_L2, config)
         idx.train(xb)
         idx.add_with_ids(xb, xb_indices)
@@ -440,6 +449,8 @@ class TestIVFIndices(unittest.TestCase):
 
         # Store values using 32-bit indices instead
         config.indicesOptions = faiss.INDICES_32_BIT
+        # 32-bit indices are not supported with cuVS
+        config.use_cuvs = False
         idx = faiss.GpuIndexIVFPQ(res, d, nlist, M, nbits,
                                   faiss.METRIC_L2, config)
         idx.train(xb)
@@ -490,7 +501,9 @@ class TestSQ_to_gpu(unittest.TestCase):
         res = faiss.StandardGpuResources()
         index = faiss.index_factory(32, "SQfp16")
         index.add(np.random.rand(1000, 32).astype(np.float32))
-        gpu_index = faiss.index_cpu_to_gpu(res, 0, index)
+        config = faiss.GpuClonerOptions()
+        config.use_cuvs = False
+        gpu_index = faiss.index_cpu_to_gpu(res, 0, index, config)
         self.assertIsInstance(gpu_index, faiss.GpuIndexFlat)
 
 
@@ -519,20 +532,17 @@ class TestInvalidParams(unittest.TestCase):
 
         # invalid k (should be > 0)
         k = -5
-        idx.setNumProbes(3)
+        idx.nprobe = 3
         self.assertRaises(AssertionError, idx.search, xb[10:20], k)
 
-        # invalid nprobe (should be > 0)
-        self.assertRaises(RuntimeError, idx.setNumProbes, 0)
-        self.assertRaises(RuntimeError, idx.setNumProbes, -3)
-
-        k = 5
-        idx.nprobe = -3
-        self.assertRaises(RuntimeError, idx.search, xb[10:20], k)
+        # nprobe is unsigned now, so this is caught before reaching C++
+        # k = 5
+        # idx.nprobe = -3
+        # self.assertRaises(RuntimeError, idx.search, xb[10:20], k)
 
         # valid params
         k = 5
-        idx.setNumProbes(3)
+        idx.nprobe = 3
         _, I = idx.search(xb[10:20], k)
         self.assertTrue(np.array_equal(xb_indices[10:20], I[:, 0]))
 
@@ -574,3 +584,24 @@ class TestLSQIcmEncoder(unittest.TestCase):
     def test_multiple_gpu(self):
         ngpu = faiss.get_num_gpus()
         self.subtest_gpu_encoding(ngpu)
+
+
+class TestGpuAutoTune(unittest.TestCase):
+
+    def test_params(self):
+        index = faiss.index_factory(32, "IVF65536_HNSW,PQ16")
+        res = faiss.StandardGpuResources()
+        options = faiss.GpuClonerOptions()
+        options.allowCpuCoarseQuantizer = True
+        index = faiss.index_cpu_to_gpu(res, 0, index, options)
+        ps = faiss.GpuParameterSpace()
+        ps.initialize(index)
+        for i in range(ps.parameter_ranges.size()):
+            pr = ps.parameter_ranges.at(i)
+            if pr.name == "quantizer_efSearch":
+                break
+        else:
+            self.fail("should include efSearch")
+        ps.set_index_parameter(index, "quantizer_efSearch", 123)
+        quantizer = faiss.downcast_index(index.quantizer)
+        self.assertEqual(quantizer.hnsw.efSearch, 123)

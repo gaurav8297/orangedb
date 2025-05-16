@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,7 +15,6 @@
 
 #include <cinttypes>
 #include <cmath>
-#include <typeinfo>
 
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/utils/random.h>
@@ -32,6 +31,7 @@
 #include <faiss/IndexPreTransform.h>
 #include <faiss/IndexRefine.h>
 #include <faiss/IndexScalarQuantizer.h>
+#include <faiss/IndexShardsIVF.h>
 #include <faiss/MetaIndexes.h>
 #include <faiss/VectorTransform.h>
 
@@ -151,12 +151,10 @@ bool OperatingPoints::add(
             return false;
         }
     }
-    { // remove non-optimal points from array
-        int i = a.size() - 1;
-        while (i > 0) {
-            if (a[i].t < a[i - 1].t)
-                a.erase(a.begin() + (i - 1));
-            i--;
+    // remove non-optimal points from array
+    for (int i = a.size() - 1; i > 0; --i) {
+        if (a[i].t < a[i - 1].t) {
+            a.erase(a.begin() + (i - 1));
         }
     }
     return true;
@@ -285,6 +283,8 @@ std::string ParameterSpace::combination_name(size_t cno) const {
     char buf[1000], *wp = buf;
     *wp = 0;
     for (int i = 0; i < parameter_ranges.size(); i++) {
+        FAISS_THROW_IF_NOT_MSG(
+                buf + 1000 - wp >= 0, "Overflow detected in snprintf");
         const ParameterRange& pr = parameter_ranges[i];
         size_t j = cno % pr.values.size();
         cno /= pr.values.size();
@@ -312,9 +312,6 @@ bool ParameterSpace::combination_ge(size_t c1, size_t c2) const {
     return true;
 }
 
-#define DC(classname) \
-    const classname* ix = dynamic_cast<const classname*>(index)
-
 static void init_pq_ParameterRange(
         const ProductQuantizer& pq,
         ParameterRange& pr) {
@@ -333,10 +330,14 @@ ParameterRange& ParameterSpace::add_range(const std::string& name) {
             return pr;
         }
     }
-    parameter_ranges.push_back(ParameterRange());
+    parameter_ranges.emplace_back();
     parameter_ranges.back().name = name;
     return parameter_ranges.back();
 }
+
+// Do not use this macro if ix will be unused
+#define DC(classname) \
+    const classname* ix = dynamic_cast<const classname*>(index)
 
 /// initialize with reasonable parameters for this type of index
 void ParameterSpace::initialize(const Index* index) {
@@ -354,7 +355,7 @@ void ParameterSpace::initialize(const Index* index) {
         index = ix->index;
     }
 
-    if (DC(IndexIVF)) {
+    if (DC(IndexIVFInterface)) {
         {
             ParameterRange& pr = add_range("nprobe");
             for (int i = 0; i < 13; i++) {
@@ -393,7 +394,7 @@ void ParameterSpace::initialize(const Index* index) {
                     std::numeric_limits<double>::infinity());
         }
     }
-    if (DC(IndexIVFPQR)) {
+    if (dynamic_cast<const IndexIVFPQR*>(index)) {
         ParameterRange& pr = add_range("k_factor");
         for (int i = 0; i <= 6; i++) {
             pr.values.push_back(1 << i);
@@ -408,9 +409,6 @@ void ParameterSpace::initialize(const Index* index) {
 }
 
 #undef DC
-
-// non-const version
-#define DC(classname) classname* ix = dynamic_cast<classname*>(index)
 
 /// set a combination of parameters on an index
 void ParameterSpace::set_index_parameters(Index* index, size_t cno) const {
@@ -441,6 +439,10 @@ void ParameterSpace::set_index_parameters(
     }
 }
 
+// non-const version
+// Do not use this macro if ix will be unused
+#define DC(classname) classname* ix = dynamic_cast<classname*>(index)
+
 void ParameterSpace::set_index_parameter(
         Index* index,
         const std::string& name,
@@ -460,6 +462,16 @@ void ParameterSpace::set_index_parameter(
     if (DC(IndexPreTransform)) {
         set_index_parameter(ix->index, name, val);
         return;
+    }
+    if (DC(IndexShardsIVF)) {
+        // special handling because the nprobe is set at the sub-class level
+        // but other params are set on the class itself
+        if (name.find("quantizer_") == 0 && name != "nprobe" &&
+            name != "quantizer_nprobe") {
+            std::string sub_name = name.substr(strlen("quantizer_"));
+            set_index_parameter(ix->quantizer, sub_name, val);
+            return;
+        }
     }
     if (DC(ThreadedIndex<Index>)) {
         // call on all sub-indexes
@@ -562,6 +574,8 @@ void ParameterSpace::set_index_parameter(
             "could not set parameter %s",
             name.c_str());
 }
+
+#undef DC
 
 void ParameterSpace::display() const {
     printf("ParameterSpace, %zd parameters, %zd combinations:\n",

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -21,70 +21,36 @@ namespace faiss {
 
 struct IndexHNSW;
 
-struct ReconstructFromNeighbors {
-    typedef HNSW::storage_idx_t storage_idx_t;
-
-    const IndexHNSW& index;
-    size_t M;   // number of neighbors
-    size_t k;   // number of codebook entries
-    size_t nsq; // number of subvectors
-    size_t code_size;
-    int k_reorder; // nb to reorder. -1 = all
-
-    std::vector<float> codebook; // size nsq * k * (M + 1)
-
-    std::vector<uint8_t> codes; // size ntotal * code_size
-    size_t ntotal;
-    size_t d, dsub; // derived values
-
-    explicit ReconstructFromNeighbors(
-            const IndexHNSW& index,
-            size_t k = 256,
-            size_t nsq = 1);
-
-    /// codes must be added in the correct order and the IndexHNSW
-    /// must be populated and sorted
-    void add_codes(size_t n, const float* x);
-
-    size_t compute_distances(
-            size_t n,
-            const idx_t* shortlist,
-            const float* query,
-            float* distances) const;
-
-    /// called by add_codes
-    void estimate_code(const float* x, storage_idx_t i, uint8_t* code) const;
-
-    /// called by compute_distances
-    void reconstruct(storage_idx_t i, float* x, float* tmp) const;
-
-    void reconstruct_n(storage_idx_t n0, storage_idx_t ni, float* x) const;
-
-    /// get the M+1 -by-d table for neighbor coordinates for vector i
-    void get_neighbor_table(storage_idx_t i, float* out) const;
-};
-
 /** The HNSW index is a normal random-access index with a HNSW
  * link structure built on top */
 
 struct IndexHNSW : Index {
     typedef HNSW::storage_idx_t storage_idx_t;
 
-    // the link strcuture
+    // the link structure
     HNSW hnsw;
 
     // the sequential storage
-    bool own_fields;
-    Index* storage;
+    bool own_fields = false;
+    Index* storage = nullptr;
 
-    ReconstructFromNeighbors* reconstruct_from_neighbors;
+    // When set to false, level 0 in the knn graph is not initialized.
+    // This option is used by GpuIndexCagra::copyTo(IndexHNSWCagra*)
+    // as level 0 knn graph is copied over from the index built by
+    // GpuIndexCagra.
+    bool init_level0 = true;
 
-    explicit IndexHNSW(int d = 0, int M = 32, int gamma = 1, MetricType metric = METRIC_L2);
-    explicit IndexHNSW(Index* storage, int M = 32, int gamma = 1);
+    // When set to true, all neighbors in level 0 are filled up
+    // to the maximum size allowed (2 * M). This option is used by
+    // IndexHHNSWCagra to create a full base layer graph that is
+    // used when GpuIndexCagra::copyFrom(IndexHNSWCagra*) is invoked.
+    bool keep_max_size_level0 = false;
+
+    explicit IndexHNSW(int d = 0, int M = 32, MetricType metric = METRIC_L2);
+    explicit IndexHNSW(Index* storage, int M = 32);
 
     ~IndexHNSW() override;
 
-    // add n vectors of dimension d to the index, x is the matrix of vectors
     void add(idx_t n, const float* x) override;
 
     /// Trains the storage if needed
@@ -107,20 +73,14 @@ struct IndexHNSW : Index {
             idx_t* labels,
             const char* filter_id_map,
             VisitedTable &vt,
-            HNSWStats& stats,
-            const SearchParameters* params = nullptr) const;
+            HNSWStats& stats) const;
 
-    // assume equality predicates only
-    void partition_search(
+    void range_search(
             idx_t n,
             const float* x,
-            idx_t k,
-            std::vector<faiss::IndexHNSW*>& partition_indices,
-            int num_partitions,
-            float* distances,
-            idx_t* labels,
-            int* filters,
-            const SearchParameters* params = nullptr) const;
+            float radius,
+            RangeSearchResult* result,
+            const SearchParameters* params = nullptr) const override;
 
     void reconstruct(idx_t key, float* recons) const override;
 
@@ -143,7 +103,8 @@ struct IndexHNSW : Index {
             float* distances,
             idx_t* labels,
             int nprobe = 1,
-            int search_type = 1) const;
+            int search_type = 1,
+            const SearchParameters* params = nullptr) const;
 
     /// alternative graph building
     void init_level_0_from_knngraph(int k, const float* D, const idx_t* I);
@@ -159,8 +120,9 @@ struct IndexHNSW : Index {
 
     void link_singletons();
 
-    // added for debugging
-    void printStats(bool print_edge_list=false, bool is_hybrid=false);
+    void permute_entries(const idx_t* perm);
+
+    DistanceComputer* get_distance_computer() const override;
 };
 
 /** Flat index topped with with a HNSW structure to access elements
@@ -169,7 +131,7 @@ struct IndexHNSW : Index {
 
 struct IndexHNSWFlat : IndexHNSW {
     IndexHNSWFlat();
-    IndexHNSWFlat(int d, int M, int gamma = 1, MetricType metric = METRIC_L2);
+    IndexHNSWFlat(int d, int M, MetricType metric = METRIC_L2);
 };
 
 /** PQ index topped with with a HNSW structure to access elements
@@ -177,7 +139,12 @@ struct IndexHNSWFlat : IndexHNSW {
  */
 struct IndexHNSWPQ : IndexHNSW {
     IndexHNSWPQ();
-    IndexHNSWPQ(int d, int pq_m, int M);
+    IndexHNSWPQ(
+            int d,
+            int pq_m,
+            int M,
+            int pq_nbits = 8,
+            MetricType metric = METRIC_L2);
     void train(idx_t n, const float* x) override;
 };
 
@@ -211,30 +178,33 @@ struct IndexHNSW2Level : IndexHNSW {
             const SearchParameters* params = nullptr) const override;
 };
 
+struct IndexHNSWCagra : IndexHNSW {
+    IndexHNSWCagra();
+    IndexHNSWCagra(int d, int M, MetricType metric = METRIC_L2);
 
-/**************************************************************
- * HYBRID INDEX
- **************************************************************/
-/** Inherits from IndexHNSWFlat
- */
-// TODO - change metadata from int* to generic type
-struct IndexHNSWHybridOld : IndexHNSWFlat {
-    IndexHNSWHybridOld();
-    IndexHNSWHybridOld(int d, int M, int gamma, std::vector<int>& metadata, MetricType metric = METRIC_L2);
+    /// When set to true, the index is immutable.
+    /// This option is used to copy the knn graph from GpuIndexCagra
+    /// to the base level of IndexHNSWCagra without adding upper levels.
+    /// Doing so enables to search the HNSW index, but removes the
+    /// ability to add vectors.
+    bool base_level_only = false;
+
+    /// When `base_level_only` is set to `True`, the search function
+    /// searches only the base level knn graph of the HNSW index.
+    /// This parameter selects the entry point by randomly selecting
+    /// some points and using the best one.
+    int num_base_level_search_entrypoints = 32;
 
     void add(idx_t n, const float* x) override;
 
-    // this doesn't override normal search since definition has a filter param - search is overloaded
+    /// entry point for search
     void search(
             idx_t n,
             const float* x,
             idx_t k,
             float* distances,
             idx_t* labels,
-            int* filters,
-            Operation op = EQUAL,
-            std::string regex = "",
-            const SearchParameters* params = nullptr) const;
+            const SearchParameters* params = nullptr) const override;
 };
 
 } // namespace faiss

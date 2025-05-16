@@ -1,4 +1,4 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
+# Copyright (c) Meta Platforms, Inc. and affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
@@ -8,8 +8,11 @@ import unittest
 import numpy as np
 import faiss
 
+from faiss.contrib.datasets import SyntheticDataset
+from faiss.contrib.evaluation import check_ref_knn_with_draws
 
 class TestShardedFlat(unittest.TestCase):
+
     @unittest.skipIf(faiss.get_num_gpus() < 2, "multiple GPU only test")
     def test_sharded(self):
         d = 32
@@ -26,6 +29,7 @@ class TestShardedFlat(unittest.TestCase):
 
         co = faiss.GpuMultipleClonerOptions()
         co.shard = True
+        co.use_cuvs = False
         index = faiss.index_cpu_to_all_gpus(index_cpu, co, ngpu=2)
 
         index.add(xb)
@@ -48,6 +52,81 @@ class TestShardedFlat(unittest.TestCase):
             pass
         else:
             raise AssertionError("errpr: call should fail but isn't failing")
+
+    @unittest.skipIf(faiss.get_num_gpus() < 2, "multiple GPU only test")
+    def do_test_sharded_ivf(self, index_key):
+        ds = SyntheticDataset(32, 8000, 10000, 100)
+        index = faiss.index_factory(ds.d, index_key)
+        if 'HNSW' in index_key:
+            # make a bit more reproducible...
+            faiss.ParameterSpace().set_index_parameter(
+                index, 'quantizer_efSearch', 40)
+        index.train(ds.get_train())
+        index.add(ds.get_database())
+        Dref, Iref = index.search(ds.get_queries(), 10)
+        index.nprobe = 8
+        Dref8, Iref8 = index.search(ds.get_queries(), 10)
+        index.nprobe = 1
+        print("REF checksum", faiss.checksum(Iref))
+
+        co = faiss.GpuMultipleClonerOptions()
+        co.shard = True
+        co.common_ivf_quantizer = True
+        co.use_cuvs = False
+        index = faiss.index_cpu_to_all_gpus(index, co, ngpu=2)
+
+        index.quantizer  # make sure there is indeed a quantizer
+        print("QUANT", faiss.downcast_index(index.quantizer))
+        Dnew, Inew = index.search(ds.get_queries(), 10)
+        np.testing.assert_array_equal(Iref, Inew)
+        np.testing.assert_array_almost_equal(Dref, Dnew, decimal=4)
+
+        # the nprobe is taken from the sub-indexes
+        faiss.GpuParameterSpace().set_index_parameter(index, 'nprobe', 8)
+        Dnew8, Inew8 = index.search(ds.get_queries(), 10)
+        np.testing.assert_array_equal(Iref8, Inew8)
+        np.testing.assert_array_almost_equal(Dref8, Dnew8, decimal=4)
+
+        index.reset()
+        index.add(ds.get_database())
+
+        Dnew8, Inew8 = index.search(ds.get_queries(), 10)
+        # np.testing.assert_array_equal(Iref8, Inew8)
+        self.assertLess((Iref8 != Inew8).sum(), Iref8.size * 0.003)
+        np.testing.assert_array_almost_equal(Dref8, Dnew8, decimal=4)
+
+    def test_sharded_IVFSQ(self):
+        self.do_test_sharded_ivf("IVF128,SQ8")
+
+    def test_sharded_IVF_HNSW(self):
+        self.do_test_sharded_ivf("IVF1000_HNSW,Flat")
+
+    def test_binary_clone(self, ngpu=1, shard=False):
+        ds = SyntheticDataset(64, 1000, 1000, 200)
+        tobinary = faiss.index_factory(ds.d, "LSHrt")
+        tobinary.train(ds.get_train())
+        index = faiss.IndexBinaryFlat(ds.d)
+        xb = tobinary.sa_encode(ds.get_database())
+        xq = tobinary.sa_encode(ds.get_queries())
+        index.add(xb)
+        Dref, Iref = index.search(xq, 5)
+
+        co = faiss.GpuMultipleClonerOptions()
+        co.shard = shard
+        co.use_cuvs = False
+
+        # index2 = faiss.index_cpu_to_all_gpus(index, ngpu=ngpu)
+        res = faiss.StandardGpuResources()
+        index2 = faiss.GpuIndexBinaryFlat(res, index)
+
+        Dnew, Inew = index2.search(xq, 5)
+        check_ref_knn_with_draws(Dref, Iref, Dnew, Inew)
+
+    def test_binary_clone_replicas(self):
+        self.test_binary_clone(ngpu=2, shard=False)
+
+    def test_binary_clone_shards(self):
+        self.test_binary_clone(ngpu=2, shard=True)
 
 
 # This class also has a multi-GPU test within
@@ -112,7 +191,9 @@ class EvalIVFPQAccuracy(unittest.TestCase):
         ts.append(time.time())
 
         res = faiss.StandardGpuResources()
-        gpu_index = faiss.index_cpu_to_gpu(res, 0, index)
+        co = faiss.GpuClonerOptions()
+        co.use_cuvs = False
+        gpu_index = faiss.index_cpu_to_gpu(res, 0, index, co)
         ts.append(time.time())
 
         # Validate the layout of the memory info
@@ -123,7 +204,7 @@ class EvalIVFPQAccuracy(unittest.TestCase):
         assert type(mem_info[0]['FlatData'][0]) == int
         assert type(mem_info[0]['FlatData'][1]) == int
 
-        gpu_index.setNumProbes(4)
+        gpu_index.nprobe = 4
 
         Dnew, Inew = gpu_index.search(xq, 10)
         ts.append(time.time())
@@ -141,6 +222,7 @@ class EvalIVFPQAccuracy(unittest.TestCase):
             res = [faiss.StandardGpuResources() for i in range(2)]
             co = faiss.GpuMultipleClonerOptions()
             co.shard = shard
+            co.use_cuvs = False
 
             gpu_index = faiss.index_cpu_to_gpu_multiple_py(res, index, co)
 

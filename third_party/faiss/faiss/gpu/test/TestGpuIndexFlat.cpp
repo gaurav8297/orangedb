@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -28,7 +28,8 @@ struct TestFlatOptions {
               numVecsOverride(-1),
               numQueriesOverride(-1),
               kOverride(-1),
-              dimOverride(-1) {}
+              dimOverride(-1),
+              use_cuvs(false) {}
 
     faiss::MetricType metric;
     float metricArg;
@@ -38,6 +39,7 @@ struct TestFlatOptions {
     int numQueriesOverride;
     int kOverride;
     int dimOverride;
+    bool use_cuvs;
 };
 
 void testFlat(const TestFlatOptions& opt) {
@@ -73,6 +75,7 @@ void testFlat(const TestFlatOptions& opt) {
     faiss::gpu::GpuIndexFlatConfig config;
     config.device = device;
     config.useFloat16 = opt.useFloat16;
+    config.use_cuvs = opt.use_cuvs;
 
     faiss::gpu::GpuIndexFlat gpuIndex(&res, dim, opt.metric, config);
     gpuIndex.metric_arg = opt.metricArg;
@@ -110,6 +113,11 @@ TEST(TestGpuIndexFlat, IP_Float32) {
         opt.useFloat16 = false;
 
         testFlat(opt);
+
+#if defined USE_NVIDIA_CUVS
+        opt.use_cuvs = true;
+        testFlat(opt);
+#endif
     }
 }
 
@@ -119,6 +127,11 @@ TEST(TestGpuIndexFlat, L1_Float32) {
     opt.useFloat16 = false;
 
     testFlat(opt);
+
+#if defined USE_NVIDIA_CUVS
+    opt.use_cuvs = true;
+    testFlat(opt);
+#endif
 }
 
 TEST(TestGpuIndexFlat, Lp_Float32) {
@@ -128,6 +141,10 @@ TEST(TestGpuIndexFlat, Lp_Float32) {
     opt.useFloat16 = false;
 
     testFlat(opt);
+#if defined USE_NVIDIA_CUVS
+    opt.use_cuvs = true;
+    testFlat(opt);
+#endif
 }
 
 TEST(TestGpuIndexFlat, L2_Float32) {
@@ -138,6 +155,28 @@ TEST(TestGpuIndexFlat, L2_Float32) {
         opt.useFloat16 = false;
 
         testFlat(opt);
+#if defined USE_NVIDIA_CUVS
+        opt.use_cuvs = true;
+        testFlat(opt);
+#endif
+    }
+}
+
+// At least one test for the k > 1024 select
+TEST(TestGpuIndexFlat, L2_k_2048) {
+    if (faiss::gpu::getMaxKSelection() >= 2048) {
+        TestFlatOptions opt;
+        opt.metric = faiss::MetricType::METRIC_L2;
+        opt.useFloat16 = false;
+        opt.kOverride = 2048;
+        opt.dimOverride = 128;
+        opt.numVecsOverride = 10000;
+
+        testFlat(opt);
+#if defined USE_NVIDIA_CUVS
+        opt.use_cuvs = true;
+        testFlat(opt);
+#endif
     }
 }
 
@@ -150,6 +189,10 @@ TEST(TestGpuIndexFlat, L2_Float32_K1) {
         opt.kOverride = 1;
 
         testFlat(opt);
+#if defined USE_NVIDIA_CUVS
+        opt.use_cuvs = true;
+        testFlat(opt);
+#endif
     }
 }
 
@@ -160,6 +203,10 @@ TEST(TestGpuIndexFlat, IP_Float16) {
         opt.useFloat16 = true;
 
         testFlat(opt);
+#if defined USE_NVIDIA_CUVS
+        opt.use_cuvs = true;
+        testFlat(opt);
+#endif
     }
 }
 
@@ -170,6 +217,10 @@ TEST(TestGpuIndexFlat, L2_Float16) {
         opt.useFloat16 = true;
 
         testFlat(opt);
+#if defined USE_NVIDIA_CUVS
+        opt.use_cuvs = true;
+        testFlat(opt);
+#endif
     }
 }
 
@@ -182,6 +233,10 @@ TEST(TestGpuIndexFlat, L2_Float16_K1) {
         opt.kOverride = 1;
 
         testFlat(opt);
+#if defined USE_NVIDIA_CUVS
+        opt.use_cuvs = true;
+        testFlat(opt);
+#endif
     }
 }
 
@@ -199,6 +254,10 @@ TEST(TestGpuIndexFlat, L2_Tiling) {
         opt.kOverride = 64;
 
         testFlat(opt);
+#if defined USE_NVIDIA_CUVS
+        opt.use_cuvs = true;
+        testFlat(opt);
+#endif
     }
 }
 
@@ -209,7 +268,7 @@ TEST(TestGpuIndexFlat, QueryEmpty) {
     faiss::gpu::GpuIndexFlatConfig config;
     config.device = 0;
     config.useFloat16 = false;
-
+    config.use_cuvs = false;
     int dim = 128;
     faiss::gpu::GpuIndexFlatL2 gpuIndex(&res, dim, config);
 
@@ -233,7 +292,7 @@ TEST(TestGpuIndexFlat, QueryEmpty) {
     }
 }
 
-TEST(TestGpuIndexFlat, CopyFrom) {
+void testCopyFrom(bool use_cuvs) {
     int numVecs = faiss::gpu::randVal(100, 200);
     int dim = faiss::gpu::randVal(1, 1000);
 
@@ -251,6 +310,7 @@ TEST(TestGpuIndexFlat, CopyFrom) {
         faiss::gpu::GpuIndexFlatConfig config;
         config.device = device;
         config.useFloat16 = useFloat16;
+        config.use_cuvs = use_cuvs;
 
         // Fill with garbage values
         faiss::gpu::GpuIndexFlatL2 gpuIndex(&res, 2000, config);
@@ -279,7 +339,17 @@ TEST(TestGpuIndexFlat, CopyFrom) {
     }
 }
 
-TEST(TestGpuIndexFlat, CopyTo) {
+TEST(TestGpuIndexFlat, CopyFrom) {
+    testCopyFrom(false);
+}
+
+#if defined USE_NVIDIA_CUVS
+TEST(TestCuvsGpuIndexFlat, CopyFrom) {
+    testCopyFrom(true);
+}
+#endif
+
+void testCopyTo(bool use_cuvs) {
     faiss::gpu::StandardGpuResources res;
     res.noTempMemory();
 
@@ -293,6 +363,7 @@ TEST(TestGpuIndexFlat, CopyTo) {
         faiss::gpu::GpuIndexFlatConfig config;
         config.device = device;
         config.useFloat16 = useFloat16;
+        config.use_cuvs = use_cuvs;
 
         faiss::gpu::GpuIndexFlatL2 gpuIndex(&res, dim, config);
         gpuIndex.add(numVecs, vecs.data());
@@ -319,7 +390,17 @@ TEST(TestGpuIndexFlat, CopyTo) {
     }
 }
 
-TEST(TestGpuIndexFlat, UnifiedMemory) {
+TEST(TestGpuIndexFlat, CopyTo) {
+    testCopyTo(false);
+}
+
+#if defined USE_NVIDIA_CUVS
+TEST(TestCuvsGpuIndexFlat, CopyTo) {
+    testCopyTo(true);
+}
+#endif
+
+void testUnifiedMemory(bool use_cuvs) {
     // Construct on a random device to test multi-device, if we have
     // multiple devices
     int device = faiss::gpu::randVal(0, faiss::gpu::getNumDevices() - 1);
@@ -345,6 +426,7 @@ TEST(TestGpuIndexFlat, UnifiedMemory) {
     faiss::gpu::GpuIndexFlatConfig config;
     config.device = device;
     config.memorySpace = faiss::gpu::MemorySpace::Unified;
+    config.use_cuvs = use_cuvs;
 
     faiss::gpu::GpuIndexFlatL2 gpuIndexL2(&res, dim, config);
 
@@ -366,7 +448,17 @@ TEST(TestGpuIndexFlat, UnifiedMemory) {
             0.015f);
 }
 
-TEST(TestGpuIndexFlat, LargeIndex) {
+TEST(TestGpuIndexFlat, UnifiedMemory) {
+    testUnifiedMemory(false);
+}
+
+#if defined USE_NVIDIA_CUVS
+TEST(TestCuvsGpuIndexFlat, UnifiedMemory) {
+    testUnifiedMemory(true);
+}
+#endif
+
+void testLargeIndex(bool use_cuvs) {
     // Construct on a random device to test multi-device, if we have
     // multiple devices
     int device = faiss::gpu::randVal(0, faiss::gpu::getNumDevices() - 1);
@@ -397,6 +489,7 @@ TEST(TestGpuIndexFlat, LargeIndex) {
 
     faiss::gpu::GpuIndexFlatConfig config;
     config.device = device;
+    config.use_cuvs = use_cuvs;
     faiss::gpu::GpuIndexFlatL2 gpuIndexL2(&res, dim, config);
 
     cpuIndexL2.add(nb, xb.data());
@@ -416,7 +509,17 @@ TEST(TestGpuIndexFlat, LargeIndex) {
             0.015f);
 }
 
-TEST(TestGpuIndexFlat, Residual) {
+TEST(TestGpuIndexFlat, LargeIndex) {
+    testLargeIndex(false);
+}
+
+#if defined USE_NVIDIA_CUVS
+TEST(TestCuvsGpuIndexFlat, LargeIndex) {
+    testLargeIndex(true);
+}
+#endif
+
+void testResidual(bool use_cuvs) {
     // Construct on a random device to test multi-device, if we have
     // multiple devices
     int device = faiss::gpu::randVal(0, faiss::gpu::getNumDevices() - 1);
@@ -426,6 +529,7 @@ TEST(TestGpuIndexFlat, Residual) {
 
     faiss::gpu::GpuIndexFlatConfig config;
     config.device = device;
+    config.use_cuvs = use_cuvs;
 
     int dim = 32;
     faiss::IndexFlat cpuIndex(dim, faiss::MetricType::METRIC_L2);
@@ -458,7 +562,17 @@ TEST(TestGpuIndexFlat, Residual) {
     EXPECT_EQ(residualsCpu, residualsGpu);
 }
 
-TEST(TestGpuIndexFlat, Reconstruct) {
+TEST(TestGpuIndexFlat, Residual) {
+    testResidual(false);
+}
+
+#if defined USE_NVIDIA_CUVS
+TEST(TestCuvsGpuIndexFlat, Residual) {
+    testResidual(true);
+}
+#endif
+
+void testReconstruct(bool use_cuvs) {
     // Construct on a random device to test multi-device, if we have
     // multiple devices
     int device = faiss::gpu::randVal(0, faiss::gpu::getNumDevices() - 1);
@@ -475,6 +589,7 @@ TEST(TestGpuIndexFlat, Reconstruct) {
         faiss::gpu::GpuIndexFlatConfig config;
         config.device = device;
         config.useFloat16 = useFloat16;
+        config.use_cuvs = use_cuvs;
 
         faiss::gpu::GpuIndexFlat gpuIndex(
                 &res, dim, faiss::MetricType::METRIC_L2, config);
@@ -539,7 +654,16 @@ TEST(TestGpuIndexFlat, Reconstruct) {
     }
 }
 
-TEST(TestGpuIndexFlat, SearchAndReconstruct) {
+TEST(TestGpuIndexFlat, Reconstruct) {
+    testReconstruct(false);
+}
+#if defined USE_NVIDIA_CUVS
+TEST(TestCuvsGpuIndexFlat, Reconstruct) {
+    testReconstruct(true);
+}
+#endif
+
+void testSearchAndReconstruct(bool use_cuvs) {
     // Construct on a random device to test multi-device, if we have
     // multiple devices
     int device = faiss::gpu::randVal(0, faiss::gpu::getNumDevices() - 1);
@@ -559,6 +683,7 @@ TEST(TestGpuIndexFlat, SearchAndReconstruct) {
 
     faiss::gpu::GpuIndexFlatConfig config;
     config.device = device;
+    config.use_cuvs = use_cuvs;
     faiss::gpu::GpuIndexFlatL2 gpuIndex(&res, dim, config);
 
     cpuIndex.add(nb, xb.data());
@@ -625,6 +750,15 @@ TEST(TestGpuIndexFlat, SearchAndReconstruct) {
         }
     }
 }
+TEST(TestGpuIndexFlat, SearchAndReconstruct) {
+    testSearchAndReconstruct(false);
+}
+
+#if defined USE_NVIDIA_CUVS
+TEST(TestCuvsGpuIndexFlat, SearchAndReconstruct) {
+    testSearchAndReconstruct(true);
+}
+#endif
 
 int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);

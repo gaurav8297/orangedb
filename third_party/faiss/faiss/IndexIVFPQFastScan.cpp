@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,21 +11,17 @@
 #include <cinttypes>
 #include <cstdio>
 
-#include <omp.h>
-
 #include <memory>
 
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/utils/distances.h>
 #include <faiss/utils/simdlib.h>
-#include <faiss/utils/utils.h>
 
 #include <faiss/invlists/BlockInvertedLists.h>
 
 #include <faiss/impl/pq4_fast_scan.h>
 #include <faiss/impl/simd_result_handlers.h>
-#include <faiss/utils/quantize_lut.h>
 
 namespace faiss {
 
@@ -44,9 +40,9 @@ IndexIVFPQFastScan::IndexIVFPQFastScan(
         MetricType metric,
         int bbs)
         : IndexIVFFastScan(quantizer, d, nlist, 0, metric), pq(d, M, nbits) {
-    by_residual = false; // set to false by default because it's much faster
+    by_residual = false; // set to false by default because it's faster
 
-    init_fastscan(M, nbits, nlist, metric, bbs);
+    init_fastscan(&pq, M, nbits, nlist, metric, bbs);
 }
 
 IndexIVFPQFastScan::IndexIVFPQFastScan() {
@@ -65,7 +61,8 @@ IndexIVFPQFastScan::IndexIVFPQFastScan(const IndexIVFPQ& orig, int bbs)
           pq(orig.pq) {
     FAISS_THROW_IF_NOT(orig.pq.nbits == 4);
 
-    init_fastscan(orig.pq.M, orig.pq.nbits, orig.nlist, orig.metric_type, bbs);
+    init_fastscan(
+            &pq, orig.pq.M, orig.pq.nbits, orig.nlist, orig.metric_type, bbs);
 
     by_residual = orig.by_residual;
     ntotal = orig.ntotal;
@@ -80,7 +77,8 @@ IndexIVFPQFastScan::IndexIVFPQFastScan(const IndexIVFPQ& orig, int bbs)
                precomputed_table.nbytes());
     }
 
-    for (size_t i = 0; i < nlist; i++) {
+#pragma omp parallel for if (nlist > 100)
+    for (idx_t i = 0; i < nlist; i++) {
         size_t nb = orig.invlists->list_size(i);
         size_t nb2 = roundup(nb, bbs);
         AlignedTable<uint8_t> tmp(nb2 * M2 / 2);
@@ -106,57 +104,30 @@ IndexIVFPQFastScan::IndexIVFPQFastScan(const IndexIVFPQ& orig, int bbs)
  * Training
  *********************************************************/
 
-void IndexIVFPQFastScan::train_residual(idx_t n, const float* x_in) {
-    const float* x = fvecs_maybe_subsample(
-            d,
-            (size_t*)&n,
-            pq.cp.max_points_per_centroid * pq.ksub,
-            x_in,
-            verbose,
-            pq.cp.seed);
-
-    std::unique_ptr<float[]> del_x;
-    if (x != x_in) {
-        del_x.reset((float*)x);
-    }
-
-    const float* trainset;
-    AlignedTable<float> residuals;
-
-    if (by_residual) {
-        if (verbose)
-            printf("computing residuals\n");
-        std::vector<idx_t> assign(n);
-        quantizer->assign(n, x, assign.data());
-        residuals.resize(n * d);
-        for (idx_t i = 0; i < n; i++) {
-            quantizer->compute_residual(
-                    x + i * d, residuals.data() + i * d, assign[i]);
-        }
-        trainset = residuals.data();
-    } else {
-        trainset = x;
-    }
-
-    if (verbose) {
-        printf("training %zdx%zd product quantizer on "
-               "%" PRId64 " vectors in %dD\n",
-               pq.M,
-               pq.ksub,
-               n,
-               d);
-    }
+void IndexIVFPQFastScan::train_encoder(
+        idx_t n,
+        const float* x,
+        const idx_t* assign) {
     pq.verbose = verbose;
-    pq.train(n, trainset);
+    pq.train(n, x);
 
     if (by_residual && metric_type == METRIC_L2) {
         precompute_table();
     }
 }
 
+idx_t IndexIVFPQFastScan::train_encoder_num_vectors() const {
+    return pq.cp.max_points_per_centroid * pq.ksub;
+}
+
 void IndexIVFPQFastScan::precompute_table() {
     initialize_IVFPQ_precomputed_table(
-            use_precomputed_table, quantizer, pq, precomputed_table, verbose);
+            use_precomputed_table,
+            quantizer,
+            pq,
+            precomputed_table,
+            by_residual,
+            verbose);
 }
 
 /*********************************************************
@@ -198,7 +169,7 @@ void IndexIVFPQFastScan::encode_vectors(
  * Look-Up Table functions
  *********************************************************/
 
-void fvec_madd_avx(
+void fvec_madd_simd(
         size_t n,
         const float* a,
         float bf,
@@ -229,12 +200,12 @@ bool IndexIVFPQFastScan::lookup_table_is_3d() const {
 void IndexIVFPQFastScan::compute_LUT(
         size_t n,
         const float* x,
-        const idx_t* coarse_ids,
-        const float* coarse_dis,
+        const CoarseQuantized& cq,
         AlignedTable<float>& dis_tables,
         AlignedTable<float>& biases) const {
     size_t dim12 = pq.ksub * pq.M;
     size_t d = pq.d;
+    size_t nprobe = this->nprobe;
 
     if (by_residual) {
         if (metric_type == METRIC_L2) {
@@ -242,7 +213,7 @@ void IndexIVFPQFastScan::compute_LUT(
 
             if (use_precomputed_table == 1) {
                 biases.resize(n * nprobe);
-                memcpy(biases.get(), coarse_dis, sizeof(float) * n * nprobe);
+                memcpy(biases.get(), cq.dis, sizeof(float) * n * nprobe);
 
                 AlignedTable<float> ip_table(n * dim12);
                 pq.compute_inner_prod_tables(n, x, ip_table.get());
@@ -251,10 +222,10 @@ void IndexIVFPQFastScan::compute_LUT(
                 for (idx_t ij = 0; ij < n * nprobe; ij++) {
                     idx_t i = ij / nprobe;
                     float* tab = dis_tables.get() + ij * dim12;
-                    idx_t cij = coarse_ids[ij];
+                    idx_t cij = cq.ids[ij];
 
                     if (cij >= 0) {
-                        fvec_madd_avx(
+                        fvec_madd_simd(
                                 dim12,
                                 precomputed_table.get() + cij * dim12,
                                 -2,
@@ -276,7 +247,7 @@ void IndexIVFPQFastScan::compute_LUT(
                 for (idx_t ij = 0; ij < n * nprobe; ij++) {
                     idx_t i = ij / nprobe;
                     float* xij = &xrel[ij * d];
-                    idx_t cij = coarse_ids[ij];
+                    idx_t cij = cq.ids[ij];
 
                     if (cij >= 0) {
                         quantizer->compute_residual(x + i * d, xij, cij);
@@ -296,7 +267,7 @@ void IndexIVFPQFastScan::compute_LUT(
             // compute_inner_prod_tables(pq, n, x, dis_tables.get());
 
             biases.resize(n * nprobe);
-            memcpy(biases.get(), coarse_dis, sizeof(float) * n * nprobe);
+            memcpy(biases.get(), cq.dis, sizeof(float) * n * nprobe);
         } else {
             FAISS_THROW_FMT("metric %d not supported", metric_type);
         }
@@ -311,11 +282,6 @@ void IndexIVFPQFastScan::compute_LUT(
             FAISS_THROW_FMT("metric %d not supported", metric_type);
         }
     }
-}
-
-void IndexIVFPQFastScan::sa_decode(idx_t n, const uint8_t* bytes, float* x)
-        const {
-    pq.decode(bytes, x, n);
 }
 
 } // namespace faiss

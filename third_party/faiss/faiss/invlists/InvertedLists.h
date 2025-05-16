@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -15,10 +15,19 @@
  * the interface.
  */
 
-#include <faiss/MetricType.h>
 #include <vector>
 
+#include <faiss/MetricType.h>
+#include <faiss/impl/maybe_owned_vector.h>
+
 namespace faiss {
+
+struct InvertedListsIterator {
+    virtual ~InvertedListsIterator();
+    virtual bool is_available() const = 0;
+    virtual void next() = 0;
+    virtual std::pair<idx_t, const uint8_t*> get_id_and_codes() = 0;
+};
 
 /** Table of inverted lists
  * multithreading rules:
@@ -30,6 +39,9 @@ namespace faiss {
 struct InvertedLists {
     size_t nlist;     ///< number of possible key values
     size_t code_size; ///< code size per vector in bytes
+
+    /// request to use iterator rather than get_codes / get_ids
+    bool use_iterator = false;
 
     InvertedLists(size_t nlist, size_t code_size);
 
@@ -76,11 +88,27 @@ struct InvertedLists {
     /// a list can be -1 hence the signed long
     virtual void prefetch_lists(const idx_t* list_nos, int nlist) const;
 
+    /*****************************************
+     * Iterator interface (with context)     */
+
+    /// check if the list is empty
+    virtual bool is_empty(size_t list_no, void* inverted_list_context = nullptr)
+            const;
+
+    /// get iterable for lists that use_iterator
+    virtual InvertedListsIterator* get_iterator(
+            size_t list_no,
+            void* inverted_list_context = nullptr) const;
+
     /*************************
      * writing functions     */
 
     /// add one entry to an inverted list
-    virtual size_t add_entry(size_t list_no, idx_t theid, const uint8_t* code);
+    virtual size_t add_entry(
+            size_t list_no,
+            idx_t theid,
+            const uint8_t* code,
+            void* inverted_list_context = nullptr);
 
     virtual size_t add_entries(
             size_t list_no,
@@ -106,25 +134,33 @@ struct InvertedLists {
     virtual void reset();
 
     /*************************
-     * high level functions     */
+     * high level functions  */
 
     /// move all entries from oivf (empty on output)
     void merge_from(InvertedLists* oivf, size_t add_id);
 
+    // how to copy a subset of elements from the inverted lists
+    // This depends on two integers, a1 and a2.
+    enum subset_type_t : int {
+        // depends on IDs
+        SUBSET_TYPE_ID_RANGE = 0, // copies ids in [a1, a2)
+        SUBSET_TYPE_ID_MOD = 1,   // copies ids if id % a1 == a2
+        // depends on order within invlists
+        SUBSET_TYPE_ELEMENT_RANGE =
+                2, // copies fractions of invlists so that a1 elements are left
+                   // before and a2 after
+        SUBSET_TYPE_INVLIST_FRACTION =
+                3, // take fraction a2 out of a1 from each invlist, 0 <= a2 < a1
+        // copy only inverted lists a1:a2
+        SUBSET_TYPE_INVLIST = 4
+    };
+
     /** copy a subset of the entries index to the other index
-     *
-     * if subset_type == 0: copies ids in [a1, a2)
-     * if subset_type == 1: copies ids if id % a1 == a2
-     * if subset_type == 2: copies inverted lists such that a1
-     *                      elements are left before and a2 elements are after
-     *                      (insensitive to ids)
-     * if subset_type == 3: take fraction a2 out of a1 from each invlist
-     *                      (does not depend on ids). 0 <= a2 < a1
      * @return number of entries copied
      */
     size_t copy_subset_to(
             InvertedLists& other,
-            int subset_type,
+            subset_type_t subset_type,
             idx_t a1,
             idx_t a2) const;
 
@@ -207,8 +243,8 @@ struct InvertedLists {
 
 /// simple (default) implementation as an array of inverted lists
 struct ArrayInvertedLists : InvertedLists {
-    std::vector<std::vector<uint8_t>> codes; // binary codes, size nlist
-    std::vector<std::vector<idx_t>> ids;     ///< Inverted lists for indexes
+    std::vector<MaybeOwnedVector<uint8_t>> codes; // binary codes, size nlist
+    std::vector<MaybeOwnedVector<idx_t>> ids; ///< Inverted lists for indexes
 
     ArrayInvertedLists(size_t nlist, size_t code_size);
 
@@ -230,6 +266,12 @@ struct ArrayInvertedLists : InvertedLists {
             const uint8_t* code) override;
 
     void resize(size_t list_no, size_t new_size) override;
+
+    /// permute the inverted lists, map maps new_id to old_id
+    void permute_invlists(const idx_t* map);
+
+    bool is_empty(size_t list_no, void* inverted_list_context = nullptr)
+            const override;
 
     ~ArrayInvertedLists() override;
 };

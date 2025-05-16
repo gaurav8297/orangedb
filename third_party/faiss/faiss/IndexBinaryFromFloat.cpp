@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,13 +9,14 @@
 
 #include <faiss/IndexBinaryFromFloat.h>
 
+#include <faiss/impl/FaissAssert.h>
 #include <faiss/utils/utils.h>
 #include <algorithm>
 #include <memory>
 
 namespace faiss {
 
-IndexBinaryFromFloat::IndexBinaryFromFloat() {}
+IndexBinaryFromFloat::IndexBinaryFromFloat() = default;
 
 IndexBinaryFromFloat::IndexBinaryFromFloat(Index* index)
         : IndexBinary(index->d), index(index), own_fields(false) {

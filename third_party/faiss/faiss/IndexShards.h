@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -71,7 +71,7 @@ struct IndexShardsTemplate : public ThreadedIndex<IndexT> {
      * Cases (successive_ids, xids):
      * - true, non-NULL       ERROR: it makes no sense to pass in ids and
      *                        request them to be shifted
-     * - true, NULL           OK, but should be called only once (calls add()
+     * - true, NULL           OK: but should be called only once (calls add()
      *                        on sub-indexes).
      * - false, non-NULL      OK: will call add_with_ids with passed in xids
      *                        distributed evenly over shards
@@ -95,7 +95,7 @@ struct IndexShardsTemplate : public ThreadedIndex<IndexT> {
 
     /// Synchronize the top-level index (IndexShards) with data in the
     /// sub-indices
-    void syncWithSubIndexes();
+    virtual void syncWithSubIndexes();
 
    protected:
     /// Called just after an index is added

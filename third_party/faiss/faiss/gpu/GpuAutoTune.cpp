@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -11,14 +11,13 @@
 #include <faiss/IndexPreTransform.h>
 #include <faiss/IndexReplicas.h>
 #include <faiss/IndexShards.h>
+#include <faiss/IndexShardsIVF.h>
+
 #include <faiss/gpu/GpuIndex.h>
 #include <faiss/gpu/GpuIndexFlat.h>
 #include <faiss/gpu/GpuIndexIVFFlat.h>
 #include <faiss/gpu/GpuIndexIVFPQ.h>
-#include <faiss/gpu/GpuIndexIVFScalarQuantizer.h>
 #include <faiss/gpu/impl/IndexUtils.h>
-#include <faiss/gpu/utils/DeviceUtils.h>
-#include <faiss/impl/FaissAssert.h>
 
 namespace faiss {
 namespace gpu {
@@ -33,7 +32,12 @@ using namespace ::faiss;
 
 void GpuParameterSpace::initialize(const Index* index) {
     if (DC(IndexPreTransform)) {
-        index = ix->index;
+        initialize(ix->index);
+        return;
+    }
+    if (DC(IndexShardsIVF)) {
+        ParameterSpace::initialize(index);
+        return;
     }
     if (DC(IndexReplicas)) {
         if (ix->count() == 0)
@@ -52,6 +56,14 @@ void GpuParameterSpace::initialize(const Index* index) {
             if (nprobe >= ix->getNumLists() || nprobe > getMaxKSelection())
                 break;
             pr.values.push_back(nprobe);
+        }
+
+        ParameterSpace ivf_pspace;
+        ivf_pspace.initialize(ix->quantizer);
+
+        for (const ParameterRange& p : ivf_pspace.parameter_ranges) {
+            ParameterRange& pr = add_range("quantizer_" + p.name);
+            pr.values = p.values;
         }
     }
     // not sure we should call the parent initializer
@@ -72,13 +84,21 @@ void GpuParameterSpace::set_index_parameter(
     }
     if (name == "nprobe") {
         if (DC(GpuIndexIVF)) {
-            ix->setNumProbes(int(val));
+            ix->nprobe = size_t(val);
             return;
         }
     }
     if (name == "use_precomputed_table") {
         if (DC(GpuIndexIVFPQ)) {
             ix->setPrecomputedCodes(bool(val));
+            return;
+        }
+    }
+
+    if (name.find("quantizer_") == 0) {
+        if (DC(GpuIndexIVF)) {
+            std::string sub_name = name.substr(strlen("quantizer_"));
+            set_index_parameter(ix->quantizer, sub_name, val);
             return;
         }
     }

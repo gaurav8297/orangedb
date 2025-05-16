@@ -9,6 +9,7 @@
 # causes a ton of useless warnings.
 
 import numpy as np
+import logging
 import sys
 import inspect
 
@@ -21,12 +22,16 @@ from faiss.gpu_wrappers import *
 from faiss.array_conversions import *
 from faiss.extra_wrappers import kmin, kmax, pairwise_distances, rand, randint, \
     lrand, randn, rand_smooth_vectors, eval_intersection, normalize_L2, \
-    ResultHeap, knn, Kmeans, checksum, matrix_bucket_sort_inplace, bucket_sort
+    ResultHeap, knn, Kmeans, checksum, matrix_bucket_sort_inplace, bucket_sort, \
+    merge_knn_results, MapInt64ToInt64, knn_hamming, \
+    pack_bitstrings, unpack_bitstrings
 
 
 __version__ = "%d.%d.%d" % (FAISS_VERSION_MAJOR,
                             FAISS_VERSION_MINOR,
                             FAISS_VERSION_PATCH)
+
+logger = logging.getLogger(__name__)
 
 class_wrappers.handle_Clustering(Clustering)
 class_wrappers.handle_Clustering1D(Clustering1D)
@@ -40,6 +45,16 @@ class_wrappers.handle_MapLong2Long(MapLong2Long)
 class_wrappers.handle_IDSelectorSubset(IDSelectorBatch, class_owns=True)
 class_wrappers.handle_IDSelectorSubset(IDSelectorArray, class_owns=False)
 class_wrappers.handle_IDSelectorSubset(IDSelectorBitmap, class_owns=False, force_int64=False)
+class_wrappers.handle_CodeSet(CodeSet)
+
+class_wrappers.handle_Tensor2D(Tensor2D)
+class_wrappers.handle_Tensor2D(Int32Tensor2D)
+class_wrappers.handle_Embedding(Embedding)
+class_wrappers.handle_Linear(Linear)
+class_wrappers.handle_QINCo(QINCo)
+class_wrappers.handle_QINCoStep(QINCoStep)
+shard_ivf_index_centroids = class_wrappers.handle_shard_ivf_index_centroids(shard_ivf_index_centroids)
+
 
 this_module = sys.modules[__name__]
 
@@ -67,6 +82,9 @@ for symbol in dir(this_module):
 
         if issubclass(the_class, SearchParameters):
             class_wrappers.handle_SearchParameters(the_class)
+
+        if issubclass(the_class, CodePacker):
+            class_wrappers.handle_CodePacker(the_class)
 
 ##############################################################################
 # For some classes (IndexIVF, IDSelector), the object holds a reference to
@@ -146,6 +164,15 @@ def add_ref_in_function(function_name, parameter_no):
     setattr(this_module, function_name, replacement_function)
 
 
+try:
+    add_ref_in_constructor(GpuIndexIVFFlat, 1)
+    add_ref_in_constructor(GpuIndexBinaryFlat, 1)
+    add_ref_in_constructor(GpuIndexFlat, 1)
+    add_ref_in_constructor(GpuIndexIVFPQ, 1)
+    add_ref_in_constructor(GpuIndexIVFScalarQuantizer, 1)
+except NameError as e:
+    logger.info("Failed to load GPU Faiss: %s. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss." % e.args[0])
+
 add_ref_in_constructor(IndexIVFFlat, 0)
 add_ref_in_constructor(IndexIVFFlatDedup, 0)
 add_ref_in_constructor(IndexPreTransform, {2: [0, 1], 1: [0]})
@@ -185,6 +212,13 @@ add_ref_in_constructor(BufferedIOWriter, 0)
 add_ref_in_constructor(BufferedIOReader, 0)
 
 add_ref_in_constructor(IDSelectorNot, 0)
+add_ref_in_constructor(IDSelectorAnd, slice(2))
+add_ref_in_constructor(IDSelectorOr, slice(2))
+add_ref_in_constructor(IDSelectorXOr, slice(2))
+add_ref_in_constructor(IDSelectorTranslated, slice(2))
+
+add_ref_in_constructor(IDSelectorXOr, slice(2))
+add_ref_in_constructor(IndexIVFIndependentQuantizer, slice(3))
 
 # seems really marginal...
 # remove_ref_from_method(IndexReplicas, 'removeIndex', 0)
@@ -279,17 +313,17 @@ IVFSearchParameters = SearchParametersIVF
 ###########################################
 
 
-def serialize_index(index):
+def serialize_index(index, io_flags=0):
     """ convert an index to a numpy uint8 array  """
     writer = VectorIOWriter()
-    write_index(index, writer)
+    write_index(index, writer, io_flags)
     return vector_to_array(writer.data)
 
 
-def deserialize_index(data):
+def deserialize_index(data, io_flags=0):
     reader = VectorIOReader()
     copy_array_to_vector(data, reader.data)
-    return read_index(reader)
+    return read_index(reader, io_flags)
 
 
 def serialize_index_binary(index):
@@ -303,3 +337,14 @@ def deserialize_index_binary(data):
     reader = VectorIOReader()
     copy_array_to_vector(data, reader.data)
     return read_index_binary(reader)
+
+
+class TimeoutGuard:
+    def __init__(self, timeout_in_seconds: float):
+        self.timeout = timeout_in_seconds
+
+    def __enter__(self):
+        TimeoutCallback.reset(self.timeout)
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        PythonInterruptCallback.reset()

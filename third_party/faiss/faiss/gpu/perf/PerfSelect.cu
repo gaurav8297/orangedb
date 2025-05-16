@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
                 resUse.get(),
                 makeDevAlloc(AllocType::Other, 0),
                 {FLAGS_rows, k});
-        DeviceTensor<int, 2, true> gpuOutInd(
+        DeviceTensor<faiss::idx_t, 2, true> gpuOutInd(
                 resUse.get(),
                 makeDevAlloc(AllocType::Other, 0),
                 {FLAGS_rows, k});

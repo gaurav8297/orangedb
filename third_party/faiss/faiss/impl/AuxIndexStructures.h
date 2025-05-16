@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -21,8 +21,6 @@
 #include <faiss/MetricType.h>
 #include <faiss/impl/platform_macros.h>
 
-#include "prefetch.h"
-
 namespace faiss {
 
 /** The objective is to have a simple result structure while
@@ -39,11 +37,10 @@ struct RangeSearchResult {
     size_t buffer_size; ///< size of the result buffers used
 
     /// lims must be allocated on input to range_search.
-    explicit RangeSearchResult(idx_t nq, bool alloc_lims = true);
+    explicit RangeSearchResult(size_t nq, bool alloc_lims = true);
 
     /// called when lims contains the nb of elements result entries
     /// for each query
-
     virtual void do_allocation();
 
     virtual ~RangeSearchResult();
@@ -125,7 +122,7 @@ struct RangeSearchPartialResult : BufferList {
     void copy_result(bool incremental = false);
 
     /// merge a set of PartialResult's into one RangeSearchResult
-    /// on ouptut the partialresults are empty!
+    /// on output the partialresults are empty!
     static void merge(
             std::vector<RangeSearchPartialResult*>& partial_results,
             bool do_delete = true);
@@ -164,10 +161,18 @@ struct FAISS_API InterruptCallback {
     static size_t get_period_hint(size_t flops);
 };
 
+struct TimeoutCallback : InterruptCallback {
+    std::chrono::time_point<std::chrono::steady_clock> start;
+    double timeout;
+    bool want_interrupt() override;
+    void set_timeout(double timeout_in_seconds);
+    static void reset(double timeout_in_seconds);
+};
+
 /// set implementation optimized for fast access.
 struct VisitedTable {
     std::vector<uint8_t> visited;
-    int visno;
+    uint8_t visno;
 
     explicit VisitedTable(int size) : visited(size), visno(1) {}
 
@@ -181,11 +186,6 @@ struct VisitedTable {
         return visited[no] == visno;
     }
 
-    // prefech for avx
-    void prefetch(int no) {
-        prefetch_L3(visited.data() + no);
-    }
-
     /// reset all flags to false
     void advance() {
         visno++;
@@ -194,17 +194,6 @@ struct VisitedTable {
             memset(visited.data(), 0, sizeof(visited[0]) * visited.size());
             visno = 1;
         }
-    }
-
-    // added for hybrid search
-    int num_visited() {
-        int num = 0;
-        for (int i = 0; i < visited.size(); i++) {
-            if (visited[i] == visno) {
-                num = num + 1;
-            }
-        }
-        return num;
     }
 };
 

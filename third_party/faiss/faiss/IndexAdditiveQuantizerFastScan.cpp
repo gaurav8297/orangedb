@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -7,11 +7,8 @@
 
 #include <faiss/IndexAdditiveQuantizerFastScan.h>
 
-#include <limits.h>
 #include <cassert>
 #include <memory>
-
-#include <omp.h>
 
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/LocalSearchQuantizer.h>
@@ -35,30 +32,31 @@ IndexAdditiveQuantizerFastScan::IndexAdditiveQuantizerFastScan(
 }
 
 void IndexAdditiveQuantizerFastScan::init(
-        AdditiveQuantizer* aq,
+        AdditiveQuantizer* aq_init,
         MetricType metric,
         int bbs) {
-    FAISS_THROW_IF_NOT(aq != nullptr);
-    FAISS_THROW_IF_NOT(!aq->nbits.empty());
-    FAISS_THROW_IF_NOT(aq->nbits[0] == 4);
+    FAISS_THROW_IF_NOT(aq_init != nullptr);
+    FAISS_THROW_IF_NOT(!aq_init->nbits.empty());
+    FAISS_THROW_IF_NOT(aq_init->nbits[0] == 4);
     if (metric == METRIC_INNER_PRODUCT) {
         FAISS_THROW_IF_NOT_MSG(
-                aq->search_type == AdditiveQuantizer::ST_LUT_nonorm,
+                aq_init->search_type == AdditiveQuantizer::ST_LUT_nonorm,
                 "Search type must be ST_LUT_nonorm for IP metric");
     } else {
         FAISS_THROW_IF_NOT_MSG(
-                aq->search_type == AdditiveQuantizer::ST_norm_lsq2x4 ||
-                        aq->search_type == AdditiveQuantizer::ST_norm_rq2x4,
+                aq_init->search_type == AdditiveQuantizer::ST_norm_lsq2x4 ||
+                        aq_init->search_type ==
+                                AdditiveQuantizer::ST_norm_rq2x4,
                 "Search type must be lsq2x4 or rq2x4 for L2 metric");
     }
 
-    this->aq = aq;
+    this->aq = aq_init;
     if (metric == METRIC_L2) {
-        M = aq->M + 2; // 2x4 bits AQ
+        M = aq_init->M + 2; // 2x4 bits AQ
     } else {
-        M = aq->M;
+        M = aq_init->M;
     }
-    init_fastscan(aq->d, M, 4, metric, bbs);
+    init_fastscan(aq_init->d, M, 4, metric, bbs);
 
     max_train_points = 1024 * ksub * M;
 }
@@ -83,7 +81,7 @@ IndexAdditiveQuantizerFastScan::IndexAdditiveQuantizerFastScan(
     pq4_pack_codes(orig_codes, ntotal, M, ntotal2, bbs, M2, codes.get());
 }
 
-IndexAdditiveQuantizerFastScan::~IndexAdditiveQuantizerFastScan() {}
+IndexAdditiveQuantizerFastScan::~IndexAdditiveQuantizerFastScan() = default;
 
 void IndexAdditiveQuantizerFastScan::train(idx_t n, const float* x_in) {
     if (is_trained) {
@@ -203,9 +201,9 @@ void IndexAdditiveQuantizerFastScan::search(
 
     NormTableScaler scaler(norm_scale);
     if (metric_type == METRIC_L2) {
-        search_dispatch_implem<true>(n, x, k, distances, labels, scaler);
+        search_dispatch_implem<true>(n, x, k, distances, labels, &scaler);
     } else {
-        search_dispatch_implem<false>(n, x, k, distances, labels, scaler);
+        search_dispatch_implem<false>(n, x, k, distances, labels, &scaler);
     }
 }
 

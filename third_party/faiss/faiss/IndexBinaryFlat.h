@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -14,12 +14,15 @@
 
 #include <faiss/IndexBinary.h>
 
+#include <faiss/impl/maybe_owned_vector.h>
+#include <faiss/utils/approx_topk/mode.h>
+
 namespace faiss {
 
 /** Index that stores the full vectors and performs exhaustive search. */
 struct IndexBinaryFlat : IndexBinary {
     /// database vectors, size ntotal * d / 8
-    std::vector<uint8_t> xb;
+    MaybeOwnedVector<uint8_t> xb;
 
     /** Select between using a heap or counting to select the k smallest values
      * when scanning inverted lists.
@@ -27,6 +30,8 @@ struct IndexBinaryFlat : IndexBinary {
     bool use_heap = true;
 
     size_t query_batch_size = 32;
+
+    ApproxTopK_mode_t approx_topk_mode = ApproxTopK_mode_t::EXACT_TOPK;
 
     explicit IndexBinaryFlat(idx_t d);
 

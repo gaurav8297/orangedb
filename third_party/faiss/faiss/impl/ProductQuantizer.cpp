@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -61,6 +61,7 @@ void ProductQuantizer::set_derived_values() {
             "The dimension of the vector (d) should be a multiple of the number of subquantizers (M)");
     dsub = d / M;
     code_size = (nbits * M + 7) / 8;
+    FAISS_THROW_IF_MSG(nbits > 24, "nbits larger than 24 is not practical.");
     ksub = 1 << nbits;
     centroids.resize(d * ksub);
     verbose = false;
@@ -135,11 +136,10 @@ void ProductQuantizer::train(size_t n, const float* x) {
             }
         }
 
-        float* xslice = new float[n * dsub];
-        ScopeDeleter<float> del(xslice);
+        std::unique_ptr<float[]> xslice(new float[n * dsub]);
         for (int m = 0; m < M; m++) {
             for (int j = 0; j < n; j++)
-                memcpy(xslice + j * dsub,
+                memcpy(xslice.get() + j * dsub,
                        x + j * d + m * dsub,
                        dsub * sizeof(float));
 
@@ -153,11 +153,19 @@ void ProductQuantizer::train(size_t n, const float* x) {
             switch (final_train_type) {
                 case Train_hypercube:
                     init_hypercube(
-                            dsub, nbits, n, xslice, clus.centroids.data());
+                            dsub,
+                            nbits,
+                            n,
+                            xslice.get(),
+                            clus.centroids.data());
                     break;
                 case Train_hypercube_pca:
                     init_hypercube_pca(
-                            dsub, nbits, n, xslice, clus.centroids.data());
+                            dsub,
+                            nbits,
+                            n,
+                            xslice.get(),
+                            clus.centroids.data());
                     break;
                 case Train_hot_start:
                     memcpy(clus.centroids.data(),
@@ -172,7 +180,7 @@ void ProductQuantizer::train(size_t n, const float* x) {
                 printf("Training PQ slice %d/%zd\n", m, M);
             }
             IndexFlatL2 index(dsub);
-            clus.train(n, xslice, assign_index ? *assign_index : index);
+            clus.train(n, xslice.get(), assign_index ? *assign_index : index);
             set_params(clus.centroids.data(), m);
         }
 
@@ -306,7 +314,8 @@ void ProductQuantizer::decode(const uint8_t* code, float* x) const {
 }
 
 void ProductQuantizer::decode(const uint8_t* code, float* x, size_t n) const {
-    for (size_t i = 0; i < n; i++) {
+#pragma omp parallel for if (n > 100)
+    for (int64_t i = 0; i < n; i++) {
         this->decode(code + code_size * i, x + d * i);
     }
 }
@@ -342,21 +351,20 @@ void ProductQuantizer::compute_codes_with_assign_index(
         assign_index->reset();
         assign_index->add(ksub, get_centroids(m, 0));
         size_t bs = 65536;
-        float* xslice = new float[bs * dsub];
-        ScopeDeleter<float> del(xslice);
-        idx_t* assign = new idx_t[bs];
-        ScopeDeleter<idx_t> del2(assign);
+
+        std::unique_ptr<float[]> xslice(new float[bs * dsub]);
+        std::unique_ptr<idx_t[]> assign(new idx_t[bs]);
 
         for (size_t i0 = 0; i0 < n; i0 += bs) {
             size_t i1 = std::min(i0 + bs, n);
 
             for (size_t i = i0; i < i1; i++) {
-                memcpy(xslice + (i - i0) * dsub,
+                memcpy(xslice.get() + (i - i0) * dsub,
                        x + i * d + m * dsub,
                        dsub * sizeof(float));
             }
 
-            assign_index->assign(i1 - i0, xslice, assign);
+            assign_index->assign(i1 - i0, xslice.get(), assign.get());
 
             if (nbits == 8) {
                 uint8_t* c = codes + code_size * i0 + m;
@@ -405,15 +413,14 @@ void ProductQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
         for (int64_t i = 0; i < n; i++)
             compute_code(x + i * d, codes + i * code_size);
 
-    } else { // worthwile to use BLAS
-        float* dis_tables = new float[n * ksub * M];
-        ScopeDeleter<float> del(dis_tables);
-        compute_distance_tables(n, x, dis_tables);
+    } else { // worthwhile to use BLAS
+        std::unique_ptr<float[]> dis_tables(new float[n * ksub * M]);
+        compute_distance_tables(n, x, dis_tables.get());
 
 #pragma omp parallel for
         for (int64_t i = 0; i < n; i++) {
             uint8_t* code = codes + i * code_size;
-            const float* tab = dis_tables + i * ksub * M;
+            const float* tab = dis_tables.get() + i * ksub * M;
             compute_code_from_distance_table(tab, code);
         }
     }
@@ -421,15 +428,28 @@ void ProductQuantizer::compute_codes(const float* x, uint8_t* codes, size_t n)
 
 void ProductQuantizer::compute_distance_table(const float* x, float* dis_table)
         const {
-    size_t m;
-
-    for (m = 0; m < M; m++) {
-        fvec_L2sqr_ny(
-                dis_table + m * ksub,
-                x + m * dsub,
-                get_centroids(m, 0),
-                dsub,
-                ksub);
+    if (transposed_centroids.empty()) {
+        // use regular version
+        for (size_t m = 0; m < M; m++) {
+            fvec_L2sqr_ny(
+                    dis_table + m * ksub,
+                    x + m * dsub,
+                    get_centroids(m, 0),
+                    dsub,
+                    ksub);
+        }
+    } else {
+        // transposed centroids are available, use'em
+        for (size_t m = 0; m < M; m++) {
+            fvec_L2sqr_ny_transposed(
+                    dis_table + m * ksub,
+                    x + m * dsub,
+                    transposed_centroids.data() + m * ksub,
+                    centroids_sq_lengths.data() + m * ksub,
+                    dsub,
+                    M * ksub,
+                    ksub);
+        }
     }
 }
 
@@ -460,7 +480,7 @@ void ProductQuantizer::compute_distance_tables(
 #endif
             if (dsub < 16) {
 
-#pragma omp parallel for
+#pragma omp parallel for if (nx > 1)
         for (int64_t i = 0; i < nx; i++) {
             compute_distance_table(x + i * d, dis_tables + i * ksub * M);
         }
@@ -494,7 +514,7 @@ void ProductQuantizer::compute_inner_prod_tables(
 #endif
             if (dsub < 16) {
 
-#pragma omp parallel for
+#pragma omp parallel for if (nx > 1)
         for (int64_t i = 0; i < nx; i++) {
             compute_inner_prod_table(x + i * d, dis_tables + i * ksub * M);
         }
@@ -668,7 +688,7 @@ void pq_knn_search_with_tables(
     size_t k = res->k, nx = res->nh;
     size_t ksub = pq.ksub, M = pq.M;
 
-#pragma omp parallel for
+#pragma omp parallel for if (nx > 1)
     for (int64_t i = 0; i < nx; i++) {
         /* query preparation for asymmetric search: compute look-up tables */
         const float* dis_table = dis_tables + i * ksub * M;
@@ -759,10 +779,6 @@ void ProductQuantizer::search_ip(
             ncodes,
             res,
             init_finalize_heap);
-}
-
-static float sqr(float x) {
-    return x * x;
 }
 
 void ProductQuantizer::compute_sdc_table() {

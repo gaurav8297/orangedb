@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -9,7 +9,7 @@
 
 #include <faiss/utils/distances_fused/avx512.h>
 
-#ifdef __AVX512__
+#ifdef __AVX512F__
 
 #include <immintrin.h>
 
@@ -68,7 +68,7 @@ void kernel(
         const float* const __restrict y,
         const float* const __restrict y_transposed,
         size_t ny,
-        SingleBestResultHandler<CMax<float, int64_t>>& res,
+        Top1BlockResultHandler<CMax<float, int64_t>>& res,
         const float* __restrict y_norms,
         size_t i) {
     const size_t ny_p =
@@ -231,7 +231,7 @@ void exhaustive_L2sqr_fused_cmax(
         const float* const __restrict y,
         size_t nx,
         size_t ny,
-        SingleBestResultHandler<CMax<float, int64_t>>& res,
+        Top1BlockResultHandler<CMax<float, int64_t>>& res,
         const float* __restrict y_norms) {
     // BLAS does not like empty matrices
     if (nx == 0 || ny == 0) {
@@ -275,7 +275,7 @@ void exhaustive_L2sqr_fused_cmax(
                 x, y, y_transposed.data(), ny, res, y_norms, i);
     }
 
-    // Does nothing for SingleBestResultHandler, but
+    // Does nothing for Top1BlockResultHandler, but
     // keeping the call for the consistency.
     res.end_multiple();
     InterruptCallback::check();
@@ -289,7 +289,7 @@ bool exhaustive_L2sqr_fused_cmax_AVX512(
         size_t d,
         size_t nx,
         size_t ny,
-        SingleBestResultHandler<CMax<float, int64_t>>& res,
+        Top1BlockResultHandler<CMax<float, int64_t>>& res,
         const float* y_norms) {
     // process only cases with certain dimensionalities
 
@@ -303,13 +303,38 @@ bool exhaustive_L2sqr_fused_cmax_AVX512(
     }
 
     switch (d) {
-        DISPATCH(2, 4, 2)
-        DISPATCH(3, 4, 1)
-        DISPATCH(4, 4, 1)
-        DISPATCH(6, 2, 1)
-        DISPATCH(8, 2, 1)
-        DISPATCH(12, 1, 1)
-        DISPATCH(16, 1, 1)
+        DISPATCH(1, 8, 1)
+        DISPATCH(2, 8, 1)
+        DISPATCH(3, 8, 1)
+        DISPATCH(4, 8, 1)
+        DISPATCH(5, 8, 1)
+        DISPATCH(6, 8, 1)
+        DISPATCH(7, 8, 1)
+        DISPATCH(8, 8, 1)
+        DISPATCH(9, 8, 1)
+        DISPATCH(10, 8, 1)
+        DISPATCH(11, 8, 1)
+        DISPATCH(12, 8, 1)
+        DISPATCH(13, 8, 1)
+        DISPATCH(14, 8, 1)
+        DISPATCH(15, 8, 1)
+        DISPATCH(16, 8, 1)
+        DISPATCH(17, 8, 1)
+        DISPATCH(18, 8, 1)
+        DISPATCH(19, 8, 1)
+        DISPATCH(20, 8, 1)
+        DISPATCH(21, 8, 1)
+        DISPATCH(22, 8, 1)
+        DISPATCH(23, 8, 1)
+        DISPATCH(24, 8, 1)
+        DISPATCH(25, 8, 1)
+        DISPATCH(26, 8, 1)
+        DISPATCH(27, 8, 1)
+        DISPATCH(28, 8, 1)
+        DISPATCH(29, 8, 1)
+        DISPATCH(30, 8, 1)
+        DISPATCH(31, 8, 1)
+        DISPATCH(32, 8, 1)
     }
 
     return false;

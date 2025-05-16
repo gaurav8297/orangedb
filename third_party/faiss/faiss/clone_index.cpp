@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -17,6 +17,10 @@
 #include <faiss/Index2Layer.h>
 #include <faiss/IndexAdditiveQuantizer.h>
 #include <faiss/IndexAdditiveQuantizerFastScan.h>
+#include <faiss/IndexBinary.h>
+#include <faiss/IndexBinaryFlat.h>
+#include <faiss/IndexBinaryHNSW.h>
+#include <faiss/IndexBinaryIVF.h>
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexHNSW.h>
 #include <faiss/IndexIVF.h>
@@ -35,6 +39,7 @@
 #include <faiss/IndexRefine.h>
 #include <faiss/IndexRowwiseMinMax.h>
 #include <faiss/IndexScalarQuantizer.h>
+
 #include <faiss/MetaIndexes.h>
 #include <faiss/VectorTransform.h>
 
@@ -42,6 +47,7 @@
 #include <faiss/impl/ProductQuantizer.h>
 #include <faiss/impl/ResidualQuantizer.h>
 #include <faiss/impl/ScalarQuantizer.h>
+#include <faiss/impl/pq4_fast_scan.h>
 
 #include <faiss/invlists/BlockInvertedLists.h>
 
@@ -59,9 +65,10 @@ Index* clone_index(const Index* index) {
 // assumes there is a copy constructor ready. Always try from most
 // specific to most general. Most indexes don't have complicated
 // structs, the default copy constructor often just works.
-#define TRYCLONE(classname, obj)                                      \
-    if (const classname* clo = dynamic_cast<const classname*>(obj)) { \
-        return new classname(*clo);                                   \
+#define TRYCLONE(classname, obj)                       \
+    if (const classname* clo##classname =              \
+                dynamic_cast<const classname*>(obj)) { \
+        return new classname(*clo##classname);         \
     } else
 
 VectorTransform* Cloner::clone_VectorTransform(const VectorTransform* vt) {
@@ -102,6 +109,11 @@ IndexIVF* Cloner::clone_IndexIVF(const IndexIVF* ivf) {
     return nullptr;
 }
 
+IndexBinaryIVF* clone_IndexBinaryIVF(const IndexBinaryIVF* ivf) {
+    TRYCLONE(IndexBinaryIVF, ivf)
+    return nullptr;
+}
+
 IndexRefine* clone_IndexRefine(const IndexRefine* ir) {
     TRYCLONE(IndexRefineFlat, ir)
     TRYCLONE(IndexRefine, ir) {
@@ -124,6 +136,11 @@ IndexHNSW* clone_IndexHNSW(const IndexHNSW* ihnsw) {
     TRYCLONE(IndexHNSW, ihnsw) {
         FAISS_THROW_MSG("clone not supported for this type of IndexHNSW");
     }
+}
+
+IndexBinaryHNSW* clone_IndexBinaryHNSW(const IndexBinaryHNSW* ihnsw) {
+    TRYCLONE(IndexBinaryHNSW, ihnsw)
+    return nullptr;
 }
 
 IndexNNDescent* clone_IndexNNDescent(const IndexNNDescent* innd) {
@@ -233,11 +250,22 @@ Index* clone_AdditiveQuantizerIndex(const Index* index) {
 
 namespace {
 
-IndexHNSW* clone_HNSW(const IndexHNSW* ihnsw) {
-    TRYCLONE(IndexHNSWFlat, ihnsw)
-    TRYCLONE(IndexHNSWPQ, ihnsw)
-    TRYCLONE(IndexHNSWSQ, ihnsw)
-    return new IndexHNSW(*ihnsw);
+InvertedLists* clone_InvertedLists(const InvertedLists* invlists) {
+    if (auto* ails = dynamic_cast<const ArrayInvertedLists*>(invlists)) {
+        return new ArrayInvertedLists(*ails);
+    }
+    if (auto* bils = dynamic_cast<const BlockInvertedLists*>(invlists)) {
+        auto* bils2 = new BlockInvertedLists(*bils);
+        if (bils->packer) {
+            auto* packerPQ4 = dynamic_cast<const CodePackerPQ4*>(bils->packer);
+            FAISS_THROW_IF_NOT(packerPQ4);
+            bils2->packer = new CodePackerPQ4(*packerPQ4);
+        }
+        return bils2;
+    }
+    FAISS_THROW_FMT(
+            "clone not supported for this type of inverted lists %s",
+            typeid(*invlists).name());
 }
 
 } // anonymous namespace
@@ -263,20 +291,11 @@ Index* Cloner::clone_Index(const Index* index) {
         IndexIVF* res = clone_IndexIVF(ivf);
         if (ivf->invlists == nullptr) {
             res->invlists = nullptr;
-        } else if (
-                auto* ails = dynamic_cast<const ArrayInvertedLists*>(
-                        ivf->invlists)) {
-            res->invlists = new ArrayInvertedLists(*ails);
-            res->own_invlists = true;
-        } else if (
-                auto* bils = dynamic_cast<const BlockInvertedLists*>(
-                        ivf->invlists)) {
-            res->invlists = new BlockInvertedLists(*bils);
-            res->own_invlists = true;
         } else {
-            FAISS_THROW_MSG(
-                    "clone not supported for this type of inverted lists");
+            res->invlists = clone_InvertedLists(ivf->invlists);
+            res->own_invlists = true;
         }
+
         res->own_fields = true;
         res->quantizer = clone_Index(ivf->quantizer);
 
@@ -316,9 +335,10 @@ Index* Cloner::clone_Index(const Index* index) {
         IndexNSG* res = clone_IndexNSG(insg);
 
         // copy the dynamic allocated graph
-        auto& new_graph = res->nsg.final_graph;
-        auto& old_graph = insg->nsg.final_graph;
-        new_graph = std::make_shared<nsg::Graph<int>>(*old_graph);
+        if (auto& old_graph = insg->nsg.final_graph) {
+            auto& new_graph = res->nsg.final_graph;
+            new_graph = std::make_shared<nsg::Graph<int>>(*old_graph);
+        }
 
         res->own_fields = true;
         res->storage = clone_Index(insg->storage);
@@ -365,7 +385,7 @@ Index* Cloner::clone_Index(const Index* index) {
                 typeid(*index).name());
     }
     return nullptr;
-}
+} // namespace
 
 Quantizer* clone_Quantizer(const Quantizer* quant) {
     TRYCLONE(ResidualQuantizer, quant)
@@ -373,6 +393,36 @@ Quantizer* clone_Quantizer(const Quantizer* quant) {
     TRYCLONE(ProductQuantizer, quant)
     TRYCLONE(ScalarQuantizer, quant)
     FAISS_THROW_MSG("Did not recognize quantizer to clone");
+}
+
+IndexBinary* clone_binary_index(const IndexBinary* index) {
+    if (auto ii = dynamic_cast<const IndexBinaryFlat*>(index)) {
+        return new IndexBinaryFlat(*ii);
+    } else if (
+            const IndexBinaryIVF* ivf =
+                    dynamic_cast<const IndexBinaryIVF*>(index)) {
+        IndexBinaryIVF* res = clone_IndexBinaryIVF(ivf);
+        if (ivf->invlists == nullptr) {
+            res->invlists = nullptr;
+        } else {
+            res->invlists = clone_InvertedLists(ivf->invlists);
+            res->own_invlists = true;
+        }
+
+        res->own_fields = true;
+        res->quantizer = clone_binary_index(ivf->quantizer);
+
+        return res;
+    } else if (
+            const IndexBinaryHNSW* ihnsw =
+                    dynamic_cast<const IndexBinaryHNSW*>(index)) {
+        IndexBinaryHNSW* res = clone_IndexBinaryHNSW(ihnsw);
+        res->own_fields = true;
+        res->storage = clone_binary_index(ihnsw->storage);
+        return res;
+    } else {
+        FAISS_THROW_MSG("cannot clone this type of index");
+    }
 }
 
 } // namespace faiss

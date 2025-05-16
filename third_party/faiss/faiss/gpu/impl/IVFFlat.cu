@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -31,7 +31,7 @@ namespace gpu {
 IVFFlat::IVFFlat(
         GpuResources* res,
         int dim,
-        int nlist,
+        idx_t nlist,
         faiss::MetricType metric,
         float metricArg,
         bool useResidual,
@@ -52,19 +52,21 @@ IVFFlat::IVFFlat(
 
 IVFFlat::~IVFFlat() {}
 
-size_t IVFFlat::getGpuVectorsEncodingSize_(int numVecs) const {
+size_t IVFFlat::getGpuVectorsEncodingSize_(idx_t numVecs) const {
     if (interleavedLayout_) {
         // bits per scalar code
-        int bits = scalarQ_ ? scalarQ_->bits : 32 /* float */;
+        idx_t bits = scalarQ_ ? scalarQ_->bits : 32 /* float */;
 
-        // bytes to encode a block of 32 vectors (single dimension)
-        int bytesPerDimBlock = bits * 32 / 8;
+        int warpSize = getWarpSizeCurrentDevice();
 
-        // bytes to fully encode 32 vectors
-        int bytesPerBlock = bytesPerDimBlock * dim_;
+        // bytes to encode a block of warpSize vectors (single dimension)
+        idx_t bytesPerDimBlock = bits * warpSize / 8;
 
-        // number of blocks of 32 vectors we have
-        int numBlocks = utils::divUp(numVecs, 32);
+        // bytes to fully encode warpSize vectors
+        idx_t bytesPerBlock = bytesPerDimBlock * dim_;
+
+        // number of blocks of warpSize vectors we have
+        idx_t numBlocks = utils::divUp(numVecs, warpSize);
 
         // total size to encode numVecs
         return bytesPerBlock * numBlocks;
@@ -76,7 +78,7 @@ size_t IVFFlat::getGpuVectorsEncodingSize_(int numVecs) const {
     }
 }
 
-size_t IVFFlat::getCpuVectorsEncodingSize_(int numVecs) const {
+size_t IVFFlat::getCpuVectorsEncodingSize_(idx_t numVecs) const {
     size_t sizePerVector =
             (scalarQ_ ? scalarQ_->code_size : sizeof(float) * dim_);
 
@@ -85,7 +87,7 @@ size_t IVFFlat::getCpuVectorsEncodingSize_(int numVecs) const {
 
 std::vector<uint8_t> IVFFlat::translateCodesToGpu_(
         std::vector<uint8_t> codes,
-        size_t numVecs) const {
+        idx_t numVecs) const {
     if (!interleavedLayout_) {
         // same format
         return codes;
@@ -100,7 +102,7 @@ std::vector<uint8_t> IVFFlat::translateCodesToGpu_(
 
 std::vector<uint8_t> IVFFlat::translateCodesFromGpu_(
         std::vector<uint8_t> codes,
-        size_t numVecs) const {
+        idx_t numVecs) const {
     if (!interleavedLayout_) {
         // same format
         return codes;
@@ -117,11 +119,11 @@ void IVFFlat::appendVectors_(
         Tensor<float, 2, true>& ivfCentroidResiduals,
         Tensor<idx_t, 1, true>& indices,
         Tensor<idx_t, 1, true>& uniqueLists,
-        Tensor<int, 1, true>& vectorsByUniqueList,
-        Tensor<int, 1, true>& uniqueListVectorStart,
-        Tensor<int, 1, true>& uniqueListStartOffset,
+        Tensor<idx_t, 1, true>& vectorsByUniqueList,
+        Tensor<idx_t, 1, true>& uniqueListVectorStart,
+        Tensor<idx_t, 1, true>& uniqueListStartOffset,
         Tensor<idx_t, 1, true>& listIds,
-        Tensor<int, 1, true>& listOffset,
+        Tensor<idx_t, 1, true>& listOffset,
         cudaStream_t stream) {
     //
     // Append the new encodings
@@ -173,7 +175,7 @@ void IVFFlat::search(
     // These are caught at a higher level
     FAISS_ASSERT(nprobe <= GPU_MAX_SELECTION_K);
     FAISS_ASSERT(k <= GPU_MAX_SELECTION_K);
-    nprobe = std::min(nprobe, (int)getNumLists());
+    nprobe = int(std::min(idx_t(nprobe), getNumLists()));
 
     FAISS_ASSERT(queries.getSize(1) == dim_);
 
@@ -281,6 +283,54 @@ void IVFFlat::searchPreassigned(
             outDistances,
             outIndices,
             storePairs);
+}
+
+void IVFFlat::reconstruct_n(idx_t i0, idx_t ni, float* out) {
+    if (ni == 0) {
+        // nothing to do
+        return;
+    }
+
+    int warpSize = getWarpSizeCurrentDevice();
+    auto stream = resources_->getDefaultStreamCurrentDevice();
+
+    for (idx_t list_no = 0; list_no < numLists_; list_no++) {
+        size_t list_size = deviceListData_[list_no]->numVecs;
+
+        auto idlist = getListIndices(list_no);
+
+        for (idx_t offset = 0; offset < list_size; offset++) {
+            idx_t id = idlist[offset];
+            if (!(id >= i0 && id < i0 + ni)) {
+                continue;
+            }
+
+            // vector data in the non-interleaved format is laid out like:
+            // v0d0 v0d1 ... v0d(dim-1) v1d0 v1d1 ... v1d(dim-1)
+
+            // vector data in the interleaved format is laid out like:
+            // (v0d0 v1d0 ... v31d0) (v0d1 v1d1 ... v31d1)
+            // (v0d(dim - 1) ... v31d(dim-1))
+            // (v32d0 v33d0 ... v63d0) (... v63d(dim-1)) (v64d0 ...)
+
+            // where vectors are chunked into groups of 32, and each dimension
+            // for each of the 32 vectors is contiguous
+
+            auto vectorChunk = offset / warpSize;
+            auto vectorWithinChunk = offset % warpSize;
+
+            auto listDataPtr = (float*)deviceListData_[list_no]->data.data();
+            listDataPtr += vectorChunk * warpSize * dim_ + vectorWithinChunk;
+
+            for (int d = 0; d < dim_; ++d) {
+                fromDevice<float>(
+                        listDataPtr + warpSize * d,
+                        out + (id - i0) * dim_ + d,
+                        1,
+                        stream);
+            }
+        }
+    }
 }
 
 void IVFFlat::searchImpl_(

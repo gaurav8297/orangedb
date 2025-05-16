@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -10,7 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include <faiss/Index.h>
+#include <faiss/MetricType.h>
 
 /** IDSelector is intended to define a subset of vectors to handle (for removal
  * or as subset to search) */
@@ -129,6 +129,45 @@ struct IDSelectorAll : IDSelector {
         return true;
     }
     virtual ~IDSelectorAll() {}
+};
+
+/// does an AND operation on the the two given IDSelector's is_membership
+/// results.
+struct IDSelectorAnd : IDSelector {
+    const IDSelector* lhs;
+    const IDSelector* rhs;
+    IDSelectorAnd(const IDSelector* lhs, const IDSelector* rhs)
+            : lhs(lhs), rhs(rhs) {}
+    bool is_member(idx_t id) const final {
+        return lhs->is_member(id) && rhs->is_member(id);
+    }
+    virtual ~IDSelectorAnd() {}
+};
+
+/// does an OR operation on the the two given IDSelector's is_membership
+/// results.
+struct IDSelectorOr : IDSelector {
+    const IDSelector* lhs;
+    const IDSelector* rhs;
+    IDSelectorOr(const IDSelector* lhs, const IDSelector* rhs)
+            : lhs(lhs), rhs(rhs) {}
+    bool is_member(idx_t id) const final {
+        return lhs->is_member(id) || rhs->is_member(id);
+    }
+    virtual ~IDSelectorOr() {}
+};
+
+/// does an XOR operation on the the two given IDSelector's is_membership
+/// results.
+struct IDSelectorXOr : IDSelector {
+    const IDSelector* lhs;
+    const IDSelector* rhs;
+    IDSelectorXOr(const IDSelector* lhs, const IDSelector* rhs)
+            : lhs(lhs), rhs(rhs) {}
+    bool is_member(idx_t id) const final {
+        return lhs->is_member(id) ^ rhs->is_member(id);
+    }
+    virtual ~IDSelectorXOr() {}
 };
 
 } // namespace faiss

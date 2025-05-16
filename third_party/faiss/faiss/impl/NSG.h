@@ -1,11 +1,9 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
-// -*- c++ -*-
 
 #pragma once
 
@@ -40,10 +38,11 @@ namespace faiss {
  */
 
 struct DistanceComputer; // from AuxIndexStructures
-struct Neighbor;
-struct Node;
 
 namespace nsg {
+
+struct Neighbor;
+struct Node;
 
 /***********************************************************
  * Graph structure to store a graph.
@@ -54,7 +53,7 @@ namespace nsg {
 
 template <class node_t>
 struct Graph {
-    node_t* data;    ///< the flattened adjacency matrix
+    node_t* data;    ///< the flattened adjacency matrix, size N-by-K
     int K;           ///< nb of neighbors per node
     int N;           ///< total nb of nodes
     bool own_fields; ///< the underlying data owned by itself or not
@@ -75,7 +74,7 @@ struct Graph {
     }
 
     // release the allocated memory if needed
-    ~Graph() {
+    virtual ~Graph() {
         if (own_fields) {
             delete[] data;
         }
@@ -90,6 +89,17 @@ struct Graph {
     inline node_t& at(int i, int j) {
         return data[i * K + j];
     }
+
+    // get all neighbors of node i (used during search only)
+    virtual size_t get_neighbors(int i, node_t* neighbors) const {
+        for (int j = 0; j < K; j++) {
+            if (data[i * K + j] < 0) {
+                return j;
+            }
+            neighbors[j] = data[i * K + j];
+        }
+        return K;
+    }
 };
 
 DistanceComputer* storage_distance_computer(const Index* storage);
@@ -99,8 +109,10 @@ DistanceComputer* storage_distance_computer(const Index* storage);
 struct NSG {
     /// internal storage of vectors (32 bits: this is expensive)
     using storage_idx_t = int32_t;
+    using Node = nsg::Node;
+    using Neighbor = nsg::Neighbor;
 
-    int ntotal; ///< nb of nodes
+    int ntotal = 0; ///< nb of nodes
 
     // construction-time parameters
     int R; ///< nb of neighbors per node
@@ -108,13 +120,13 @@ struct NSG {
     int C; ///< candidate pool size at construction time
 
     // search-time parameters
-    int search_L; ///< length of the search path
+    int search_L = 16; ///< length of the search path
 
     int enterpoint; ///< enterpoint
 
-    std::shared_ptr<nsg::Graph<int>> final_graph; ///< NSG graph structure
+    std::shared_ptr<nsg::Graph<int32_t>> final_graph; ///< NSG graph structure
 
-    bool is_built; ///< NSG is built or not
+    bool is_built = false; ///< NSG is built or not
 
     RandomGenerator rng; ///< random generator
 

@@ -1,5 +1,5 @@
-/**
- * Copyright (c) Facebook, Inc. and its affiliates.
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -63,7 +63,9 @@ struct AlignedTableTightAlloc {
     }
 
     void clear() {
-        memset(ptr, 0, nbytes());
+        if (numel > 0) {
+            memset(ptr, 0, nbytes());
+        }
     }
     size_t size() const {
         return numel;
@@ -98,7 +100,9 @@ struct AlignedTableTightAlloc {
     AlignedTableTightAlloc<T, A>& operator=(
             const AlignedTableTightAlloc<T, A>& other) {
         resize(other.numel);
-        memcpy(ptr, other.ptr, sizeof(T) * numel);
+        if (numel > 0) {
+            memcpy(ptr, other.ptr, sizeof(T) * numel);
+        }
         return *this;
     }
 
