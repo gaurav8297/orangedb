@@ -1352,7 +1352,7 @@ void benchmark_acorn(InputParser &input) {
     for (int i = 0; i < baseNumVectors; i++) {
         metadata[i] = (int) filteredMask[i];
     }
-    auto index = faiss::IndexACORNFlat(baseDimension, M, gamma, metadata, M_beta, faiss::METRIC_INNER_PRODUCT);
+    auto index = faiss::IndexACORNFlat(baseDimension, M, gamma, metadata, M_beta);
     faiss::IndexACORNFlat* acorn_index = &index;
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
@@ -1367,7 +1367,7 @@ void benchmark_acorn(InputParser &input) {
         faiss::write_index(acorn_index, storagePath.c_str());
     } else {
         acorn_index = dynamic_cast<faiss::IndexACORNFlat *>(faiss::read_index(storagePath.c_str()));
-        acorn_index->metric_type = faiss::METRIC_INNER_PRODUCT;
+        // acorn_index->metric_type = faiss::METRIC_INNER_PRODUCT;
     }
     omp_set_num_threads(1);
 
@@ -1428,6 +1428,7 @@ void benchmark_acorn(InputParser &input) {
                 }
             }
         }
+        printf("Duration: %lld ms\n", ((double) durationPerQuery / queryNumVectors) * 1e-6);
         auto config = fmt::format("acorn_{}", gamma);
         write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6,
                           recall / (queryNumVectors * k), efSearch, selectivity);
