@@ -1262,6 +1262,7 @@ int tuneEfByStep(std::function<double(int)> getRecall,
     int ef     = efMin;
     double rec = recallMin;
     int prevEf = -1;
+    double prev_rec = rec;
     while (ef != prevEf) {
         prevEf = ef;
 
@@ -1271,6 +1272,14 @@ int tuneEfByStep(std::function<double(int)> getRecall,
         else                         break;  // in the sweet spot
 
         rec = getRecall(ef);
+
+        if (prev_rec < targetLow && rec > targetHigh) {
+            // we just crossed the lower bound
+            printf("ef: %d, recall: %f\n", ef, rec);
+            return ef;
+        }
+
+        prev_rec = rec;
         printf("ef: %d, recall: %f\n", ef, rec);
     }
 
@@ -1299,11 +1308,14 @@ void populate_mask_and_gt_paths(const std::string &basePath, const std::vector<s
 }
 
 void write_json_result(const std::string &basePath, const std::string config, const int totalQueries, const double searchTime,
-                       const double recall, const int efSearch, const std::string selectivity) {
-     std::string jsonPath = fmt::format("{}/output_{}_{}.json", basePath, selectivity, config);
+                        const double distanceComputations, const double nIos, const double recall, const int efSearch,
+                        const std::string selectivity) {
+    std::string jsonPath = fmt::format("{}/output_{}_{}.json", basePath, selectivity, config);
     nlohmann::json J;
     J["total_queries"] = totalQueries;
     J["avg_execution_time_ms"] = searchTime;
+    J["avg_distance_computations"] = distanceComputations;
+    J["avg_list_nbrs_calls"] = nIos;
     J["recall_percentage"] = recall * 100;
     J["selectivity"] = stof(selectivity);
     J["efSearch"] = efSearch;
@@ -1466,10 +1478,12 @@ void benchmark_navix(InputParser &input) {
     printf("Base dimension: %zu\n", baseDimension);
     printf("Query num vectors: %zu\n", queryNumVectors);
 
+    faiss::MetricType metricType = useIp ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+
     // First build the index
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     auto *filteredMask = new uint8_t[baseNumVectors];
-    auto index = faiss::IndexHNSWFlat(baseDimension, M);
+    auto index = faiss::IndexHNSWFlat(baseDimension, M, metricType);
     faiss::IndexHNSWFlat* hnsw_index = &index;
     hnsw_index->verbose = true;
     hnsw_index->hnsw.efConstruction = efConstruction;
@@ -1485,15 +1499,19 @@ void benchmark_navix(InputParser &input) {
         printf("Building time: %lld ms\n", duration.count());
         printf("Writing the index on disk!");
         faiss::write_index(hnsw_index, storagePath.c_str());
+
+        printf("Building time: %lld ms\n", duration.count());
+        auto stat_path = fmt::format("{}/navix_{}_build_time.txt", M, resultPath);
+        std::ofstream stat_file(stat_path);
+        stat_file << "Building time: " << duration.count() << " ms" << std::endl;
+        stat_file.close();
     } else {
         hnsw_index = dynamic_cast<faiss::IndexHNSWFlat *>(faiss::read_index(storagePath.c_str()));
         hnsw_index->hnsw.efConstruction = efConstruction;
-        // hnsw_index->metric_type = faiss::METRIC_INNER_PRODUCT;
+        hnsw_index->metric_type = metricType;
     }
 
     omp_set_num_threads(1);
-
-    // Todo: Write the time to build the index
 
     // Now perform search for each selectivity
     for (int i = 0; i < sels.size(); i++) {
@@ -1518,16 +1536,13 @@ void benchmark_navix(InputParser &input) {
                     auto labels = new faiss::idx_t[k];
                     auto distances = new float[k];
                     hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
-                    // hnsw_index->search(1, queryVecs + (j * baseDimension), k, distances, labels);
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
                         if (std::find(gt, gt + k, (vector_idx_t)labels[m]) != (gt + k)) {
                             recall++;
                         }
                     }
-                    // break;
                 }
-                printf("Recall: %f\n", recall);
                 auto recallPerQuery = recall / queryNumVectors;
                 return recallPerQuery / k;
             }, minRecall, maxRecall, 100, 1500, 50);
@@ -1545,7 +1560,6 @@ void benchmark_navix(InputParser &input) {
         long durationPerQuery = 0;
         for (size_t j = 0; j < queryNumVectors; j++) {
             auto startTime = std::chrono::high_resolution_clock::now();
-            // hnsw_index->search(1, queryVecs + (j * baseDimension), k, distances, labels);
             hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
@@ -1556,13 +1570,13 @@ void benchmark_navix(InputParser &input) {
                     recall++;
                 }
             }
-            // break;
         }
         auto config = fmt::format("navix_{}", M);
         printf("durationPerQuery: %f ms\n", ((double) durationPerQuery / queryNumVectors) * 1e-6);
         printf("distance: %f\n", ((double) stats.ndis / queryNumVectors));
-        printf("numVisited: %f\n", ((double) stats.nhops / queryNumVectors));
+        printf("graph ios: %f\n", ((double) stats.nhops / queryNumVectors));
         write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6,
+                            (double) stats.ndis / queryNumVectors, (double) stats.nhops / queryNumVectors,
                           recall / (queryNumVectors * k), efSearch, selectivity);
     }
 
@@ -1598,47 +1612,98 @@ std::pair<int, int> get_range(const char* filteredMask, int n) {
 }
 
 void benchmark_irangegraph(InputParser &input) {
-    const std::string &vectorPath = input.getCmdOption("-vectorPath");
-    const std::string &queryPath = input.getCmdOption("-queryPath");
-    const std::string &gtPath = input.getCmdOption("-gtPath");
-    const std::string &maskPath = input.getCmdOption("-maskPath");
+    const std::string &dataPath = input.getCmdOption("-dataPath");
+    const std::string &basePath = input.getCmdOption("-basePath");
+    const std::vector<std::string> sels = parseCommaSeparated(input.getCmdOption("-sels"));
+    const std::vector<int> efS = parseCommaSeparatedIntegers(input.getCmdOption("-efS"));
+    const int autoEf = stoi(input.getCmdOption("-autoEf"));
     int k = stoi(input.getCmdOption("-k"));
     int M = stoi(input.getCmdOption("-M"));
-    int efSearch = stoi(input.getCmdOption("-efSearch"));
     int efConstruction = stoi(input.getCmdOption("-efConstruction"));
     int nThreads = stoi(input.getCmdOption("-nThreads"));
+    float minRecall = stof(input.getCmdOption("-minRecall"));
+    float maxRecall = stof(input.getCmdOption("-maxRecall"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
-    const std::string &outputPath = input.getCmdOption("-outputPath");
+    const std::string &resultPath = input.getCmdOption("-resultPath");
+    std::vector<std::string> maskPaths, gtPath;
+    std::string queryPath;
+    populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPath, queryPath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(vectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(dataPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-    auto *filteredMask = new uint8_t[queryNumVectors * baseNumVectors];
-    loadFromFile(maskPath, filteredMask, queryNumVectors * baseNumVectors);
+    printf("Base num vectors: %zu\n", baseNumVectors);
+    printf("Base dimension: %zu\n", baseDimension);
     printf("Query num vectors: %zu\n", queryNumVectors);
-    printf("Query dimension: %zu\n", baseDimension);
+
 
     iRangeGraph::DataLoader storage;
     storage.LoadData(baseVecs, baseNumVectors, baseDimension);
-    storage.LoadQuery(queryVecs, queryNumVectors, baseDimension);
-    storage.LoadGroundtruth(gtVecs, k);
-    auto query_range = get_range(reinterpret_cast<char *>(filteredMask), baseNumVectors);
-    storage.LoadQueryRange(query_range.first, query_range.second);
-
     if (!readFromDisk) {
+        auto start = std::chrono::high_resolution_clock::now();
         iRangeGraph::iRangeGraph_Build<float> index(&storage, M, efConstruction);
         index.max_threads = nThreads;
         index.buildandsave(storagePath);
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        // Save the time to build the index in a file
+        printf("Building time: %lld ms\n", duration.count());
+        auto stat_path = fmt::format("{}/irangegraph_{}_build_time.txt", M, resultPath);
+        std::ofstream stat_file(stat_path);
+        stat_file << "Building time: " << duration.count() << " ms" << std::endl;
+        stat_file.close();
     }
 
-    iRangeGraph::iRangeGraph_Search<float> searchIndex("", storagePath, &storage, M);
-    std::vector<int> efSearches = {efSearch};
-    searchIndex.search(efSearches, outputPath, M);
+    // First build the index
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    auto *filteredMask = new uint8_t[baseNumVectors];
+    storage.LoadQuery(queryVecs, queryNumVectors, baseDimension);
+    for (int i = 0; i < sels.size(); i++) {
+        auto& selectivity = sels[i];
+        printf("Selectivity: %s\n", selectivity.c_str());
+        auto efSearch = efS[i];
+        auto& maskPathStr = maskPaths[i];
+        auto& gtPathStr = gtPath[i];
+        printf("gtPath: %s\n", gtPathStr.c_str());
+        printf("maskPath: %s\n", maskPathStr.c_str());
+        loadFromFile(gtPathStr, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+        loadFromFile(maskPathStr, filteredMask, baseNumVectors);
+
+        storage.LoadGroundtruth(gtVecs, k);
+        auto query_range = get_range(reinterpret_cast<char *>(filteredMask), baseNumVectors);
+        printf("Running range: %d, %d\n", query_range.first, query_range.second);
+        storage.LoadQueryRange(query_range.first, query_range.second);
+        printf("efSearch: %d, selectivity: %s\n", efSearch, sels[i].c_str());
+        iRangeGraph::iRangeGraph_Search<float> searchIndex("", storagePath, &storage, M);
+        std::vector<int> finalEfSearches;
+        if (autoEf) {
+            auto ef = tuneEfByStep([&](int ef) {
+                 std::vector<int> efSearches = {ef};
+                 auto res = searchIndex.search_new(efSearches, M);
+                return res[0].RECALL[0];
+            }, minRecall, maxRecall, 100, 1500, 50);
+            finalEfSearches.push_back(ef);
+        } else {
+            finalEfSearches.push_back(efSearch);
+        }
+
+        auto res = searchIndex.search_new(finalEfSearches, M);
+        auto recall = res[0].RECALL[0];
+        auto latency_sec = res[0].latency[0];
+        auto ndis = res[0].DCO[0];
+        auto nhops = res[0].HOP[0];
+
+        auto config = fmt::format("navix_{}", M);
+        printf("durationPerQuery: %f ms\n", latency_sec * 1000);
+        printf("distance: %f\n", ndis);
+        printf("graph ios: %f\n", nhops);
+        write_json_result(resultPath, config, queryNumVectors, latency_sec * 1000,
+                          ndis, nhops,
+                          recall, efSearch, selectivity);
+    }
 }
 
 void fvec_to_fbin(InputParser &input) {

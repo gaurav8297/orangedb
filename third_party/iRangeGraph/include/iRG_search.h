@@ -321,8 +321,8 @@ namespace iRangeGraph
         }
 
         struct iRangeGraphRes {
-            std::vector<int> HOP;
-            std::vector<int> DCO;
+            std::vector<float> HOP;
+            std::vector<float> DCO;
             std::vector<float> QPS;
             std::vector<float> RECALL;
             std::vector<float> latency;
@@ -381,12 +381,13 @@ namespace iRangeGraph
                     float qps = storage->query_nb / searchtime;
                     float dco = metric_distance_computations * 1.0 / storage->query_nb;
                     float hop = metric_hops * 1.0 / storage->query_nb;
+                    float lat = searchtime / storage->query_nb;
 
                     HOP.emplace_back(hop);
                     DCO.emplace_back(dco);
                     QPS.emplace_back(qps);
                     RECALL.emplace_back(recall);
-                    latency.emplace_back(searchtime);
+                    latency.emplace_back(lat);
                 }
                 iRangeGraphRes res;
                 res.HOP = HOP;
