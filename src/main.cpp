@@ -1355,6 +1355,8 @@ void benchmark_acorn(InputParser &input) {
     printf("Base num vectors: %zu\n", baseNumVectors);
     printf("Query num vectors: %zu\n", queryNumVectors);
 
+    faiss::MetricType metric = useIp ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+
     // First build the index
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     auto *filteredMask = new uint8_t[baseNumVectors];
@@ -1363,7 +1365,7 @@ void benchmark_acorn(InputParser &input) {
     for (int i = 0; i < baseNumVectors; i++) {
         metadata[i] = (int) filteredMask[i];
     }
-    auto index = faiss::IndexACORNFlat(baseDimension, M, gamma, metadata, M_beta);
+    auto index = faiss::IndexACORNFlat(baseDimension, M, gamma, metadata, M_beta, metric);
     faiss::IndexACORNFlat* acorn_index = &index;
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
@@ -1383,7 +1385,7 @@ void benchmark_acorn(InputParser &input) {
         stat_file.close();
     } else {
         acorn_index = dynamic_cast<faiss::IndexACORNFlat *>(faiss::read_index(storagePath.c_str()));
-        // acorn_index->metric_type = faiss::METRIC_INNER_PRODUCT;
+        acorn_index->metric_type = metric;
     }
     omp_set_num_threads(1);
 
@@ -1424,6 +1426,7 @@ void benchmark_acorn(InputParser &input) {
                 return recallPerQuery / k;
             }, minRecall, maxRecall, 100, 1500, 50);
             acorn_index->acorn.efSearch = ef;
+            efSearch = ef;
         } else {
             acorn_index->acorn.efSearch = efSearch;
         }
@@ -1454,7 +1457,7 @@ void benchmark_acorn(InputParser &input) {
         auto config = fmt::format("acorn_{}", gamma);
         write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6,
                           (double) stats.ndis / queryNumVectors, (double) stats.nIos / queryNumVectors,
-                          recall / (queryNumVectors * k), efSearch, selectivity);
+                          recall / (queryNumVectors * k), acorn_index->acorn.efSearch, selectivity);
     }
 
     delete[] filteredMask;
