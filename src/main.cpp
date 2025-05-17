@@ -1501,7 +1501,7 @@ void benchmark_navix(InputParser &input) {
         faiss::write_index(hnsw_index, storagePath.c_str());
 
         printf("Building time: %lld ms\n", duration.count());
-        auto stat_path = fmt::format("{}/navix_{}_build_time.txt", M, resultPath);
+        auto stat_path = fmt::format("{}/navix_{}_build_time.txt", resultPath, M);
         std::ofstream stat_file(stat_path);
         stat_file << "Building time: " << duration.count() << " ms" << std::endl;
         stat_file.close();
@@ -1651,7 +1651,7 @@ void benchmark_irangegraph(InputParser &input) {
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         // Save the time to build the index in a file
         printf("Building time: %lld ms\n", duration.count());
-        auto stat_path = fmt::format("{}/irangegraph_{}_build_time.txt", M, resultPath);
+        auto stat_path = fmt::format("{}/irangegraph_{}_build_time.txt", resultPath, M);
         std::ofstream stat_file(stat_path);
         stat_file << "Building time: " << duration.count() << " ms" << std::endl;
         stat_file.close();
