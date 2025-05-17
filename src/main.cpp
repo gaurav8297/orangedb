@@ -1376,6 +1376,11 @@ void benchmark_acorn(InputParser &input) {
         printf("Building time: %lld ms\n", duration.count());
         printf("Writing the index on disk!");
         faiss::write_index(acorn_index, storagePath.c_str());
+
+        auto stat_path = fmt::format("{}/acorn_{}_{}_build_time.txt", resultPath, gamma, M);
+        std::ofstream stat_file(stat_path);
+        stat_file << "Building time: " << duration.count() << " ms" << std::endl;
+        stat_file.close();
     } else {
         acorn_index = dynamic_cast<faiss::IndexACORNFlat *>(faiss::read_index(storagePath.c_str()));
         // acorn_index->metric_type = faiss::METRIC_INNER_PRODUCT;
