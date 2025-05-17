@@ -1626,9 +1626,9 @@ void benchmark_irangegraph(InputParser &input) {
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const std::string &resultPath = input.getCmdOption("-resultPath");
-    std::vector<std::string> maskPaths, gtPath;
+    std::vector<std::string> maskPaths, gtPaths;
     std::string queryPath;
-    populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPath, queryPath);
+    populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPaths, queryPath);
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(dataPath.c_str(), &baseDimension, &baseNumVectors);
@@ -1638,7 +1638,6 @@ void benchmark_irangegraph(InputParser &input) {
     printf("Base num vectors: %zu\n", baseNumVectors);
     printf("Base dimension: %zu\n", baseDimension);
     printf("Query num vectors: %zu\n", queryNumVectors);
-
 
     iRangeGraph::DataLoader storage;
     storage.LoadData(baseVecs, baseNumVectors, baseDimension);
@@ -1666,7 +1665,7 @@ void benchmark_irangegraph(InputParser &input) {
         printf("Selectivity: %s\n", selectivity.c_str());
         auto efSearch = efS[i];
         auto& maskPathStr = maskPaths[i];
-        auto& gtPathStr = gtPath[i];
+        auto& gtPathStr = gtPaths[i];
         printf("gtPath: %s\n", gtPathStr.c_str());
         printf("maskPath: %s\n", maskPathStr.c_str());
         loadFromFile(gtPathStr, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));

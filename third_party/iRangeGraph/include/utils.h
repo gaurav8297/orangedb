@@ -148,6 +148,7 @@ namespace iRangeGraph
 
         void LoadQueryRange(const int ql, const int qr)
         {
+            query_range[0].clear();
             for (int i = 0; i < query_nb; i++)
             {
                 query_range[0].emplace_back(ql, qr);
