@@ -1402,6 +1402,7 @@ int hybrid_search_from_candidates(
             stats.n2++;
         }
         stats.n3 += ndis;
+        stats.ndis += ndis;
     }
 
 
@@ -1553,10 +1554,8 @@ ACORNStats ACORN::hybrid_search(
 
             candidates.push(nearest, d_nearest);
             debug_search("-starting BFS at level 0 with ef: %d, nearest: %d, d: %f, metadata: %d\n", ef, nearest, d_nearest, metadata[nearest]);
-            stats.ndis += hybrid_search_from_candidates(
+            hybrid_search_from_candidates(
                     *this, qdis, filter_map, k, I, D, candidates, vt, stats, 0, 0, params);
-            
-
         } else {
             // TODO
             printf("UNIMPLEMENTED BRANCH for hybid search\n");
