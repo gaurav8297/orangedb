@@ -1261,6 +1261,7 @@ int tuneEfByStep(std::function<double(int)> getRecall,
     // 3) Step through [efMin, efMax]
     int ef     = efMin;
     double rec = recallMin;
+    double prev_rec = rec;
     int prevEf = -1;
     while (ef != prevEf) {
         prevEf = ef;
@@ -1269,8 +1270,15 @@ int tuneEfByStep(std::function<double(int)> getRecall,
         if (rec < targetLow)        ef = std::min(ef + step, efMax);
         else if (rec > targetHigh)  ef = std::max(ef - step, efMin);
         else                         break;  // in the sweet spot
-
         rec = getRecall(ef);
+
+        if (prev_rec < targetLow && rec > targetHigh) {
+            // we just crossed the lower bound
+            printf("ef: %d, recall: %f\n", ef, rec);
+            return ef;
+        }
+
+        prev_rec = rec;
         printf("ef: %d, recall: %f\n", ef, rec);
     }
 
@@ -1299,11 +1307,14 @@ void populate_mask_and_gt_paths(const std::string &basePath, const std::vector<s
 }
 
 void write_json_result(const std::string &basePath, const std::string config, const int totalQueries, const double searchTime,
-                       const double recall, const int efSearch, const std::string selectivity) {
+                        const double distanceComputations, const double nIos, const double recall, const int efSearch,
+                        const std::string selectivity) {
      std::string jsonPath = fmt::format("{}/output_{}_{}.json", basePath, selectivity, config);
     nlohmann::json J;
     J["total_queries"] = totalQueries;
     J["avg_execution_time_ms"] = searchTime;
+    J["avg_distance_computations"] = distanceComputations;
+    J["avg_list_nbrs_calls"] = nIos;
     J["recall_percentage"] = recall * 100;
     J["selectivity"] = stof(selectivity);
     J["efSearch"] = efSearch;
@@ -1392,8 +1403,10 @@ void benchmark_acorn(InputParser &input) {
                 auto labels = new faiss::idx_t[k];
                 auto distances = new float[k];
                 auto recall = 0.0;
+                faiss::ACORNStats stats;
+                faiss::VisitedTable visited(baseNumVectors);
                 for (size_t j = 0; j < queryNumVectors; j++) {
-                    acorn_index->search(1, queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask));
+                    acorn_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
                         if (std::find(gt, gt + k, labels[m]) != (gt + k)) {
@@ -1415,9 +1428,11 @@ void benchmark_acorn(InputParser &input) {
         auto labels = new faiss::idx_t[k];
         auto distances = new float[k];
         long durationPerQuery = 0;
+        faiss::ACORNStats stats;
+        faiss::VisitedTable visited(baseNumVectors);
         for (size_t j = 0; j < queryNumVectors; j++) {
             auto startTime = std::chrono::high_resolution_clock::now();
-            acorn_index->search(1, queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask));
+            acorn_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
             durationPerQuery += duration;
@@ -1429,8 +1444,11 @@ void benchmark_acorn(InputParser &input) {
             }
         }
         printf("Duration: %f ms\n", ((double) durationPerQuery / queryNumVectors) * 1e-6);
+        printf("Distance computation: %f\n", (double) stats.ndis / queryNumVectors);
+        printf("Number of ios: %f\n", (double) stats.nIos / queryNumVectors);
         auto config = fmt::format("acorn_{}", gamma);
         write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6,
+                          (double) stats.ndis / queryNumVectors, (double) stats.nIos / queryNumVectors,
                           recall / (queryNumVectors * k), efSearch, selectivity);
     }
 
@@ -1560,7 +1578,7 @@ void benchmark_navix(InputParser &input) {
             visited.advance();
         }
         auto config = fmt::format("navix_{}", M);
-        write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6,
+        write_json_result(resultPath, config, queryNumVectors, ((double) durationPerQuery / queryNumVectors) * 1e-6, 0, 0,
                           recall / (queryNumVectors * k), efSearch, selectivity);
     }
 

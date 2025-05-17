@@ -76,6 +76,15 @@ struct IndexACORN : Index {
             char* filter_id_map,
             const SearchParameters* params = nullptr) const;
 
+    void single_search(
+        const float* query,
+        idx_t k,
+        float* distances,
+        idx_t* labels,
+        char* filter_id_map,
+        VisitedTable &vt,
+        ACORNStats& stats) const;
+
     void reconstruct(idx_t key, float* recons) const override;
 
     void reset() override;

@@ -1256,6 +1256,7 @@ int hybrid_search_from_candidates(
 
         size_t begin, end;
         hnsw.neighbor_range(v0, level, &begin, &end);
+        stats.nIos += 1;
 
         // variable to keep track of search expansion
         int num_found = 0;
@@ -1326,6 +1327,7 @@ int hybrid_search_from_candidates(
                 debug_search("------------expanding neighbor list for %d; neighbor %ld, hnsw.M_beta: %d\n", v1, j-begin, hnsw.M_beta);
                 size_t begin2, end2;
                 hnsw.neighbor_range(v1, level, &begin2, &end2);
+                stats.nIos += 1;
                 // try to parallelize neighbor expansion
                 for (size_t j2 = begin2; j2 < end2; j2+=1) {
                     
@@ -1541,6 +1543,7 @@ ACORNStats ACORN::hybrid_search(
 
         }
         stats.n3 += ndis_upper;
+        stats.ndis += ndis_upper;
 
         int ef = std::max(efSearch, k);
         if (search_bounded_queue) { // this is the most common branch
@@ -1550,7 +1553,7 @@ ACORNStats ACORN::hybrid_search(
 
             candidates.push(nearest, d_nearest);
             debug_search("-starting BFS at level 0 with ef: %d, nearest: %d, d: %f, metadata: %d\n", ef, nearest, d_nearest, metadata[nearest]);
-            hybrid_search_from_candidates(
+            stats.ndis += hybrid_search_from_candidates(
                     *this, qdis, filter_map, k, I, D, candidates, vt, stats, 0, 0, params);
             
 

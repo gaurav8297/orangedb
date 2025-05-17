@@ -276,6 +276,7 @@ struct ACORN {
 struct ACORNStats {
     size_t n1, n2, n3;
     size_t ndis;
+    size_t nIos;
     size_t nreorder;
     
     // added for timing
@@ -291,17 +292,19 @@ struct ACORNStats {
             size_t n2 = 0,
             size_t n3 = 0,
             size_t ndis = 0,
+            size_t nIos = 0,
             size_t nreorder = 0,
             double candidates_loop = 0.0,
             double neighbors_loop = 0.0,
             double tuple_unwrap = 0.0,
             double skips = 0.0,
             double visits = 0.0)
-            : n1(n1), n2(n2), n3(n3), ndis(ndis), nreorder(nreorder), candidates_loop(candidates_loop), neighbors_loop(neighbors_loop), tuple_unwrap(tuple_unwrap), skips(skips), visits(visits) {}
+            : n1(n1), n2(n2), n3(n3), ndis(ndis), nIos(nIos), nreorder(nreorder), candidates_loop(candidates_loop), neighbors_loop(neighbors_loop), tuple_unwrap(tuple_unwrap), skips(skips), visits(visits) {}
 
     void reset() {
         n1 = n2 = n3 = 0;
         ndis = 0;
+        nIos = 0;
         nreorder = 0;
 
         // added
@@ -317,6 +320,7 @@ struct ACORNStats {
         n2 += other.n2;
         n3 += other.n3;
         ndis += other.ndis;
+        nIos += other.nIos;
         nreorder += other.nreorder;
 
         //added
