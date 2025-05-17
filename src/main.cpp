@@ -1696,7 +1696,7 @@ void benchmark_irangegraph(InputParser &input) {
         auto ndis = res[0].DCO[0];
         auto nhops = res[0].HOP[0];
 
-        auto config = fmt::format("navix_{}", M);
+        auto config = fmt::format("irangegraph_{}", M);
         printf("durationPerQuery: %f ms\n", latency_sec * 1000);
         printf("distance: %f\n", ndis);
         printf("graph ios: %f\n", nhops);
