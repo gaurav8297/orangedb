@@ -337,8 +337,8 @@ namespace iRangeGraph
                 int suffix = range.first;
                 std::vector<std::vector<int>> &gt = storage->groundtruth[suffix];
 
-                std::vector<int> HOP;
-                std::vector<int> DCO;
+                std::vector<float> HOP;
+                std::vector<float> DCO;
                 std::vector<float> QPS;
                 std::vector<float> RECALL;
                 std::vector<float> latency;
