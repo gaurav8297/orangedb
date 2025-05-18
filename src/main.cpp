@@ -798,7 +798,7 @@ void populate_mask_and_gt_paths(const std::string &basePath, const std::vector<s
         gtPath.push_back(gtPathStr);
     }
     // Generate the query path
-    queryPath = fmt::format("{}/queries.fvecs", basePath);
+    queryPath = fmt::format("{}/normalized_queries.fvecs", basePath);
 }
 
 std::vector<std::string> parseCommaSeparated(const std::string& input) {
