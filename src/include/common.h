@@ -72,10 +72,9 @@ namespace orangedb {
         CHECK_ARGUMENT(nr == n * (d + 1), "could not read whole file");
 
         // TODO: Round up the dimensions to the nearest multiple of 8, otherwise the below code will not work
-        float *align_x;
-        allocAligned(((void **) &align_x), n * d * sizeof(float), 8 * sizeof(float));
+        auto *align_x = new float[n * d];
+        // allocAligned(((void **) &align_x), n * d * sizeof(float), 8 * sizeof(float));
         printf("align_x: %p\n", align_x);
-
         // copy data to aligned memory
         for (size_t i = 0; i < n; i++) {
             memcpy(align_x + i * d, x + 1 + i * (d + 1), d * sizeof(float));
@@ -83,6 +82,7 @@ namespace orangedb {
 
         // free original memory
         delete[] x;
+        x = nullptr;
         fclose(f);
         return align_x;
     }
