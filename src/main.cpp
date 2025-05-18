@@ -818,7 +818,6 @@ void generateFilterGroundTruth(InputParser &input) {
     const std::string &basePath = input.getCmdOption("-basePath");
     const std::vector<std::string> sels = parseCommaSeparated(input.getCmdOption("-sels"));
     auto k = stoi(input.getCmdOption("-k"));
-    const std::string &filteredMaskPath = input.getCmdOption("-maskPath");
     std::vector<std::string> maskPaths, gtPaths;
     std::string queryPath;
     populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPaths, queryPath);
