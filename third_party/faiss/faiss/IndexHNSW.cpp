@@ -331,7 +331,7 @@ void IndexHNSW::single_search(
 }
 
 /// Navix search
-inline void IndexHNSW::navix_search(
+void IndexHNSW::navix_search(
     const float *query,
     idx_t k,
     float *distances,
