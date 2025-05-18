@@ -461,7 +461,7 @@ void IndexACORN::add(idx_t n, const float* x) {
     int n0 = ntotal;
     storage->add(n, x);
     ntotal = storage->ntotal;
-
+    printf("hell yea!");
     acorn_add_vertices(*this, n0, n, x, verbose, acorn.levels.size() == ntotal);
 }
 
