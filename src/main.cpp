@@ -787,41 +787,67 @@ void setFilterMaskUsingSelectivity(
     }
 }
 
+void populate_mask_and_gt_paths(const std::string &basePath, const std::vector<std::string> &sels,
+                         std::vector<std::string> &maskPaths,
+                         std::vector<std::string> &gtPath, std::string &queryPath) {
+    // Parse the selectivities and efS strings
+    for (const auto &sel : sels) {
+        auto maskPath = fmt::format("{}/mask_{}.bin", basePath, sel);
+        auto gtPathStr = fmt::format("{}/gt_{}.bin", basePath, sel);
+        maskPaths.push_back(maskPath);
+        gtPath.push_back(gtPathStr);
+    }
+    // Generate the query path
+    queryPath = fmt::format("{}/queries.fvecs", basePath);
+}
+
+std::vector<std::string> parseCommaSeparated(const std::string& input) {
+    std::vector<std::string> res;
+    std::stringstream ss(input);
+    std::string temp;
+
+    while (std::getline(ss, temp, ',')) {
+        res.push_back(temp);
+    }
+
+    return res;
+}
+
 void generateFilterGroundTruth(InputParser &input) {
+    const std::string &dataPath = input.getCmdOption("-dataPath");
     const std::string &basePath = input.getCmdOption("-basePath");
+    const std::vector<std::string> sels = parseCommaSeparated(input.getCmdOption("-sels"));
     auto k = stoi(input.getCmdOption("-k"));
-    const std::string &gtPath = input.getCmdOption("-gtPath");
     const std::string &filteredMaskPath = input.getCmdOption("-maskPath");
-    auto baseVectorPath = fmt::format("{}/new_base.fvecs", basePath);
-    auto queryVectorPath = fmt::format("{}/uncorrelated/queries.fvecs", basePath);
+    std::vector<std::string> maskPaths, gtPaths;
+    std::string queryPath;
+    populate_mask_and_gt_paths(basePath, sels, maskPaths, gtPaths, queryPath);
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(dataPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
-    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-
+    float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     printf("Base vectors: %zu, Query vectors: %zu\n", baseNumVectors, queryNumVectors);
     printf("Base dimension: %zu, Query dimension: %zu\n", baseDimension, queryDimension);
-
     auto *filteredMask = new uint8_t[baseNumVectors];
-    // memset(filteredMask, 0, queryNumVectors * baseNumVectors);
-    // setFilterMaskUsingSelectivity(queryNumVectors, filteredMask, baseNumVectors, selectivity);
-    loadFromFile(filteredMaskPath, filteredMask, baseNumVectors);
-    // Calculate selectivity from filteredMask
-    size_t numFiltered = 0;
-    for (int i = 0; i < baseNumVectors; i++) {
-        if (filteredMask[i] == 1) {
-            numFiltered++;
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    for (size_t i = 0; i < sels.size(); i++) {
+        auto maskPath = maskPaths[i];
+        auto gtPath = gtPaths[i];
+
+        loadFromFile(maskPath, filteredMask, baseNumVectors);
+        // Calculate selectivity from filteredMask
+        size_t numFiltered = 0;
+        for (int j = 0; j < baseNumVectors; j++) {
+            if (filteredMask[j] == 1) {
+                numFiltered++;
+            }
         }
+        float selectivity = (float) numFiltered / baseNumVectors;
+        printf("Selectivity: %f\n", selectivity);
+        generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
+        writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     }
-    float selectivity = (float) numFiltered / baseNumVectors;
-    printf("Selectivity: %f\n", selectivity);
-    generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
-    // serialize gtVecs to a file
-    writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-    // serialize filteredMask to a file
-    // writeToFile(filteredMaskPath, filteredMask, queryNumVectors * baseNumVectors);
 }
 
 void generateGroundTruth(
@@ -876,18 +902,6 @@ std::vector<int> parseCommaSeparatedIntegers(const std::string& input) {
     }
 
     return numbers;
-}
-
-std::vector<std::string> parseCommaSeparated(const std::string& input) {
-    std::vector<std::string> res;
-    std::stringstream ss(input);
-    std::string temp;
-
-    while (std::getline(ss, temp, ',')) {
-        res.push_back(temp);
-    }
-
-    return res;
 }
 
 void benchmark_filtered_hnsw_queries(InputParser &input) {
@@ -1293,20 +1307,6 @@ int tuneEfByStep(std::function<double(int)> getRecall,
     return efMax;
 }
 
-void populate_mask_and_gt_paths(const std::string &basePath, const std::vector<std::string> &sels,
-                         std::vector<std::string> &maskPaths,
-                         std::vector<std::string> &gtPath, std::string &queryPath) {
-    // Parse the selectivities and efS strings
-    for (const auto &sel : sels) {
-        auto maskPath = fmt::format("{}/mask_{}.bin", basePath, sel);
-        auto gtPathStr = fmt::format("{}/gt_{}.bin", basePath, sel);
-        maskPaths.push_back(maskPath);
-        gtPath.push_back(gtPathStr);
-    }
-    // Generate the query path
-    queryPath = fmt::format("{}/queries.fvecs", basePath);
-}
-
 void write_json_result(const std::string &basePath, const std::string config, const int totalQueries, const double searchTime,
                         const double distanceComputations, const double nIos, const double recall, const int efSearch,
                         const std::string selectivity) {
@@ -1535,7 +1535,11 @@ void benchmark_navix(InputParser &input) {
                 for (size_t j = 0; j < queryNumVectors; j++) {
                     auto labels = new faiss::idx_t[k];
                     auto distances = new float[k];
-                    hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    if (selectivity == "100") {
+                        hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
+                    } else {
+                        hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    }
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
                         if (std::find(gt, gt + k, (vector_idx_t)labels[m]) != (gt + k)) {
@@ -1560,7 +1564,11 @@ void benchmark_navix(InputParser &input) {
         long durationPerQuery = 0;
         for (size_t j = 0; j < queryNumVectors; j++) {
             auto startTime = std::chrono::high_resolution_clock::now();
-            hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            if (selectivity == "100") {
+                hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
+            } else {
+                hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            }
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
             durationPerQuery += duration;

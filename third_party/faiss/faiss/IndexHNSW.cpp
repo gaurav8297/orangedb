@@ -310,6 +310,26 @@ void IndexHNSW::search(
     }
 }
 
+void IndexHNSW::single_search(
+    const float *query,
+    idx_t k,
+    float *distances,
+    idx_t *labels,
+    VisitedTable &vt,
+    HNSWStats &stats) const {
+    using RH = HeapBlockResultHandler<HNSW::C>;
+    RH bres(1, distances, labels, k);
+    RH::SingleResultHandler res(bres);
+    std::unique_ptr<DistanceComputer> dis(
+            storage_distance_computer(storage));
+    res.begin(0);
+    dis->set_query(query);
+    auto new_stats = hnsw.search(*dis, res, vt);
+    stats.combine(new_stats);
+    res.end();
+    vt.advance();
+}
+
 /// Navix search
 void IndexHNSW::navix_search(
     const float *query,
