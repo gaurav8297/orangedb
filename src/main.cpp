@@ -798,7 +798,7 @@ void populate_mask_and_gt_paths(const std::string &basePath, const std::vector<s
         gtPath.push_back(gtPathStr);
     }
     // Generate the query path
-    queryPath = fmt::format("{}/normalized_queries.fvecs", basePath);
+    queryPath = fmt::format("{}/queries.fvecs", basePath);
 }
 
 std::vector<std::string> parseCommaSeparated(const std::string& input) {
@@ -1506,6 +1506,8 @@ void benchmark_navix(InputParser &input) {
         stat_file << "Building time: " << duration.count() << " ms" << std::endl;
         stat_file.close();
     } else {
+        delete[] baseVecs;
+        baseVecs = nullptr;
         hnsw_index = dynamic_cast<faiss::IndexHNSWFlat *>(faiss::read_index(storagePath.c_str()));
         hnsw_index->hnsw.efConstruction = efConstruction;
         hnsw_index->metric_type = metricType;
@@ -1535,11 +1537,11 @@ void benchmark_navix(InputParser &input) {
                 for (size_t j = 0; j < queryNumVectors; j++) {
                     auto labels = new faiss::idx_t[k];
                     auto distances = new float[k];
-                    if (selectivity == "100") {
-                        hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
-                    } else {
-                        hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
-                    }
+                    // if (selectivity == "100") {
+                    //     hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
+                    // } else {
+                    hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    // }
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
                         if (std::find(gt, gt + k, (vector_idx_t)labels[m]) != (gt + k)) {
@@ -1564,11 +1566,11 @@ void benchmark_navix(InputParser &input) {
         long durationPerQuery = 0;
         for (size_t j = 0; j < queryNumVectors; j++) {
             auto startTime = std::chrono::high_resolution_clock::now();
-            if (selectivity == "100") {
-                hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
-            } else {
-                hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
-            }
+            // if (selectivity == "100") {
+            //     hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
+            // } else {
+            hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            // }
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
             durationPerQuery += duration;
