@@ -1551,7 +1551,7 @@ void benchmark_navix(InputParser &input) {
                 }
                 auto recallPerQuery = recall / queryNumVectors;
                 return recallPerQuery / k;
-            }, minRecall, maxRecall, 100, 1500, 50);
+            }, minRecall, maxRecall, 100, 1500, 10);
             hnsw_index->hnsw.efSearch = ef;
         } else {
             hnsw_index->hnsw.efSearch = efSearch;
