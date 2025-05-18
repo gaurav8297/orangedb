@@ -462,7 +462,7 @@ void IndexACORN::add(idx_t n, const float* x) {
     storage->add(n, x);
     ntotal = storage->ntotal;
     auto data = reinterpret_cast<float *>(dynamic_cast<IndexFlat *>(storage)->codes.data());
-    printf("hell yea! deleting actual data!");
+    printf("hell yea! deleting actual data!\n");
     delete[] x;
     x = nullptr;
     acorn_add_vertices(*this, n0, n, data, verbose, acorn.levels.size() == ntotal);
