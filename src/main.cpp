@@ -845,6 +845,7 @@ void generateFilterGroundTruth(InputParser &input) {
         float selectivity = (float) numFiltered / baseNumVectors;
         printf("Selectivity: %f\n", selectivity);
         generateFilterGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, filteredMask, queryNumVectors, k, gtVecs);
+        printf("Writing gt to file: %s\n", gtPath.c_str());
         writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     }
 }
