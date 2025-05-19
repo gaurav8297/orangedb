@@ -110,6 +110,8 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 
 ./build/release/bin/orangedb_main -run benchmarkAcorn -dataPath /home/centos/vector_dataset/wiki/base.fvecs -basePath /home/centos/vector_dataset/wiki/pos_correlated -sels 22.93,15.02,9.96,5.10,1.01 -efS 100,100,100,100,100 -autoEf 1 -k 100 -M 64 -gamma 1 -M_beta 128 -minRecall 0.950 -maxRecall 0.955 -nThreads 32 -readFromDisk 1 -storagePath  /home/centos/vector_dataset/wiki/acorn_1_index.bin -useIp 1 -resultPath /home/centos/results/wiki/pos/
 
+./build/release/bin/orangedb_main -run generateFilterGT -dataPath /home/centos/vector_dataset/wiki/base.fvecs -basePath /home/centos/vector_dataset/wiki/neg_correlated -sels 22.93,15.02,9.96,5.10,1.01 -k 100
+./build/release/bin/orangedb_main -run generateFilterGT -dataPath /home/centos/vector_dataset/wiki/base.fvecs -basePath /home/centos/vector_dataset/wiki/pos_correlated -sels 22.93,15.02,9.96,5.10,1.01 -k 100
 ./build/release/bin/orangedb_main -run generateFilterGT -dataPath /home/centos/vector_dataset/wiki/base.fvecs -basePath /home/centos/vector_dataset/wiki/uncorrelated -sels 100,90,75,50,40,30,20,10,5,3,1 -k 100
 
 ./build/release/bin/orangedb_main -run benchmarkNavix -dataPath /home/centos/vector_dataset/wiki/base.fvecs -basePath /home/centos/vector_dataset/wiki/neg_correlated -sels 22.93,15.02,9.96,5.10,1.01 -efS 100,100,100,100,100 -autoEf 1 -k 100 -M 32 -efConstruction 200 -minRecall 0.950 -maxRecall 0.955 -nThreads 32 -readFromDisk 1 -storagePath  /home/centos/vector_dataset/wiki/navix_index.bin -useIp 1 -resultPath /home/centos/results/wiki/neg/

@@ -1567,18 +1567,10 @@ void benchmark_navix(InputParser &input) {
         for (size_t j = 0; j < queryNumVectors; j++) {
             auto startTime = std::chrono::high_resolution_clock::now();
             // if (selectivity == "100") {
-            hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
+            // hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
             // } else {
-            // hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
             // }
-            auto cr = 0.0;
-            for (int m = 0; m < k; m++) {
-                if (filteredMask[labels[m]]) {
-                    cr += 1;
-                }
-            }
-            auto selectivity = (double) cr / k;
-            printf("Selectivity: %f\n", selectivity);
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
             durationPerQuery += duration;
