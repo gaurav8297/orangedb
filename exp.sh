@@ -126,3 +126,23 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 ./build/release/bin/orangedb_main -run benchmarkAcorn -dataPath /home/centos/vector_dataset/wiki/base.fvecs -basePath /home/centos/vector_dataset/wiki/pos_correlated -sels 22.93,15.02,9.96,5.10,1.01 -efS 100,100,100,100,100 -autoEf 1 -k 100 -M 64 -gamma 1 -M_beta 128 -minRecall 0.950 -maxRecall 0.955 -nThreads 32 -readFromDisk 1 -storagePath /home/centos/vector_dataset/wiki/acorn_1_index.bin -useIp 1 -resultPath /home/centos/results/wiki/pos/
 ./build/release/bin/orangedb_main -run benchmarkAcorn -dataPath /home/centos/vector_dataset/wiki/base.fvecs -basePath /home/centos/vector_dataset/wiki/uncorrelated -sels 90,75,50,40,30,20,10,5,3,1 -efS 100,100,100,100,100,100,100,100,100,100 -autoEf 1 -k 100 -M 64 -gamma 1 -M_beta 128 -minRecall 0.950 -maxRecall 0.955 -nThreads 32 -readFromDisk 1 -storagePath /home/centos/vector_dataset/wiki/acorn_1_index.bin -useIp 1 -resultPath /home/centos/results/wiki/uncorrelated/
 
+./apps/build_disk_index --data_type float --dist_fn cosine --data_path ~/vector_dataset/wiki/base.fbin --index_path_prefix ~/vector_dataset/wiki/diskann_index_R64_L200_B3_A1.2 -R 64 -L 200 -B 3 -M 100 -T 32
+./apps/search_disk_index  --data_type float --dist_fn cosine --index_path_prefix ~/vector_dataset/wiki/diskann_index_R64_L200_B3_A1.2 --query_file ~/vector_dataset/wiki/query.fbin  --gt_file ~/vector_dataset/wiki/gt.bin -K 100 -L 100 --result_path ~/vector_dataset/wiki/res --num_nodes_to_cache 10000
+./apps/utils/compute_groundtruth  --data_type float --dist_fn cosine --base_file ~/vector_dataset/wiki/base.fbin --query_file ~/vector_dataset/wiki/query.fbin --gt_file  ~/vector_dataset/wiki/gt.bin --K 100
+
+./apps/build_disk_index --data_type float --dist_fn l2 --data_path ~/vector_dataset/gist/base.fbin --index_path_prefix ~/vector_dataset/gist/diskann_index_R64_L200_B3_A1.2 -R 64 -L 200 -B 0.384 -M 5 -T 32
+./apps/utils/compute_groundtruth  --data_type float --dist_fn l2 --base_file ~/vector_dataset/gist/base.fbin --query_file ~/vector_dataset/gist/query.fbin --gt_file  ~/vector_dataset/wiki/gt.bin --K 100
+ ./apps/search_disk_index  --data_type float --dist_fn l2 --index_path_prefix ~/vector_dataset/gist/diskann_index_R64_L200_B3_A1.2 --query_file ~/vector_dataset/gist/query.fbin  --gt_file ~/vector_dataset/gist/gt.bin -K 10 -L 10 20 30 40 50 100 --result_path ~/vector_dataset/gist/ --num_nodes_to_cache 10000
+
+./apps/utils/fvecs_to_bin float ~/vector_dataset/gist/base.fvecs ~/vector_dataset/gist/base.fbin
+./apps/utils/fvecs_to_bin float ~/vector_dataset/gist/bench_data/queries.fvecs ~/vector_dataset/gist/query.fbin
+./apps/utils/compute_groundtruth  --data_type float --dist_fn l2 --base_file ~/vector_dataset/gist/base.fbin --query_file ~/vector_dataset/gist/query.fbin --gt_file ~/vector_dataset/gist/gt.bin --K 100
+
+
+mkdir -p ~/DiskANN/build/data && cd ~/DiskANN/build/data
+wget ftp://ftp.irisa.fr/local/texmex/corpus/sift.tar.gz
+tar -xf sift.tar.gz
+cd ..
+./apps/utils/fvecs_to_bin float data/sift/sift_learn.fvecs data/sift/sift_learn.fbin
+./apps/utils/fvecs_to_bin float data/sift/sift_query.fvecs data/sift/sift_query.fbin
+./apps/build_disk_index --data_type float --dist_fn l2 --data_path data/sift/sift_learn.fbin --index_path_prefix data/sift/disk_index_sift_learn_R32_L50_A1.2 -R 32 -L 50 -B 0.1 -M 1
