@@ -372,6 +372,23 @@ void IndexACORN::single_search(
     idx_t k,
     float *distances,
     idx_t *labels,
+    VisitedTable &vt,
+    ACORNStats &stats) const {
+    DistanceComputer* dis = storage_distance_computer(storage);
+    ScopeDeleter1<DistanceComputer> del(dis);
+    dis->set_query(query);
+    maxheap_heapify(k, distances, labels);
+    ACORNStats new_stats = acorn.search(*dis, k, labels, distances, vt, nullptr);
+    maxheap_reorder(k, distances, labels);
+    stats.combine(new_stats);
+    vt.advance();
+}
+
+void IndexACORN::single_hybrid_search(
+    const float *query,
+    idx_t k,
+    float *distances,
+    idx_t *labels,
     char *filter_id_map,
     VisitedTable &vt,
     ACORNStats &stats) const {

@@ -81,6 +81,14 @@ struct IndexACORN : Index {
         idx_t k,
         float* distances,
         idx_t* labels,
+        VisitedTable &vt,
+        ACORNStats& stats) const;
+
+    void single_hybrid_search(
+        const float* query,
+        idx_t k,
+        float* distances,
+        idx_t* labels,
         char* filter_id_map,
         VisitedTable &vt,
         ACORNStats& stats) const;

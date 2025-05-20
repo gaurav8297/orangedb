@@ -1413,7 +1413,11 @@ void benchmark_acorn(InputParser &input) {
                 faiss::ACORNStats stats;
                 faiss::VisitedTable visited(baseNumVectors);
                 for (size_t j = 0; j < queryNumVectors; j++) {
-                    acorn_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    if (selectivity == "100") {
+                        acorn_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
+                    } else {
+                        acorn_index->single_hybrid_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    }
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
                         if (std::find(gt, gt + k, labels[m]) != (gt + k)) {
@@ -1440,7 +1444,11 @@ void benchmark_acorn(InputParser &input) {
         faiss::VisitedTable visited(baseNumVectors);
         for (size_t j = 0; j < queryNumVectors; j++) {
             auto startTime = std::chrono::high_resolution_clock::now();
-            acorn_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            if (selectivity == "100") {
+                acorn_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
+            } else {
+                acorn_index->single_hybrid_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            }
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
             durationPerQuery += duration;
