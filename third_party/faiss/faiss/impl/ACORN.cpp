@@ -847,7 +847,6 @@ int greedy_update_nearest(
             return nDis;
         }
     }
-    return nDis;
 }
 
 
