@@ -807,13 +807,14 @@ void search_neighbors_to_add(
 
 /// greedily update a nearest vector at a given level
 /// used for construction (other version below will be used in search)
-void greedy_update_nearest(
+int greedy_update_nearest(
         const ACORN& hnsw,
         DistanceComputer& qdis,
         int level,
         storage_idx_t& nearest,
         float& d_nearest) {
     debug("%s\n", "reached");
+    int nDis = 0;
     for (;;) {
         storage_idx_t prev_nearest = nearest;
 
@@ -836,15 +837,17 @@ void greedy_update_nearest(
             }
 
             float dis = qdis(v);
+            nDis++;
             if (dis < d_nearest) {
                 nearest = v;
                 d_nearest = dis;
             }
         }
         if (nearest == prev_nearest) {
-            return;
+            return nDis;
         }
     }
+    return nDis;
 }
 
 
@@ -1150,6 +1153,7 @@ int search_from_candidates(
 
         size_t begin, end;
         hnsw.neighbor_range(v0, level, &begin, &end);
+        stats.nIos += 1;
 
         for (size_t j = begin; j < end; j++) {
             int v1 = hnsw.neighbors[j];
@@ -1183,6 +1187,7 @@ int search_from_candidates(
             stats.n2++;
         }
         stats.n3 += ndis;
+        stats.ndis += ndis;
     }
 
     return nres;
@@ -1435,10 +1440,11 @@ ACORNStats ACORN::search(
 
         //  greedy search on upper levels
         storage_idx_t nearest = entry_point;
+        stats.ndis += 1;
         float d_nearest = qdis(nearest);
 
         for (int level = max_level; level >= 1; level--) {
-            greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            stats.ndis += greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
         }
 
         
