@@ -1387,6 +1387,12 @@ void benchmark_acorn(InputParser &input) {
         acorn_index = dynamic_cast<faiss::IndexACORNFlat *>(faiss::read_index(storagePath.c_str()));
         acorn_index->metric_type = metric;
     }
+    if (acorn_index->metric_type == faiss::METRIC_INNER_PRODUCT) {
+        printf("Building ip index\n");
+    } else if (acorn_index->metric_type == faiss::METRIC_L2) {
+        printf("Building l2 index\n");
+    }
+
     omp_set_num_threads(1);
 
     // Todo: Write the time to build the index
