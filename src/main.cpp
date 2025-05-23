@@ -1242,7 +1242,7 @@ int tuneEfByStep(std::function<double(int)> getRecall,
     // 1) Evaluate at efMin
     double recallMin = getRecall(efMin);
     printf("efMin: %d, recall: %f\n", efMin, recallMin);
-    if (recallMin >= targetLow && recallMin <= targetHigh) {
+    if (recallMin >= targetLow) {
         return efMin;
     }
 
@@ -1251,10 +1251,6 @@ int tuneEfByStep(std::function<double(int)> getRecall,
     printf("efMax: %d, recall: %f\n", efMax, recallMax);
     // If even efMax is below your lower bound, just return efMax (best you can do)
     if (recallMax < targetLow) {
-        return efMax;
-    }
-    // Or if efMax falls in range, return it immediately
-    if (recallMax >= targetLow && recallMax <= targetHigh) {
         return efMax;
     }
 
