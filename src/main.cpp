@@ -2185,6 +2185,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     const int nThreads = stoi(input.getCmdOption("-nThreads"));
     const int k = stoi(input.getCmdOption("-k"));
     const int numQueries = stoi(input.getCmdOption("-numQueries"));
+    const int sampleSize = stoi(input.getCmdOption("-sampleSize"));
     const int nProbes = stoi(input.getCmdOption("-nProbes"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
@@ -2203,9 +2204,13 @@ void benchmark_faiss_clustering(InputParser &input) {
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
     auto quantizer = faiss::IndexFlatL2(baseDimension);
     auto numCentroids = baseNumVectors / clusterSize;
-    faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, faiss::METRIC_L2);
+    faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, faiss::METRIC_INNER_PRODUCT);
     faiss::IndexIVFFlat* index = &idx;
     index->cp.niter = nIter;
+    index->cp.max_points_per_centroid = (sampleSize / numCentroids);
+    index->cp.min_points_per_centroid = (sampleSize / numCentroids) * 0.5;
+    printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
+           index->cp.max_points_per_centroid, index->cp.min_points_per_centroid);
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
         // Print grond truth num vectors
