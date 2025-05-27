@@ -2211,6 +2211,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     index->cp.min_points_per_centroid = (sampleSize / numCentroids) * 0.5;
     printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
            index->cp.max_points_per_centroid, index->cp.min_points_per_centroid);
+    index->cp.verbose = true;
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
         // Print grond truth num vectors
