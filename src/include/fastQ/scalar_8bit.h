@@ -491,7 +491,7 @@ namespace fastq {
             // Training
             float breakPointDataRatio;
             uint64_t numTrainedVecs;
-            std::vector<std::vector<std::atomic_uint64_t>> histogram;
+            std::vector<std::vector<uint64_t>> histogram;
         };
     } // namespace sq
 } // namespace fastq
