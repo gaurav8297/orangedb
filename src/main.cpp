@@ -1461,6 +1461,7 @@ void benchmark_navix(InputParser &input) {
     int nThreads = stoi(input.getCmdOption("-nThreads"));
     float minRecall = stof(input.getCmdOption("-minRecall"));
     float maxRecall = stof(input.getCmdOption("-maxRecall"));
+    int maxEfValue = stof(input.getCmdOption("-maxEfValue"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const std::string &resultPath = input.getCmdOption("-resultPath");
@@ -1551,7 +1552,7 @@ void benchmark_navix(InputParser &input) {
                 }
                 auto recallPerQuery = recall / queryNumVectors;
                 return recallPerQuery / k;
-            }, minRecall, maxRecall, 100, 1500, 10);
+            }, minRecall, maxRecall, 100, maxEfValue, 10);
             hnsw_index->hnsw.efSearch = ef;
         } else {
             hnsw_index->hnsw.efSearch = efSearch;
