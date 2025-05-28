@@ -73,7 +73,7 @@ namespace fastq {
             *result = res;
         }
 
-#if SIMSIMD_TARGET_X86
+#if _SIMSIMD_TARGET_X86
         #if SIMSIMD_TARGET_HASWELL
 #pragma GCC push_options
 #pragma GCC target("avx2", "fma")
