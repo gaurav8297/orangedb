@@ -1335,6 +1335,7 @@ void benchmark_acorn(InputParser &input) {
     int nThreads = stoi(input.getCmdOption("-nThreads"));
     float minRecall = stof(input.getCmdOption("-minRecall"));
     float maxRecall = stof(input.getCmdOption("-maxRecall"));
+    int maxEfValue = stoi(input.getCmdOption("-maxEfValue"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const std::string &resultPath = input.getCmdOption("-resultPath");
@@ -1430,7 +1431,7 @@ void benchmark_acorn(InputParser &input) {
                 printf("Recall: %f\n", recall);
                 auto recallPerQuery = recall / queryNumVectors;
                 return recallPerQuery / k;
-            }, minRecall, maxRecall, 100, 1500, 10);
+            }, minRecall, maxRecall, 100, maxEfValue, 10);
             acorn_index->acorn.efSearch = ef;
             efSearch = ef;
         } else {
