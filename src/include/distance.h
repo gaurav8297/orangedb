@@ -59,7 +59,7 @@ namespace orangedb {
             sym_dc->compute_distance(ci, cj, result);
         }
 
-        void computeDistance(float *src, float *dest, double *result) override {
+        inline void computeDistance(float *src, float *dest, double *result) override {
             // Not implemented
             CHECK_ARGUMENT(false, "Not implemented");
         }

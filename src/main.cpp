@@ -2237,6 +2237,7 @@ void benchmark_faiss_clustering(InputParser &input) {
         index->search(1, queryVecs + (i * baseDimension), k, distances, labels);
         auto gt = gtVecs + i * k;
         for (int j = 0; j < k; j++) {
+            printf("Query %zu, label: %lld, gt: %llu, dist: %f\n", i, labels[j], gt[j], distances[j]);
             if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
                 recall++;
             }

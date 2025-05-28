@@ -38,67 +38,72 @@ namespace fastq {
         // x = alpha * ci + beta
         // TODO: Think about making precomputed values optional
 
-        inline uint8_t encode_serial(const float *x, size_t i, const float *vmin, const float *vdiff) {
-            auto val = std::min(std::max(x[i] - vmin[i], 0.0f), vdiff[i]);
-            return std::min(int((val / vdiff[i]) * 4.0f), 3);
+       // Serial encoding functions
+        inline uint8_t encode_serial(const float x, const float vmin, const float vdiff,
+                                     float scalar_range) {
+            auto val = std::min(std::max(x - vmin, 0.0f), vdiff);
+            return std::min(int((val / vdiff) * scalar_range), (int) scalar_range - 1);
         }
 
-        inline void encode_serial(const float *x, uint8_t *codes, size_t n, int dim, const float *vmin,
-                                  const float *vdiff, const float *alpha, const float *beta) {
-            for (size_t i = 0; i < n; i++) {
-                auto *xi = x + i * dim;
-                // We need to skip the last 4 bytes as they are precomputed values
-                auto *ci = codes + i * (dim + 4);
-                float precompute_value = 0;
-                for (size_t j = 0; j < dim; j++) {
-                    ci[j] = encode_serial(xi, j, vmin, vdiff);
-                    precompute_value += ci[j] * alpha[j] * beta[j];
-                }
-                // Store precomputed values
-                *reinterpret_cast<float *>(ci + dim) = precompute_value;
+        inline float compute_precomputed_value_serial(const uint8_t code, const float alpha, const float beta) {
+            return ((float) code) * alpha * beta;
+        }
+
+        inline void encode_serial_8bit(const float *data, uint8_t *codes, int dim, const float *vmin,
+                                       const float *vdiff, const float *alpha, const float *beta, float beta_sqr) {
+            float precompute_value = beta_sqr;
+            for (size_t j = 0; j < dim; j++) {
+                codes[j] = encode_serial(data[j], vmin[j], vdiff[j], 256.0f);
+                precompute_value += compute_precomputed_value_serial(codes[j], alpha[j], beta[j]);
             }
+            // Store precomputed values
+            *reinterpret_cast<float *>(codes + dim) = precompute_value;
         }
 
-        inline float decode_serial(const uint8_t *code, size_t i, const float *alpha, const float *beta) {
-            return alpha[i] * code[i] + beta[i];
+        inline float decode_serial(const uint8_t code, const float alpha, const float beta) {
+            return alpha * code + beta;
         }
 
-        inline void decode_serial(const uint8_t *code, float *x, size_t n, int dim,
-                                  const float *alpha, const float *beta) {
-            for (size_t i = 0; i < n; i++) {
-                // We need to skip the last 4 bytes as they are precomputed values
-                auto *ci = code + i * (dim + 4);
-                auto *xi = x + i * dim;
-                for (size_t j = 0; j < dim; j++) {
-                    xi[j] = decode_serial(ci, j, alpha, beta);
-                }
+        inline void compute_asym_l2sq_serial_8bit(const float *x, const uint8_t *y, double *result, size_t dim,
+                                                  const float *alpha, const float *beta) {
+            double res = 0;
+            for (size_t i = 0; i < dim; i++) {
+                auto code = decode_serial(y[i], alpha[i], beta[i]);
+                auto xc = (x[i] - code);
+                res += xc * xc;
             }
+            *result = res;
         }
 
-        // This doesn't use precomputed values
-        inline void compute_asym_ip_serial(const float *x, const uint8_t *y, double *result, size_t dim,
-                                           const float *alpha, const float *beta) {
-            auto *decoded = new float[dim];
-            decode_serial(y, decoded, 1, dim, alpha, beta);
-            simsimd_l2sq_f32(x, decoded, dim, result);
+        inline void compute_sym_l2sq_serial_8bit(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
+                                                 const float *alphaSqr) {
+            double res = 0;
+            for (size_t i = 0; i < dim; i++) {
+                int xy = x[i] - y[i];
+                res += xy * xy * alphaSqr[i];
+            }
+            *result = res;
         }
 
-        // This uses precomputed values
-        inline void compute_sym_ip_serial(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
-                                          const float *alphaSqr, const float *betaSqr) {
+        inline void compute_asym_ip_serial_8bit(const float *x, const uint8_t *y, double *result, size_t dim,
+                                                  const float *alpha, const float *beta) {
             double xy = 0;
             for (size_t i = 0; i < dim; i++) {
-                xy += x[i] * y[i] * alphaSqr[i] + betaSqr[i];
+                xy += x[i] * decode_serial(y[i], alpha[i], beta[i]);
             }
-            // Add precomputed value (last 4 bytes)
-            xy += *reinterpret_cast<const float *>(x + dim);
             *result = xy;
         }
 
-        inline void compute_asym_l2sq_serial(const float *x, const uint8_t *y, double *result, size_t dim,
-                                             const float *alpha, const float *beta, float *decoded) {
-            decode_serial(y, decoded, 1, dim, alpha, beta);
-            simsimd_l2sq_f32(x, decoded, dim, result);
+        inline void compute_sym_ip_serial_8bit(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
+                                                const float *alphaSqr) {
+            double xy = 0;
+            for (size_t i = 0; i < dim; i++) {
+                xy += x[i] * y[i] * alphaSqr[i];
+            }
+            // Add precomputed value (last 4 bytes)
+            xy += *reinterpret_cast<const float *>(x + dim);
+            xy += *reinterpret_cast<const float *>(y + dim);
+            *result = xy;
         }
 
 #if SIMSIMD_TARGET_ARM
@@ -107,26 +112,28 @@ namespace fastq {
 #pragma GCC target("+simd")
 #pragma clang attribute push(__attribute__((target("+simd"))), apply_to = function)
 
-        inline uint8x8_t encode_neon(const float *x, size_t i, const float *vmin, const float *vdiff) {
-            // Faster version
-            // 255 => 3.0f
-            float32x4_t const_255 = vdupq_n_f32(4.0f);
+        inline uint32x4_t encode_neon_(const float *x, size_t i, const float *vmin, const float *vdiff,
+                                       const float scalar_range) {
+            float32x4_t scalar_range_vec = vdupq_n_f32(scalar_range);
+            float32x4_t vmin_vec = vld1q_f32(vmin + i);
+            float32x4_t vdiff_vec = vld1q_f32(vdiff + i);
+            float32x4_t x_vec = vld1q_f32(x + i);
 
-            float32x4_t x_low = vld1q_f32(x + i);
-            float32x4_t x_high = vld1q_f32(x + i + 4);
+            // Clamp to [vmin, vmin + vdiff]
+            float32x4_t val = vminq_f32(vmaxq_f32(vsubq_f32(x_vec, vmin_vec), vdupq_n_f32(0.0f)), vdiff_vec);
 
+            // Scale to [0, 1]
+            float32x4_t x_scaled = vdivq_f32(val, vdiff_vec);
+            // Scale to [0, scalar_range) => min(x * scalar_range, scalar_range - 1)
+            uint32x4_t ci = vminq_u32(vcvtq_u32_f32(vmulq_f32(x_scaled, scalar_range_vec)),
+                                      vdupq_n_u32((uint32_t) scalar_range - 1));
+            return ci;
+        }
 
-            // Scale to [0, 1] => (x - vmin) / vdiff
-            float32x4_t x_scaled_low = vdivq_f32(vsubq_f32(x_low, vld1q_f32(vmin + i)), vld1q_f32(vdiff + i));
-            float32x4_t x_scaled_high = vdivq_f32(vsubq_f32(x_high, vld1q_f32(vmin + i + 4)), vld1q_f32(vdiff + i + 4));
-
-            // Scale to [0, 255] => x * 255
-            // TODO: What if we use vmulq_f32(x_scaled_low, const_255) to calculate precomputed values? Will it
-            //  increase accuracy?
-            uint32x4_t ci_low = vcvtq_u32_f32(vmulq_f32(x_scaled_low, const_255));
-            uint32x4_t ci_high = vcvtq_u32_f32(vmulq_f32(x_scaled_high, const_255));
-
-            // Clamp to [0, 255]
+        inline uint8x8_t encode_neon(const float *x, size_t i, const float *vmin, const float *vdiff,
+                                     const float scalar_range) {
+            uint32x4_t ci_low = encode_neon_(x, i, vmin, vdiff, scalar_range);
+            uint32x4_t ci_high = encode_neon_(x, i + 4, vmin, vdiff, scalar_range);
             return vmovn_u16(vcombine_u16(vmovn_u32(ci_low), vmovn_u32(ci_high)));
         }
 
@@ -145,276 +152,24 @@ namespace fastq {
             return vaddq_f32(precompute_values_low, precompute_values_high);
         }
 
-        inline void encode_neon(const float *x, uint8_t *codes, size_t n, int dim, const float *vmin,
-                                const float *vdiff, const float *alpha, const float *beta) {
-            for (size_t i = 0; i < n; i++) {
-                size_t j = 0;
-                const float *xi = x + i * dim;
-                // We need to skip the last 4 bytes as they are precomputed values
-                uint8_t *ci = codes + i * (dim + 4);
-                float32x4_t precompute_values = vdupq_n_f32(0);
-                for (; j + 8 <= dim; j += 8) {
-                    uint8x8_t ci_vec = encode_neon(xi, j, vmin, vdiff);
-                    precompute_values = vaddq_f32(calc_precomputed_values_neon(ci_vec, j, alpha, beta),
-                                                  precompute_values);
-                    vst1_u8(ci + j, ci_vec);
-                }
-                // Handle the remaining
-                for (; j < dim; j++) {
-                    ci[j] = encode_serial(xi, j, vmin, vdiff);
-                }
-                // Store precomputed values
-                *reinterpret_cast<float *>(ci + dim) = vaddvq_f32(precompute_values);
-            }
-        }
-
-        inline float32x4x2_t decode_neon(const uint8_t *code, size_t i, const float *alpha, const float *beta) {
-            uint8x8_t ci_vec = vld1_u8(code + i);
-            uint16x8_t ci_vec16 = vmovl_u8(ci_vec);
-            float32x4_t ci_vec32_low = vcvtq_f32_u32(vmovl_u16(vget_low_u16(ci_vec16)));
-            float32x4_t ci_vec32_high = vcvtq_f32_u32(vmovl_u16(vget_high_u16(ci_vec16)));
-
-            // x = alpha * ci + beta
-            float32x4_t x_low = vmlaq_f32(vld1q_f32(beta + i), vld1q_f32(alpha + i), ci_vec32_low);
-            float32x4_t x_high = vmlaq_f32(vld1q_f32(beta + i + 4), vld1q_f32(alpha + i + 4), ci_vec32_high);
-            return {x_low, x_high};
-        }
-
-        inline void decode_neon(const uint8_t *code, float *x, size_t n, int dim,
-                                const float *alpha, const float *beta) {
-            for (size_t i = 0; i < n; i++) {
-                size_t j = 0;
-                // We need to skip the last 4 bytes as they are precomputed values
-                const uint8_t *ci = code + i * (dim + 4);
-                float *xi = x + i * dim;
-                for (; j + 8 <= dim; j += 8) {
-                    float32x4x2_t x0 = decode_neon(ci, j, alpha, beta);
-                    vst1q_f32(xi + j, x0.val[0]);
-                    vst1q_f32(xi + j + 4, x0.val[1]);
-                }
-                // Handle the remaining
-                for (; j < dim; j++) {
-                    xi[j] = decode_serial(ci, j, alpha, beta);
-                }
-            }
-        }
-
-        // This doesn't use precomputed values
-        inline void compute_asym_ip_neon(const float *x, const uint8_t *y, double *result, size_t dim,
-                                         const float *alpha, const float *beta) {
-            float32x4_t xy_vec = vdupq_n_f32(0);
-            size_t i = 0;
+        inline void encode_neon_8bit(const float *data, uint8_t *codes, int dim, const float *vmin,
+                                     const float *vdiff, const float *alpha, const float *beta) {
+            int i = 0;
+            float32x4_t precompute_values = vdupq_n_f32(0);
             for (; i + 8 <= dim; i += 8) {
-                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta);
-                float32x4_t x_low_vec = vld1q_f32(x + i);
-                float32x4_t y_low_vec = y_decoded.val[0];
-                float32x4_t x_high_vec = vld1q_f32(x + i + 4);
-                float32x4_t y_high_vec = y_decoded.val[1];
-
-                xy_vec = vmlaq_f32(xy_vec, x_low_vec, y_low_vec);
-                xy_vec = vmlaq_f32(xy_vec, x_high_vec, y_high_vec);
+                uint8x8_t ci_vec = encode_neon(data, i, vmin, vdiff, 256.0f);
+                precompute_values = vaddq_f32(calc_precomputed_values_neon(ci_vec, i, alpha, beta),
+                                              precompute_values);
+                vst1_u8(codes + i, ci_vec);
             }
-            float xy = vaddvq_f32(xy_vec);
-
-            // Calculate the remaining. See if vectorization is possible or will be helpful
+            auto precompute_value = vaddvq_f32(precompute_values);
+            // Handle the remaining
             for (; i < dim; i++) {
-                float xi = x[i];
-                float yi = decode_serial(y, i, alpha, beta);
-                xy += xi * yi;
+                codes[i] = encode_serial(data[i], vmin[i], vdiff[i], 256.0f);
+                precompute_value += compute_precomputed_value_serial(codes[i], alpha[i], beta[i]);
             }
-            *result = xy;
-        }
-
-        inline void compute_asym_l2sqr_neon(const float *x, const uint8_t *y, double *result, size_t dim,
-                                            const float *alpha, const float *beta) {
-            float32x4_t sum_vec = vdupq_n_f32(0);
-            simsimd_size_t i = 0;
-            for (; i + 8 <= dim; i += 8) {
-                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta);
-                float32x4_t x_low_vec = vld1q_f32(x + i);
-                float32x4_t y_low_vec = y_decoded.val[0];
-                float32x4_t x_high_vec = vld1q_f32(x + i + 4);
-                float32x4_t y_high_vec = y_decoded.val[1];
-                float32x4_t diff_low = vsubq_f32(x_low_vec, y_low_vec);
-                sum_vec = vfmaq_f32(sum_vec, diff_low, diff_low);
-                float32x4_t diff_high = vsubq_f32(x_high_vec, y_high_vec);
-                sum_vec = vfmaq_f32(sum_vec, diff_high, diff_high);
-            }
-            simsimd_f32_t sum = vaddvq_f32(sum_vec);
-            for (; i < dim; i++) {
-                float xi = x[i];
-                float yi = decode_serial(y, i, alpha, beta);
-                simsimd_f32_t diff = xi - yi;
-                sum += diff * diff;
-            }
-            *result = sum;
-        }
-
-        inline void compute_sym_l2sqr_neon(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
-                                           const float *alpha, const float *beta) {
-            float32x4_t sum_vec = vdupq_n_f32(0);
-            simsimd_size_t i = 0;
-            for (; i + 8 <= dim; i += 8) {
-                float32x4x2_t x_decoded = decode_neon(x, i, alpha, beta);
-                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta);
-                float32x4_t x_low_vec = x_decoded.val[0];
-                float32x4_t y_low_vec = y_decoded.val[0];
-                float32x4_t x_high_vec = x_decoded.val[1];
-                float32x4_t y_high_vec = y_decoded.val[1];
-
-                float32x4_t diff_low = vsubq_f32(x_low_vec, y_low_vec);
-                sum_vec = vfmaq_f32(sum_vec, diff_low, diff_low);
-
-                float32x4_t diff_high = vsubq_f32(x_high_vec, y_high_vec);
-                sum_vec = vfmaq_f32(sum_vec, diff_high, diff_high);
-            }
-            simsimd_f32_t sum = vaddvq_f32(sum_vec);
-            for (; i < dim; i++) {
-                float xi = decode_serial(x, i, alpha, beta);
-                float yi = decode_serial(y, i, alpha, beta);
-                simsimd_f32_t diff = xi - yi;
-                sum += diff * diff;
-            }
-            *result = sum;
-        }
-
-        inline float32x4x2_t decode_neon_new(const uint8_t *code1, const uint8_t *code2, size_t i, const float *alpha) {
-            uint8x8_t c1_vec = vld1_u8(code1 + i);
-            uint8x8_t c2_vec = vld1_u8(code2 + i);
-            // abs(diff_vec)
-            uint8x8_t diff_vec = vabd_u8(c1_vec, c2_vec);
-            // print 4 element of ci_vec and c2_vec
-
-            // Convert to 32-bit integers
-            uint16x8_t umov = vmovl_u8(vmul_u8(diff_vec, diff_vec));
-            uint32x4_t ci_vec32_low = vmovl_u16(vget_low_u16(umov));
-            uint32x4_t ci_vec32_high = vmovl_u16(vget_high_u16(umov));
-
-            // Convert to float
-            float32x4_t ci_vec32_low_f = vcvtq_f32_u32(ci_vec32_low);
-            float32x4_t ci_vec32_high_f = vcvtq_f32_u32(ci_vec32_high);
-
-            // Load alpha
-            float32x4_t alpha_vec_low = vld1q_f32(alpha + i);
-            float32x4_t alpha_vec_high = vld1q_f32(alpha + i + 4);
-
-            // Multiply by alpha
-            float32x4_t ci_vec32_low_alpha = vmulq_f32(ci_vec32_low_f, alpha_vec_low);
-            float32x4_t ci_vec32_high_alpha = vmulq_f32(ci_vec32_high_f, alpha_vec_high);
-
-
-            return {ci_vec32_low_alpha, ci_vec32_high_alpha};
-        }
-
-        inline uint16x8_t
-        decode_neon_new_new(const uint8_t *code1, const uint8_t *code2, size_t i, const float *alpha) {
-            uint8x8_t c1_vec = vld1_u8(code1 + i);
-            uint8x8_t c2_vec = vld1_u8(code2 + i);
-            // abs(diff_vec)
-            uint8x8_t diff_vec = vabd_u8(c1_vec, c2_vec);
-            // print 4 element of ci_vec and c2_vec
-
-            // Convert to 32-bit integers
-//            uint16x8_t umov = vmovl_u8(vmul_u8(diff_vec, diff_vec));
-            uint16x8_t umov = vmovl_u8(diff_vec);
-//            uint32x4_t ci_vec32_low = vmovl_u16(vget_low_u16(umov));
-//            uint32x4_t ci_vec32_high = vmovl_u16(vget_high_u16(umov));
-
-            // Convert to float
-//            float32x4_t ci_vec32_low_f = vcvtq_f32_u32(ci_vec32_low);
-//            float32x4_t ci_vec32_high_f = vcvtq_f32_u32(ci_vec32_high);
-//
-//            // Load alpha
-//            float32x4_t alpha_vec_low = vld1q_f32(alpha + i);
-//            float32x4_t alpha_vec_high = vld1q_f32(alpha + i + 4);
-//
-//            // Multiply by alpha
-//            float32x4_t ci_vec32_low_alpha = vmulq_f32(ci_vec32_low_f, alpha_vec_low);
-//            float32x4_t ci_vec32_high_alpha = vmulq_f32(ci_vec32_high_f, alpha_vec_high);
-
-
-            return umov;
-        }
-
-        inline void compute_sym_l2sqr_neon_new(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
-                                               const float *alphaSqr, const float *beta) {
-            uint16x8_t sum_vec = vdupq_n_u16(0);
-            simsimd_size_t i = 0;
-            for (; i + 8 <= dim; i += 8) {
-                uint16x8_t decoded = decode_neon_new_new(x, y, i, alphaSqr);
-                sum_vec = vaddq_u16(sum_vec, decoded);
-            }
-            simsimd_f32_t sum = (float) vaddvq_u16(sum_vec);
-            *result = sum;
-        }
-
-        // This uses precomputed values
-        inline void compute_sym_ip_neon(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
-                                        const float *alphaSqr, const float *betaSqr) {
-            size_t i = 0;
-            float32x4_t xy_vec = vdupq_n_f32(0);
-            for (; i + 8 < dim; i += 8) {
-                uint16x8_t x0 = vmovl_u8(vld1_u8(x + i));
-                uint16x8_t y0 = vmovl_u8(vld1_u8(y + i));
-
-                float32x4_t x0_low = vcvtq_f32_u32(vmovl_u16(vget_low_u16(x0)));
-                float32x4_t x0_high = vcvtq_f32_u32(vmovl_u16(vget_high_u16(x0)));
-                float32x4_t y0_low = vcvtq_f32_u32(vmovl_u16(vget_low_u16(y0)));
-                float32x4_t y0_high = vcvtq_f32_u32(vmovl_u16(vget_high_u16(y0)));
-
-                float32x4_t alphaSqr_low = vld1q_f32(alphaSqr + i);
-                float32x4_t alphaSqr_high = vld1q_f32(alphaSqr + i + 4);
-
-                float32x4_t gammaSqr_low = vld1q_f32(betaSqr + i);
-                float32x4_t gammaSqr_high = vld1q_f32(betaSqr + i + 4);
-
-                float32x4_t xy_low = vfmaq_f32(gammaSqr_low, vmulq_f32(x0_low, y0_low), alphaSqr_low);
-                float32x4_t xy_high = vfmaq_f32(gammaSqr_high, vmulq_f32(x0_high, y0_high), alphaSqr_high);
-                xy_vec = vaddq_f32(xy_vec, xy_low);
-                xy_vec = vaddq_f32(xy_vec, xy_high);
-            }
-            float xy = vaddvq_f32(xy_vec);
-
-            // Calculate the remaining
-            for (; i < dim; i++) {
-                xy += x[i] * y[i] * alphaSqr[i] + betaSqr[i];
-            }
-
-            // Add precomputed value (last 4 bytes)
-            xy += *reinterpret_cast<const float *>(x + dim);
-            *result = xy;
-        }
-
-        inline void compute_asym_cos_neon(const float *x, const uint8_t *y, double *result, size_t dim,
-                                          const float *alpha, const float *beta) {
-            float32x4_t xy_vec = vdupq_n_f32(0), x2_vec = vdupq_n_f32(0), y2_vec = vdupq_n_f32(0);
-            simsimd_size_t i = 0;
-            for (; i + 8 <= dim; i += 8) {
-                float32x4x2_t y_decoded = decode_neon(y, i, alpha, beta);
-                float32x4_t x_low_vec = vld1q_f32(x + i);
-                float32x4_t y_low_vec = y_decoded.val[0];
-                float32x4_t x_high_vec = vld1q_f32(x + i + 4);
-                float32x4_t y_high_vec = y_decoded.val[1];
-
-                xy_vec = vfmaq_f32(xy_vec, x_low_vec, y_low_vec);
-                xy_vec = vfmaq_f32(xy_vec, x_high_vec, y_high_vec);
-                x2_vec = vfmaq_f32(x2_vec, x_low_vec, x_low_vec);
-                x2_vec = vfmaq_f32(x2_vec, x_high_vec, x_high_vec);
-                y2_vec = vfmaq_f32(y2_vec, y_low_vec, y_low_vec);
-                y2_vec = vfmaq_f32(y2_vec, y_high_vec, y_high_vec);
-            }
-
-            simsimd_f32_t xy = vaddvq_f32(xy_vec), x2 = vaddvq_f32(x2_vec), y2 = vaddvq_f32(y2_vec);
-            for (; i < dim; ++i) {
-                float xi = x[i], yi = decode_serial(y, i, alpha, beta);
-                xy += xi * yi;
-                x2 += xi * xi;
-                y2 += yi * yi;
-            }
-
-            simsimd_f32_t x2_y2_arr[2] = {x2, y2};
-            vst1_f32(x2_y2_arr, vrsqrte_f32(vld1_f32(x2_y2_arr)));
-            *result = xy != 0 ? 1 - xy * x2_y2_arr[0] * x2_y2_arr[1] : 1;
+            // Store precomputed values
+            *reinterpret_cast<float *>(codes + dim) = precompute_value;
         }
 
 #pragma clang attribute pop
@@ -424,127 +179,74 @@ namespace fastq {
 
 #if SIMSIMD_TARGET_X86
 #if SIMSIMD_TARGET_HASWELL
-
 #pragma GCC push_options
 #pragma GCC target("avx2", "fma")
 #pragma clang attribute push(__attribute__((target("avx2,fma"))), apply_to = function)
 
-        inline __m128i encode_haswell(const float *x, size_t i, const float *vmin, const float *vdiff) {
-            // Faster version
-            // 255 => 3.0f
-            __m256 const_255 = _mm256_set1_ps(3.0f);
+        inline __m128i encode_haswell_(const float *x, size_t i, const float *vmin, const float *vdiff,
+                                       const float scalar_range) {
+            __m256 scalar_range_vec = _mm256_set1_ps(scalar_range);
+            __m256 vmin_vec = _mm256_loadu_ps(vmin + i);
+            __m256 vdiff_vec = _mm256_loadu_ps(vdiff + i);
+            __m256 x_vec = _mm256_loadu_ps(x + i);
 
-            // Load the input values
-            __m256 x_values = _mm256_loadu_ps(x + i);
+            // Clamp to [vmin, vmin + vdiff]
+            __m256 val = _mm256_min_ps(_mm256_max_ps(_mm256_sub_ps(x_vec, vmin_vec), _mm256_setzero_ps()), vdiff_vec);
 
-            // Load the vmin and vdiff values
-            __m256 vmin_values = _mm256_loadu_ps(vmin + i);
-            __m256 vdiff_values = _mm256_loadu_ps(vdiff + i);
 
-            // Scale to [0, 1] => (x - vmin) / vdiff
-            __m256 x_scaled = _mm256_div_ps(_mm256_sub_ps(x_values, vmin_values), vdiff_values);
+            // Scale to [0, 1]
+            __m256 x_scaled = _mm256_div_ps(val, vdiff_vec);
 
-            // Scale to [0, 255] => x * 255
-            __m256 x_scaled_255 = _mm256_mul_ps(x_scaled, const_255);
-
-            // Convert to integers
-            __m256i ci = _mm256_cvtps_epi32(x_scaled_255);
+            // Scale to [0, scalar_range) => x * scalar_range
+            __m256i ci = _mm256_cvtps_epi32(_mm256_mul_ps(x_scaled, scalar_range_vec));
 
             // Pack and clamp to [0, 255]
             __m128i ci_low = _mm256_extracti128_si256(ci, 0);
             __m128i ci_high = _mm256_extracti128_si256(ci, 1);
+            __m128i packed16 = _mm_packus_epi32(ci_low, ci_high);
 
-            // Saturate to uint8
-            __m128i result = _mm_packus_epi32(ci_low, ci_high);
-
-            return result;
+            return packed16;
         }
 
-        inline __m256 calc_precomputed_values_haswell_2(__m128i ci_vec, size_t i, const float *alpha, const float *beta) {
-            // Unpack the 8-bit integers to 32-bit integers
-            __m256i ci_vec32 = _mm256_cvtepu8_epi32(ci_vec);
-
-            // Convert to float
-            __m256 ci_vec_float = _mm256_cvtepi32_ps(ci_vec32);
-
-            // Load alpha and beta
-            __m256 alpha_values = _mm256_loadu_ps(alpha + i);
-            __m256 beta_values = _mm256_loadu_ps(beta + i);
-
-            // Calculate precomputed values: i8 * alpha * beta
-            __m256 precompute_values = _mm256_mul_ps(_mm256_mul_ps(ci_vec_float, alpha_values), beta_values);
-
-            return precompute_values;
+        inline __m128i encode_haswell(const float *x, size_t i, const float *vmin, const float *vdiff,
+                                      const float scalar_range) {
+            __m128i ci_low = encode_haswell_(x, i, vmin, vdiff, scalar_range);
+            __m128i ci_high = encode_haswell_(x, i + 8, vmin, vdiff, scalar_range);
+            return _mm_packus_epi16(ci_low, ci_high);
         }
 
-        inline __m256 calc_precomputed_values_haswell(__m128i ci_vec, size_t i, const float *alphaSqr) {
-            // Unpack the 8-bit integers to 32-bit integers
-            __m256i ci_vec32 = _mm256_cvtepu8_epi32(ci_vec);
+        inline __m256 calc_precomputed_values_haswell(__m128i ci_vec, size_t i, const float *alpha, const float *beta) {
+            // Load and extend ci_vec data
+            __m256 ci_vec_lower_half = _mm256_cvtepi32_ps(_mm256_cvtepu8_epi32(ci_vec));
+            __m256 ci_vec_upper_half = _mm256_cvtepi32_ps(_mm256_cvtepu8_epi32(_mm_srli_si128(ci_vec, 8)));
 
-            // Convert to float
-            __m256 ci_vec_float = _mm256_cvtepi32_ps(ci_vec32);
+            // Calculate precomputed values
+            __m256 precompute_values_lower_half = _mm256_mul_ps(_mm256_mul_ps(
+                    ci_vec_lower_half, _mm256_loadu_ps(alpha + i)), _mm256_loadu_ps(beta + i));
+            __m256 precompute_values_upper_half = _mm256_mul_ps(_mm256_mul_ps(
+                    ci_vec_upper_half, _mm256_loadu_ps(alpha + i + 8)), _mm256_loadu_ps(beta + i + 8));
 
-            // Load alpha and beta
-            __m256 alpha_sqr_values = _mm256_loadu_ps(alphaSqr + i);
-
-            // Calculate precomputed values: i8 * alpha * beta
-            __m256 precompute_values = _mm256_mul_ps(_mm256_mul_ps(ci_vec_float, ci_vec_float), alpha_sqr_values);
-
-            return precompute_values;
+            return _mm256_add_ps(precompute_values_lower_half, precompute_values_upper_half);
         }
 
-        inline void encode_haswell(const float *x, uint8_t *codes, size_t n, int dim, const float *vmin,
-                                    const float *vdiff, const float *alphaSqr) {
-            for (size_t i = 0; i < n; i++) {
-                size_t j = 0;
-                const float *xi = x + i * dim;
-                // We need to skip the last 4 bytes as they are precomputed values
-                uint8_t *ci = codes + i * (dim + 4);
-                __m256 precompute_values = _mm256_setzero_ps();
-                for (; j + 8 <= dim; j += 8) {
-                    __m128i ci_vec = encode_haswell(xi, j, vmin, vdiff);
-                    precompute_values = _mm256_add_ps(calc_precomputed_values_haswell(ci_vec, j, alphaSqr), precompute_values);
-                    _mm_storeu_si128((__m128i *)(ci + j), ci_vec);
-                }
-                // Handle the remaining
-                for (; j < dim; j++) {
-                    ci[j] = encode_serial(xi, j, vmin, vdiff); // Ensure encode_serial is available and works for single elements
-                }
-                // Store precomputed values
-                *reinterpret_cast<float *>(ci + dim) = _mm_cvtss_f32(_mm256_castps256_ps128(precompute_values));
+        inline void encode_haswell_8bit(const float *data, uint8_t *codes, int dim, const float *vmin,
+                                        const float *vdiff, const float *alpha, const float *beta) {
+            int i = 0;
+            __m256 precompute_values = _mm256_setzero_ps();
+            for (; i + 16 <= dim; i += 16) {
+                __m128i ci_vec = encode_haswell(data, i, vmin, vdiff, 256.0f);
+                precompute_values = _mm256_add_ps(calc_precomputed_values_haswell(ci_vec, i, alpha, beta),
+                                                  precompute_values);
+                _mm_storeu_si128((__m128i *) (codes + i), ci_vec);
             }
-        }
-
-        inline __m256 decode_haswell(const uint8_t *code, size_t i, const float *alpha, const float *beta) {
-            __m128i ci_vec = _mm_loadu_si128((__m128i const *)(code + i));
-            __m256i ci_vec32 = _mm256_cvtepu8_epi32(ci_vec);
-            __m256 ci_vec_float = _mm256_cvtepi32_ps(ci_vec32);
-
-            // Load alpha and beta
-            __m256 alpha_values = _mm256_loadu_ps(alpha + i);
-            __m256 beta_values = _mm256_loadu_ps(beta + i);
-
-            // x = alpha * ci + beta
-            __m256 x_values = _mm256_fmadd_ps(alpha_values, ci_vec_float, beta_values);
-
-            return x_values;
-        }
-
-        inline void decode_haswell(const uint8_t *code, float *x, size_t n, int dim, const float *alpha, const float *beta) {
-            for (size_t i = 0; i < n; i++) {
-                size_t j = 0;
-                // We need to skip the last 4 bytes as they are precomputed values
-                const uint8_t *ci = code + i * (dim + 4);
-                float *xi = x + i * dim;
-                for (; j + 8 <= dim; j += 8) {
-                    __m256 x_values = decode_haswell(ci, j, alpha, beta);
-                    _mm256_storeu_ps(xi + j, x_values);
-                }
-                // Handle the remaining
-                for (; j < dim; j++) {
-                    xi[j] = decode_serial(ci, j, alpha, beta); // Ensure decode_serial is available and works for single elements
-                }
+            double precompute_value = _simsimd_reduce_f32x8_haswell(precompute_values);
+            // Handle the remaining
+            for (; i < dim; i++) {
+                codes[i] = encode_serial(data[i], vmin[i], vdiff[i], 256.0f);
+                precompute_value += (double) compute_precomputed_value_serial(codes[i], alpha[i], beta[i]);
             }
+            // Store precomputed values
+            *reinterpret_cast<float *>(codes + dim) = (float)precompute_value;
         }
 
 #pragma clang attribute pop
@@ -555,254 +257,114 @@ namespace fastq {
 #pragma GCC push_options
 #pragma GCC target("avx512f", "avx512vl", "bmi2")
 #pragma clang attribute push(__attribute__((target("avx512f,avx512vl,bmi2"))), apply_to = function)
+        inline __m512 decode_skylake(const __m128i ci_vec, size_t i, const float *alpha, const float *beta) {
+            __m512i ci_vec32 = _mm512_cvtepu8_epi32(ci_vec);
+            __m512 ci_vec_float = _mm512_cvtepi32_ps(ci_vec32);
 
-inline __m512 decode_skylake(const uint8_t *code, size_t i, const float *alpha, const float *beta) {
-    __m128i ci_vec = _mm_loadu_si128((__m128i const *)(code + i));
-    __m512i ci_vec32 = _mm512_cvtepu8_epi32(ci_vec);
-    __m512 ci_vec_float = _mm512_cvtepi32_ps(ci_vec32);
+            // Load alpha and beta
+            __m512 alpha_vec = _mm512_loadu_ps(alpha + i);
+            __m512 beta_vec = _mm512_loadu_ps(beta + i);
 
-    // Load alpha and beta
-    __m512 alpha_values = _mm512_loadu_ps(alpha + i);
-    __m512 beta_values = _mm512_loadu_ps(beta + i);
+            // x = alpha * ci + beta
+            __m512 x_vec = _mm512_fmadd_ps(alpha_vec, ci_vec_float, beta_vec);
 
-    // x = alpha * ci + beta
-    __m512 x_values = _mm512_fmadd_ps(alpha_values, ci_vec_float, beta_values);
+            return x_vec;
+        }
 
-    return x_values;
-}
+        inline void compute_asym_l2sq_skylake_8bit(const float *x, const uint8_t *y, double *result, size_t dim,
+                                              const float *alpha, const float *beta) {
+            __m512 d2_vec = _mm512_setzero();
+            __m512 y_vec, x_vec, d_vec;
+            size_t i = 0;
+            for (; i + 16 <= dim; i += 16) {
+                x_vec = _mm512_loadu_ps(x + i);
+                __m128i codes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(y + i));
+                y_vec = decode_skylake(codes, i, alpha, beta);
+                d_vec = _mm512_sub_ps(x_vec, y_vec);
+                d2_vec = _mm512_fmadd_ps(d_vec, d_vec, d2_vec);
+            }
+            *result = _mm512_reduce_add_ps(d2_vec);
+        }
 
-inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *result, size_t dim,
-                                      const float *alpha, const float *beta) {
-    __m512 d2_vec = _mm512_setzero();
-    __m512 a_vec, b_vec;
-    size_t j = 0;
-    for (; j + 16 <= dim; j += 16) {
-        a_vec = decode_skylake(y, j, alpha, beta);
-        b_vec = _mm512_loadu_ps(x + j);
-        __m512 d_vec = _mm512_sub_ps(a_vec, b_vec);
-        d2_vec = _mm512_fmadd_ps(d_vec, d_vec, d2_vec);
-    }
-    *result = _mm512_reduce_add_ps(d2_vec);
-}
+        inline void compute_sym_l2sq_skylake_8bit(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
+                                                  const float *alphaSqr) {
+            // TODO
+        }
 
+        inline void compute_asym_ip_skylake_8bit(const float *x, const uint8_t *y, double *result, size_t dim,
+                                                 const float *alpha, const float *beta) {
+            __m512 xy_vec = _mm512_setzero();
+            __m512 y_vec, x_vec, d_vec;
+            size_t i = 0;
+            for (; i + 16 <= dim; i += 16) {
+                x_vec = _mm512_loadu_ps(x + i);
+                __m128i codes = _mm_loadu_si128(reinterpret_cast<const __m128i *>(y + i));
+                y_vec = decode_skylake(codes, i, alpha, beta);
+                xy_vec = _mm512_fmadd_ps(x_vec, y_vec, xy_vec);
+            }
+            *result = _mm512_reduce_add_ps(xy_vec);
+        }
+
+        inline void compute_sym_ip_skylake_8bit(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
+                                                const float *alphaSqr) {
+            __m512 xy_vec = _mm512_setzero();
+            size_t i = 0;
+            __m256i x_codes, y_codes;
+            __m512i x_codes16, y_codes16, xy;
+            __m512 lower_half, upper_half, alphaSqr_vec_low, alphaSqr_vec_high;
+            for (; i + 32 <= dim; i += 32) {
+                x_codes = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(x + i));
+                y_codes = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(y + i));
+                // Convert to 16 bit integers
+                x_codes16 = _mm512_cvtepu8_epi16(x_codes);
+                y_codes16 = _mm512_cvtepu8_epi16(y_codes);
+
+                // Multiply and add
+                xy = _mm512_mullo_epi16(x_codes16, y_codes16);
+
+                // Convert to 32-bit integers
+                lower_half = _mm512_cvtepi32_ps(_mm512_cvtepu16_epi32(_mm512_castsi512_si256(xy)));
+                upper_half = _mm512_cvtepi32_ps(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(xy, 1)));
+
+                // xy_vec = _mm512_add_ps(xy_vec, lower_half);
+                alphaSqr_vec_low = _mm512_loadu_ps(alphaSqr + i);
+                alphaSqr_vec_high = _mm512_loadu_ps(alphaSqr + i + 16);
+                xy_vec = _mm512_fmadd_ps(lower_half, alphaSqr_vec_low, xy_vec);
+                xy_vec = _mm512_fmadd_ps(upper_half, alphaSqr_vec_high, xy_vec);
+            }
+            *result = _mm512_reduce_add_ps(xy_vec) + reinterpret_cast<const float *>(x + dim)[0] +
+                      reinterpret_cast<const float *>(y + dim)[0];
+        }
 #pragma clang attribute pop
 #pragma GCC pop_options
 #endif // SIMSIMD_TARGET_SKYLAKE
 #endif // SIMSIMD_TARGET_X86
-
-        // This doesn't use precomputed values
-        class AsymmetricIP : public DistanceComputer<float, uint8_t> {
-        public:
-            explicit AsymmetricIP(int dim, const float *alpha, const float *beta)
-                    : DistanceComputer(dim), alpha(alpha), beta(beta) {};
-
-            ~AsymmetricIP() = default;
-
-            inline void compute_distance(const float *x, const uint8_t *y, double *result) override {
-//#if SIMSIMD_TARGET_NEON
-//                compute_asym_ip_neon(x, y, result, dim, alpha, beta);
-//#else
-                compute_asym_ip_serial(x, y, result, dim, alpha, beta);
-//#endif
-            }
-
-            inline void batch_compute_distances(const float *x, const uint8_t *y, double *results, size_t n) override {
-                for (size_t i = 0; i < n; i++) {
-                    // We need to skip the last 4 bytes as they are precomputed values
-                    compute_distance(x + i * dim, y + i * (dim + 4), results + i);
-                }
-            }
-
-        private:
-            const float *alpha;
-            const float *beta;
-        };
-
-        class AsymmetricCosine : public DistanceComputer<float, uint8_t> {
-        public:
-            explicit AsymmetricCosine(int dim, const float *alpha, const float *beta)
-                    : DistanceComputer(dim), alpha(alpha), beta(beta) {};
-
-            ~AsymmetricCosine() = default;
-
-            inline void compute_distance(const float *x, const uint8_t *y, double *result) override {
-#if SIMSIMD_TARGET_NEON
-                compute_asym_cos_neon(x, y, result, dim, alpha, beta);
-#endif
-            }
-
-            inline void batch_compute_distances(const float *x, const uint8_t *y, double *results,
-                                                size_t n) override {
-                for (size_t i = 0; i < n; i++) {
-                    // We need to skip the last 4 bytes as they are precomputed values
-                    compute_distance(x + i * dim, y + i * (dim + 4), results + i);
-                }
-            }
-
-        private:
-            const float *alpha;
-            const float *beta;
-        };
-
-        // This uses precomputed values
-        class SymmetricIP : public DistanceComputer<uint8_t, uint8_t> {
-        public:
-            explicit SymmetricIP(int dim, const float *alphaSqr, const float *betaSqr) : DistanceComputer(dim),
-                                                                                         alphaSqr(alphaSqr),
-                                                                                         betaSqr(betaSqr) {};
-
-            ~SymmetricIP() = default;
-
-            inline void compute_distance(const uint8_t *x, const uint8_t *y, double *result) override {
-#if SIMSIMD_TARGET_NEON
-                compute_sym_ip_neon(x, y, result, dim, alphaSqr, betaSqr);
-#else
-                compute_sym_ip_serial(x, y, result, dim, alphaSqr, betaSqr);
-#endif
-            }
-
-            inline void
-            batch_compute_distances(const uint8_t *x, const uint8_t *y, double *results, size_t n) override {
-                for (size_t i = 0; i < n; i++) {
-                    // We need to skip the last 4 bytes as they are precomputed values
-                    compute_distance(x + i * (dim + 4), y + i * (dim + 4), results + i);
-                }
-            }
-
-        private:
-            int dim;
-            const float *alphaSqr;
-            const float *betaSqr;
-        };
-
-        class AsymmetricL2Sq : public DistanceComputer<float, uint8_t> {
-        public:
-            explicit AsymmetricL2Sq(int dim, const float *alpha, const float *beta)
-                    : DistanceComputer(dim), alpha(alpha), beta(beta) {
-                decoded = new float[dim];
-            };
-
-            ~AsymmetricL2Sq() {
-                delete[] decoded;
-            }
-
-            inline void compute_distance(const float *x, const uint8_t *y, double *result) override {
-#if SIMSIMD_TARGET_SKYLAKE
-                compute_asym_l2sq_skylake(x, y, result, dim, alpha, beta);
-#elif SIMSIMD_TARGET_NEON
-                compute_asym_l2sqr_neon(x, y, result, dim, alpha, beta);
-#else
-                compute_asym_l2sq_serial(x, y, result, dim, alpha, beta, decoded);
-#endif
-            }
-
-            inline void batch_compute_distances(const float *x, const uint8_t *y, double *results, size_t n) override {
-                for (size_t i = 0; i < n; i++) {
-                    // We need to skip the last 4 bytes as they are precomputed values
-                    compute_distance(x + i * dim, y + i * (dim + 4), results + i);
-                }
-            }
-
-        private:
-            const float *alpha;
-            const float *beta;
-
-            float *decoded;
-        };
-
-        class SymmetricL2Sq : public DistanceComputer<uint8_t, uint8_t> {
-        public:
-            explicit SymmetricL2Sq(int dim, const float *alpha, const float *beta, const float *alphaSqr)
-                    : DistanceComputer(dim), alpha(alpha), beta(beta), alphaSqr(alphaSqr) {
-            };
-
-            ~SymmetricL2Sq() = default;
-
-            inline void compute_distance(const uint8_t *x, const uint8_t *y, double *result) override {
-#if SIMSIMD_TARGET_NEON
-                compute_sym_l2sqr_neon_new(x, y, result, dim, alpha, beta);
-#else
-                compute_sym_ip_serial(x, y, result, dim, alpha, beta);
-#endif
-            }
-
-            inline void
-            batch_compute_distances(const uint8_t *x, const uint8_t *y, double *results, size_t n) override {
-                for (size_t i = 0; i < n; i++) {
-                    // We need to skip the last 4 bytes as they are precomputed values
-                    compute_distance(x + i * (dim + 4), y + i * (dim + 4), results + i);
-                }
-            }
-
-        private:
-            const float *alphaSqr;
-            const float *alpha;
-            const float *beta;
-        };
-
         class SQ8Bit : public Quantizer<uint8_t> {
-            static constexpr size_t NUM_BINS = 512;
-            static constexpr float BREAK_POINT_DATA_RATIO = 0.95f;
+            static constexpr size_t HISTOGRAM_NUM_BINS = 512;
+            static constexpr size_t SCALAR_RANGE = 256;
         public:
-            explicit SQ8Bit(int dim) : Quantizer(dim, dim + 4) {
+            explicit SQ8Bit(int dim, float breakPointDataRatio = 1.0f) : Quantizer(dim, dim + 4),
+                                                                       breakPointDataRatio(breakPointDataRatio) {
                 vmin = new float[dim];
                 vdiff = new float[dim];
                 for (size_t i = 0; i < dim; i++) {
                     vmin[i] = std::numeric_limits<float>::max();
                     vdiff[i] = std::numeric_limits<float>::lowest();
                 }
-
                 alpha = new float[dim];
                 beta = new float[dim];
                 alphaSqr = new float[dim];
                 betaSqr = new float[dim];
-            }
 
-            inline void determine_smallest_breakpoint(size_t n, const float *data) {
-                printf("Histogram\n");
-                // Use histogram to determine the smallest break point.
-                // We will use 256 bins.
-                std::vector<std::vector<uint64_t>> histogram(dim);
+                // initialize the histogram
+                histogram = std::vector<std::vector<std::atomic_uint64_t>>(dim);
                 for (size_t i = 0; i < dim; i++) {
-                    histogram[i].resize(NUM_BINS, 0);
+                    histogram[i] = std::vector<std::atomic_uint64_t>(HISTOGRAM_NUM_BINS);
                 }
-
-                for (size_t i = 0; i < n; i++) {
-                    for (size_t j = 0; j < dim; j++) {
-                        // Determine the bin using vmin and vdiff.
-                        auto bin = static_cast<uint64_t>(((data[i * dim + j] - vmin[j]) / vdiff[j]) * NUM_BINS);
-                        bin = std::min((int) bin, (int) NUM_BINS - 1);
-                        histogram[j][bin]++;
-                    }
-                }
-
-                // Now we have to find the smallest which contains at-least 70% of n of the data.
-                // Find the smallest bin range that contains at least 70% of the data
-                auto threshold = n * BREAK_POINT_DATA_RATIO;
                 for (size_t i = 0; i < dim; i++) {
-                    size_t start_bin = 0;
-                    size_t end_bin = 0;
-                    size_t min_bin_size = NUM_BINS;
-                    size_t sum = 0;
-                    size_t left = 0;
-
-                    // Sliding window approach to find the smallest range
-                    for (size_t right = 0; right < NUM_BINS; right++) {
-                        sum += histogram[i][right];
-
-                        // Shrink the window from the left if the threshold is met
-                        while (sum >= threshold) {
-                            if (right - left < min_bin_size) {
-                                min_bin_size = right - left;
-                                start_bin = left;
-                                end_bin = right;
-                            }
-                            sum -= histogram[i][left];
-                            left++;
-                        }
+                    for (size_t j = 0; j < HISTOGRAM_NUM_BINS; j++) {
+                        histogram[i][j] = 0;
                     }
-                    vmin[i] = vmin[i] + (float) start_bin / NUM_BINS * vdiff[i];
-                    vdiff[i] = (float) (end_bin - start_bin) / NUM_BINS * vdiff[i];
                 }
             }
 
@@ -816,68 +378,95 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
 
                 for (size_t i = 0; i < dim; i++) {
                     vdiff[i] -= vmin[i];
-                }
-
-                for (size_t i = 0; i < 10; i++) {
-                    printf("vmin[%d]: %f, vdiff[%d]: %f\n", i, vmin[i], i, vdiff[i]);
-                }
-
-                determine_smallest_breakpoint(n, x);
-
-                for (size_t i = 0; i < 10; i++) {
-                    printf("vmin[%d]: %f, vdiff[%d]: %f\n", i, vmin[i], i, vdiff[i]);
-                }
-
-                // Precompute alpha and gamma, as well as their squares
-                for (size_t i = 0; i < dim; i++) {
-                    alpha[i] = vdiff[i] / 4.0f;
+                    alpha[i] = vdiff[i] / SCALAR_RANGE;
                     beta[i] = (0.5f * alpha[i]) + vmin[i];
                     alphaSqr[i] = alpha[i] * alpha[i];
                     betaSqr[i] = beta[i] * beta[i];
                 }
+            }
 
-                // print alpha
-                for (size_t i = 0; i < 10; i++) {
-                    printf("alpha[%d]: %f, beta[%d]: %f\n", i, alpha[i], i, beta[i]);
+            inline void determine_breakpoint(size_t n, const float *data) {
+                if (breakPointDataRatio >= 1.0f) {
+                    return;
+                }
+                // Use histogram to determine the smallest break point.
+                // We will use 256 bins.
+                for (size_t i = 0; i < n; i++) {
+                    for (size_t j = 0; j < dim; j++) {
+                        // TODO: This should be using simd instruction.
+                        // Determine the bin using vmin and vdiff.
+                        auto bin = static_cast<uint64_t>(((data[i * dim + j] - vmin[j]) / vdiff[j]) * (float) HISTOGRAM_NUM_BINS);
+                        bin = std::min((int) bin, (int) HISTOGRAM_NUM_BINS - 1);
+                        histogram[j][bin]++;
+                    }
+                }
+                numTrainedVecs += n;
+
+                // Now we have to find the smallest which contains at-least 70% of n of the data.
+                // Find the smallest bin range that contains at least 70% of the data
+                auto threshold = n * breakPointDataRatio;
+                for (size_t i = 0; i < dim; i++) {
+                    size_t start_bin = 0;
+                    size_t end_bin = 0;
+                    size_t min_bin_size = HISTOGRAM_NUM_BINS;
+                    size_t sum = 0;
+                    size_t left = 0;
+
+                    // Sliding window approach to find the smallest range
+                    for (size_t right = 0; right < HISTOGRAM_NUM_BINS; right++) {
+                        sum += histogram[i][right];
+
+                        // Shrink the window from the left if the threshold is met
+                        while (sum >= threshold) {
+                            if (right - left < min_bin_size) {
+                                min_bin_size = right - left;
+                                start_bin = left;
+                                end_bin = right;
+                            }
+                            sum -= histogram[i][left];
+                            left++;
+                        }
+                    }
+                    vmin[i] = vmin[i] + (float) start_bin / HISTOGRAM_NUM_BINS * vdiff[i];
+                    vdiff[i] = (float) (end_bin - start_bin) / HISTOGRAM_NUM_BINS * vdiff[i];
                 }
             }
 
+
+
             inline void encode(const float *x, uint8_t *codes, size_t n) const override {
-//#if SIMSIMD_TARGET_NEON
-//                encode_neon(x, codes, n, dim, vmin, vdiff, alpha, beta);
-//#else
-                encode_serial(x, codes, n, dim, vmin, vdiff, alpha, beta);
-//#endif
+                for (size_t i = 0; i < n; i++) {
+                    const float *xi = x + i * dim;
+                    // We need to skip the last 4 bytes as they are precomputed values
+                    uint8_t *ci = codes + i * codeSize;
+#if SIMSIMD_TARGET_HASWELL
+                    encode_haswell_8bit(xi, ci, dim, vmin, vdiff, alpha, beta);
+#elif SIMSIMD_TARGET_NEON
+                    encode_neon_8bit(xi, ci, dim, vmin, vdiff, alpha, beta);
+#else
+                    encode_serial_8bit(xi, ci, dim, vmin, vdiff, alpha, beta, 0);
+#endif
+                }
             }
 
-            inline void decode(const uint8_t *code, float *x, size_t n) const override {
-#if SIMSIMD_TARGET_NEON
-                decode_neon(code, x, n, dim, alpha, beta);
-#else
-                decode_serial(code, x, n, dim, alpha, beta);
-#endif
+            inline void decode(const uint8_t *codes, float *x, size_t n) const override {
+                for (size_t i = 0; i < n; i++) {
+                    const uint8_t *ci = codes + i * codeSize;
+                    float *xi = x + i * dim;
+                    for (size_t j = 0; j < dim; j++) {
+                        xi[j] = decode_serial(ci[j], alpha[j], beta[j]);
+                    }
+                }
             }
 
             inline std::unique_ptr<DistanceComputer<float, uint8_t>>
             get_asym_distance_computer(DistanceType type) const override {
-                switch (type) {
-                    case DistanceType::L2:
-                        return std::make_unique<AsymmetricL2Sq>(dim, alpha, beta);
-                    case DistanceType::COSINE:
-                        return std::make_unique<AsymmetricCosine>(dim, alpha, beta);
-                    default:
-                        throw std::runtime_error("Unsupported distance type");
-                }
+                throw std::runtime_error("Not implemented");
             }
 
             inline std::unique_ptr<DistanceComputer<uint8_t, uint8_t>>
             get_sym_distance_computer(DistanceType type) const override {
-                switch (type) {
-                    case DistanceType::L2:
-                        return std::make_unique<SymmetricL2Sq>(dim, alpha, beta, alphaSqr);
-                    default:
-                        throw std::runtime_error("Unsupported distance type");
-                }
+                throw std::runtime_error("Not implemented");
             }
 
             ~SQ8Bit() {
@@ -898,6 +487,11 @@ inline void compute_asym_l2sq_skylake(const float *x, const uint8_t *y, double *
             float *beta;
             float *alphaSqr;
             float *betaSqr;
+
+            // Training
+            float breakPointDataRatio;
+            uint64_t numTrainedVecs;
+            std::vector<std::vector<std::atomic_uint64_t>> histogram;
         };
     } // namespace sq
 } // namespace fastq

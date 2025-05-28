@@ -92,7 +92,7 @@ perf record -e cycles:ppp -- ./orangedb_main -basePath /home/g3sehgal/projects/d
 
 ./build/release/bin/orangedb_main -run generateGT -basePath /home/centos/vector_dataset/sift10m -numVectors 10000000 -k 100 -gtPath /home/centos/vector_dataset/sift10m/gt.bin
 
-./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/wiki/base.fvecs -queryVectorPath /home/centos/vector_dataset/wiki/uncorrelated/queries.fvecs -groundTruthPath /home/centos/vector_dataset/wiki/gt.bin -k 100 -numVectors 100000000 -nIter 30 -nThreads 64 -numQueries 50 -clusterSize 500 -nProbes 20 -readFromDisk 0 -storagePath /home/centos/vector_dataset/wiki/faiss_ivf_flat_index.bin
+./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/wiki/base.fvecs -queryVectorPath /home/centos/vector_dataset/wiki/uncorrelated/queries.fvecs -groundTruthPath /home/centos/vector_dataset/wiki/gt.bin -k 100 -numVectors 100000000 -sampleSize 1000000 -nIter 10 -nThreads 64 -numQueries 50 -clusterSize 500 -nProbes 20 -readFromDisk 0 -storagePath /home/centos/vector_dataset/wiki/faiss_ivf_flat_index.bin
 
 ./build/release/bin/orangedb_main -run benchmarkClustering -baseVectorPath /home/centos/vector_dataset/wiki/base.fvecs -queryVectorPath /home/centos/vector_dataset/wiki/uncorrelated/queries.fvecs -groundTruthPath /home/centos/vector_dataset/wiki/gt.bin -k 100 -numVectors 100000000 -nIter 10 -clusterSize 500 -lambda 0 -nProbes 60 -numThreads 64
 

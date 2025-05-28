@@ -16,10 +16,10 @@ namespace orangedb {
     constexpr vector_idx_t INVALID_VECTOR_ID = UINT64_MAX;
 
     [[noreturn]] inline void failCheckArgument(
-            const char *condition_name, const char *file, int linenr, const char *comment) {
+        const char *condition_name, const char *file, int linenr, const char *comment) {
         throw std::invalid_argument(fmt::format(
-                "Assertion failed in file \"{}\" on line {}: {} with comment: {}", file, linenr, condition_name,
-                comment));
+            "Assertion failed in file \"{}\" on line {}: {} with comment: {}", file, linenr, condition_name,
+            comment));
     }
 
 #define CHECK_ARGUMENT(condition, comment)                                                            \
@@ -111,8 +111,8 @@ namespace orangedb {
         CHECK_ARGUMENT(sz % (4 + d * sizeof(uint8_t)) == 0, "weird file size");
 
         // Calculate the total number of vectors and apply the limit
-        size_t total_n = sz / (4 + d * sizeof(uint8_t));  // Total number of vectors
-        size_t n = (total_n > max_rows) ? max_rows : total_n;  // Limit the number of vectors to max_rows
+        size_t total_n = sz / (4 + d * sizeof(uint8_t)); // Total number of vectors
+        size_t n = (total_n > max_rows) ? max_rows : total_n; // Limit the number of vectors to max_rows
         *d_out = d;
         *n_out = n;
 
@@ -130,7 +130,7 @@ namespace orangedb {
         // Convert uint8_t data to float and copy to aligned memory
         for (size_t i = 0; i < n; i++) {
             for (size_t j = 0; j < d; j++) {
-                align_x[i * d + j] = static_cast<float>(x[4 + i * (4 + d) + j]);  // Skip first 4 bytes (dimension)
+                align_x[i * d + j] = static_cast<float>(x[4 + i * (4 + d) + j]); // Skip first 4 bytes (dimension)
             }
         }
 
@@ -150,7 +150,7 @@ namespace orangedb {
         }
 
         // Allocate a temporary buffer for storing uint8_t values
-        auto *buffer = new uint8_t[(d + 4) * n];  // 4 bytes for dimension + d bytes for vector values per vector
+        auto *buffer = new uint8_t[(d + 4) * n]; // 4 bytes for dimension + d bytes for vector values per vector
 
         // Fill the buffer with dimension + vector data
         for (size_t i = 0; i < n; i++) {
@@ -191,7 +191,7 @@ namespace orangedb {
         return (int *) readFvecFile(fName, d_out, n_out);
     }
 
-    static float* readFbinFile(const char *fName, size_t *d_out, size_t *n_out) {
+    static float *readFbinFile(const char *fName, size_t *d_out, size_t *n_out) {
         FILE *f = fopen(fName, "rb");
         if (!f) {
             fprintf(stderr, "could not open %s\n", fName);
@@ -237,7 +237,8 @@ namespace orangedb {
     }
 
     struct RandomGenerator {
-        RandomGenerator(int seed) : mt(seed) {};
+        RandomGenerator(int seed) : mt(seed) {
+        };
 
         inline float randFloat() {
             return mt() / float(mt.max());
@@ -270,4 +271,175 @@ namespace orangedb {
 
         std::mt19937 mt;
     };
+
+
+#if SIMSIMD_TARGET_ARM
+#if SIMSIMD_TARGET_NEON
+#pragma GCC push_options
+#pragma GCC target("+simd")
+#pragma clang attribute push(__attribute__((target("+simd"))), apply_to = function)
+
+    inline static float compute_normalized_factor_neon(const float *vector, int dim) {
+        float32x4_t sum_vec = vdupq_n_f32(0.0f); // Initialize sum vector to 0
+        int i = 0;
+        // Process 4 elements at a time
+        for (; i + 4 <= dim; i += 4) {
+            float32x4_t vec = vld1q_f32(vector + i); // Load 4 elements
+            sum_vec = vfmaq_f32(sum_vec, vec, vec); // Square each element
+        }
+        // Horizontal addition of sum_vec components
+        float sum = vaddvq_f32(sum_vec);
+
+        // Handle the remaining elements (if dim is not divisible by 4)
+        for (; i < dim; i++) {
+            sum += vector[i] * vector[i];
+        }
+
+        return 1.0f / std::sqrt(sum); // Compute the normalization factor
+    }
+
+    inline static void normalize_vectors_neon(const float *vector, int dim, float *normalized_vector) {
+        float norm = compute_normalized_factor_neon(vector, dim);
+        float32x4_t norm_vec = vdupq_n_f32(norm); // Create a vector with the normalization factor
+        int i = 0;
+        // Process 4 elements at a time
+        for (; i + 4 <= dim; i += 4) {
+            float32x4_t vec = vld1q_f32(vector + i); // Load 4 elements
+            float32x4_t normed_vec = vmulq_f32(vec, norm_vec); // Normalize the vector
+            vst1q_f32(normalized_vector + i, normed_vec); // Store the normalized vector
+        }
+
+        // Handle the remaining elements (if dim is not divisible by 4)
+        for (; i < dim; i++) {
+            normalized_vector[i] = vector[i] * norm;
+        }
+    }
+
+#pragma clang attribute pop
+#pragma GCC pop_options
+#endif
+#endif
+
+#if SIMSIMD_TARGET_X86
+#if SIMSIMD_TARGET_HASWELL
+#pragma GCC push_options
+#pragma GCC target("avx2", "fma")
+#pragma clang attribute push(__attribute__((target("avx2,fma"))), apply_to = function)
+
+inline static float compute_normalized_factor_haswell(const float *vector, int dim) {
+    __m256 sum_vec = _mm256_setzero_ps();  // Initialize sum vector to 0
+    int i = 0;
+
+    // Process 8 elements at a time using AVX2
+    for (; i + 8 <= dim; i += 8) {
+        __m256 vec = _mm256_loadu_ps(vector + i);
+        // Use FMA for multiply-add operation: sum += vec * vec
+        sum_vec = _mm256_fmadd_ps(vec, vec, sum_vec);
+    }
+
+    // Reduce with double precision for better accuracy
+    double sum = _simsimd_reduce_f32x8_haswell(sum_vec);
+
+    // Handle remaining elements in double precision
+    for (; i < dim; i++) {
+        sum += vector[i] * vector[i];
+    }
+
+    return 1.0 / std::sqrt(sum);
+}
+
+inline static void normalize_vectors_haswell(const float *vector, int dim, float *normalized_vector) {
+    float norm = compute_normalized_factor_haswell(vector, dim);
+    __m256 norm_vec = _mm256_set1_ps(norm);  // Broadcast norm to all elements
+    int i = 0;
+
+    // Process 8 elements at a time
+    for (; i + 8 <= dim; i += 8) {
+        __m256 vec = _mm256_loadu_ps(vector + i);
+        __m256 normed_vec = _mm256_mul_ps(vec, norm_vec);
+        _mm256_storeu_ps(normalized_vector + i, normed_vec);
+    }
+
+    // Handle remaining elements
+    for (; i < dim; i++) {
+        normalized_vector[i] = vector[i] * norm;
+    }
+}
+
+#pragma clang attribute pop
+#pragma GCC pop_options
+#endif // SIMSIMD_TARGET_HASWELL
+
+#if SIMSIMD_TARGET_SKYLAKE
+#pragma GCC push_options
+#pragma GCC target("avx512f", "avx512vl", "bmi2")
+#pragma clang attribute push(__attribute__((target("avx512f,avx512vl,bmi2"))), apply_to = function)
+    inline static float compute_normalized_factor_skylake(const float *vector, int dim) {
+        __m512 sum_vec = _mm512_setzero_ps();  // Initialize sum vector to 0
+        int i = 0;
+
+        for (; i + 16 <= dim; i += 16) {
+            __m512 vec = _mm512_loadu_ps(vector + i);     // Load 16 elements
+            sum_vec= _mm512_fmadd_ps(vec, vec, sum_vec);     // Square each element
+        }
+
+        float sum = _mm512_reduce_add_ps(sum_vec);
+
+        for (; i < dim; i++) {
+            sum += vector[i] * vector[i];
+        }
+
+        return 1.0f / std::sqrt(sum); // Compute the normalization factor
+    }
+
+    inline static void normalize_vectors_skylake(const float *vector, int dim, float *normalized_vector) {
+        float norm = compute_normalized_factor_skylake(vector, dim);
+        __m512 norm_vec = _mm512_set1_ps(norm); // Broadcast norm to all elements
+        int i = 0;
+        for (; i + 16 <= dim; i += 16) {
+            __m512 vec = _mm512_loadu_ps(vector + i);
+            __m512 normed_vec = _mm512_mul_ps(vec, norm_vec);
+            _mm512_storeu_ps(normalized_vector + i, normed_vec);
+        }
+        for (; i < dim; i++) {
+            normalized_vector[i] = vector[i] * norm;
+        }
+    }
+#pragma clang attribute pop
+#pragma GCC pop_options
+#endif // SIMSIMD_TARGET_SKYLAKE
+#endif // SIMSIMD_TARGET_X86
+
+
+    // Normalize the vectors
+    inline static float compute_normalized_factor(const float *vector, int dim) {
+#if SIMSIMD_TARGET_NEON
+        return compute_normalized_factor_neon(vector, dim);
+#elif SIMSIMD_TARGET_SKYLAKE
+            return compute_normalized_factor_skylake(vector, dim);
+#elif SIMSIMD_TARGET_HASWELL
+            return compute_normalized_factor_haswell(vector, dim);
+#else
+            float norm = 0;
+            for (int i = 0; i < dim; i++) {
+                norm += vector[i] * vector[i];
+            }
+            return 1.0f / std::sqrt(norm);
+#endif
+    }
+
+    inline static void normalize_vectors(const float *vector, int dim, float *normalized_vector) {
+#if SIMSIMD_TARGET_NEON
+        normalize_vectors_neon(vector, dim, normalized_vector);
+#elif SIMSIMD_TARGET_SKYLAKE
+            normalize_vectors_skylake(vector, dim, normalized_vector);
+#elif SIMSIMD_TARGET_HASWELL
+            normalize_vectors_haswell(vector, dim, normalized_vector);
+#else
+            float norm = compute_normalized_factor(vector, dim);
+            for (int i = 0; i < dim; i++) {
+                normalized_vector[i] = vector[i] * norm;
+            }
+#endif
+    }
 } // namespace orange
