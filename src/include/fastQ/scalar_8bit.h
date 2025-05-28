@@ -357,9 +357,9 @@ namespace fastq {
                 betaSqr = new float[dim];
 
                 // initialize the histogram
-                histogram = std::vector<std::vector<std::atomic_uint64_t>>(dim);
+                histogram = std::vector<std::vector<uint64_t>>(dim);
                 for (size_t i = 0; i < dim; i++) {
-                    histogram[i] = std::vector<std::atomic_uint64_t>(HISTOGRAM_NUM_BINS);
+                    histogram[i] = std::vector<uint64_t>(HISTOGRAM_NUM_BINS);
                 }
                 for (size_t i = 0; i < dim; i++) {
                     for (size_t j = 0; j < HISTOGRAM_NUM_BINS; j++) {
