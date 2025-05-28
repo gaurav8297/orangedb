@@ -2202,7 +2202,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-    auto quantizer = faiss::IndexFlatL2(baseDimension);
+    auto quantizer = faiss::IndexFlatIP(baseDimension);
     auto numCentroids = baseNumVectors / clusterSize;
     faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, faiss::METRIC_INNER_PRODUCT);
     faiss::IndexIVFFlat* index = &idx;

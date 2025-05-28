@@ -159,11 +159,11 @@ namespace orangedb {
 
         void load_from_disk(const std::string &file_path);
 
-        std::unique_ptr<DistanceComputer> getDistanceComputer(const float *data, int n) const {
+        std::unique_ptr<DistanceComputer<float>> getDistanceComputer(const float *data, int n) const {
             if (config.distanceType == L2) {
-                return std::make_unique<L2DistanceComputer>(data, dim, n);
+                return std::make_unique<L2DistanceComputer>(dim);
             }
-            return std::make_unique<CosineDistanceComputer>(data, dim, n);
+            return std::make_unique<CosineDistanceComputer>(dim);
         }
 
     private:

@@ -432,8 +432,6 @@ namespace fastq {
                 }
             }
 
-
-
             inline void encode(const float *x, uint8_t *codes, size_t n) const override {
                 for (size_t i = 0; i < n; i++) {
                     const float *xi = x + i * dim;
@@ -457,6 +455,18 @@ namespace fastq {
                         xi[j] = decode_serial(ci[j], alpha[j], beta[j]);
                     }
                 }
+            }
+
+            inline const float* getAlpha() const {
+                return alpha;
+            }
+
+            inline const float* getBeta() const {
+                return beta;
+            }
+
+            inline const float* getAlphaSqr() const {
+                return alphaSqr;
             }
 
             inline std::unique_ptr<DistanceComputer<float, uint8_t>>
