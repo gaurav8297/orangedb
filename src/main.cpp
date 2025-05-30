@@ -1256,7 +1256,7 @@ int tuneEfByStep(std::function<double(int)> getRecall,
     // 1) Evaluate at efMin
     double recallMin = getRecall(efMin);
     printf("efMin: %d, recall: %f\n", efMin, recallMin);
-    if (recallMin >= targetLow && recallMin <= targetHigh) {
+    if (recallMin >= targetLow) {
         return efMin;
     }
 
