@@ -45,7 +45,7 @@ namespace orangedb {
     }
 
     void HNSW::searchNearestOnLevel(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             level_t level,
             vector_idx_t &nearest,
             double &nearestDist,
@@ -77,7 +77,7 @@ namespace orangedb {
     }
 
     void HNSW::searchNeighbors(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             level_t level,
             std::priority_queue<NodeDistCloser> &results,
             vector_idx_t entrypoint,
@@ -140,7 +140,7 @@ namespace orangedb {
     }
 
     void HNSW::searchNeighborsOnLastLevel(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             std::priority_queue<NodeDistCloser> &results,
             vector_idx_t entrypoint,
             double entrypointDist,
@@ -222,7 +222,7 @@ namespace orangedb {
     }
 
     void HNSW::searchNeighborsOnLastLevel1(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             std::priority_queue<NodeDistCloser> &results,
             vector_idx_t entrypoint,
             double entrypointDist,
@@ -303,7 +303,7 @@ namespace orangedb {
     //       Another idea: Run shrink with smaller alpha, if the nodes reduced significantly, use it with higher alpha
     //       Another idea: Use centroids to check the equality condition
     void HNSW::shrinkNeighbors(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             vector_idx_t id,
             std::priority_queue<NodeDistCloser> &results,
             int maxSize,
@@ -338,7 +338,7 @@ namespace orangedb {
             bool good = true;
             for (NodeDistFarther &nodeB: result) {
                 double distNodeAB;
-                dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), dim, &distNodeAB);
+                dc->computeDistance(getActualId(level, nodeA.id), getActualId(level, nodeB.id), &distNodeAB);
                 stats.totalDistCompDuringShrink++;
                 if ((config.minAlpha * distNodeAB) < distNodeAQ) {
                     good = false;
@@ -389,7 +389,7 @@ namespace orangedb {
 
     // It is assumed that the node is already locked.
     void HNSW::makeConnection(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             vector_idx_t src,
             vector_idx_t dest,
             double distSrcDest,
@@ -439,7 +439,7 @@ namespace orangedb {
     }
 
     void HNSW::addNodeOnLevel(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             vector_idx_t id,
             level_t level,
             vector_idx_t entrypoint,
@@ -467,7 +467,7 @@ namespace orangedb {
     }
 
     void HNSW::addNode(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             std::vector<vector_idx_t> node_id,
             level_t node_level,
             std::vector<omp_lock_t> &locks,
@@ -592,7 +592,7 @@ namespace orangedb {
         {
 //            auto asym_dc = quantizer->get_asym_distance_computer(fastq::DistanceType::L2);
 //            auto sym_dc = quantizer->get_sym_distance_computer(fastq::DistanceType::L2);
-            DistanceComputer *localDc = new L2DistanceComputer(data, storage->dim, n);
+            auto localDc = createDistanceComputer(data, storage->dim, n, L2);
 //            DistanceComputer *localDc = new QuantizedDistanceComputer(storage->codes, asym_dc.get(), sym_dc.get(),
 //                                                                      storage->code_size);
             VisitedTable visited(n);
@@ -600,7 +600,7 @@ namespace orangedb {
 #pragma omp for schedule(static)
             for (size_t i = 0; i < n; i++) {
                 localDc->setQuery(storage->data + ((size_t)i * storage->dim));
-                addNode(localDc, node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
+                addNode(localDc.get(), node_ids[i], node_ids[i].size() - 1, locks, visited, localStats);
                 if (i % 100000 == 0) {
                     spdlog::warn("Inserted 100000!!");
                 }
@@ -634,20 +634,20 @@ namespace orangedb {
             VisitedTable &visited,
             std::priority_queue<NodeDistCloser> &results,
             Stats &stats) {
-        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
-        dc.setQuery(query);
+        auto dc = createDistanceComputer(storage->data, storage->dim, storage->numPoints, L2);
+        dc->setQuery(query);
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = storage->entryPoint;
         double nearestDist;
         int level = storage->maxLevel;
-        dc.computeDistance(getActualId(level, nearestID), &nearestDist);
+        dc->computeDistance(getActualId(level, nearestID), &nearestDist);
         // Update the nearest node
         for (; level > 0; level--) {
-            searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
+            searchNearestOnLevel(dc.get(), level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
         searchNeighborsOnLastLevel(
-                &dc,
+                dc.get(),
                 results,
                 nearestID,
                 nearestDist,
@@ -752,23 +752,23 @@ namespace orangedb {
             std::priority_queue<NodeDistCloser> &results,
             Stats &stats,
             PocTaskScheduler *scheduler) {
-        CosineDistanceComputer dc = CosineDistanceComputer(storage->data, storage->dim, storage->numPoints);
-        dc.setQuery(query);
+        auto dc = createDistanceComputer(storage->data, storage->dim, storage->numPoints, COSINE);
+        dc->setQuery(query);
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = storage->entryPoint;
         double nearestDist;
         int level = storage->maxLevel;
-        dc.computeDistance(getActualId(level, nearestID), &nearestDist);
+        dc->computeDistance(getActualId(level, nearestID), &nearestDist);
         // Update the nearest node
         for (; level > 1; level--) {
-            searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
+            searchNearestOnLevel(dc.get(), level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
         VisitedTable localVisited(storage->numPoints);
 
         if (config.searchParallelAlgorithm == "none") {
             searchNeighborsOnLastLevel(
-                    &dc,
+                    dc.get(),
                     results,
                     nearestID,
                     nearestDist,
@@ -781,7 +781,7 @@ namespace orangedb {
 
         // search atleast 50 Local minima ANN
         searchNeighbors(
-                &dc,
+                dc.get(),
                 1,
                 results,
                 nearestID,
@@ -807,13 +807,13 @@ namespace orangedb {
 
         // Parallel search
         if (config.searchParallelAlgorithm == "et") {
-            searchParallelSyncAfterEveryIter(&dc, results, visited, newEfSearch, stats, scheduler);
+            searchParallelSyncAfterEveryIter(dc.get(), results, visited, newEfSearch, stats, scheduler);
         } else if (config.searchParallelAlgorithm == "pq") {
-            searchParallelWithParallelQueue(&dc, results, visited, newEfSearch, stats);
+            searchParallelWithParallelQueue(dc.get(), results, visited, newEfSearch, stats);
         } else if (config.searchParallelAlgorithm == "part") {
-            searchParallelWithPartitioning(&dc, results, visited, newEfSearch, stats);
+            searchParallelWithPartitioning(dc.get(), results, visited, newEfSearch, stats);
         } else if (config.searchParallelAlgorithm == "deltaStepping") {
-            searchParallelWithDeltaStepping(&dc, results, visited, newEfSearch, stats);
+            searchParallelWithDeltaStepping(dc.get(), results, visited, newEfSearch, stats);
         } else {
             throw std::runtime_error("Unknown search parallel algorithm");
         }
@@ -940,7 +940,7 @@ namespace orangedb {
 //        return m;
 //    }
 
-    int HNSW::findNextKNeighboursV2(DistanceComputer* dc, vector_idx_t entrypoint, NodeDistCloser *nbrs,
+    int HNSW::findNextKNeighboursV2(DelegateDC<float>* dc, vector_idx_t entrypoint, NodeDistCloser *nbrs,
                                     AtomicVisitedTable &visited, int minK, int maxNeighboursCheck) {
         auto neighbors = storage->get_neighbors(0);
         size_t begin, end;
@@ -1031,7 +1031,7 @@ namespace orangedb {
     }
 
     void HNSW::searchParallelSyncAfterEveryIter(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             std::priority_queue<NodeDistCloser> &results,
             AtomicVisitedTable &visited,
             uint64_t efSearch,
@@ -1141,7 +1141,7 @@ namespace orangedb {
     }
 
     void HNSW::searchParallelWithParallelQueue(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             std::priority_queue<NodeDistCloser> &results,
             AtomicVisitedTable &visited,
             uint64_t efSearch,
@@ -1271,7 +1271,7 @@ namespace orangedb {
     }
 
     void HNSW::searchParallelWithPartitioning(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             std::priority_queue<NodeDistCloser> &results,
             AtomicVisitedTable &visited,
             uint64_t efSearch,
@@ -1356,7 +1356,7 @@ namespace orangedb {
     }
 
     void HNSW::searchParallelWithDeltaStepping(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             std::priority_queue<NodeDistCloser> &results,
             AtomicVisitedTable &visited,
             uint64_t efSearch,
@@ -1494,7 +1494,7 @@ namespace orangedb {
     }
 
     void HNSW::deleteNodes(const vector_idx_t *deletedIds, size_t n, int dim, Stats &stats) {
-        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
+        auto dc = createDistanceComputer(storage->data, storage->dim, storage->numPoints, L2);
         std::vector<omp_lock_t> locks(storage->numPoints);
         for (int i = 0; i < storage->numPoints; i++) {
             omp_init_lock(&locks[i]);
@@ -1514,7 +1514,7 @@ namespace orangedb {
 
 #pragma omp for schedule(static)
             for (int i = 0; i < n; i++) {
-                deleteNode(&dc, deletedIds[i], locks, infVector, dim, visited, localStats);
+                deleteNode(dc.get(), deletedIds[i], locks, infVector, dim, visited, localStats);
                 if (i % 10000 == 0) {
                     spdlog::warn("Deleted 10000!!");
                 }
@@ -1531,7 +1531,7 @@ namespace orangedb {
     }
 
     void HNSW::searchNeighborsOnLastLevelWithFilterA(
-            orangedb::DistanceComputer *dc,
+            orangedb::DelegateDC<float> *dc,
             std::priority_queue<NodeDistCloser> &results,
             orangedb::vector_idx_t entrypoint,
             double entrypointDist,
@@ -1618,7 +1618,7 @@ namespace orangedb {
     }
 
     int HNSW::findNextFilteredKNeighbours(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             vector_idx_t entrypoint,
             std::vector<vector_idx_t> &nbrs,
             const uint8_t *filterMask,
@@ -1696,7 +1696,7 @@ namespace orangedb {
     }
 
     void HNSW::searchNeighborsOnLastLevelWithFilterB(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             std::priority_queue<NodeDistCloser> &results,
             vector_idx_t entrypoint,
             double entrypointDist,
@@ -1796,20 +1796,20 @@ namespace orangedb {
             std::priority_queue<NodeDistCloser> &results,
             const uint8_t *filterMask,
             orangedb::Stats &stats) {
-        L2DistanceComputer dc = L2DistanceComputer(storage->data, storage->dim, storage->numPoints);
-        dc.setQuery(query);
+        auto dc = createDistanceComputer(storage->data, storage->dim, storage->numPoints, L2);
+        dc->setQuery(query);
         int newEfSearch = std::max(k, efSearch);
         vector_idx_t nearestID = storage->entryPoint;
         double nearestDist;
         int level = storage->maxLevel;
-        dc.computeDistance(getActualId(level, nearestID), &nearestDist);
+        dc->computeDistance(getActualId(level, nearestID), &nearestDist);
         // Update the nearest node
         for (; level > 0; level--) {
-            searchNearestOnLevel(&dc, level, nearestID, nearestDist, stats);
+            searchNearestOnLevel(dc.get(), level, nearestID, nearestDist, stats);
             nearestID = storage->next_level_ids[level][nearestID];
         }
         searchNeighborsOnLastLevelWithFilterB(
-                &dc,
+                dc.get(),
                 results,
                 nearestID,
                 nearestDist,
@@ -1821,7 +1821,7 @@ namespace orangedb {
     }
 
     void HNSW::deleteNode(
-            DistanceComputer* dc,
+            DelegateDC<float>* dc,
             orangedb::vector_idx_t deletedId,
             std::vector<omp_lock_t> &locks,
             const float *infVector,
@@ -1925,7 +1925,7 @@ namespace orangedb {
     }
 
     void HNSW::deleteNodeV2(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             vector_idx_t deletedId,
             std::vector<omp_lock_t> &locks,
             const float *infVector,
@@ -1939,7 +1939,7 @@ namespace orangedb {
     //        Delete vector
     //        Run shrink in the end & update
     void HNSW::deleteNodeV3(
-            DistanceComputer *dc,
+            DelegateDC<float> *dc,
             vector_idx_t deletedId,
             std::vector<omp_lock_t> &locks,
             const float *infVector,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fstream>
 #include <vector>
 #include <simsimd/simsimd.h>
 #include <fastQ/fastq.h>
@@ -375,7 +376,9 @@ namespace fastq {
                         vdiff[j] = std::max(vdiff[j], x[i * dim + j]);
                     }
                 }
+            }
 
+            inline void finalize_train() {
                 for (size_t i = 0; i < dim; i++) {
                     vdiff[i] -= vmin[i];
                     alpha[i] = vdiff[i] / SCALAR_RANGE;
@@ -454,6 +457,47 @@ namespace fastq {
                     for (size_t j = 0; j < dim; j++) {
                         xi[j] = decode_serial(ci[j], alpha[j], beta[j]);
                     }
+                }
+            }
+
+            void flush_to_disk(std::ofstream& out) const {
+                // Write the basic fields
+                out.write(reinterpret_cast<const char *>(&dim), sizeof(dim));
+                out.write(reinterpret_cast<const char *>(&breakPointDataRatio), sizeof(breakPointDataRatio));
+                out.write(reinterpret_cast<const char *>(&numTrainedVecs), sizeof(numTrainedVecs));
+                // Write the vmin and vdiff
+                out.write(reinterpret_cast<const char *>(vmin), dim * sizeof(float));
+                out.write(reinterpret_cast<const char *>(vdiff), dim * sizeof(float));
+                // Write the alpha and beta
+                out.write(reinterpret_cast<const char *>(alpha), dim * sizeof(float));
+                out.write(reinterpret_cast<const char *>(beta), dim * sizeof(float));
+                // Write the alphaSqr and betaSqr
+                out.write(reinterpret_cast<const char *>(alphaSqr), dim * sizeof(float));
+                out.write(reinterpret_cast<const char *>(betaSqr), dim * sizeof(float));
+                // Write the histogram
+                for (size_t i = 0; i < dim; i++) {
+                    out.write(reinterpret_cast<const char *>(histogram[i].data()), HISTOGRAM_NUM_BINS * sizeof(uint64_t));
+                }
+            }
+
+            void load_from_disk(std::ifstream& in) {
+                // Read the basic fields
+                in.read(reinterpret_cast<char *>(&dim), sizeof(dim));
+                in.read(reinterpret_cast<char *>(&breakPointDataRatio), sizeof(breakPointDataRatio));
+                in.read(reinterpret_cast<char *>(&numTrainedVecs), sizeof(numTrainedVecs));
+                // Read the vmin and vdiff
+                in.read(reinterpret_cast<char *>(vmin), dim * sizeof(float));
+                in.read(reinterpret_cast<char *>(vdiff), dim * sizeof(float));
+                // Read the alpha and beta
+                in.read(reinterpret_cast<char *>(alpha), dim * sizeof(float));
+                in.read(reinterpret_cast<char *>(beta), dim * sizeof(float));
+                // Read the alphaSqr and betaSqr
+                in.read(reinterpret_cast<char *>(alphaSqr), dim * sizeof(float));
+                in.read(reinterpret_cast<char *>(betaSqr), dim * sizeof(float));
+                // Read the histogram
+                for (size_t i = 0; i < dim; i++) {
+                    histogram[i].resize(HISTOGRAM_NUM_BINS);
+                    in.read(reinterpret_cast<char *>(histogram[i].data()), HISTOGRAM_NUM_BINS * sizeof(uint64_t));
                 }
             }
 

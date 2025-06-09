@@ -1015,7 +1015,6 @@ int HNSW::navix_batch_compute_distance(
             node_array[i + 3],
             dis[0],
             dis[1],
-
             dis[2],
             dis[3]);
         stats.ndis += 4;

@@ -744,10 +744,10 @@ void generateFilterGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    CosineDistanceComputer dc(vectors, dim, numVectors);
+    auto dc = createDistanceComputer(vectors, dim, numVectors, COSINE);
 #pragma omp parallel
     {
-        auto localDc = dc.clone();
+        auto localDc = dc->clone();
         IndexOneNN index(localDc.get(), dim, numVectors);
 #pragma omp for schedule(static)
         for (size_t i = 0; i < queryNumVectors; i++) {
@@ -858,10 +858,10 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    CosineDistanceComputer dc(vectors, dim, numVectors);
+    auto dc = createDistanceComputer(vectors, dim, numVectors, COSINE);
 #pragma omp parallel
     {
-        auto localDc = dc.clone();
+        auto localDc = dc->clone();
         IndexOneNN index(localDc.get(), dim, numVectors);
 #pragma omp for schedule(dynamic, 100)
         for (size_t i = 0; i < queryNumVectors; i++) {
@@ -1229,16 +1229,16 @@ void calculate_dists(InputParser &input) {
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readBvecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
 
-    L2DistanceComputer dc(baseVecs, baseDimension, baseNumVectors);
+    auto dc = createDistanceComputer(baseVecs, baseDimension, baseNumVectors, COSINE);
 
-    dc.setQuery(baseVecs + (1 * baseDimension));
+    dc->setQuery(baseVecs + (1 * baseDimension));
     double dist;
-    dc.computeDistance(18530814, &dist);
+    dc->computeDistance(18530814, &dist);
     printf("Dist: %f\n", dist);
 
-    dc.setQuery(baseVecs + (18530806 * baseDimension));
+    dc->setQuery(baseVecs + (18530806 * baseDimension));
     double dist2;
-    dc.computeDistance(18530814, &dist2);
+    dc->computeDistance(18530814, &dist2);
     printf("Dist: %f\n", dist2);
 
     auto q = baseVecs + (18530806 * baseDimension);
@@ -1540,7 +1540,7 @@ void benchmark_navix(InputParser &input) {
                     // if (selectivity == "100") {
                     //     hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
                     // } else {
-                    hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    hnsw_index->navix_single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
                     // }
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
@@ -1569,7 +1569,7 @@ void benchmark_navix(InputParser &input) {
             // if (selectivity == "100") {
             // hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
             // } else {
-            hnsw_index->navix_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            hnsw_index->navix_single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
             // }
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
@@ -1743,10 +1743,10 @@ void benchmark_quantization(InputParser &input) {
     uint8_t *codes = new uint8_t[sq.codeSize * baseNumVectors];
     sq.encode(baseVecs, codes, baseNumVectors);
 
-    L2DistanceComputer dc(baseVecs, baseDimension, baseNumVectors);
-    dc.setQuery(queryVecs);
+    auto dc = createDistanceComputer(baseVecs, baseDimension, baseNumVectors, L2);
+    dc->setQuery(queryVecs);
     double dist;
-    dc.computeDistance(0, &dist);
+    dc->computeDistance(static_cast<vector_idx_t>(0), &dist);
 
     auto qdc = sq.get_asym_distance_computer(fastq::scalar_test::L2_SQ);
     double qDist;
@@ -2118,14 +2118,14 @@ void test_clustering_data(InputParser &input) {
     // Run search by first finding nProbes centroids and then searching in those
     double totalDC = 0.0;
     double recall = 0.0;
-    auto centroidDc = L2DistanceComputer(clustering.centroids.data(), baseDimension, clustering.getNumCentroids());
+    auto centroidDc = createDistanceComputer(clustering.centroids.data(), baseDimension, clustering.getNumCentroids(), L2);
     for (size_t i = 0; i < queryNumVectors; i++) {
         // Find the nearest nProbes centroids for the current query
-        centroidDc.setQuery(queryVecs + i * queryDimension);
+        centroidDc->setQuery(queryVecs + i * queryDimension);
         std::priority_queue<NodeDistCloser> closestCentroids;
         for (int j = 0; j < numCentroids; j++) {
             double dist;
-            centroidDc.computeDistance(j, &dist);
+            centroidDc->computeDistance(j, &dist);
             totalDC++;
             if (closestCentroids.size() < nProbes || dist < closestCentroids.top().dist) {
                 closestCentroids.emplace(j, dist);
@@ -2144,7 +2144,7 @@ void test_clustering_data(InputParser &input) {
             for (size_t v = 0; v < baseNumVectors; v++) {
                 if (labels[v] == closestCentroidId.id) {
                     double dist;
-                    centroidDc.computeDistance(queryVecs + i * queryDimension, baseVecs + v * baseDimension, &dist);
+                    centroidDc->computeDistance(queryVecs + i * queryDimension, baseVecs + v * baseDimension, &dist);
                     totalDC++;
                     if (results.size() < k || dist < results.top().dist) {
                         results.emplace(v, dist);

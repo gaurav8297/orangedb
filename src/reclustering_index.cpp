@@ -3,6 +3,7 @@
 namespace orangedb {
     ReclusteringIndex::ReclusteringIndex(int dim, ReclusteringIndexConfig config, RandomGenerator *rg)
         : dim(dim), config(config), size(0), rg(rg) {
+        quantizer = std::make_unique<SQ8Bit>(dim);
     }
 
     ReclusteringIndex::ReclusteringIndex(const std::string &file_path, RandomGenerator *rg) : rg(rg) {
@@ -765,6 +766,40 @@ namespace orangedb {
         }
     }
 
+    void ReclusteringIndex::quantizeVectors() {
+        printf("ReclusteringIndex::quantizeVectors\n");
+        if (miniCentroids.empty()) {
+            return;
+        }
+
+        // Quantize the new mini centroids
+        auto miniCentroidsSize = miniClusters.size();
+        for (size_t i = 0; i < miniCentroidsSize; i++) {
+            auto &miniCluster = miniClusters[i];
+            if (miniCluster.empty()) {
+                continue;
+            }
+            quantizer->batch_train(miniCluster.size() / dim, miniCluster.data());
+        }
+
+        // Finalize the quantizer
+        quantizer->finalize_train();
+
+        // Resize the quantized mini clusters
+        quantizedMiniClusters.resize(miniCentroidsSize);
+
+        // Quantize the mini clusters
+        for (size_t i = 0; i < miniCentroidsSize; i++) {
+            auto &miniCluster = miniClusters[i];
+            auto miniClusterSize = miniCluster.size() / dim;
+            quantizedMiniClusters[i].resize(miniClusterSize * quantizer->codeSize);
+            if (miniClusterSize == 0) {
+                continue;
+            }
+            quantizer->encode(miniCluster.data(), quantizedMiniClusters[i].data(), miniClusterSize);
+        }
+    }
+
     double ReclusteringIndex::calcScoreForMegaCluster(int megaClusterId) {
         auto miniCentroidIds = megaMiniCentroidIds[megaClusterId];
         printf("ReclusteringIndex::calcScoreForMegaCluster %d\n", megaClusterId);
@@ -994,6 +1029,67 @@ namespace orangedb {
         }
     }
 
+    void ReclusteringIndex::searchQuantized(const float *query, uint16_t k,
+                                            std::priority_queue<NodeDistCloser> &results, int nMegaProbes,
+                                            int nMicroProbes, ReclusteringIndexStats &stats) {
+        if (quantizedMiniClusters.size() == 0) {
+            // If quantizedMiniClusters is empty, we cannot search
+            return;
+        }
+
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto numMiniCentroids = miniCentroids.size() / dim;
+        nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
+        nMicroProbes = std::min(nMicroProbes, (int)numMiniCentroids);
+
+        // Find 5 closest mega centroids
+        std::vector<vector_idx_t> megaAssign;
+        findKClosestMegaCentroids(query, nMegaProbes, megaAssign);
+
+        auto numMicroCentroids = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMicroCentroids);
+        dc->setQuery(query);
+
+        // Now find the closest micro centroids
+        std::priority_queue<NodeDistCloser> closestMicro;
+        for (auto megaId : megaAssign) {
+            auto microIds = megaMiniCentroidIds[megaId];
+            for (auto microId: microIds) {
+                double d;
+                dc->computeDistance(microId, &d);
+                stats.numDistanceCompForSearch++;
+                if (closestMicro.size() < nMicroProbes || d < closestMicro.top().dist) {
+                    closestMicro.emplace(microId, d);
+                    if (closestMicro.size() > nMicroProbes) {
+                        closestMicro.pop();
+                    }
+                }
+            }
+        }
+
+        // Now we have the closest micro centroids, let's find the closest vectors
+        while (!closestMicro.empty()) {
+            auto microId = closestMicro.top().id;
+            closestMicro.pop();
+            auto cluster = quantizedMiniClusters[microId];
+            auto ids = miniClusterVectorIds[microId];
+            auto clusterSize = ids.size();
+            auto clusterDc = getQuantizedDistanceComputer(cluster.data(), clusterSize);
+            clusterDc->setQuery(query);
+            for (int j = 0; j < clusterSize; j++) {
+                double dist;
+                clusterDc->computeDistance(j, &dist);
+                stats.numDistanceCompForSearch++;
+                if (results.size() <= k || dist < results.top().dist) {
+                    results.emplace(ids[j], dist);
+                    if (results.size() > k) {
+                        results.pop();
+                    }
+                }
+            }
+        }
+    }
+
     void ReclusteringIndex::findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids) {
         std::priority_queue<NodeDistCloser> closestMicro;
         auto numMegaCentroids = megaCentroids.size() / dim;
@@ -1138,6 +1234,18 @@ namespace orangedb {
             out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
         }
 
+        // Write quantized mini clusters
+        size_t quantizedMiniClustersSize = quantizedMiniClusters.size();
+        out.write(reinterpret_cast<const char *>(&quantizedMiniClustersSize), sizeof(quantizedMiniClustersSize));
+        for (const auto &cluster: quantizedMiniClusters) {
+            size_t clusterSize = cluster.size();
+            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(uint8_t));
+        }
+
+        // Write quantizer
+        quantizer->flush_to_disk(out);
+
         // Write stats
         out.write(reinterpret_cast<const char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
         out.write(reinterpret_cast<const char *>(&stats.totalQueries), sizeof(stats.totalQueries));
@@ -1145,6 +1253,7 @@ namespace orangedb {
         out.write(reinterpret_cast<const char *>(&stats.totalReclusters), sizeof(stats.totalReclusters));
         out.write(reinterpret_cast<const char *>(&stats.totalDataWrittenBySystem), sizeof(stats.totalDataWrittenBySystem));
         out.write(reinterpret_cast<const char *>(&stats.totalDataWrittenByUser), sizeof(stats.totalDataWrittenByUser));
+        out.close();
     }
 
     void ReclusteringIndex::load_from_disk(const std::string &file_path) {
@@ -1243,6 +1352,21 @@ namespace orangedb {
             in.read(reinterpret_cast<char *>(newMiniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
         }
 
+        // Read quantized mini clusters
+        size_t quantizedMiniClustersCount;
+        in.read(reinterpret_cast<char *>(&quantizedMiniClustersCount), sizeof(quantizedMiniClustersCount));
+        quantizedMiniClusters.resize(quantizedMiniClustersCount);
+        for (size_t i = 0; i < quantizedMiniClustersCount; i++) {
+            size_t clusterSize;
+            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+            quantizedMiniClusters[i].resize(clusterSize);
+            in.read(reinterpret_cast<char *>(quantizedMiniClusters[i].data()), clusterSize * sizeof(uint8_t));
+        }
+
+        // Read quantizer
+        quantizer = std::make_unique<SQ8Bit>(dim);
+        quantizer->load_from_disk(in);
+
         // Read stats
         in.read(reinterpret_cast<char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
         in.read(reinterpret_cast<char *>(&stats.totalQueries), sizeof(stats.totalQueries));
@@ -1250,5 +1374,6 @@ namespace orangedb {
         in.read(reinterpret_cast<char *>(&stats.totalReclusters), sizeof(stats.totalReclusters));
         in.read(reinterpret_cast<char *>(&stats.totalDataWrittenBySystem), sizeof(stats.totalDataWrittenBySystem));
         in.read(reinterpret_cast<char *>(&stats.totalDataWrittenByUser), sizeof(stats.totalDataWrittenByUser));
+        in.close();
     }
 }

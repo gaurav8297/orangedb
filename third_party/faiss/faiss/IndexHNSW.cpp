@@ -327,16 +327,83 @@ void IndexHNSW::single_search(
     auto new_stats = hnsw.search(*dis, res, vt);
     stats.combine(new_stats);
     res.end();
-    vt.advance();
 }
 
-/// Navix search
 void IndexHNSW::navix_search(
+    idx_t n,
+    const float *x,
+    idx_t k,
+    float *distances,
+    idx_t *labels,
+    const char *filter_masks,
+    const SearchParameters *params) const {
+    FAISS_THROW_IF_NOT(k > 0);
+    using RH = HeapBlockResultHandler<HNSW::C>;
+    RH bres(n, distances, labels, k);
+
+    FAISS_THROW_IF_NOT_MSG(
+        storage,
+        "No storage index, please use IndexHNSWFlat (or variants) "
+        "instead of IndexHNSW directly");
+
+    int efSearch = hnsw.efSearch;
+    if (params) {
+        if (const SearchParametersHNSW *hnsw_params =
+                dynamic_cast<const SearchParametersHNSW *>(params)) {
+            efSearch = hnsw_params->efSearch;
+        }
+    }
+    size_t n1 = 0, n2 = 0, ndis = 0, nhops = 0;
+
+    idx_t check_period = InterruptCallback::get_period_hint(
+            hnsw.max_level * d * efSearch);
+
+    for (idx_t i0 = 0; i0 < n; i0 += check_period) {
+        idx_t i1 = std::min(i0 + check_period, n);
+
+#pragma omp parallel if (i1 - i0 > 1)
+        {
+            VisitedTable vt(ntotal);
+            RH::SingleResultHandler res(bres);
+
+            std::unique_ptr<DistanceComputer> dis(
+                    storage_distance_computer(storage));
+
+#pragma omp for reduction(+ : n1, n2, ndis, nhops) schedule(guided)
+            for (idx_t i = i0; i < i1; i++) {
+                res.begin(i);
+                dis->set_query(x + i * d);
+                auto filter_mask = filter_masks + i * ntotal;
+                auto stats = hnsw.navix_hybrid_search(*dis, res, vt, filter_mask);
+                n1 += stats.n1;
+                n2 += stats.n2;
+                ndis += stats.ndis;
+                nhops += stats.nhops;
+                res.end();
+                vt.advance();
+            }
+        }
+        InterruptCallback::check();
+    }
+
+    hnsw_stats.combine({n1, n2, ndis, nhops});
+
+    if (is_similarity_metric(this->metric_type)) {
+        // we need to revert the negated distances
+        for (size_t i = 0; i < k * n; i++) {
+            distances[i] = -distances[i];
+        }
+    }
+}
+
+
+/// Navix search
+void IndexHNSW::navix_single_search(
     const float *query,
     idx_t k,
     float *distances,
     idx_t *labels,
-    const char *filter_id_map,
+    const char *filter_mask,
     VisitedTable &vt,
     HNSWStats &stats) const {
     using RH = HeapBlockResultHandler<HNSW::C>;
@@ -346,7 +413,7 @@ void IndexHNSW::navix_search(
             storage_distance_computer(storage));
     res.begin(0);
     dis->set_query(query);
-    auto new_stats = hnsw.navix_hybrid_search(*dis, res, vt, filter_id_map);
+    auto new_stats = hnsw.navix_hybrid_search(*dis, res, vt, filter_mask);
     stats.combine(new_stats);
     res.end();
     vt.advance();

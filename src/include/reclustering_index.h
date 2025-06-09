@@ -84,12 +84,17 @@ namespace orangedb {
 
         void storeScoreForMegaClusters();
 
+        void quantizeVectors();
+
         void printStats();
 
         void flush_to_disk(const std::string &file_path) const;
 
         void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
                     int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
+
+        void searchQuantized(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
+            int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
 
     private:
         vector_idx_t getWorstMegaCentroid();
@@ -159,11 +164,13 @@ namespace orangedb {
 
         void load_from_disk(const std::string &file_path);
 
-        std::unique_ptr<DistanceComputer<float>> getDistanceComputer(const float *data, int n) const {
-            if (config.distanceType == L2) {
-                return std::make_unique<L2DistanceComputer>(dim);
-            }
-            return std::make_unique<CosineDistanceComputer>(dim);
+        std::unique_ptr<DelegateDC<float>> getDistanceComputer(const float *data, int n) const {
+            return createDistanceComputer(data, dim, n, config.distanceType);
+        }
+
+        std::unique_ptr<DelegateDC<uint8_t> > getQuantizedDistanceComputer(
+            const uint8_t *data, int n, bool symmetric = false) const {
+            return createQuantizedDistanceComputer(data, dim, n, config.distanceType, quantizer.get(), symmetric);
         }
 
     private:
@@ -184,6 +191,10 @@ namespace orangedb {
         std::vector<float> newMiniCentroids;
         std::vector<std::vector<float>> newMiniClusters;
         std::vector<std::vector<vector_idx_t>> newMiniClusterVectorIds;
+
+        // Quantization
+        std::unique_ptr<SQ8Bit> quantizer;
+        std::vector<std::vector<uint8_t>> quantizedMiniClusters;
 
         // Stats
         ReclusteringIndexStats stats;

@@ -14,7 +14,8 @@ namespace orangedb {
                             dim));
         }
         actualIds = std::vector<std::vector<vector_idx_t>>(config.numCentroids);
-        centroidIndex = new IndexOneNN(new L2DistanceComputer(clustering->centroids.data(), dim, config.numCentroids), dim, config.numCentroids);
+        dc = createDistanceComputer(clustering->centroids.data(), dim, config.numCentroids, L2);
+        centroidIndex = new IndexOneNN(dc.get(), dim, config.numCentroids);
     }
 
     void PartitionedIndex::build(float *data, size_t n) {

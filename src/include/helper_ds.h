@@ -384,7 +384,7 @@ namespace orangedb {
         ParallelMultiQueue<NodeDistFarther> *resultPq;
         NodeDistCloser *candidates;
         NodeDistCloser *nextFrontier;
-        DistanceComputer *dc;
+        DelegateDC<float> *dc;
 
     private:
         const int efSearch;

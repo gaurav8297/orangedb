@@ -9,7 +9,7 @@ namespace orangedb {
     // Perform 1-NN search on the given data in parallel using OpenMP
     class IndexOneNN {
     public:
-        explicit IndexOneNN(DistanceComputer *dc, int dim, int numEntries, float lambda = 0)
+        explicit IndexOneNN(DelegateDC<float> *dc, int dim, int numEntries, float lambda = 0)
                 : dc(dc), dim(dim),
                   numEntries(numEntries), lambda(lambda) {};
 
@@ -21,7 +21,7 @@ namespace orangedb {
 
         void knnFiltered(int k, const float *query, double *distance, vector_idx_t *resultIds, const uint8_t *filteredMask);
     private:
-        DistanceComputer *dc;
+        DelegateDC<float> *dc;
         int dim;
         int numEntries;
         float lambda;
@@ -36,7 +36,7 @@ namespace orangedb {
     // 2. No concept of weights for vectors.
     class Clustering {
     public:
-        Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda = 0);
+        Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda = 0, DistanceType distanceType = COSINE);
 
         void initCentroids(const float *data, int n);
 
@@ -75,6 +75,7 @@ namespace orangedb {
         int maxCentroidSize; // maximum size of a centroid. This is used to sample the training set.
         float lambda; // regularization parameter
         bool debugMode = false;
+        DistanceType distanceType; // distance type to use for clustering
 
         int seed = 1234; // seed for random number generator
     };

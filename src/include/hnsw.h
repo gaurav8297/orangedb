@@ -240,14 +240,14 @@ namespace orangedb {
 
         // Add node to the graph
         void searchNearestOnLevel(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 level_t level,
                 vector_idx_t &nearest,
                 double &nearestDist,
                 Stats &stats);
 
         void searchNeighbors(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 level_t level,
                 std::priority_queue<NodeDistCloser> &results,
                 vector_idx_t entrypoint,
@@ -257,7 +257,7 @@ namespace orangedb {
                 Stats &stats);
 
         void searchNeighborsOnLastLevel(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::priority_queue<NodeDistCloser> &results,
                 vector_idx_t entrypoint,
                 double entrypointDist,
@@ -267,7 +267,7 @@ namespace orangedb {
                 Stats &stats);
 
         void searchNeighborsOnLastLevel1(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::priority_queue<NodeDistCloser> &results,
                 vector_idx_t entrypoint,
                 double entrypointDist,
@@ -293,7 +293,7 @@ namespace orangedb {
                 int& depth);
 
         int findNextKNeighboursV2(
-                DistanceComputer* dc,
+                DelegateDC<float>* dc,
                 vector_idx_t entrypoint,
                 NodeDistCloser *nbrs,
                 AtomicVisitedTable &visited,
@@ -301,7 +301,7 @@ namespace orangedb {
                 int maxNeighboursCheck);
 
         void searchParallelSyncAfterEveryIter(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::priority_queue<NodeDistCloser> &results,
                 AtomicVisitedTable &visited,
                 uint64_t efSearch,
@@ -309,21 +309,21 @@ namespace orangedb {
                 PocTaskScheduler *scheduler);
 
         void searchParallelWithParallelQueue(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::priority_queue<NodeDistCloser> &results,
                 AtomicVisitedTable &visited,
                 uint64_t efSearch,
                 Stats &stats);
 
         void searchParallelWithPartitioning(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::priority_queue<NodeDistCloser> &results,
                 AtomicVisitedTable &visited,
                 uint64_t efSearch,
                 Stats &stats);
 
         void searchParallelWithDeltaStepping(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::priority_queue<NodeDistCloser> &results,
                 AtomicVisitedTable &visited,
                 uint64_t efSearch,
@@ -341,7 +341,7 @@ namespace orangedb {
                                                      int distCompBatchSize, orangedb::Stats &stats);
 
         int findNextFilteredKNeighbours(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 vector_idx_t entrypoint,
                 std::vector<vector_idx_t> &nbrs,
                 const uint8_t *filterMask,
@@ -354,7 +354,7 @@ namespace orangedb {
                 Stats &stats);
 
         void searchNeighborsOnLastLevelWithFilterA(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::priority_queue<NodeDistCloser> &results,
                 vector_idx_t entrypoint,
                 double entrypointDist,
@@ -365,7 +365,7 @@ namespace orangedb {
                 Stats &stats);
 
         void searchNeighborsOnLastLevelWithFilterB(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::priority_queue<NodeDistCloser> &results,
                 vector_idx_t entrypoint,
                 double entrypointDist,
@@ -376,7 +376,7 @@ namespace orangedb {
                 Stats &stats);
 
         void shrinkNeighbors(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 vector_idx_t id,
                 std::priority_queue<NodeDistCloser> &results,
                 int maxSize,
@@ -385,7 +385,7 @@ namespace orangedb {
                 Stats &stats);
 
         void makeConnection(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 vector_idx_t src,
                 vector_idx_t dest,
                 double distSrcDest,
@@ -393,7 +393,7 @@ namespace orangedb {
                 Stats &stats);
 
         void addNodeOnLevel(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 vector_idx_t id,
                 level_t level,
                 vector_idx_t entrypoint,
@@ -403,7 +403,7 @@ namespace orangedb {
                 Stats &stats);
 
         void addNode(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 std::vector<vector_idx_t> node_id,
                 level_t level,
                 std::vector<omp_lock_t> &locks,
@@ -411,7 +411,7 @@ namespace orangedb {
                 Stats &stats);
 
         void deleteNode(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 orangedb::vector_idx_t deletedId,
                 std::vector<omp_lock_t> &locks,
                 const float *infVector,
@@ -420,7 +420,7 @@ namespace orangedb {
                 Stats &stats);
 
         void deleteNodeV2(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 orangedb::vector_idx_t deletedId,
                 std::vector<omp_lock_t> &locks,
                 const float *infVector,
@@ -428,7 +428,7 @@ namespace orangedb {
                 Stats &stats);
 
         void deleteNodeV3(
-                DistanceComputer *dc,
+                DelegateDC<float> *dc,
                 orangedb::vector_idx_t deletedId,
                 std::vector<omp_lock_t> &locks,
                 const float *infVector,

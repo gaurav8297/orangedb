@@ -12,14 +12,17 @@
 #define EPS (1 / 1024.)
 
 namespace orangedb {
-    Clustering::Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda)
-            : dim(dim),
-              numCentroids(numCentroids),
-              nIter(nIter),
-              minCentroidSize(minCentroidSize),
-              maxCentroidSize(maxCentroidSize),
-              centroids(std::vector<float>(dim * numCentroids)),
-              lambda(lambda) {}
+    Clustering::Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda,
+                           DistanceType distanceType)
+        : dim(dim),
+          numCentroids(numCentroids),
+          nIter(nIter),
+          minCentroidSize(minCentroidSize),
+          maxCentroidSize(maxCentroidSize),
+          centroids(std::vector<float>(dim * numCentroids)),
+          lambda(lambda),
+          distanceType(distanceType) {
+    }
 
     void Clustering::initCentroids(const float *data, int n) {
         // TODO: Implement divide and conquer k-means++ initialization
@@ -46,21 +49,21 @@ namespace orangedb {
         for (int i = 0; i < nIter; i++) {
             // printf("Running iteration: %d\n", i);
             // Initialize the index
-            CosineDistanceComputer dc = CosineDistanceComputer(centroids.data(), dim, numCentroids);
-            IndexOneNN index = IndexOneNN(&dc, dim, numCentroids, lambda);
+            auto dc = createDistanceComputer(centroids.data(), dim, numCentroids, distanceType);
+            IndexOneNN index = IndexOneNN(dc.get(), dim, numCentroids, lambda);
 
             // Phase 1: Assign each vector to the nearest centroid
             index.search(nSample, sample, dist, assign);
 
             // accumulate objective
-            float objective = 0;
-            for (int j = 0; j < nSample; j++) {
-                objective += dist[j];
-            }
+            // float objective = 0;
+            // for (int j = 0; j < nSample; j++) {
+            //     objective += dist[j];
+            // }
 
             // Phase 2: Update the centroids
-            int *hist = new int[numCentroids];
-            float *newCentroids = new float[numCentroids * dim];
+            const auto hist = new int[numCentroids];
+            auto *newCentroids = new float[numCentroids * dim];
             computeCentroids(nSample, sample, assign, hist, newCentroids);
 
             // Phase 3: Split the big clusters
@@ -73,8 +76,8 @@ namespace orangedb {
 
     void Clustering::assignCentroids(const float *data, int n, int32_t *assign) {
         // Initialize the index
-        CosineDistanceComputer dc = CosineDistanceComputer(centroids.data(), dim, numCentroids);
-        IndexOneNN index = IndexOneNN(&dc, dim, numCentroids);
+        auto dc = createDistanceComputer(centroids.data(), dim, numCentroids, distanceType);
+        IndexOneNN index = IndexOneNN(dc.get(), dim, numCentroids);
 
         // Assign each vector to the nearest centroid
         // TODO: Dist is not needed. We can optimize this.
@@ -84,8 +87,8 @@ namespace orangedb {
     }
 
     void Clustering::assignCentroids(const float *data, int n, double *dist, int32_t *assign) {
-        CosineDistanceComputer dc = CosineDistanceComputer(centroids.data(), dim, numCentroids);
-        IndexOneNN index = IndexOneNN(&dc, dim, numCentroids);
+        auto dc = createDistanceComputer(centroids.data(), dim, numCentroids, distanceType);
+        IndexOneNN index = IndexOneNN(dc.get(), dim, numCentroids);
         index.search(n, data, dist, assign);
     }
 

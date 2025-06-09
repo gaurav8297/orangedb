@@ -45,6 +45,7 @@ namespace orangedb {
         int search(const float *query, uint16_t k, VisitedTable &visited, std::vector<NodeDistFarther> &results, Stats &stats);
 
     private:
+        std::unique_ptr<DelegateDC<float>> dc;
         std::unique_ptr<Clustering> clustering;
         std::vector<std::unique_ptr<HNSW>> indexes;
         std::vector<std::vector<vector_idx_t>> actualIds;
