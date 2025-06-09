@@ -2274,6 +2274,27 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     return recall / queryNumVectors;
 }
 
+double get_quantized_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
+                  vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes) {
+    // search
+    double recall = 0;
+    ReclusteringIndexStats stats;
+    for (int i = 0; i < queryNumVectors; i++) {
+        std::priority_queue<NodeDistCloser> results;
+        index.searchQuantized(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats);
+        auto gt = gtVecs + i * k;
+        while (!results.empty()) {
+            auto res = results.top();
+            results.pop();
+            if (std::find(gt, gt + k, res.id) != (gt + k)) {
+                recall++;
+            }
+        }
+    }
+    printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
+    return recall / queryNumVectors;
+}
+
 void benchmark_reclustering_index(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
@@ -2368,6 +2389,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const int numThreads = stoi(input.getCmdOption("-numThreads"));
+    // const bool useQuantization = stoi(input.getCmdOption("-useQuantization"));
     omp_set_num_threads(numThreads);
 
     // Read dataset
@@ -2406,9 +2428,12 @@ void benchmark_fast_reclustering(InputParser &input) {
         printf("Writing index to disk\n");
         index.flush_to_disk(storagePath);
     }
+    index.quantizeVectors();
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
-    printf("Recall: %f\n", recall);
+    auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                                 nMegaProbes, nMiniProbes);
+    printf("Recall: %f, Quantized Recall: %f\n", recall, quantizedRecall);
     index.printStats();
     index.storeScoreForMegaClusters();
     index.flush_to_disk(storagePath);
@@ -2417,6 +2442,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.reclusterAllMegaCentroids();
         auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                          nMiniProbes);
+        auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                             nMegaProbes, nMiniProbes);
+        printf("Recall: %f, Quantized Recall: %f\n", recall, quantizedRecall);
         printf("After reclustering only  mega centroids, iteration: %d, recall: %f\n", iter, recall);
         if (numMegaReclusterCentroids == 1) {
             index.reclusterFast();
@@ -2427,9 +2455,13 @@ void benchmark_fast_reclustering(InputParser &input) {
                 index.reclusterFull(numMegaReclusterCentroids);
             }
         }
+        index.quantizeVectors();
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
-        printf("After micro reclustering, iteration: %d, recall: %f\n", iter, recall);
+        quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                     nMegaProbes, nMiniProbes);
+
+        printf("After micro reclustering, iteration: %d, recall: %f, quantized recall: %f\n", iter, recall, quantizedRecall);
         printf("Recalculating scores\n");
         index.storeScoreForMegaClusters();
         index.printStats();

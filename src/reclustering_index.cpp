@@ -1235,16 +1235,16 @@ namespace orangedb {
         }
 
         // Write quantized mini clusters
-        size_t quantizedMiniClustersSize = quantizedMiniClusters.size();
-        out.write(reinterpret_cast<const char *>(&quantizedMiniClustersSize), sizeof(quantizedMiniClustersSize));
-        for (const auto &cluster: quantizedMiniClusters) {
-            size_t clusterSize = cluster.size();
-            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
-            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(uint8_t));
-        }
-
-        // Write quantizer
-        quantizer->flush_to_disk(out);
+        // size_t quantizedMiniClustersSize = quantizedMiniClusters.size();
+        // out.write(reinterpret_cast<const char *>(&quantizedMiniClustersSize), sizeof(quantizedMiniClustersSize));
+        // for (const auto &cluster: quantizedMiniClusters) {
+        //     size_t clusterSize = cluster.size();
+        //     out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+        //     out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(uint8_t));
+        // }
+        //
+        // // Write quantizer
+        // quantizer->flush_to_disk(out);
 
         // Write stats
         out.write(reinterpret_cast<const char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
@@ -1353,19 +1353,19 @@ namespace orangedb {
         }
 
         // Read quantized mini clusters
-        size_t quantizedMiniClustersCount;
-        in.read(reinterpret_cast<char *>(&quantizedMiniClustersCount), sizeof(quantizedMiniClustersCount));
-        quantizedMiniClusters.resize(quantizedMiniClustersCount);
-        for (size_t i = 0; i < quantizedMiniClustersCount; i++) {
-            size_t clusterSize;
-            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
-            quantizedMiniClusters[i].resize(clusterSize);
-            in.read(reinterpret_cast<char *>(quantizedMiniClusters[i].data()), clusterSize * sizeof(uint8_t));
-        }
-
-        // Read quantizer
-        quantizer = std::make_unique<SQ8Bit>(dim);
-        quantizer->load_from_disk(in);
+        // size_t quantizedMiniClustersCount;
+        // in.read(reinterpret_cast<char *>(&quantizedMiniClustersCount), sizeof(quantizedMiniClustersCount));
+        // quantizedMiniClusters.resize(quantizedMiniClustersCount);
+        // for (size_t i = 0; i < quantizedMiniClustersCount; i++) {
+        //     size_t clusterSize;
+        //     in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+        //     quantizedMiniClusters[i].resize(clusterSize);
+        //     in.read(reinterpret_cast<char *>(quantizedMiniClusters[i].data()), clusterSize * sizeof(uint8_t));
+        // }
+        //
+        // // Read quantizer
+        // quantizer = std::make_unique<SQ8Bit>(dim);
+        // quantizer->load_from_disk(in);
 
         // Read stats
         in.read(reinterpret_cast<char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
