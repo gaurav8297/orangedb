@@ -1092,6 +1092,7 @@ namespace orangedb {
             for (int j = 0; j < clusterSize; j++) {
                 double dist;
                 clusterDc->computeDistance(j, &dist);
+                printf("dist: %f\n", dist);
                 stats.numDistanceCompForSearch++;
                 if (results.size() <= k || dist < results.top().dist) {
                     results.emplace(ids[j], dist);
