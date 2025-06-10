@@ -2461,10 +2461,9 @@ void benchmark_fast_reclustering(InputParser &input) {
                                  nMiniProbes);
         quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                      nMegaProbes, nMiniProbes);
-
         printf("After micro reclustering, iteration: %d, recall: %f, quantized recall: %f\n", iter, recall, quantizedRecall);
         printf("Recalculating scores\n");
-        index.storeScoreForMegaClusters();
+        // index.storeScoreForMegaClusters();
         index.printStats();
         printf("Done with iteration: %d\n", iter);
         // printf("Flushing to disk\n");
