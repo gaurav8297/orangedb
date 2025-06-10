@@ -780,7 +780,7 @@ namespace orangedb {
         }
 
         // Allocate for normalized vectors
-        // std::vector<float> normalizedVectors(maxMiniClusterSize * dim);
+        std::vector<float> normalizedVectors(maxMiniClusterSize * dim);
 
         // Quantize the new mini centroids
         auto miniCentroidsSize = miniClusters.size();
@@ -790,8 +790,12 @@ namespace orangedb {
             if (miniCluster.empty()) {
                 continue;
             }
-            // normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
-            quantizer->batch_train(miniClusterSize, miniCluster.data());
+            if (config.distanceType == COSINE) {
+                normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
+                quantizer->batch_train(miniClusterSize, normalizedVectors.data());
+            } else {
+                quantizer->batch_train(miniClusterSize, miniCluster.data());
+            }
         }
 
         // Finalize the quantizer
@@ -808,8 +812,14 @@ namespace orangedb {
             if (miniClusterSize == 0) {
                 continue;
             }
-            // normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
-            quantizer->encode(miniCluster.data(), quantizedMiniClusters[i].data(), miniClusterSize);
+            if (config.distanceType == COSINE) {
+                // Normalize the vectors before quantization
+                normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
+                quantizer->encode(normalizedVectors.data(), quantizedMiniClusters[i].data(), miniClusterSize);
+            } else {
+                // Directly quantize the vectors without normalization
+                quantizer->encode(miniCluster.data(), quantizedMiniClusters[i].data(), miniClusterSize);
+            }
         }
     }
 
