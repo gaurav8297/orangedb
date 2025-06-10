@@ -773,14 +773,25 @@ namespace orangedb {
             return;
         }
 
+        // Calculate max miniClusterSize
+        size_t maxMiniClusterSize = 0;
+        for (const auto &miniCluster : miniClusters) {
+            maxMiniClusterSize = std::max(maxMiniClusterSize, miniCluster.size() / dim);
+        }
+
+        // Allocate for normalized vectors
+        std::vector<float> normalizedVectors(maxMiniClusterSize * dim);
+
         // Quantize the new mini centroids
         auto miniCentroidsSize = miniClusters.size();
         for (size_t i = 0; i < miniCentroidsSize; i++) {
             auto &miniCluster = miniClusters[i];
+            auto miniClusterSize = miniCluster.size() / dim;
             if (miniCluster.empty()) {
                 continue;
             }
-            quantizer->batch_train(miniCluster.size() / dim, miniCluster.data());
+            normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
+            quantizer->batch_train(miniClusterSize, normalizedVectors.data());
         }
 
         // Finalize the quantizer
@@ -797,7 +808,8 @@ namespace orangedb {
             if (miniClusterSize == 0) {
                 continue;
             }
-            quantizer->encode(miniCluster.data(), quantizedMiniClusters[i].data(), miniClusterSize);
+            normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
+            quantizer->encode(normalizedVectors.data(), quantizedMiniClusters[i].data(), miniClusterSize);
         }
     }
 

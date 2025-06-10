@@ -428,7 +428,7 @@ inline static void normalize_vectors_haswell(const float *vector, int dim, float
 #endif
     }
 
-    inline static void normalize_vectors(const float *vector, int dim, float *normalized_vector) {
+    inline static void normalize_vector(const float *vector, int dim, float *normalized_vector) {
 #if SIMSIMD_TARGET_NEON
         normalize_vectors_neon(vector, dim, normalized_vector);
 #elif SIMSIMD_TARGET_SKYLAKE
@@ -441,5 +441,11 @@ inline static void normalize_vectors_haswell(const float *vector, int dim, float
                 normalized_vector[i] = vector[i] * norm;
             }
 #endif
+    }
+
+    inline static void normalize_vectors(const float *vector, int dim, int n, float *normalized_vector) {
+        for (int i = 0; i < n; i++) {
+            normalized_vector(vector + i * dim, dim, normalized_vector + i * dim);
+        }
     }
 } // namespace orange

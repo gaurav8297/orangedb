@@ -303,7 +303,7 @@ namespace orangedb {
         }
 
         inline void setQuery(const float *query) override {
-            normalize_vectors(query, dim, this->query);
+            normalize_vector(query, dim, this->query);
         }
 
         inline std::unique_ptr<DistanceComputer<uint8_t>> clone() override {
@@ -347,7 +347,7 @@ namespace orangedb {
         }
 
         inline void setQuery(const float *query) override {
-            normalize_vectors(query, dim, normalizedQuery);
+            normalize_vector(query, dim, normalizedQuery);
             quantizer->encode(normalizedQuery, quantizedQuery, 1);
         }
 
