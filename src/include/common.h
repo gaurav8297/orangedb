@@ -438,7 +438,7 @@ inline static void normalize_vectors_haswell(const float *vector, int dim, float
 #else
             float norm = compute_normalized_factor(vector, dim);
             for (int i = 0; i < dim; i++) {
-                normalized_vector[i] = vector[i] * norm;
+                norm_vector[i] = vector[i] * norm;
             }
 #endif
     }
