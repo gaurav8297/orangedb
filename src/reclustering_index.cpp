@@ -1337,6 +1337,7 @@ namespace orangedb {
         for (size_t i = 0; i < miniClustersCount; i++) {
             size_t vectorIdSize;
             in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
+            printf("ReclusteringIndex::load_from_disk: miniClusterVectorIds[%zu] size: %zu\n", i, vectorIdSize);
             miniClusterVectorIds[i].resize(vectorIdSize);
             in.read(reinterpret_cast<char *>(miniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
         }

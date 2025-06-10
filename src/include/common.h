@@ -6,6 +6,7 @@
 #include <random>
 #include "spdlog/fmt/fmt.h"
 #include <unordered_map>
+#include <simsimd/simsimd.h>
 
 #define IS_ALIGNED(X, Y) ((uint64_t)(X) % (uint64_t)(Y) == 0)
 #define IS_512_ALIGNED(X) IS_ALIGNED(X, 512)
@@ -443,7 +444,7 @@ inline static void normalize_vectors_haswell(const float *vector, int dim, float
 #endif
     }
 
-    inline static void normalize_vectors(const float *vector, int dim, int n, float *norm_vector) {
+    inline static void normalize_vectors(const float *vector, int dim, size_t n, float *norm_vector) {
         for (size_t i = 0; i < n; i++) {
             normalize_vector(vector + i * dim, dim, norm_vector + i * dim);
         }
