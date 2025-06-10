@@ -2435,8 +2435,8 @@ void benchmark_fast_reclustering(InputParser &input) {
                                                  nMegaProbes, nMiniProbes);
     printf("Recall: %f, Quantized Recall: %f\n", recall, quantizedRecall);
     index.printStats();
-    index.storeScoreForMegaClusters();
-    index.flush_to_disk(storagePath);
+    // index.storeScoreForMegaClusters();
+    // index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
         index.reclusterAllMegaCentroids();
