@@ -778,24 +778,50 @@ namespace orangedb {
         for (const auto &miniCluster : miniClusters) {
             maxMiniClusterSize = std::max(maxMiniClusterSize, miniCluster.size() / dim);
         }
-
         // Allocate for normalized vectors
         std::vector<float> normalizedVectors(maxMiniClusterSize * dim);
-
-        // Quantize the new mini centroids
         auto miniCentroidsSize = miniClusters.size();
-        for (size_t i = 0; i < miniCentroidsSize; i++) {
-            auto &miniCluster = miniClusters[i];
-            auto miniClusterSize = miniCluster.size() / dim;
-            if (miniCluster.empty()) {
-                continue;
+        if (config.quantizationTrainPercentage >= 1) {
+            // Quantize the new mini centroids
+            for (size_t i = 0; i < miniCentroidsSize; i++) {
+                auto &miniCluster = miniClusters[i];
+                auto miniClusterSize = miniCluster.size() / dim;
+                if (miniCluster.empty()) {
+                    continue;
+                }
+                if (config.distanceType == COSINE) {
+                    normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
+                    quantizer->batch_train(miniClusterSize, normalizedVectors.data());
+                } else {
+                    quantizer->batch_train(miniClusterSize, miniCluster.data());
+                }
             }
-            if (config.distanceType == COSINE) {
-                normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
-                quantizer->batch_train(miniClusterSize, normalizedVectors.data());
-            } else {
-                quantizer->batch_train(miniClusterSize, miniCluster.data());
+        } else {
+            auto vectorsTrainedOn = 0;
+            // Quantize the new mini centroids
+            for (size_t i = 0; i < miniCentroidsSize; i++) {
+                auto &miniCluster = miniClusters[i];
+                auto miniClusterSize = miniCluster.size() / dim;
+                if (miniCluster.empty()) {
+                    continue;
+                }
+                for (size_t j = 0; j < miniClusterSize; j++) {
+                    if (rg->randFloat() > config.quantizationTrainPercentage) {
+                        // Skip this vector
+                        continue;
+                    }
+
+                    // Train using this vector
+                    if (config.distanceType == COSINE) {
+                        normalize_vectors(miniCluster.data() + j * dim, dim, 1, normalizedVectors.data());
+                        quantizer->batch_train(1, normalizedVectors.data());
+                    } else {
+                        quantizer->batch_train(1, miniCluster.data() + j * dim);
+                    }
+                    vectorsTrainedOn++;
+                }
             }
+            printf("ReclusteringIndex::quantizeVectors trained on %d vectors\n", vectorsTrainedOn);
         }
 
         // Finalize the quantizer

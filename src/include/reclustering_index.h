@@ -44,6 +44,8 @@ namespace orangedb {
         int numNewMiniReclusterCentroids = 100;
         // number of existing mega centroids to consider for reclustering
         int numExistingMegaReclusterCentroids = 5;
+        // Quantization train percentage
+        float quantizationTrainPercentage = 0.1;
 
         explicit ReclusteringIndexConfig() = default;
 
