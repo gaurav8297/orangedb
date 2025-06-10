@@ -858,7 +858,7 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    auto dc = createDistanceComputer(vectors, dim, numVectors, COSINE);
+    auto dc = createDistanceComputer(vectors, dim, numVectors, L2);
 #pragma omp parallel
     {
         auto localDc = dc->clone();
@@ -2389,7 +2389,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const int numThreads = stoi(input.getCmdOption("-numThreads"));
-    // const bool useQuantization = stoi(input.getCmdOption("-useQuantization"));
+    const bool useIP = stoi(input.getCmdOption("-useIP"));
     omp_set_num_threads(numThreads);
 
     // Read dataset
@@ -2401,7 +2401,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
-    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, COSINE,
+    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, L2,
                                    0, 0);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];

@@ -549,7 +549,7 @@ namespace orangedb {
         Clustering clustering(dim, numClusters, config.nIter,
                               getMinCentroidSize(n, numClusters),
                               getMaxCentroidSize(n, numClusters),
-                              config.lambda);
+                              config.lambda, config.distanceType);
 
         // Initialize the centroids
         clustering.initCentroids(data, n);
@@ -604,7 +604,7 @@ namespace orangedb {
         Clustering clustering(dim, numClusters, config.nIter,
                               getMinCentroidSize(n, numClusters),
                               getMaxCentroidSize(n, numClusters),
-                              config.lambda);
+                              config.lambda, config.distanceType);
 
         // Initialize the centroids
         clustering.initCentroids(data, n);
@@ -780,7 +780,7 @@ namespace orangedb {
         }
 
         // Allocate for normalized vectors
-        std::vector<float> normalizedVectors(maxMiniClusterSize * dim);
+        // std::vector<float> normalizedVectors(maxMiniClusterSize * dim);
 
         // Quantize the new mini centroids
         auto miniCentroidsSize = miniClusters.size();
@@ -790,8 +790,8 @@ namespace orangedb {
             if (miniCluster.empty()) {
                 continue;
             }
-            normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
-            quantizer->batch_train(miniClusterSize, normalizedVectors.data());
+            // normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
+            quantizer->batch_train(miniClusterSize, miniCluster.data());
         }
 
         // Finalize the quantizer
@@ -808,8 +808,8 @@ namespace orangedb {
             if (miniClusterSize == 0) {
                 continue;
             }
-            normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
-            quantizer->encode(normalizedVectors.data(), quantizedMiniClusters[i].data(), miniClusterSize);
+            // normalize_vectors(miniCluster.data(), dim, miniClusterSize, normalizedVectors.data());
+            quantizer->encode(miniCluster.data(), quantizedMiniClusters[i].data(), miniClusterSize);
         }
     }
 
@@ -1092,7 +1092,7 @@ namespace orangedb {
             for (int j = 0; j < clusterSize; j++) {
                 double dist;
                 clusterDc->computeDistance(j, &dist);
-                printf("dist: %f\n", dist);
+                // printf("dist: %f\n", dist);
                 stats.numDistanceCompForSearch++;
                 if (results.size() <= k || dist < results.top().dist) {
                     results.emplace(ids[j], dist);

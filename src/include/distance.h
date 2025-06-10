@@ -446,7 +446,7 @@ namespace orangedb {
                                                            quantizer->getAlphaSqr());
             }
         }
-        return std::make_unique<DelegateDC<uint8_t> >(std::move(delegate), data, dim, n);
+        return std::make_unique<DelegateDC<uint8_t> >(std::move(delegate), data, quantizer->codeSize, n);
     }
 
         // struct QuantizedDistanceComputer : public DistanceComputer {

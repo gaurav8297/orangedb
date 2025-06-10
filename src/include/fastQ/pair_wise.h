@@ -238,8 +238,9 @@ namespace fastq {
 
             inline void compute_distance(const float *x, const uint8_t *y, double *result) override {
 #if SIMSIMD_TARGET_NEON
-                compute_asym_l2sqr_neon(x, y, result, dim, alpha, beta, skewed_alpha, skewed_beta, code_mask_size,
-                                        masks.data());
+                // compute_asym_l2sqr_neon(x, y, result, dim, alpha, beta, skewed_alpha, skewed_beta, code_mask_size,
+                //                         masks.data());
+                throw std::runtime_error("Not implemented");
 #else
                 throw std::runtime_error("Not implemented");
 #endif
@@ -274,8 +275,9 @@ namespace fastq {
 
             inline void compute_distance(const uint8_t *x, const uint8_t *y, double *result) override {
 #if SIMSIMD_TARGET_NEON
-                compute_sym_l2sqr_neon(x, y, result, dim, alpha, beta, skewed_alpha, skewed_beta, code_mask_size,
-                                       x_masks.data(), y_masks.data());
+                // compute_sym_l2sqr_neon(x, y, result, dim, alpha, beta, skewed_alpha, skewed_beta, code_mask_size,
+                //                        x_masks.data(), y_masks.data());
+                throw std::runtime_error("Not implemented");
 #else
                 throw std::runtime_error("Not implemented");
 #endif
@@ -420,7 +422,7 @@ namespace fastq {
 
             inline void decode(const uint8_t *code, float *x, size_t n) const override {
 #if SIMSIMD_TARGET_NEON
-                decode_neon(code, x, n, dim, codeSize, non_skewed_alpha, non_skewed_beta, skewed_alpha, skewed_beta);
+                // decode_neon(code, x, n, dim, codeSize, non_skewed_alpha, non_skewed_beta, skewed_alpha, skewed_beta);
 #endif
             }
 
