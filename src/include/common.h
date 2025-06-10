@@ -445,7 +445,7 @@ inline static void normalize_vectors_haswell(const float *vector, int dim, float
 
     inline static void normalize_vectors(const float *vector, int dim, int n, float *norm_vector) {
         for (int i = 0; i < n; i++) {
-            norm_vector(vector + i * dim, dim, norm_vector + i * dim);
+            normalize_vector(vector + i * dim, dim, norm_vector + i * dim);
         }
     }
 } // namespace orange
