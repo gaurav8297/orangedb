@@ -2401,7 +2401,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
-    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, L2,
+    DistanceType distanceType = useIP ? COSINE : L2;
+    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
                                    0, 0);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
