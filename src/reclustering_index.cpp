@@ -8,6 +8,7 @@ namespace orangedb {
 
     ReclusteringIndex::ReclusteringIndex(const std::string &file_path, RandomGenerator *rg) : rg(rg) {
         load_from_disk(file_path);
+        quantizer = std::make_unique<SQ8Bit>(dim);
     }
 
     void ReclusteringIndex::insert(float *data, size_t n) {
