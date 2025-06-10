@@ -194,6 +194,8 @@ namespace orangedb {
 
         // Quantization
         std::unique_ptr<SQ8Bit> quantizer;
+        std::vector<uint8_t> quantizedMegaCentroids;
+        std::vector<uint8_t> quantizedMiniCentroids;
         std::vector<std::vector<uint8_t>> quantizedMiniClusters;
 
         // Stats

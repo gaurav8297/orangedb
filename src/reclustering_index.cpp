@@ -821,6 +821,28 @@ namespace orangedb {
                 quantizer->encode(miniCluster.data(), quantizedMiniClusters[i].data(), miniClusterSize);
             }
         }
+
+        // Quantize the mega centroids
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        quantizedMegaCentroids.resize(numMegaCentroids * quantizer->codeSize);
+        if (config.distanceType == COSINE) {
+            normalizedVectors.resize(numMegaCentroids * dim);
+            normalize_vectors(megaCentroids.data(), dim, numMegaCentroids, normalizedVectors.data());
+            quantizer->encode(normalizedVectors.data(), quantizedMegaCentroids.data(), numMegaCentroids);
+        } else {
+            quantizer->encode(megaCentroids.data(), quantizedMegaCentroids.data(), numMegaCentroids);
+        }
+
+        // Quantize the mini centroids
+        auto numMiniCentroids = miniCentroids.size() / dim;
+        quantizedMiniCentroids.resize(numMiniCentroids * quantizer->codeSize);
+        if (config.distanceType == COSINE) {
+            normalizedVectors.resize(numMiniCentroids * dim);
+            normalize_vectors(miniCentroids.data(), dim, numMiniCentroids, normalizedVectors.data());
+            quantizer->encode(normalizedVectors.data(), quantizedMiniCentroids.data(), numMiniCentroids);
+        } else {
+            quantizer->encode(miniCentroids.data(), quantizedMiniCentroids.data(), numMiniCentroids);
+        }
     }
 
     double ReclusteringIndex::calcScoreForMegaCluster(int megaClusterId) {
@@ -1070,7 +1092,7 @@ namespace orangedb {
         findKClosestMegaCentroids(query, nMegaProbes, megaAssign);
 
         auto numMicroCentroids = miniCentroids.size() / dim;
-        auto dc = getDistanceComputer(miniCentroids.data(), numMicroCentroids);
+        auto dc = getQuantizedDistanceComputer(quantizedMiniCentroids.data(), numMicroCentroids);
         dc->setQuery(query);
 
         // Now find the closest micro centroids
