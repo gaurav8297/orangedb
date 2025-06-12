@@ -1118,7 +1118,7 @@ namespace orangedb {
         findKClosestMegaCentroids(query, nMegaProbes, megaAssign);
 
         auto numMicroCentroids = miniCentroids.size() / dim;
-        auto dc = getDistanceComputer(miniCentroids.data(), numMicroCentroids);
+        auto dc = getQuantizedDistanceComputer(quantizedMiniCentroids.data(), numMicroCentroids);
         dc->setQuery(query);
 
         // Now find the closest micro centroids
