@@ -70,6 +70,10 @@ namespace orangedb {
 
         void naiveInsert(float *data, size_t n);
 
+        void trainQuant(float *data, size_t n);
+
+        void naiveInsertQuant(float *data, size_t n);
+
         void mergeNewMiniCentroids();
 
         void reclusterMegaCentroids(int n);
@@ -122,17 +126,50 @@ namespace orangedb {
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                  std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds);
 
+        // Quantized clustering methods
+        void clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                 std::vector<float>& centroids, std::vector<std::vector<uint8_t>>& clusters,
+                 std::vector<std::vector<vector_idx_t>> &clusterVectorIds);
+
+        void clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                 std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds);
+
+        // Generic clustering method
+        template <typename T>
+        void clusterData_(T *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                 std::vector<float>& centroids, std::vector<std::vector<T>>& clusters,
+                 std::vector<std::vector<vector_idx_t>> &clusterVectorIds,
+                 DelegateDC<T> *dc, int dataDim, std::function<float(T)> decodeFunc);
+
+        template <typename T>
+        void clusterData_(T *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                          std::vector<float> &centroids, std::vector<std::vector<vector_idx_t> > &clusterVectorIds,
+                          DelegateDC<T> *dc, int dataDim, std::function<float(T)> decodeFunc);
+
         void calcMeanCentroid(float *data, vector_idx_t *vectorIds, int n, std::vector<float> &centroids,
                           std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
 
-        std::vector<vector_idx_t> appendOrMergeCentroids(std::vector<vector_idx_t> oldMegaCentroids, std::vector<float> &newMegaCentroids,
-                                    std::vector<std::vector<vector_idx_t> > &miniClusterIds,
-                                    std::vector<float> &newMiniCentroids,
-                                    std::vector<std::vector<float> > &newMiniClusters,
-                                    std::vector<std::vector<vector_idx_t> > &newMiniClusterVectorIds);
+        std::vector<vector_idx_t> appendOrMergeCentroids(
+            std::vector<vector_idx_t> oldMegaCentroids,
+            std::vector<float> &newMegaCentroids,
+            std::vector<std::vector<vector_idx_t>> &miniClusterIds,
+            std::vector<float> &newMiniCentroids,
+            std::vector<std::vector<float>> &newMiniClusters,
+            std::vector<std::vector<vector_idx_t>> &newMiniClusterVectorIds);
 
-        std::vector<vector_idx_t> appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds, std::vector<float> &newMegaCentroids,
-                                       std::vector<std::vector<vector_idx_t> > &newMiniClusterIds);
+        // Quantization methods!
+        std::vector<vector_idx_t> appendOrMergeCentroidsQuant(
+            std::vector<vector_idx_t> oldMegaCentroids,
+            std::vector<float> &newMegaCentroids,
+            std::vector<std::vector<vector_idx_t> > &miniClusterIds,
+            std::vector<uint8_t> &newMiniCentroids,
+            std::vector<std::vector<uint8_t> > &newMiniClusters,
+            std::vector<std::vector<vector_idx_t> > &newMiniClusterVectorIds);
+
+        std::vector<vector_idx_t> appendOrMergeMegaCentroids(
+            std::vector<vector_idx_t> oldMegaCentroidIds,
+            std::vector<float> &newMegaCentroids,
+            std::vector<std::vector<vector_idx_t>> &newMiniClusterIds);
 
         inline void updateTotalDataWrittenBySystem(const std::vector<std::vector<vector_idx_t>> &newMiniClusterIds,
                                                    const std::vector<std::vector<vector_idx_t>> &newMiniClusterVectorIds);
@@ -194,9 +231,9 @@ namespace orangedb {
         std::vector<std::vector<float>> newMiniClusters;
         std::vector<std::vector<vector_idx_t>> newMiniClusterVectorIds;
 
-        // Quantization
+        // Quantized data
         std::unique_ptr<SQ8Bit> quantizer;
-        std::vector<uint8_t> quantizedMegaCentroids;
+        // std::vector<float> quantizedMegaCentroids;
         std::vector<uint8_t> quantizedMiniCentroids;
         std::vector<std::vector<uint8_t>> quantizedMiniClusters;
 

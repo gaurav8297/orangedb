@@ -2087,7 +2087,9 @@ void test_clustering_data(InputParser &input) {
     int numCentroids = numVectors / clusterSize;
     int minCentroidSize = (numVectors / numCentroids) * 0.5;
     int maxCentroidSize = (numVectors / numCentroids) * 1.2;
-    auto clustering = Clustering(baseDimension, numCentroids, nIter, minCentroidSize, maxCentroidSize, lambda);
+    auto dc = createDistanceComputer(baseVecs, baseDimension, baseNumVectors, L2);
+    auto clustering = Clustering<float>(baseDimension, baseDimension, numCentroids, nIter, minCentroidSize,
+                                        maxCentroidSize, dc.get(), [](const float a) { return a; }, lambda);
 
     // Init centroids and train!!
     printf("Init centroids\n");
@@ -2144,7 +2146,7 @@ void test_clustering_data(InputParser &input) {
             for (size_t v = 0; v < baseNumVectors; v++) {
                 if (labels[v] == closestCentroidId.id) {
                     double dist;
-                    centroidDc->computeDistance(queryVecs + i * queryDimension, baseVecs + v * baseDimension, &dist);
+                    centroidDc->computeSymDistance(queryVecs + i * queryDimension, baseVecs + v * baseDimension, &dist);
                     totalDC++;
                     if (results.size() < k || dist < results.top().dist) {
                         results.emplace(v, dist);

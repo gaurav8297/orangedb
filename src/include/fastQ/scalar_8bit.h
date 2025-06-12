@@ -460,6 +460,16 @@ namespace fastq {
                 }
             }
 
+            inline void decode_one(const uint8_t *codes, float *x, size_t n) const override {
+                for (size_t i = 0; i < n; i++) {
+                    const uint8_t *ci = codes + i * codeSize;
+                    float *xi = x + i * dim;
+                    for (size_t j = 0; j < dim; j++) {
+                        xi[j] = decode_serial(ci[j], alpha[j], beta[j]);
+                    }
+                }
+            }
+
             void flush_to_disk(std::ofstream& out) const {
                 // Write the basic fields
                 out.write(reinterpret_cast<const char *>(&dim), sizeof(dim));

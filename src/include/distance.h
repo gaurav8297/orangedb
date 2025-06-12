@@ -27,7 +27,9 @@ namespace orangedb {
 
         virtual void computeDistance(const T *dest, double *result) = 0;
 
-        virtual void computeDistance(const T *src, const T *dest, double *result) = 0;
+        virtual void computeSymDistance(const T *src, const T *dest, double *result) = 0;
+
+        virtual void computeAsymDistance(const float *src, const T *dest, double *result) = 0;
 
         virtual void setQuery(const float *query) = 0;
 
@@ -63,7 +65,11 @@ namespace orangedb {
             simsimd_l2sq_f32(query, dest, dim, result);
         }
 
-        inline void computeDistance(const float *src, const float *dest, double *result) override {
+        inline void computeSymDistance(const float *src, const float *dest, double *result) override {
+            simsimd_l2sq_f32(src, dest, dim, result);
+        }
+
+        inline void computeAsymDistance(const float *src, const float *dest, double *result) override {
             simsimd_l2sq_f32(src, dest, dim, result);
         }
 
@@ -89,7 +95,11 @@ namespace orangedb {
             simsimd_dot_f32(query, dest, dim, result);
         }
 
-        inline void computeDistance(const float *src, const float *dest, double *result) override {
+        inline void computeSymDistance(const float *src, const float *dest, double *result) override {
+            simsimd_dot_f32(src, dest, dim, result);
+        }
+
+        inline void computeAsymDistance(const float *src, const float *dest, double *result) override {
             simsimd_dot_f32(src, dest, dim, result);
         }
 
@@ -115,7 +125,11 @@ namespace orangedb {
             simsimd_cos_f32(query, dest, dim, result);
         }
 
-        inline void computeDistance(const float *src, const float *dest, double *result) override {
+        inline void computeSymDistance(const float *src, const float *dest, double *result) override {
+            simsimd_cos_f32(src, dest, dim, result);
+        }
+
+        inline void computeAsymDistance(const float *src, const float *dest, double *result) override {
             simsimd_cos_f32(src, dest, dim, result);
         }
 
@@ -149,11 +163,19 @@ namespace orangedb {
 #endif
         }
 
-        inline void computeDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
+        inline void computeSymDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
 #if SIMSIMD_TARGET_SKYLAKE
         compute_sym_l2sq_skylake_8bit(src, dest, result, dim, alphaSqr);
 #else
             compute_sym_l2sq_serial_8bit(src, dest, result, dim, alphaSqr);
+#endif
+        }
+
+        inline void computeAsymDistance(const float *src, const uint8_t *dest, double *result) override {
+#if SIMSIMD_TARGET_SKYLAKE
+            compute_asym_l2sq_skylake_8bit(src, dest, result, dim, alpha, beta);
+#else
+            compute_asym_l2sq_serial_8bit(src, dest, result, dim, alpha, beta);
 #endif
         }
 
@@ -192,11 +214,19 @@ namespace orangedb {
 #endif
         }
 
-        inline void computeDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
+        inline void computeSymDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
 #if SIMSIMD_TARGET_SKYLAKE
         compute_sym_l2sq_skylake_8bit(src, dest, result, dim, quantizer->getAlphaSqr());
 #else
             compute_sym_l2sq_serial_8bit(src, dest, result, dim, quantizer->getAlphaSqr());
+#endif
+        }
+
+        inline void computeAsymDistance(const float *src, const uint8_t *dest, double *result) override {
+#if SIMSIMD_TARGET_SKYLAKE
+            compute_asym_l2sq_skylake_8bit(src, dest, result, dim, quantizer->getAlpha(), quantizer->getBeta());
+#else
+            compute_asym_l2sq_serial_8bit(src, dest, result, dim, quantizer->getAlpha(), quantizer->getBeta());
 #endif
         }
 
@@ -223,8 +253,12 @@ namespace orangedb {
             compute_asym_ip_serial_8bit(query, dest, result, dim, alpha, beta);
         }
 
-        inline void computeDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
+        inline void computeSymDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
             compute_sym_ip_serial_8bit(src, dest, result, dim, alphaSqr);
+        }
+
+        inline void computeAsymDistance(const float *src, const uint8_t *dest, double *result) override {
+            compute_asym_ip_serial_8bit(src, dest, result, dim, alpha, beta);
         }
 
         inline void setQuery(const float *query) override {
@@ -258,8 +292,12 @@ namespace orangedb {
             compute_sym_ip_serial_8bit(quantizedQuery, dest, result, dim, quantizer->getAlphaSqr());
         }
 
-        inline void computeDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
+        inline void computeSymDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
             compute_sym_ip_serial_8bit(src, dest, result, dim, quantizer->getAlphaSqr());
+        }
+
+        inline void computeAsymDistance(const float *src, const uint8_t *dest, double *result) override {
+            compute_asym_ip_serial_8bit(src, dest, result, dim, quantizer->getAlpha(), quantizer->getBeta());
         }
 
         inline void setQuery(const float *query) override {
@@ -288,7 +326,7 @@ namespace orangedb {
 
         inline void computeDistance(const uint8_t *dest, double *result) override {
 #if SIMSIMD_TARGET_SKYLAKE
-        compute_asym_ip_skylake_8bit(query, dest, result, dim, alpha, beta);
+            compute_asym_ip_skylake_8bit(query, dest, result, dim, alpha, beta);
 #else
             compute_asym_ip_serial_8bit(query, dest, result, dim, alpha, beta);
 #endif
@@ -296,8 +334,22 @@ namespace orangedb {
             *result = *result < 0 ? 0 : *result;
         }
 
-        inline void computeDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
+        inline void computeSymDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
+#if SIMSIMD_TARGET_SKYLAKE
+            compute_sym_ip_skylake_8bit(src, dest, result, dim, alphaSqr);
+#else
             compute_sym_ip_serial_8bit(src, dest, result, dim, alphaSqr);
+#endif
+            *result = 1 - *result;
+            *result = *result < 0 ? 0 : *result;
+        }
+
+        inline void computeAsymDistance(const float *src, const uint8_t *dest, double *result) override {
+#if SIMSIMD_TARGET_SKYLAKE
+            compute_asym_ip_skylake_8bit(src, dest, result, dim, alpha, beta);
+#else
+            compute_asym_ip_serial_8bit(src, dest, result, dim, alpha, beta);
+#endif
             *result = 1 - *result;
             *result = *result < 0 ? 0 : *result;
         }
@@ -340,8 +392,22 @@ namespace orangedb {
             *result = *result < 0 ? 0 : *result;
         }
 
-        inline void computeDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
+        inline void computeSymDistance(const uint8_t *src, const uint8_t *dest, double *result) override {
+#if SIMSIMD_TARGET_SKYLAKE
+            compute_sym_ip_skylake_8bit(src, dest, result, dim, quantizer->getAlphaSqr());
+#else
             compute_sym_ip_serial_8bit(src, dest, result, dim, quantizer->getAlphaSqr());
+#endif
+            *result = 1 - *result;
+            *result = *result < 0 ? 0 : *result;
+        }
+
+        inline void computeAsymDistance(const float *src, const uint8_t *dest, double *result) override {
+#if SIMSIMD_TARGET_SKYLAKE
+            compute_asym_ip_skylake_8bit(src, dest, result, dim, quantizer->getAlpha(), quantizer->getBeta());
+#else
+            compute_asym_ip_serial_8bit(src, dest, result, dim, quantizer->getAlpha(), quantizer->getBeta());
+#endif
             *result = 1 - *result;
             *result = *result < 0 ? 0 : *result;
         }
@@ -377,15 +443,19 @@ namespace orangedb {
             CHECK_ARGUMENT(src < n && dest < n, "Index out of bounds");
             const T *x = data + (src * dim);
             const T *y = data + (dest * dim);
-            dc->computeDistance(x, y, result);
+            dc->computeSymDistance(x, y, result);
         }
 
         inline void computeDistance(const T *dest, double *result) {
             dc->computeDistance(dest, result);
         }
 
-        inline void computeDistance(const T *src, const T *dest, double *result) {
-            dc->computeDistance(src, dest, result);
+        inline void computeSymDistance(const T *src, const T *dest, double *result) {
+            dc->computeSymDistance(src, dest, result);
+        }
+
+        inline void computeAsymDistance(const float *src, const T *dest, double *result) {
+            dc->computeAsymDistance(src, dest, result);
         }
 
         inline void batchComputeDistances(vector_idx_t *ids, double *results, int size) {
