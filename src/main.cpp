@@ -2390,6 +2390,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const int numThreads = stoi(input.getCmdOption("-numThreads"));
     const bool useIP = stoi(input.getCmdOption("-useIP"));
+    const float quantTrainPercentage = stof(input.getCmdOption("-quantTrainPercentage"));
     omp_set_num_threads(numThreads);
 
     // Read dataset
@@ -2403,7 +2404,7 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     DistanceType distanceType = useIP ? COSINE : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
-                                   0, 0);
+                                   0, 0, quantTrainPercentage);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
