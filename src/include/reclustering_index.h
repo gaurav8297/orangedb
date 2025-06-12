@@ -45,14 +45,14 @@ namespace orangedb {
         // number of existing mega centroids to consider for reclustering
         int numExistingMegaReclusterCentroids = 5;
         // Quantization train percentage
-        float quantizationTrainPercentage = 1;
+        float quantizationTrainPercentage = 0.1;
 
         explicit ReclusteringIndexConfig() = default;
 
         explicit ReclusteringIndexConfig(const int nIter, const int megaCentroidSize, const int miniCentroidSize,
                                          const int newMiniCentroidSize, const float lambda, const float searchThreshold,
                                          const DistanceType distanceType, const int numMegaReclusterCentroids,
-                                         const int numNewMiniReclusterCentroids, const float quantizationTrainPercentage = 1)
+                                         const int numNewMiniReclusterCentroids, const float quantizationTrainPercentage = 0.1)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
