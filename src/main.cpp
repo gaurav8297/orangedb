@@ -2281,7 +2281,7 @@ double get_quantized_recall(ReclusteringIndex &index, float *queryVecs, size_t q
     ReclusteringIndexStats stats;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
-        index.searchQuantized(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats);
+        index.searchQuantized(queryVecs + i * queryDimension, k*3, results, nMegaProbes, nMiniProbes, stats);
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();
