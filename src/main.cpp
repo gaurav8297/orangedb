@@ -2087,7 +2087,9 @@ void test_clustering_data(InputParser &input) {
     int numCentroids = numVectors / clusterSize;
     int minCentroidSize = (numVectors / numCentroids) * 0.5;
     int maxCentroidSize = (numVectors / numCentroids) * 1.2;
-    auto clustering = Clustering(baseDimension, numCentroids, nIter, minCentroidSize, maxCentroidSize, lambda);
+    auto dc = createDistanceComputer(baseVecs, baseDimension, baseNumVectors, L2);
+    auto clustering = Clustering<float>(baseDimension, baseDimension, numCentroids, nIter, minCentroidSize,
+                                        maxCentroidSize, dc.get(), [](const float a, int j) { return a; }, lambda);
 
     // Init centroids and train!!
     printf("Init centroids\n");
@@ -2144,7 +2146,7 @@ void test_clustering_data(InputParser &input) {
             for (size_t v = 0; v < baseNumVectors; v++) {
                 if (labels[v] == closestCentroidId.id) {
                     double dist;
-                    centroidDc->computeDistance(queryVecs + i * queryDimension, baseVecs + v * baseDimension, &dist);
+                    centroidDc->computeSymDistance(queryVecs + i * queryDimension, baseVecs + v * baseDimension, &dist);
                     totalDC++;
                     if (results.size() < k || dist < results.top().dist) {
                         results.emplace(v, dist);
@@ -2391,6 +2393,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int numThreads = stoi(input.getCmdOption("-numThreads"));
     const bool useIP = stoi(input.getCmdOption("-useIP"));
     const float quantTrainPercentage = stof(input.getCmdOption("-quantTrainPercentage"));
+    const bool quantBuild = stoi(input.getCmdOption("-quantBuild"));
     omp_set_num_threads(numThreads);
 
     // Read dataset
@@ -2412,6 +2415,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     RandomGenerator rng(1234);
     ReclusteringIndex index(baseDimension, config, &rng);
 
+    if (quantBuild) {
+        index.trainQuant(baseVecs, baseNumVectors);
+    }
+
     if (readFromDisk) {
         index = ReclusteringIndex(storagePath, &rng);
     } else {
@@ -2425,31 +2432,35 @@ void benchmark_fast_reclustering(InputParser &input) {
                 end = baseNumVectors;
             }
             printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
-            index.naiveInsert(baseVecs + start * baseDimension, end - start);
+            if (quantBuild) {
+                index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
+            } else {
+                index.naiveInsert(baseVecs + start * baseDimension, end - start);
+            }
         }
         printf("Writing index to disk\n");
         index.flush_to_disk(storagePath);
     }
-    index.quantizeVectors();
-    auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-                                 nMiniProbes);
+    // index.quantizeVectors();
+    // auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+    //                              nMiniProbes);
     auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                                  nMegaProbes, nMiniProbes);
-    printf("Recall: %f, Quantized Recall: %f\n", recall, quantizedRecall);
-    index.printStats();
+    printf("Recall: %f, Quantized Recall: %f\n", 0, quantizedRecall);
+    // index.printStats();
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
-        index.reclusterAllMegaCentroids();
-        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-                         nMiniProbes);
+        index.reclusterAllMiniCentroidsQuant();
+        // auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+        //                  nMiniProbes);
         auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              nMegaProbes, nMiniProbes);
-        printf("Recall: %f, Quantized Recall: %f\n", recall, quantizedRecall);
-        printf("After reclustering only  mega centroids, iteration: %d, recall: %f\n", iter, recall);
+        printf("Recall: %f, Quantized Recall: %f\n", 0, quantizedRecall);
+        printf("After reclustering only  mega centroids, iteration: %d, recall: %f\n", iter, quantizedRecall);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast();
+            index.reclusterFastQuant();
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
@@ -2457,15 +2468,15 @@ void benchmark_fast_reclustering(InputParser &input) {
                 index.reclusterFull(numMegaReclusterCentroids);
             }
         }
-        index.quantizeVectors();
-        recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-                                 nMiniProbes);
+        // index.quantizeVectors();
+        // recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+        //                          nMiniProbes);
         quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                      nMegaProbes, nMiniProbes);
-        printf("After micro reclustering, iteration: %d, recall: %f, quantized recall: %f\n", iter, recall, quantizedRecall);
+        printf("After micro reclustering, iteration: %d, recall: %f, quantized recall: %f\n", iter, 0, quantizedRecall);
         printf("Recalculating scores\n");
         // index.storeScoreForMegaClusters();
-        index.printStats();
+        // index.printStats();
         printf("Done with iteration: %d\n", iter);
         // printf("Flushing to disk\n");
         // index.flush_to_disk(storagePath);

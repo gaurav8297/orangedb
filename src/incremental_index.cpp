@@ -174,8 +174,7 @@ namespace orangedb {
         }
 
         // TODO: Move some vectors based on edge cases
-        Clustering megaClustering(dim, 2, 50, getMinCentroidSize(totalVectors, 2), getMaxCentroidSize(totalVectors, 2),
-                                  0);
+        Clustering<float> megaClustering(dim, dim, 2, 50, getMinCentroidSize(totalVectors, 2), getMaxCentroidSize(totalVectors, 2));
         megaClustering.initCentroids(temp_vectors.data(), totalVectors);
         megaClustering.train(temp_vectors.data(), totalVectors);
 
@@ -216,9 +215,9 @@ namespace orangedb {
         }
 
         // Cluster mega cluster A
-        Clustering megaClusteringA(dim, config.numCentroids, config.nIter,
+        Clustering<float> megaClusteringA(dim, dim, config.numCentroids, config.nIter,
                                    getMinCentroidSize(megaClusterASize, config.numCentroids),
-                                   getMaxCentroidSize(megaClusterASize, config.numCentroids), 0);
+                                   getMaxCentroidSize(megaClusterASize, config.numCentroids));
         // TODO: Maybe initialize based on previous clusters
         megaClusteringA.initCentroids(megaClusterA.data(), megaClusterASize);
         megaClusteringA.train(megaClusterA.data(), megaClusterASize);
@@ -226,10 +225,9 @@ namespace orangedb {
                          &megaClusteringA, megaClusterA.data(), megaClusterAIds.data(), megaClusterASize);
 
         // Cluster mega cluster B
-        Clustering megaClusteringB(dim, config.numCentroids, config.nIter,
+        Clustering<float> megaClusteringB(dim, dim, config.numCentroids, config.nIter,
                                    getMinCentroidSize(megaClusterBSize, config.numCentroids),
-                                   getMaxCentroidSize(megaClusterBSize, config.numCentroids),
-                                   0);
+                                   getMaxCentroidSize(megaClusterBSize, config.numCentroids));
         megaClusteringB.initCentroids(megaClusterB.data(), megaClusterBSize);
         megaClusteringB.train(megaClusterB.data(), megaClusterBSize);
         appendMegaCluster(megaClusteringB.centroids.data(),
@@ -237,7 +235,7 @@ namespace orangedb {
     }
 
     void IncrementalIndex::storeMegaCluster(int oldMegaClusterId, const float *newMegaCentroid,
-                                            Clustering *microClustering, const float *data,
+                                            Clustering<float> *microClustering, const float *data,
                                             const vector_idx_t *vectorIds, size_t n) {
         // 1) Update the mega‐centroid coordinates
         memcpy(
@@ -301,7 +299,7 @@ namespace orangedb {
     }
 
     void IncrementalIndex::appendMegaCluster(const float *newMegaCentroid,
-                                             Clustering *microClustering, const float *data,
+                                             Clustering<float> *microClustering, const float *data,
                                              const vector_idx_t *vectorIds, size_t n) {
         // Increase the size of mega centroids
         auto curSize = megaCentroids.size() / dim;
@@ -380,8 +378,8 @@ namespace orangedb {
         }
 
         auto size = clusters[microClusterId].size() / dim;
-        Clustering microClustering(dim, 2, 50, getMinCentroidSize(size, 2),
-                                   getMaxCentroidSize(size, 2), 0);
+        Clustering<float> microClustering(dim, dim, 2, 50, getMinCentroidSize(size, 2),
+                                   getMaxCentroidSize(size, 2));
         microClustering.initCentroids(clusters[microClusterId].data(), size);
         microClustering.train(clusters[microClusterId].data(), size);
         std::vector<int32_t> reclusterAssign(size);
@@ -660,7 +658,7 @@ namespace orangedb {
         auto minCentroidSize = getMinCentroidSize(n, config.numCentroids);
         auto maxCentroidSize = getMaxCentroidSize(n, config.numCentroids);
         printf("minCentroidSize: %zu, maxCentroidSize: %zu\n", minCentroidSize, maxCentroidSize);
-        Clustering clustering(dim, config.numCentroids, config.nIter, minCentroidSize, maxCentroidSize, config.lambda);
+        Clustering<float> clustering(dim, dim, config.numCentroids, config.nIter, minCentroidSize, maxCentroidSize);
 
         printf("Initialized clustering\n");
         clustering.initCentroids(data, n);

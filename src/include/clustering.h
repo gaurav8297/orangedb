@@ -6,12 +6,16 @@
 #include <common.h>
 
 namespace orangedb {
+    template<class T>
+    using decode_func_t = std::function<float(T, int)>;
+
     // Perform 1-NN search on the given data in parallel using OpenMP
     class IndexOneNN {
     public:
         explicit IndexOneNN(DelegateDC<float> *dc, int dim, int numEntries, float lambda = 0)
-                : dc(dc), dim(dim),
-                  numEntries(numEntries), lambda(lambda) {};
+            : dc(dc), dim(dim),
+              numEntries(numEntries), lambda(lambda) {
+        };
 
         inline void search(int n, const float *queries, double *distances, int32_t *resultIds);
 
@@ -19,7 +23,9 @@ namespace orangedb {
 
         void knn(int k, const float *queries, double *distances, vector_idx_t *resultIds);
 
-        void knnFiltered(int k, const float *query, double *distance, vector_idx_t *resultIds, const uint8_t *filteredMask);
+        void knnFiltered(int k, const float *query, double *distance, vector_idx_t *resultIds,
+                         const uint8_t *filteredMask);
+
     private:
         DelegateDC<float> *dc;
         int dim;
@@ -34,48 +40,47 @@ namespace orangedb {
     // Non Goals:
     // 1. We only need few clusters. So, we don't have to optimize for large number of clusters.
     // 2. No concept of weights for vectors.
+    template<typename T>
     class Clustering {
     public:
-        Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda = 0, DistanceType distanceType = COSINE);
+        Clustering(int dim, int dataDim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize,
+                   DelegateDC<T> *dc = nullptr,
+                   decode_func_t<T> decodeFunc = [](float a, int d) {return a;}, float lambda = 0);
 
-        void initCentroids(const float *data, int n);
+        void initCentroids(const T *data, int n);
 
-        void train(float *data, int n);
+        void train(T *data, int n);
 
-        void assignCentroids(const float *data, int n, int32_t *assign);
+        void assignCentroids(const T *data, int n, int32_t *assign);
 
-        void assignCentroids(const float *data, int n, double* dist, int32_t *assign);
+        void assignCentroids(const T *data, int n, double *dist, int32_t *assign);
 
-        inline int getCentroid(int i, float *centroid) {
-            CHECK_ARGUMENT(i < numCentroids, "Invalid centroid index");
-            centroid = new float[dim];
-            memcpy(centroid, centroids.data() + i * dim, dim * sizeof(float));
-            return dim;
-        }
-
-        inline int getNumCentroids() {
+        int getNumCentroids() {
             return numCentroids;
         }
 
     private:
-        inline void computeCentroids(int n, const float *data, const int *assign, int *hist, float *newCentroids);
+        void computeCentroids(int n, const T *data, const int *assign, int *hist, float *newCentroids);
 
-        inline void splitClusters(int *hist, float *newCentroids);
+        void splitClusters(int *hist, float *newCentroids);
 
-        inline int sampleData(int n, float *data, float **sampleData);
+        int sampleData(int n, T *data, T **sampleData);
 
     public:
         std::vector<float> centroids; // centroids (k * d)
 
     private:
         int dim; // dimension
+        int dataDim; // dimension of the data (if different from centroids)
         int numCentroids; // number of centroids
         int nIter; // number of iterations
         int minCentroidSize; // minimum size of a centroid. This is used to sample the training set.
         int maxCentroidSize; // maximum size of a centroid. This is used to sample the training set.
         float lambda; // regularization parameter
         bool debugMode = false;
-        DistanceType distanceType; // distance type to use for clustering
+        std::unique_ptr<DelegateDC<T>> tempDC = nullptr; // temporary distance computer for training
+        DelegateDC<T> *dc; // distance type to use for clustering
+        decode_func_t<T> decodeFunc;
 
         int seed = 1234; // seed for random number generator
     };

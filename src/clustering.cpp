@@ -12,19 +12,28 @@
 #define EPS (1 / 1024.)
 
 namespace orangedb {
-    Clustering::Clustering(int dim, int numCentroids, int nIter, int minCentroidSize, int maxCentroidSize, float lambda,
-                           DistanceType distanceType)
-        : dim(dim),
+    template<typename T>
+    Clustering<T>::Clustering(int dim, int dataDim, int numCentroids, int nIter, int minCentroidSize,
+                              int maxCentroidSize,
+                              DelegateDC<T> *dc, decode_func_t<T> decodeFunc, float lambda)
+        : centroids(std::vector<float>(dim * numCentroids)),
+          dim(dim),
+          dataDim(dataDim),
           numCentroids(numCentroids),
           nIter(nIter),
           minCentroidSize(minCentroidSize),
           maxCentroidSize(maxCentroidSize),
-          centroids(std::vector<float>(dim * numCentroids)),
           lambda(lambda),
-          distanceType(distanceType) {
+          dc(dc),
+          decodeFunc(std::move(decodeFunc)) {
+        if (dc == nullptr) {
+            // tempDC = createDistanceComputer(nullptr, dim, 0, DistanceType::L2);
+            dc = nullptr;
+        }
     }
 
-    void Clustering::initCentroids(const float *data, int n) {
+    template <typename T>
+    void Clustering<T>::initCentroids(const T *data, int n) {
         // TODO: Implement divide and conquer k-means++ initialization
         // For now choose the random centroids
         CHECK_ARGUMENT(n > numCentroids, "Number of vectors should be greater than number of centroids");
@@ -33,27 +42,26 @@ namespace orangedb {
         RandomGenerator rg(seed + 15486557L);
         rg.randomPerm(n, perm.data(), numCentroids);
         for (int i = 0; i < numCentroids; i++) {
-            memcpy(c + i * dim, data + perm[i] * dim, dim * sizeof(float));
+            // Decode the data point using decodeFunc
+            for (int j = 0; j < dim; j++) {
+                c[i * dim + j] = decodeFunc(data[perm[i] * dataDim + j], j);
+            }
         }
     }
 
-    void Clustering::train(float *data, int n) {
+    template <typename T>
+    void Clustering<T>::train(T *data, int n) {
         // printf("Training numCentroids: %d, nIter: %d, minCentroidSize: %d, maxCentroidSize: %d\n",
         //        numCentroids, nIter, minCentroidSize, maxCentroidSize);
         // Sample data from the given data
-        float *sample = nullptr;
+        T *sample = nullptr;
         int nSample = sampleData(n, data, &sample);
 
         auto *dist = new double[nSample];
         auto *assign = new int32_t[nSample];
         for (int i = 0; i < nIter; i++) {
-            // printf("Running iteration: %d\n", i);
-            // Initialize the index
-            auto dc = createDistanceComputer(centroids.data(), dim, numCentroids, distanceType);
-            IndexOneNN index = IndexOneNN(dc.get(), dim, numCentroids, lambda);
-
             // Phase 1: Assign each vector to the nearest centroid
-            index.search(nSample, sample, dist, assign);
+            assignCentroids(sample, nSample, dist, assign);
 
             // accumulate objective
             // float objective = 0;
@@ -62,7 +70,7 @@ namespace orangedb {
             // }
 
             // Phase 2: Update the centroids
-            const auto hist = new int[numCentroids];
+            auto *hist = new int[numCentroids];
             auto *newCentroids = new float[numCentroids * dim];
             computeCentroids(nSample, sample, assign, hist, newCentroids);
 
@@ -71,28 +79,57 @@ namespace orangedb {
 
             // Copy the centroids
             memcpy(centroids.data(), newCentroids, numCentroids * dim * sizeof(float));
+
+            // Delete hist and nuw centroids
+            delete[] hist;
+            delete[] newCentroids;
+        }
+
+        // Clean up
+        delete[] dist;
+        delete[] assign;
+        if (sample != data) {
+            delete[] sample; // Only delete if we allocated new memory
         }
     }
 
-    void Clustering::assignCentroids(const float *data, int n, int32_t *assign) {
-        // Initialize the index
-        auto dc = createDistanceComputer(centroids.data(), dim, numCentroids, distanceType);
-        IndexOneNN index = IndexOneNN(dc.get(), dim, numCentroids);
-
-        // Assign each vector to the nearest centroid
-        // TODO: Dist is not needed. We can optimize this.
+    template <typename T>
+    void Clustering<T>::assignCentroids(const T *data, int n, int32_t *assign) {
         auto *dist = new double[n];
-        index.search(n, data, dist, assign);
+        assignCentroids(data, n, dist, assign);
         delete[] dist;
     }
 
-    void Clustering::assignCentroids(const float *data, int n, double *dist, int32_t *assign) {
-        auto dc = createDistanceComputer(centroids.data(), dim, numCentroids, distanceType);
-        IndexOneNN index = IndexOneNN(dc.get(), dim, numCentroids);
-        index.search(n, data, dist, assign);
+    template <typename T>
+    void Clustering<T>::assignCentroids(const T *data, int n, double *dist, int32_t *assign) {
+        std::vector<double> hist(numCentroids, 0);
+#pragma omp parallel
+        {
+            auto localDc = dc->clone();
+#pragma omp for
+            for (size_t i = 0; i < n; i++) {
+                T* queryData = const_cast<T*>(data + i * dataDim);
+                double minDistance = std::numeric_limits<double>::max();
+                vector_idx_t j = 0, minId = 0;
+                for (vector_idx_t l = 0; l < numCentroids; l++) {
+                    float* centroid = centroids.data() + l * dim;
+                    double d;
+                    localDc->computeAsymDistance(centroid, queryData, &d);
+                    auto recomputedDist = d + lambda * hist[l];
+                    if (recomputedDist < minDistance) {
+                        minDistance = recomputedDist;
+                        minId = l;
+                    }
+                }
+                assign[i] = minId;
+                dist[i] = minDistance;
+                hist[minId]++;
+            }
+        }
     }
 
-    void Clustering::computeCentroids(int n, const float *data, const int *assign, int *hist, float *newCentroids) {
+    template <typename T>
+    void Clustering<T>::computeCentroids(int n, const T *data, const int *assign, int *hist, float *newCentroids) {
         memset(newCentroids, 0, numCentroids * dim * sizeof(float));
         memset(hist, 0, numCentroids * sizeof(int));
 #pragma omp parallel
@@ -109,9 +146,9 @@ namespace orangedb {
                 int c = assign[i];
                 if (c0 <= c && c < c1) {
                     auto centroid = newCentroids + c * dim;
-                    auto point = data + i * dim;
+                    auto point = data + i * dataDim;
                     for (int j = 0; j < dim; j++) {
-                        centroid[j] += point[j];
+                        centroid[j] += decodeFunc(point[j], j);
                     }
                     hist[c]++;
                 }
@@ -132,7 +169,8 @@ namespace orangedb {
         }
     }
 
-    void Clustering::splitClusters(int *hist, float *newCentroids) {
+    template <typename T>
+    void Clustering<T>::splitClusters(int *hist, float *newCentroids) {
         // Split the big clusters
         for (size_t small = 0; small < numCentroids; small++) {
             // skip the clusters that are already large enough
@@ -169,7 +207,8 @@ namespace orangedb {
         }
     }
 
-    int Clustering::sampleData(int n, float *data, float **sampleData) {
+    template <typename T>
+    int Clustering<T>::sampleData(int n, T *data, T **sampleData) {
         // Sample data from the given data
         // We will sample maxCentroidSize * numOfCentroids vectors from the data
         // We will return the sampled data and the number of vectors sampled
@@ -180,12 +219,12 @@ namespace orangedb {
             return nSample;
         }
 
-        *sampleData = new float[nSample * dim];
+        *sampleData = new T[nSample * dim];
         std::vector<vector_idx_t> perm(nSample);
         RandomGenerator rg(seed);
         rg.randomPerm(n, perm.data(), nSample);
         for (size_t i = 0; i < nSample; i++) {
-            memcpy(*sampleData + i * dim, data + perm[i] * dim, dim * sizeof(float));
+            memcpy(*sampleData + i * dataDim, data + perm[i] * dataDim, dataDim * sizeof(T));
         }
         return nSample;
     }
@@ -310,4 +349,7 @@ namespace orangedb {
             res.pop();
         }
     }
+
+    template class Clustering<float>;          // generates code for float version
+    template class Clustering<uint8_t>;  // generates code for uint8_t version
 }

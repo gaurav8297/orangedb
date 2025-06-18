@@ -46,7 +46,7 @@ namespace orangedb {
 
     private:
         std::unique_ptr<DelegateDC<float>> dc;
-        std::unique_ptr<Clustering> clustering;
+        std::unique_ptr<Clustering<float>> clustering;
         std::vector<std::unique_ptr<HNSW>> indexes;
         std::vector<std::vector<vector_idx_t>> actualIds;
         PartitionedIndexConfig config;

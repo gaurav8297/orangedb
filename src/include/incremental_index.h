@@ -70,10 +70,10 @@ namespace orangedb {
 
         void splitMegaCluster(int megaClusterId);
 
-        void storeMegaCluster(int oldMegaClusterId, const float* newMegaCentroid, Clustering* microClustering,
+        void storeMegaCluster(int oldMegaClusterId, const float* newMegaCentroid, Clustering<float>* microClustering,
                     const float *data, const vector_idx_t *vectorIds, size_t n);
 
-        void appendMegaCluster(const float* newMegaCentroid, Clustering* microClustering,
+        void appendMegaCluster(const float* newMegaCentroid, Clustering<float>* microClustering,
             const float *data, const vector_idx_t *vectorIds, size_t n);
 
         void splitMicroCluster(int microClusterId);

@@ -42,6 +42,29 @@ namespace orangedb {
         printf("Added %lu new mini centroids!\n", newMiniCentroids.size() / dim);
     }
 
+    void ReclusteringIndex::trainQuant(float *data, size_t n) {
+        // Allocate for normalized vectors
+        std::vector<float> normalizedVector(dim);
+        size_t totalTrained = 0;
+        // Quantize the new mini centroids
+        for (size_t i = 0; i < n; i++) {
+            if (rg->randFloat() > config.quantizationTrainPercentage) {
+                // Skip this vector
+                continue;
+            }
+            // Train using this vector
+            if (config.distanceType == COSINE) {
+                normalize_vectors(data + i * dim, dim, 1, normalizedVector.data());
+                quantizer->batch_train(1, normalizedVector.data());
+            } else {
+                quantizer->batch_train(1, data + i * dim);
+            }
+            totalTrained++;
+        }
+        printf("ReclusteringIndex::trainQuant trained on %lu vectors\n", totalTrained);
+        quantizer->finalize_train();
+    }
+
     void ReclusteringIndex::naiveInsert(float *data, size_t n) {
         std::vector<vector_idx_t> vectorIds(n);
         for (size_t i = 0; i < n; i++) {
@@ -77,12 +100,6 @@ namespace orangedb {
         // Create the mega centroids just by taking the mean
         std::vector<float> newMegaCentroid;
         std::vector<std::vector<vector_idx_t> > miniClusterIds;
-        // calcMeanCentroid(
-        //     newMiniCentroids.data(),
-        //     newMiniClusterIds.data(),
-        //     newMiniClusterIds.size(),
-        //     newMegaCentroid,
-        //     miniClusterIds);
         clusterData(newMiniCentroids.data(), newMiniClusterIds.data(), newMiniClusterIds.size(),
                     config.megaCentroidSize, newMegaCentroid, miniClusterIds);
 
@@ -97,6 +114,68 @@ namespace orangedb {
             megaMiniCentroidIds[curMegaClusterSize + i] = std::move(miniClusterIds[i]);
         }
         // TODO: Store the score
+        megaClusteringScore.resize(curMegaClusterSize + newMegaClusterSize);
+        size += n;
+        updateTotalDataWrittenByUser(n);
+    }
+
+    void ReclusteringIndex::naiveInsertQuant(float *data, size_t n) {
+        std::vector<vector_idx_t> vectorIds(n);
+        for (size_t i = 0; i < n; i++) {
+            vectorIds[i] = i + size;
+        }
+        auto dataDim = quantizer->codeSize;
+
+        // Quantize the data
+        std::vector<uint8_t> quantizedData;
+        quantizeVectors(data, n, quantizedData);
+
+        // Run clustering to create mini clusters
+        std::vector<float> newMiniCentroids;
+        std::vector<std::vector<uint8_t>> newMiniClusters;
+        std::vector<std::vector<vector_idx_t> > newMiniClusterVectorIds;
+        clusterDataQuant(quantizedData.data(), vectorIds.data(), n, config.miniCentroidSize, newMiniCentroids,
+            newMiniClusters, newMiniClusterVectorIds);
+
+        // Quantize the new mini centroids
+        std::vector<uint8_t> quantizedMiniCtrds;
+        quantizeVectors(newMiniCentroids.data(), newMiniCentroids.size() / dim, quantizedMiniCtrds);
+
+        // Assign mini cluster unique ids
+        auto curMiniClusterSize = quantizedMiniCentroids.size() / dataDim;
+        auto newMiniClusterSize = quantizedMiniCtrds.size() / dataDim;
+        std::vector<vector_idx_t> newMiniClusterIds(newMiniClusterSize);
+        for (size_t i = 0; i < newMiniClusterSize; i++) {
+            newMiniClusterIds[i] = curMiniClusterSize + i;
+        }
+
+        quantizedMiniCentroids.resize((curMiniClusterSize + newMiniClusterSize) * dataDim);
+        memcpy(quantizedMiniCentroids.data() + curMiniClusterSize * dataDim, quantizedMiniCtrds.data(),
+               newMiniCentroids.size() * sizeof(uint8_t));
+        quantizedMiniClusters.resize(curMiniClusterSize + newMiniClusterSize);
+        miniClusterVectorIds.resize(curMiniClusterSize + newMiniClusterSize);
+        for (size_t i = 0; i < newMiniClusterSize; i++) {
+            quantizedMiniClusters[curMiniClusterSize + i] = std::move(newMiniClusters[i]);
+            miniClusterVectorIds[curMiniClusterSize + i] = std::move(newMiniClusterVectorIds[i]);
+        }
+
+        // Create the mega centroids just by taking the mean
+        std::vector<float> newMegaCentroid;
+        std::vector<std::vector<vector_idx_t> > miniClusterIds;
+        clusterDataQuant(quantizedMiniCtrds.data(), newMiniClusterIds.data(), newMiniClusterIds.size(),
+                    config.megaCentroidSize, newMegaCentroid, miniClusterIds);
+
+        // Copy the new mega centroids
+        auto curMegaClusterSize = megaCentroids.size() / dim;
+        auto newMegaClusterSize = newMegaCentroid.size() / dim;
+        megaCentroids.resize((curMegaClusterSize + newMegaClusterSize) * dim);
+        memcpy(megaCentroids.data() + curMegaClusterSize * dim, newMegaCentroid.data(),
+               newMegaCentroid.size() * sizeof(float));
+        megaMiniCentroidIds.resize(curMegaClusterSize + newMegaClusterSize);
+        for (size_t i = 0; i < newMegaClusterSize; i++) {
+            megaMiniCentroidIds[curMegaClusterSize + i] = std::move(miniClusterIds[i]);
+        }
+
         megaClusteringScore.resize(curMegaClusterSize + newMegaClusterSize);
         size += n;
         updateTotalDataWrittenByUser(n);
@@ -130,6 +209,18 @@ namespace orangedb {
             megaClusterIds[i] = i;
         }
         reclusterFastMegaCentroids(megaClusterIds);
+    }
+
+    void ReclusteringIndex::reclusterFastQuant() {
+        // List all mega centroids
+        std::vector<vector_idx_t> megaClusterIds(megaCentroids.size() / dim);
+        for (size_t i = 0; i < megaClusterIds.size(); i++) {
+            megaClusterIds[i] = i;
+        }
+        // Now recluster miniCentroids within the mega centroids
+        for (auto megaCentroidId: megaClusterIds) {
+            reclusterInternalMegaCentroidQuant(megaCentroidId);
+        }
     }
 
     void ReclusteringIndex::reclusterFull(int numMegaCentroids) {
@@ -204,7 +295,7 @@ namespace orangedb {
                                            newMiniClusterIds[i]);
             }
         } else {
-            calcMeanCentroid(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
+            calcMeanCentroid(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(), dim,
                               newMegaCentroids, newMiniClusterIds);
             mergeNewMiniCentroidsBatch(newMegaCentroids.data(),
                                            newMiniClusterIds[0]);
@@ -296,6 +387,19 @@ namespace orangedb {
                                newMiniClusters, newMiniClusterVectorIds);
     }
 
+    void ReclusteringIndex::quantizeVectors(float *data, int n, std::vector<uint8_t> &quantizedVectors) {
+        quantizedVectors = std::vector<uint8_t>(n * quantizer->codeSize);
+        if (config.distanceType == COSINE) {
+            std::vector<float> normalizedVector(dim);
+            for (size_t i = 0; i < n; i++) {
+                normalize_vectors(data + i * dim, dim, 1, normalizedVector.data());
+                quantizer->encode(normalizedVector.data(), quantizedVectors.data() + i * quantizer->codeSize, 1);
+            }
+        } else {
+            quantizer->encode(data, quantizedVectors.data(), n);
+        }
+    }
+
     void ReclusteringIndex::reclusterFastMegaCentroids(std::vector<vector_idx_t> megaClusterIds) {
         // reclusterOnlyMegaCentroids(megaClusterIds);
         // It's possible that after reclustering the mega centroids has reduced in size.
@@ -357,6 +461,60 @@ namespace orangedb {
                                newMiniClusterVectorIds);
     }
 
+    void ReclusteringIndex::reclusterInternalMegaCentroidQuant(vector_idx_t megaClusterId) {
+        // Take all the existing mini centroids and merge them
+        auto dataDim = quantizer->codeSize;
+        auto totalVecs = 0;
+        auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
+        auto miniClusterSize = quantizedMiniClusters.size();
+        for (auto microCentroidId: microCentroidIds) {
+            assert(microCentroidId < miniClusterSize);
+            auto cluster = quantizedMiniClusters[microCentroidId];
+            totalVecs += (cluster.size() / dataDim);
+        }
+
+        // Copy actual vecs and vectorIds here
+        std::vector<uint8_t> tempData(totalVecs * dataDim);
+        std::vector<vector_idx_t> tempVectorIds(totalVecs);
+        size_t idx = 0;
+        for (auto microCentroidId: microCentroidIds) {
+            auto cluster = quantizedMiniClusters[microCentroidId];
+            auto vectorId = miniClusterVectorIds[microCentroidId];
+            size_t numVectors = cluster.size() / dataDim;
+            memcpy(tempData.data() + idx * dataDim, cluster.data(), cluster.size() * sizeof(uint8_t));
+            memcpy(tempVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
+            idx += numVectors;
+        }
+
+        // Run mini reclustering
+        std::vector<float> newMiniCentroids;
+        std::vector<std::vector<uint8_t>> newMiniClusters;
+        std::vector<std::vector<vector_idx_t>> newMiniClusterVectorIds;
+        clusterDataQuant(tempData.data(), tempVectorIds.data(), totalVecs, config.miniCentroidSize,
+                    newMiniCentroids, newMiniClusters, newMiniClusterVectorIds);
+
+        // Quantize the new mini centroids
+        std::vector<uint8_t> quantizedMiniCtrds;
+        quantizeVectors(newMiniCentroids.data(), newMiniCentroids.size() / dim, quantizedMiniCtrds);
+
+        std::vector<std::vector<vector_idx_t>> newMiniCentroidIds(1);
+        newMiniCentroidIds[0].resize(quantizedMiniCtrds.size() / dataDim);
+        for (size_t i = 0; i < newMiniCentroidIds[0].size(); i++) {
+            newMiniCentroidIds[0][i] = i;
+        }
+        std::vector<float> newMegaCentroids(dim);
+        memcpy(newMegaCentroids.data(), megaCentroids.data() + megaClusterId * dim,
+               dim * sizeof(float));
+
+        appendOrMergeCentroidsQuant({megaClusterId},
+                               newMegaCentroids,
+                               newMiniCentroidIds,
+                               quantizedMiniCtrds,
+                               newMiniClusters,
+                               newMiniClusterVectorIds);
+    }
+
+
 
     vector_idx_t ReclusteringIndex::getWorstMegaCentroid() {
         vector_idx_t worstMegaCentroid = 0;
@@ -382,6 +540,18 @@ namespace orangedb {
             megaCentroidIds[i] = i;
         }
         reclusterOnlyMegaCentroids(megaCentroidIds);
+    }
+
+    void ReclusteringIndex::reclusterAllMiniCentroidsQuant() {
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        if (numMegaCentroids == 0) {
+            return;
+        }
+        std::vector<vector_idx_t> megaCentroidIds(numMegaCentroids);
+        for (size_t i = 0; i < numMegaCentroids; i++) {
+            megaCentroidIds[i] = i;
+        }
+        reclusterOnlyMegaCentroidsQuant(megaCentroidIds);
     }
 
     void ReclusteringIndex::mergeNewMiniCentroidsBatch(float *newMegaCentroid,
@@ -526,6 +696,34 @@ namespace orangedb {
         appendOrMergeMegaCentroids(oldMegaCentroidIds, tempMegaCentroids, tempMiniClusterIds);
     }
 
+    void ReclusteringIndex::reclusterOnlyMegaCentroidsQuant(std::vector<vector_idx_t> oldMegaCentroidIds) {
+        auto totalVec = 0;
+        for (auto megaId: oldMegaCentroidIds) {
+            totalVec += megaMiniCentroidIds[megaId].size();
+        }
+        auto dataDim = quantizer->codeSize;
+
+        // Take all the micro centroids and copy into temp storage
+        std::vector<uint8_t> tempMiniCentroids(totalVec * dataDim);
+        std::vector<vector_idx_t> tempMiniCentroidIds(totalVec);
+        int idx = 0;
+        for (auto megaId: oldMegaCentroidIds) {
+            for (auto miniId: megaMiniCentroidIds[megaId]) {
+                memcpy(tempMiniCentroids.data() + idx * dataDim, quantizedMiniCentroids.data() + miniId * dataDim, sizeof(uint8_t) * dataDim);
+                tempMiniCentroidIds[idx] = miniId;
+                idx++;
+            }
+        }
+
+        // Cluster data and write the mega and micro back again
+        std::vector<float> tempMegaCentroids;
+        std::vector<std::vector<vector_idx_t>> tempMiniClusterIds;
+        clusterDataQuant(tempMiniCentroids.data(), tempMiniCentroidIds.data(), totalVec, config.megaCentroidSize, tempMegaCentroids, tempMiniClusterIds);
+
+        // Append back to mini centroids
+        appendOrMergeMegaCentroids(oldMegaCentroidIds, tempMegaCentroids, tempMiniClusterIds);
+    }
+
     void ReclusteringIndex::resetInputBuffer() {
         newMiniCentroids.clear();
         newMiniClusters.clear();
@@ -535,21 +733,60 @@ namespace orangedb {
         newMiniClusterVectorIds = std::vector<std::vector<vector_idx_t> >();
     }
 
-
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
                                         std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        auto dc = createDistanceComputer(data, dim, n, config.distanceType);
+        clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds,
+                            dc.get(), dim, [](const float x, int d) { return x; });
+    }
+
+    void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                        std::vector<float> &centroids,
+                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        auto dc = createDistanceComputer(data, dim, n, config.distanceType);
+        clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
+                            dc.get(), dim, [](const float x, int d) { return x; });
+    }
+
+    void ReclusteringIndex::clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                             std::vector<float> &centroids,
+                                             std::vector<std::vector<uint8_t> > &clusters,
+                                             std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        auto dc = createQuantizedDistanceComputer(data, dim, n, config.distanceType, quantizer.get());
+        auto q = quantizer.get();
+        clusterData_<uint8_t>(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds,
+                              dc.get(), q->codeSize, [&](const uint8_t x, int d) { return q->decode_one(x, d); });
+    }
+
+    void ReclusteringIndex::clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                             std::vector<float> &centroids,
+                                             std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        auto dc = createQuantizedDistanceComputer(data, dim, n, config.distanceType, quantizer.get());
+        auto q = quantizer.get();
+        clusterData_<uint8_t>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
+                              dc.get(), q->codeSize, [&](const uint8_t x, int d) { return q->decode_one(x, d); });
+    }
+
+    template <typename T>
+    void ReclusteringIndex::clusterData_(T *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                        std::vector<float> &centroids, std::vector<std::vector<T> > &clusters,
+                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds,
+                                        DelegateDC<T> *dc, int dataDim, decode_func_t<T> decodeFunc) {
         // Create the clustering object
         auto numClusters = getNumCentroids(n, avgClusterSize);
         // printf("Performing mini-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
         if (numClusters <= 1) {
-            calcMeanCentroid(data, vectorIds, n, centroids, clusterVectorIds);
+            calcMeanCentroid(data, vectorIds, n, dataDim, centroids, clusterVectorIds);
             return;
         }
-        Clustering clustering(dim, numClusters, config.nIter,
-                              getMinCentroidSize(n, numClusters),
-                              getMaxCentroidSize(n, numClusters),
-                              config.lambda, config.distanceType);
+
+        Clustering<T> clustering(dim, dataDim, numClusters, config.nIter,
+                                     getMinCentroidSize(n, numClusters),
+                                     getMaxCentroidSize(n, numClusters),
+                                     dc,
+                                     decodeFunc,
+                                     config.lambda);
 
         // Initialize the centroids
         clustering.initCentroids(data, n);
@@ -571,7 +808,7 @@ namespace orangedb {
         clusters.resize(numClusters);
         clusterVectorIds.resize(numClusters);
         for (int i = 0; i < numClusters; i++) {
-            std::vector<float> cluster(hist[i] * dim);
+            std::vector<T> cluster(hist[i] * dataDim);
             clusters[i] = cluster;
             std::vector<vector_idx_t> vectorId(hist[i]);
             clusterVectorIds[i] = vectorId;
@@ -582,29 +819,32 @@ namespace orangedb {
             auto assignId = assign[i];
             auto idx = hist[assignId];
             auto &cluster = clusters[assignId];
-            memcpy(cluster.data() + idx * dim, data + i * dim, dim * sizeof(float));
+            memcpy(cluster.data() + idx * dataDim, data + i * dataDim, dataDim * sizeof(T));
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
         }
         stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
     }
 
-    void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+    template <typename T>
+    void ReclusteringIndex::clusterData_(T *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids,
-                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
-
+                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds,
+                                        DelegateDC<T> *dc, int dataDim, decode_func_t<T> decodeFunc) {
         // Create the clustering object
         auto numClusters = getNumCentroids(n, avgClusterSize);
         // printf("Performing mega-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
         if (numClusters <= 1) {
-            calcMeanCentroid(data, vectorIds, n, centroids, clusterVectorIds);
+            calcMeanCentroid(data, vectorIds, n, dataDim, centroids, clusterVectorIds);
             return;
         }
 
-        Clustering clustering(dim, numClusters, config.nIter,
-                              getMinCentroidSize(n, numClusters),
-                              getMaxCentroidSize(n, numClusters),
-                              config.lambda, config.distanceType);
+        Clustering<T> clustering(dim, dataDim, numClusters, config.nIter,
+                                     getMinCentroidSize(n, numClusters),
+                                     getMaxCentroidSize(n, numClusters),
+                                     dc,
+                                     decodeFunc,
+                                     config.lambda);
 
         // Initialize the centroids
         clustering.initCentroids(data, n);
@@ -639,7 +879,8 @@ namespace orangedb {
         stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
     }
 
-    void ReclusteringIndex::calcMeanCentroid(float *data, vector_idx_t *vectorIds, int n, std::vector<float> &centroids,
+    template <typename T>
+    void ReclusteringIndex::calcMeanCentroid(T *data, vector_idx_t *vectorIds, int n, int dataDim, std::vector<float> &centroids,
                                              std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
         // Calculate mean over all vectors and copy the vectorIds directly
         centroids.resize(dim);
@@ -647,7 +888,7 @@ namespace orangedb {
         // TODO: Maybe do this using simd at some point
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < dim; j++) {
-                centroids[j] += data[i * dim + j];
+                centroids[j] += quantizer->decode_one(data[i * dataDim + j], j);
             }
         }
         auto norm = 1.0f / n;
@@ -759,6 +1000,106 @@ namespace orangedb {
         return appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
     }
 
+    std::vector<vector_idx_t> ReclusteringIndex::appendOrMergeCentroidsQuant(
+        std::vector<vector_idx_t> oldMegaCentroids,
+        std::vector<float> &newMegaCentroids,
+        std::vector<std::vector<vector_idx_t>> &miniCentroidIds,
+        std::vector<uint8_t> &newMiniCentroids,
+        std::vector<std::vector<uint8_t> > &newMiniClusters,
+        std::vector<std::vector<vector_idx_t> > &newMiniClusterVectorIds) {
+        auto quantDim = quantizer->codeSize;
+        updateTotalDataWrittenBySystem({}, newMiniClusterVectorIds);
+        // Try to copy inplace if possible otherwise append
+        std::vector<vector_idx_t> oldMiniClusterIds;
+        for (const int currMegaId : oldMegaCentroids) {
+            for (const auto &megaMiniId: megaMiniCentroidIds[currMegaId]) {
+                oldMiniClusterIds.push_back(megaMiniId);
+            }
+        }
+
+        // Copy the mini centroids, clusters and vector ids and fix the miniClusterIds
+        std::unordered_map<vector_idx_t, vector_idx_t> newToOldCentroidIdMap;
+        auto newMiniCentroidsSize = newMiniCentroids.size() / quantDim;
+        // assert(oldMiniClusterIds.size() <= newMiniCentroidsSize);
+        auto miniCentroidsSize = std::min(newMiniCentroidsSize, oldMiniClusterIds.size());
+        for (int i = 0; i < miniCentroidsSize; i++) {
+            auto oldCentroidId = oldMiniClusterIds[i];
+            // Copy the centroid
+            memcpy(quantizedMiniCentroids.data() + oldCentroidId * quantDim, newMiniCentroids.data() + i * quantDim, quantDim * sizeof(uint8_t));
+            // Move the cluster
+            auto currCluster = newMiniClusters[i];
+            auto currVectorId = newMiniClusterVectorIds[i];
+            quantizedMiniClusters[oldCentroidId] = std::move(currCluster);
+            miniClusterVectorIds[oldCentroidId] = std::move(currVectorId);
+            newToOldCentroidIdMap[i] = oldCentroidId;
+        }
+
+        if (newMiniCentroidsSize > miniCentroidsSize) {
+            // Append the new mini centroids
+            auto currentSize = quantizedMiniCentroids.size() / quantDim;
+            quantizedMiniCentroids.resize((currentSize + newMiniCentroidsSize - miniCentroidsSize) * quantDim);
+            memcpy(quantizedMiniCentroids.data() + currentSize * quantDim, newMiniCentroids.data() + miniCentroidsSize * quantDim,
+                   (newMiniCentroidsSize - miniCentroidsSize) * quantDim * sizeof(uint8_t));
+
+            // Append the new clusters
+            quantizedMiniClusters.resize(currentSize + newMiniCentroidsSize - miniCentroidsSize);
+            miniClusterVectorIds.resize(currentSize + newMiniCentroidsSize - miniCentroidsSize);
+            auto idx = 0;
+            for (auto i = miniCentroidsSize; i < newMiniCentroidsSize; i++) {
+                auto currCluster = newMiniClusters[i];
+                auto currVectorId = newMiniClusterVectorIds[i];
+                quantizedMiniClusters[currentSize + idx] = std::move(currCluster);
+                miniClusterVectorIds[currentSize + idx] = std::move(currVectorId);
+                newToOldCentroidIdMap[i] = currentSize + idx;
+                idx++;
+            }
+        } else {
+            std::unordered_map<vector_idx_t, vector_idx_t> mappedMiniClusterIds;
+            auto lastCentroidId = (quantizedMiniCentroids.size() / quantDim) - 1;
+            // If the new mini centroid smaller than oldMiniClusterIds.size()
+            for (int i = newMiniCentroidsSize; i < oldMiniClusterIds.size(); i++) {
+                // Copy from last to i
+                auto currCentroidId = oldMiniClusterIds[i];
+                while (std::find(oldMiniClusterIds.begin() + newMiniCentroidsSize, oldMiniClusterIds.end(), lastCentroidId) != oldMiniClusterIds.end()) {
+                    lastCentroidId--;
+                }
+                if (currCentroidId > lastCentroidId) {
+                    // No need to delete from megaMiniCentroidIds since it'll be taken care when we append mega centroids.
+                    continue;
+                }
+                memcpy(quantizedMiniCentroids.data() + currCentroidId * quantDim, quantizedMiniCentroids.data() + (lastCentroidId * quantDim), quantDim * sizeof(uint8_t));
+                quantizedMiniClusters[currCentroidId] = std::move(quantizedMiniClusters[lastCentroidId]);
+                miniClusterVectorIds[currCentroidId] = std::move(miniClusterVectorIds[lastCentroidId]);
+                mappedMiniClusterIds[lastCentroidId] = currCentroidId;
+                // printf("Removing mini centroid %d with miniCentroid %d\n", lastCentroidId, currCentroidId);
+                lastCentroidId--;
+            }
+            // Update mega mini centroid ids
+            for (auto &ids : megaMiniCentroidIds) {
+                for (auto &id: ids) {
+                    auto it = mappedMiniClusterIds.find(id);
+                    if (it != mappedMiniClusterIds.end()) {
+                        id = it->second;
+                    }
+                }
+            }
+            // Resize the mini centroids
+            quantizedMiniCentroids.resize((lastCentroidId + 1) * quantDim);
+            miniClusters.resize(lastCentroidId + 1);
+            miniClusterVectorIds.resize(lastCentroidId + 1);
+        }
+
+        // Upadate the ids in miniCentroidIds using the newToOldCentroidIdMap
+        for (auto & ids : miniCentroidIds) {
+            for (auto &id: ids) {
+                id = newToOldCentroidIdMap[id];
+            }
+        }
+
+        // Copy the mega clusters
+        return appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
+    }
+
     void ReclusteringIndex::storeScoreForMegaClusters() {
         auto numMegaCentroids = megaCentroids.size() / dim;
         megaClusteringScore.resize(numMegaCentroids);
@@ -849,15 +1190,17 @@ namespace orangedb {
         }
 
         // Quantize the mega centroids
-        auto numMegaCentroids = megaCentroids.size() / dim;
-        quantizedMegaCentroids.resize(numMegaCentroids * quantizer->codeSize);
-        if (config.distanceType == COSINE) {
-            normalizedVectors.resize(numMegaCentroids * dim);
-            normalize_vectors(megaCentroids.data(), dim, numMegaCentroids, normalizedVectors.data());
-            quantizer->encode(normalizedVectors.data(), quantizedMegaCentroids.data(), numMegaCentroids);
-        } else {
-            quantizer->encode(megaCentroids.data(), quantizedMegaCentroids.data(), numMegaCentroids);
-        }
+        // auto numMegaCentroids = megaCentroids.size() / dim;
+        // quantizedMegaCentroids.resize(numMegaCentroids * dim);
+        // Copy the mega centroids to quantizedMegaCentroids
+        // memcpy(quantizedMegaCentroids.data(), megaCentroids.data(), numMegaCentroids * dim * sizeof(float));
+        // if (config.distanceType == COSINE) {
+        //     normalizedVectors.resize(numMegaCentroids * dim);
+        //     normalize_vectors(megaCentroids.data(), dim, numMegaCentroids, normalizedVectors.data());
+        //     quantizer->encode(normalizedVectors.data(), quantizedMegaCentroids.data(), numMegaCentroids);
+        // } else {
+        //     quantizer->encode(megaCentroids.data(), quantizedMegaCentroids.data(), numMegaCentroids);
+        // }
 
         // Quantize the mini centroids
         auto numMiniCentroids = miniCentroids.size() / dim;
@@ -1109,7 +1452,7 @@ namespace orangedb {
         }
 
         auto numMegaCentroids = megaCentroids.size() / dim;
-        auto numMiniCentroids = miniCentroids.size() / dim;
+        auto numMiniCentroids = quantizedMiniCentroids.size() / quantizer->codeSize;
         nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
         nMicroProbes = std::min(nMicroProbes, (int)numMiniCentroids);
 
@@ -1117,7 +1460,7 @@ namespace orangedb {
         std::vector<vector_idx_t> megaAssign;
         findKClosestMegaCentroids(query, nMegaProbes, megaAssign);
 
-        auto numMicroCentroids = miniCentroids.size() / dim;
+        auto numMicroCentroids = quantizedMiniCentroids.size() / quantizer->codeSize;
         auto dc = getQuantizedDistanceComputer(quantizedMiniCentroids.data(), numMicroCentroids);
         dc->setQuery(query);
 
@@ -1306,17 +1649,22 @@ namespace orangedb {
             out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
         }
 
+        // Write quantizer
+        quantizer->flush_to_disk(out);
+
+        // Write quantized mini centroids
+        size_t quantizedMiniCentroidsSize = quantizedMiniCentroids.size();
+        out.write(reinterpret_cast<const char *>(&quantizedMiniCentroidsSize), sizeof(quantizedMiniCentroidsSize));
+        out.write(reinterpret_cast<const char *>(quantizedMiniCentroids.data()), quantizedMiniCentroidsSize * sizeof(uint8_t));
+
         // Write quantized mini clusters
-        // size_t quantizedMiniClustersSize = quantizedMiniClusters.size();
-        // out.write(reinterpret_cast<const char *>(&quantizedMiniClustersSize), sizeof(quantizedMiniClustersSize));
-        // for (const auto &cluster: quantizedMiniClusters) {
-        //     size_t clusterSize = cluster.size();
-        //     out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
-        //     out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(uint8_t));
-        // }
-        //
-        // // Write quantizer
-        // quantizer->flush_to_disk(out);
+        size_t quantizedMiniClustersSize = quantizedMiniClusters.size();
+        out.write(reinterpret_cast<const char *>(&quantizedMiniClustersSize), sizeof(quantizedMiniClustersSize));
+        for (const auto &cluster: quantizedMiniClusters) {
+            size_t clusterSize = cluster.size();
+            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(uint8_t));
+        }
 
         // Write stats
         out.write(reinterpret_cast<const char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
@@ -1424,20 +1772,26 @@ namespace orangedb {
             in.read(reinterpret_cast<char *>(newMiniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
         }
 
+        // Read quantizer
+        quantizer = std::make_unique<SQ8Bit>(dim);
+        quantizer->load_from_disk(in);
+
+        // Read quantized mini centroids
+        size_t quantizedMiniCentroidsCount;
+        in.read(reinterpret_cast<char *>(&quantizedMiniCentroidsCount), sizeof(quantizedMiniCentroidsCount));
+        quantizedMiniCentroids.resize(quantizedMiniCentroidsCount);
+        in.read(reinterpret_cast<char *>(quantizedMiniCentroids.data()), quantizedMiniCentroidsCount * sizeof(uint8_t));
+
         // Read quantized mini clusters
-        // size_t quantizedMiniClustersCount;
-        // in.read(reinterpret_cast<char *>(&quantizedMiniClustersCount), sizeof(quantizedMiniClustersCount));
-        // quantizedMiniClusters.resize(quantizedMiniClustersCount);
-        // for (size_t i = 0; i < quantizedMiniClustersCount; i++) {
-        //     size_t clusterSize;
-        //     in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
-        //     quantizedMiniClusters[i].resize(clusterSize);
-        //     in.read(reinterpret_cast<char *>(quantizedMiniClusters[i].data()), clusterSize * sizeof(uint8_t));
-        // }
-        //
-        // // Read quantizer
-        // quantizer = std::make_unique<SQ8Bit>(dim);
-        // quantizer->load_from_disk(in);
+        size_t quantizedMiniClustersCount;
+        in.read(reinterpret_cast<char *>(&quantizedMiniClustersCount), sizeof(quantizedMiniClustersCount));
+        quantizedMiniClusters.resize(quantizedMiniClustersCount);
+        for (size_t i = 0; i < quantizedMiniClustersCount; i++) {
+            size_t clusterSize;
+            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+            quantizedMiniClusters[i].resize(clusterSize);
+            in.read(reinterpret_cast<char *>(quantizedMiniClusters[i].data()), clusterSize * sizeof(uint8_t));
+        }
 
         // Read stats
         in.read(reinterpret_cast<char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));

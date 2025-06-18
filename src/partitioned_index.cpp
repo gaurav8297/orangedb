@@ -3,7 +3,7 @@
 namespace orangedb {
     PartitionedIndex::PartitionedIndex(int dim, const PartitionedIndexConfig &config, RandomGenerator* rg)
             : config(config), numVectors(0), dim(dim) {
-        clustering = std::make_unique<Clustering>(dim, config.numCentroids, config.nIter, config.minCentroidSize,
+        clustering = std::make_unique<Clustering<float>>(dim, dim, config.numCentroids, config.nIter, config.minCentroidSize,
                                                   config.maxCentroidSize);
         for (int i = 0; i < config.numCentroids; i++) {
             indexes.push_back(
