@@ -466,7 +466,6 @@ namespace fastq {
 
             void flush_to_disk(std::ofstream& out) const {
                 // Write the basic fields
-                out.write(reinterpret_cast<const char *>(&dim), sizeof(dim));
                 out.write(reinterpret_cast<const char *>(&breakPointDataRatio), sizeof(breakPointDataRatio));
                 out.write(reinterpret_cast<const char *>(&numTrainedVecs), sizeof(numTrainedVecs));
                 // Write the vmin and vdiff
@@ -486,7 +485,6 @@ namespace fastq {
 
             void load_from_disk(std::ifstream& in) {
                 // Read the basic fields
-                in.read(reinterpret_cast<char *>(&dim), sizeof(dim));
                 in.read(reinterpret_cast<char *>(&breakPointDataRatio), sizeof(breakPointDataRatio));
                 in.read(reinterpret_cast<char *>(&numTrainedVecs), sizeof(numTrainedVecs));
                 // Read the vmin and vdiff
@@ -499,6 +497,7 @@ namespace fastq {
                 in.read(reinterpret_cast<char *>(alphaSqr), dim * sizeof(float));
                 in.read(reinterpret_cast<char *>(betaSqr), dim * sizeof(float));
                 // Read the histogram
+                histogram.resize(dim);
                 for (size_t i = 0; i < dim; i++) {
                     histogram[i].resize(HISTOGRAM_NUM_BINS);
                     in.read(reinterpret_cast<char *>(histogram[i].data()), HISTOGRAM_NUM_BINS * sizeof(uint64_t));

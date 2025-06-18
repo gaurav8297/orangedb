@@ -1590,6 +1590,8 @@ namespace orangedb {
                   sizeof(config.numMegaReclusterCentroids));
         out.write(reinterpret_cast<const char *>(&config.numNewMiniReclusterCentroids),
                   sizeof(config.numNewMiniReclusterCentroids));
+        out.write(reinterpret_cast<const char *>(&config.quantizationTrainPercentage),
+                  sizeof(config.quantizationTrainPercentage));
 
         // Write mega centroids
         size_t megaCentroidSize = megaCentroids.size();
@@ -1613,57 +1615,69 @@ namespace orangedb {
         // Write the miniCentroids
         size_t miniCentroidSize = miniCentroids.size();
         out.write(reinterpret_cast<const char *>(&miniCentroidSize), sizeof(miniCentroidSize));
-        out.write(reinterpret_cast<const char *>(miniCentroids.data()), miniCentroidSize * sizeof(float));
+        if (miniCentroidSize > 0) {
+            out.write(reinterpret_cast<const char *>(miniCentroids.data()), miniCentroidSize * sizeof(float));
+            // Write the miniClusters
+            for (const auto &cluster: miniClusters) {
+                size_t clusterSize = cluster.size();
+                out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+                out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
+            }
 
-        // Write the miniClusters
-        for (const auto &cluster: miniClusters) {
-            size_t clusterSize = cluster.size();
-            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
-            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
+            // Write the mini cluster vector ids
+            for (const auto &vectorId: miniClusterVectorIds) {
+                size_t vectorIdSize = vectorId.size();
+                out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
+                out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
+            }
         }
 
-        // Write the mini cluster vector ids
-        for (const auto &vectorId: miniClusterVectorIds) {
-            size_t vectorIdSize = vectorId.size();
-            out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
-            out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
+        // Write quantized mini centroids
+        size_t quantizedMiniCentroidsSize = quantizedMiniCentroids.size();
+        out.write(reinterpret_cast<const char *>(&quantizedMiniCentroidsSize), sizeof(quantizedMiniCentroidsSize));
+        if (quantizedMiniCentroidsSize > 0) {
+            out.write(reinterpret_cast<const char *>(quantizedMiniCentroids.data()), quantizedMiniCentroidsSize * sizeof(uint8_t));
+
+            // Write quantized mini clusters
+            size_t quantizedMiniClustersSize = quantizedMiniClusters.size();
+            out.write(reinterpret_cast<const char *>(&quantizedMiniClustersSize), sizeof(quantizedMiniClustersSize));
+            for (const auto &cluster: quantizedMiniClusters) {
+                size_t clusterSize = cluster.size();
+                out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+                out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(uint8_t));
+            }
+
+            // Write the mini cluster vector ids
+            for (const auto &vectorId: miniClusterVectorIds) {
+                size_t vectorIdSize = vectorId.size();
+                out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
+                out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
+            }
         }
 
         // Write new mini centroids
         size_t newMiniCentroidSize = newMiniCentroids.size();
         out.write(reinterpret_cast<const char *>(&newMiniCentroidSize), sizeof(newMiniCentroidSize));
-        out.write(reinterpret_cast<const char *>(newMiniCentroids.data()), newMiniCentroidSize * sizeof(float));
+        if (newMiniCentroidSize > 0) {
+            out.write(reinterpret_cast<const char *>(newMiniCentroids.data()), newMiniCentroidSize * sizeof(float));
 
-        // Write newMiniClusters
-        for (const auto &cluster: newMiniClusters) {
-            size_t clusterSize = cluster.size();
-            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
-            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
-        }
+            // Write newMiniClusters
+            for (const auto &cluster: newMiniClusters) {
+                size_t clusterSize = cluster.size();
+                out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
+                out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
+            }
 
-        // Write newMiniClusterVectorIds
-        for (const auto &vectorId: newMiniClusterVectorIds) {
-            size_t vectorIdSize = vectorId.size();
-            out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
-            out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
+            // Write newMiniClusterVectorIds
+            for (const auto &vectorId: newMiniClusterVectorIds) {
+                size_t vectorIdSize = vectorId.size();
+                out.write(reinterpret_cast<const char *>(&vectorIdSize), sizeof(vectorIdSize));
+                out.write(reinterpret_cast<const char *>(vectorId.data()), vectorIdSize * sizeof(vector_idx_t));
+            }
         }
 
         // Write quantizer
         quantizer->flush_to_disk(out);
-
-        // Write quantized mini centroids
-        size_t quantizedMiniCentroidsSize = quantizedMiniCentroids.size();
-        out.write(reinterpret_cast<const char *>(&quantizedMiniCentroidsSize), sizeof(quantizedMiniCentroidsSize));
-        out.write(reinterpret_cast<const char *>(quantizedMiniCentroids.data()), quantizedMiniCentroidsSize * sizeof(uint8_t));
-
-        // Write quantized mini clusters
-        size_t quantizedMiniClustersSize = quantizedMiniClusters.size();
-        out.write(reinterpret_cast<const char *>(&quantizedMiniClustersSize), sizeof(quantizedMiniClustersSize));
-        for (const auto &cluster: quantizedMiniClusters) {
-            size_t clusterSize = cluster.size();
-            out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
-            out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(uint8_t));
-        }
 
         // Write stats
         out.write(reinterpret_cast<const char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
@@ -1697,6 +1711,8 @@ namespace orangedb {
         in.read(reinterpret_cast<char *>(&config.numMegaReclusterCentroids), sizeof(config.numMegaReclusterCentroids));
         in.read(reinterpret_cast<char *>(&config.numNewMiniReclusterCentroids),
                 sizeof(config.numNewMiniReclusterCentroids));
+        in.read(reinterpret_cast<char *>(&config.quantizationTrainPercentage),
+                sizeof(config.quantizationTrainPercentage));
 
         // Read mega centroids
         size_t megaCentroidsCount;
@@ -1724,73 +1740,88 @@ namespace orangedb {
         // Read mini centroids
         size_t miniCentroidsCount;
         in.read(reinterpret_cast<char *>(&miniCentroidsCount), sizeof(miniCentroidsCount));
-        miniCentroids.resize(miniCentroidsCount);
-        in.read(reinterpret_cast<char *>(miniCentroids.data()), miniCentroidsCount * sizeof(float));
+        if (miniCentroidsCount > 0) {
+            miniCentroids.resize(miniCentroidsCount);
+            in.read(reinterpret_cast<char *>(miniCentroids.data()), miniCentroidsCount * sizeof(float));
 
-        // Derive mini clusters count from mini centroids (each cluster is one centroid)
-        size_t miniClustersCount = miniCentroidsCount / dim;
-        miniClusters.resize(miniClustersCount);
-        for (size_t i = 0; i < miniClustersCount; i++) {
-            size_t clusterSize;
-            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
-            miniClusters[i].resize(clusterSize);
-            in.read(reinterpret_cast<char *>(miniClusters[i].data()), clusterSize * sizeof(float));
+            // Derive mini clusters count from mini centroids (each cluster is one centroid)
+            size_t miniClustersCount = miniCentroidsCount / dim;
+            miniClusters.resize(miniClustersCount);
+            for (size_t i = 0; i < miniClustersCount; i++) {
+                size_t clusterSize;
+                in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+                miniClusters[i].resize(clusterSize);
+                in.read(reinterpret_cast<char *>(miniClusters[i].data()), clusterSize * sizeof(float));
+            }
+
+            // Read mini cluster vector ids (same count as mini clusters)
+            miniClusterVectorIds.resize(miniClustersCount);
+            for (size_t i = 0; i < miniClustersCount; i++) {
+                size_t vectorIdSize;
+                in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
+                miniClusterVectorIds[i].resize(vectorIdSize);
+                in.read(reinterpret_cast<char *>(miniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
+            }
         }
 
-        // Read mini cluster vector ids (same count as mini clusters)
-        miniClusterVectorIds.resize(miniClustersCount);
-        for (size_t i = 0; i < miniClustersCount; i++) {
-            size_t vectorIdSize;
-            in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
-            miniClusterVectorIds[i].resize(vectorIdSize);
-            in.read(reinterpret_cast<char *>(miniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
+        // Read quantized mini centroids
+        size_t quantizedMiniCentroidsCount;
+        in.read(reinterpret_cast<char *>(&quantizedMiniCentroidsCount), sizeof(quantizedMiniCentroidsCount));
+        if (quantizedMiniCentroidsCount > 0) {
+            quantizedMiniCentroids.resize(quantizedMiniCentroidsCount);
+            in.read(reinterpret_cast<char *>(quantizedMiniCentroids.data()), quantizedMiniCentroidsCount * sizeof(uint8_t));
+
+            // Read quantized mini clusters
+            size_t quantizedMiniClustersCount;
+            in.read(reinterpret_cast<char *>(&quantizedMiniClustersCount), sizeof(quantizedMiniClustersCount));
+            quantizedMiniClusters.resize(quantizedMiniClustersCount);
+            for (size_t i = 0; i < quantizedMiniClustersCount; i++) {
+                size_t clusterSize;
+                in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+                quantizedMiniClusters[i].resize(clusterSize);
+                in.read(reinterpret_cast<char *>(quantizedMiniClusters[i].data()), clusterSize * sizeof(uint8_t));
+            }
+
+            // Read mini cluster vector ids (same count as mini clusters)
+            miniClusterVectorIds.resize(quantizedMiniClustersCount);
+            for (size_t i = 0; i < quantizedMiniClustersCount; i++) {
+                size_t vectorIdSize;
+                in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
+                miniClusterVectorIds[i].resize(vectorIdSize);
+                in.read(reinterpret_cast<char *>(miniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
+            }
         }
 
         // Read new mini centroids
         size_t newMiniCentroidsCount;
         in.read(reinterpret_cast<char *>(&newMiniCentroidsCount), sizeof(newMiniCentroidsCount));
-        newMiniCentroids.resize(newMiniCentroidsCount);
-        in.read(reinterpret_cast<char *>(newMiniCentroids.data()), newMiniCentroidsCount * sizeof(float));
+        if (newMiniCentroidsCount > 0) {
+            newMiniCentroids.resize(newMiniCentroidsCount);
+            in.read(reinterpret_cast<char *>(newMiniCentroids.data()), newMiniCentroidsCount * sizeof(float));
 
-        // Derive new mini clusters count from new mini centroids
-        size_t newMiniClustersCount = newMiniCentroidsCount / dim;
-        newMiniClusters.resize(newMiniClustersCount);
-        for (size_t i = 0; i < newMiniClustersCount; i++) {
-            size_t clusterSize;
-            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
-            newMiniClusters[i].resize(clusterSize);
-            in.read(reinterpret_cast<char *>(newMiniClusters[i].data()), clusterSize * sizeof(float));
-        }
+            // Derive new mini clusters count from new mini centroids
+            size_t newMiniClustersCount = newMiniCentroidsCount / dim;
+            newMiniClusters.resize(newMiniClustersCount);
+            for (size_t i = 0; i < newMiniClustersCount; i++) {
+                size_t clusterSize;
+                in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+                newMiniClusters[i].resize(clusterSize);
+                in.read(reinterpret_cast<char *>(newMiniClusters[i].data()), clusterSize * sizeof(float));
+            }
 
-        // Read new mini cluster vector ids (same count as new mini clusters)
-        newMiniClusterVectorIds.resize(newMiniClustersCount);
-        for (size_t i = 0; i < newMiniClustersCount; i++) {
-            size_t vectorIdSize;
-            in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
-            newMiniClusterVectorIds[i].resize(vectorIdSize);
-            in.read(reinterpret_cast<char *>(newMiniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
+            // Read new mini cluster vector ids (same count as new mini clusters)
+            newMiniClusterVectorIds.resize(newMiniClustersCount);
+            for (size_t i = 0; i < newMiniClustersCount; i++) {
+                size_t vectorIdSize;
+                in.read(reinterpret_cast<char *>(&vectorIdSize), sizeof(vectorIdSize));
+                newMiniClusterVectorIds[i].resize(vectorIdSize);
+                in.read(reinterpret_cast<char *>(newMiniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
+            }
         }
 
         // Read quantizer
         quantizer = std::make_unique<SQ8Bit>(dim);
         quantizer->load_from_disk(in);
-
-        // Read quantized mini centroids
-        size_t quantizedMiniCentroidsCount;
-        in.read(reinterpret_cast<char *>(&quantizedMiniCentroidsCount), sizeof(quantizedMiniCentroidsCount));
-        quantizedMiniCentroids.resize(quantizedMiniCentroidsCount);
-        in.read(reinterpret_cast<char *>(quantizedMiniCentroids.data()), quantizedMiniCentroidsCount * sizeof(uint8_t));
-
-        // Read quantized mini clusters
-        size_t quantizedMiniClustersCount;
-        in.read(reinterpret_cast<char *>(&quantizedMiniClustersCount), sizeof(quantizedMiniClustersCount));
-        quantizedMiniClusters.resize(quantizedMiniClustersCount);
-        for (size_t i = 0; i < quantizedMiniClustersCount; i++) {
-            size_t clusterSize;
-            in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
-            quantizedMiniClusters[i].resize(clusterSize);
-            in.read(reinterpret_cast<char *>(quantizedMiniClusters[i].data()), clusterSize * sizeof(uint8_t));
-        }
 
         // Read stats
         in.read(reinterpret_cast<char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
