@@ -2415,13 +2415,12 @@ void benchmark_fast_reclustering(InputParser &input) {
     RandomGenerator rng(1234);
     ReclusteringIndex index(baseDimension, config, &rng);
 
-    if (quantBuild) {
-        index.trainQuant(baseVecs, baseNumVectors);
-    }
-
     if (readFromDisk) {
         index = ReclusteringIndex(storagePath, &rng);
     } else {
+        if (quantBuild) {
+            index.trainQuant(baseVecs, baseNumVectors);
+        }
         printf("Building index\n");
         auto chunkSize = baseNumVectors / numInserts;
         printf("Chunk size: %d\n", chunkSize);
