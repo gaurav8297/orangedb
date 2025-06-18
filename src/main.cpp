@@ -2446,7 +2446,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     //                              nMiniProbes);
     auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                                  nMegaProbes, nMiniProbes);
-    printf("Recall: %f, Quantized Recall: %f\n", 0, quantizedRecall);
+    printf("Recall: %f, Quantized Recall: %f\n", 0.0, quantizedRecall);
     // index.printStats();
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
@@ -2457,7 +2457,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         //                  nMiniProbes);
         auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              nMegaProbes, nMiniProbes);
-        printf("Recall: %f, Quantized Recall: %f\n", 0, quantizedRecall);
+        printf("Recall: %f, Quantized Recall: %f\n", 0.0, quantizedRecall);
         printf("After reclustering only  mega centroids, iteration: %d, recall: %f\n", iter, quantizedRecall);
         if (numMegaReclusterCentroids == 1) {
             index.reclusterFastQuant();
