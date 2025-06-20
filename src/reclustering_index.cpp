@@ -220,6 +220,7 @@ namespace orangedb {
         for (auto megaCentroidId: megaClusterIds) {
             printf("ReclusteringIndex::reclusterFastQuant for mega centroid %llu\n", megaCentroidId);
             reclusterInternalMegaCentroidQuant(megaCentroidId);
+            flush_to_disk("/home/centos/vector_dataset/wiki/reclustering_fast_index.bin");
         }
     }
 
