@@ -217,11 +217,11 @@ namespace orangedb {
             megaClusterIds[i] = i;
         }
         // Now recluster miniCentroids within the mega centroids
-        for (auto megaCentroidId: megaClusterIds) {
-            printf("ReclusteringIndex::reclusterFastQuant for mega centroid %llu\n", megaCentroidId);
-            reclusterInternalMegaCentroidQuant(megaCentroidId);
+        // for (auto megaCentroidId: megaClusterIds) {
+            printf("ReclusteringIndex::reclusterFastQuant for mega centroid %llu\n", 11);
+            reclusterInternalMegaCentroidQuant(11);
             flush_to_disk("/home/centos/vector_dataset/wiki/reclustering_fast_index.bin");
-        }
+        // }
     }
 
     void ReclusteringIndex::reclusterFull(int numMegaCentroids) {
