@@ -2451,7 +2451,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
-        index.reclusterAllMiniCentroidsQuant();
+        // index.reclusterAllMiniCentroidsQuant();
         // auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
         //                  nMiniProbes);
         auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
