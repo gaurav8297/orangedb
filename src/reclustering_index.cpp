@@ -218,6 +218,7 @@ namespace orangedb {
         }
         // Now recluster miniCentroids within the mega centroids
         for (auto megaCentroidId: megaClusterIds) {
+            printf("ReclusteringIndex::reclusterFastQuant for mega centroid %llu\n", megaCentroidId);
             reclusterInternalMegaCentroidQuant(megaCentroidId);
         }
     }
