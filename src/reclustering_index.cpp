@@ -1006,7 +1006,7 @@ namespace orangedb {
         std::vector<float> &newMegaCentroids,
         std::vector<std::vector<vector_idx_t>> &miniCentroidIds,
         std::vector<uint8_t> &newMiniCentroids,
-        std::vector<std::vector<uint8_t> > &newMiniClusters,
+        std::vector<std::vector<uint8_t>> &newMiniClusters,
         std::vector<std::vector<vector_idx_t> > &newMiniClusterVectorIds) {
         auto quantDim = quantizer->codeSize;
         updateTotalDataWrittenBySystem({}, newMiniClusterVectorIds);
@@ -1046,6 +1046,8 @@ namespace orangedb {
             quantizedMiniClusters.resize(currentSize + newMiniCentroidsSize - miniCentroidsSize);
             miniClusterVectorIds.resize(currentSize + newMiniCentroidsSize - miniCentroidsSize);
             auto idx = 0;
+            printf("miniCentroidsSize: %lu, newMiniCentroidsSize: %lu, newMiniClusters.size: %lu\n", miniCentroidsSize,
+                   newMiniCentroidsSize, newMiniClusters.size());
             for (auto i = miniCentroidsSize; i < newMiniCentroidsSize; i++) {
                 auto currCluster = newMiniClusters[i];
                 auto currVectorId = newMiniClusterVectorIds[i];
