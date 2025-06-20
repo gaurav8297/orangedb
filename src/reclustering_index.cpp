@@ -473,6 +473,8 @@ namespace orangedb {
             auto cluster = quantizedMiniClusters[microCentroidId];
             totalVecs += (cluster.size() / dataDim);
         }
+        printf("ReclusteringIndex::reclusterInternalMegaCentroidQuant for mega centroid %llu with %lu vectors\n",
+               megaClusterId, totalVecs);
 
         // Copy actual vecs and vectorIds here
         std::vector<uint8_t> tempData(totalVecs * dataDim);
