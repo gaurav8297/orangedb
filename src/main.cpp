@@ -2451,13 +2451,14 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
-        // index.reclusterAllMiniCentroidsQuant();
+        printf("Iteration: %d\n", iter);
+        index.reclusterAllMiniCentroidsQuant();
         // auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
         //                  nMiniProbes);
-        auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+        index.printStats();
+        quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              nMegaProbes, nMiniProbes);
-        printf("Recall: %f, Quantized Recall: %f\n", 0.0, quantizedRecall);
-        printf("After reclustering only  mega centroids, iteration: %d, recall: %f\n", iter, quantizedRecall);
+        printf("After reclustering only mega centroids, Recall: %f, Quantized Recall: %f\n", 0.0, quantizedRecall);
         if (numMegaReclusterCentroids == 1) {
             index.reclusterFastQuant();
         } else {
@@ -2472,11 +2473,11 @@ void benchmark_fast_reclustering(InputParser &input) {
         //                          nMiniProbes);
         quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                      nMegaProbes, nMiniProbes);
-        printf("After micro reclustering, iteration: %d, recall: %f, quantized recall: %f\n", iter, 0, quantizedRecall);
-        printf("Recalculating scores\n");
+        printf("After micro reclustering, recall: %f, quantized recall: %f\n", 0, quantizedRecall);
+        // printf("Recalculating scores\n");
         // index.storeScoreForMegaClusters();
-        // index.printStats();
-        printf("Done with iteration: %d\n", iter);
+        index.printStats();
+        printf("Done iteration: %d\n", iter);
         // printf("Flushing to disk\n");
         // index.flush_to_disk(storagePath);
     }

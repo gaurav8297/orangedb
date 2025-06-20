@@ -217,11 +217,9 @@ namespace orangedb {
             megaClusterIds[i] = i;
         }
         // Now recluster miniCentroids within the mega centroids
-        // for (auto megaCentroidId: megaClusterIds) {
-            printf("ReclusteringIndex::reclusterFastQuant for mega centroid %llu\n", 11);
-            reclusterInternalMegaCentroidQuant(11);
-            flush_to_disk("/home/centos/vector_dataset/wiki/reclustering_fast_index.bin");
-        // }
+        for (auto megaCentroidId: megaClusterIds) {
+            reclusterInternalMegaCentroidQuant(megaCentroidId);
+        }
     }
 
     void ReclusteringIndex::reclusterFull(int numMegaCentroids) {
@@ -473,8 +471,6 @@ namespace orangedb {
             auto cluster = quantizedMiniClusters[microCentroidId];
             totalVecs += (cluster.size() / dataDim);
         }
-        printf("ReclusteringIndex::reclusterInternalMegaCentroidQuant for mega centroid %llu with %lu vectors\n",
-               megaClusterId, totalVecs);
 
         // Copy actual vecs and vectorIds here
         std::vector<uint8_t> tempData(totalVecs * dataDim);
