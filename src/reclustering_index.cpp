@@ -1554,6 +1554,22 @@ namespace orangedb {
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
 
+        printf("Number of quantized mini clusters: %zu\n", quantizedMiniCentroids.size() / quantizer->codeSize);
+        // print min, max, avg size of the quantized clusters
+        size_t quantizedMinSize = std::numeric_limits<size_t>::max();
+        size_t quantizedMaxSize = 0;
+        size_t quantizedAvgSize = 0;
+        for (const auto &cluster: quantizedMiniClusters) {
+            auto size = cluster.size() / quantizer->codeSize;
+            quantizedMinSize = std::min(quantizedMinSize, size);
+            quantizedMaxSize = std::max(quantizedMaxSize, size);
+            quantizedAvgSize += size;
+        }
+        printf("Min size of quantized clusters: %zu\n", quantizedMinSize);
+        printf("Max size of quantized clusters: %zu\n", quantizedMaxSize);
+        printf("Avg size of quantized clusters: %zu\n", quantizedAvgSize / quantizedMiniClusters.size());
+        printf("Total number of mini clusters: %zu/%zu\n", quantizedAvgSize, size);
+
         // Print score for mega clusters
         // int i = 0;
         // for (const auto &megaScore: megaClusteringScore) {
