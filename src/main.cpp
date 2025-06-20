@@ -2446,7 +2446,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                                 nMegaProbes, nMiniProbes);
     printf("Recall: %f, Quantized Recall: %f\n", 0.0, quantizedRecall);
-    // index.printStats();
+    index.printStats();
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
 
