@@ -21,13 +21,13 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
 find_package(OpenMP REQUIRED)
 # Global compiler flags for debug and release
-set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer -mavx2 -mfma -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw")
 #set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g")
 set(CMAKE_CXX_FLAGS_RELEASE "-fopenmp -O3 -march=native -fsanitize=address -fno-omit-frame-pointer")
-set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer -mavx2 -mfma -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw")
 #set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g")
 set(CMAKE_C_FLAGS_RELEASE "-fopenmp -O3 -march=native -fsanitize=address -fno-omit-frame-pointer")
-#set(CMAKE_OSX_ARCHITECTURES "x86_64")
+set(CMAKE_OSX_ARCHITECTURES "x86_64")
 
 # Add include path
 include_directories(${PROJECT_SOURCE_DIR}/src/include)

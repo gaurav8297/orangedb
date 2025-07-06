@@ -289,7 +289,32 @@ namespace fastq {
 
         inline void compute_sym_l2sq_skylake_8bit(const uint8_t *x, const uint8_t *y, double *result, size_t dim,
                                                   const float *alphaSqr) {
-            // TODO
+            __m512 xy_vec = _mm512_setzero();
+            size_t i = 0;
+            __m256i x_codes, y_codes;
+            __m512i x_codes16, y_codes16, xy_sub, xy;
+            __m512 lower_half, upper_half, alphaSqr_vec_low, alphaSqr_vec_high;
+            for (; i + 32 <= dim; i += 32) {
+                x_codes = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(x + i));
+                y_codes = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(y + i));
+                // Convert to 16 bit integers
+                x_codes16 = _mm512_cvtepu8_epi16(x_codes);
+                y_codes16 = _mm512_cvtepu8_epi16(y_codes);
+                // perform xy * xy * alphaSqr[i];
+                xy_sub = _mm512_subs_epi16(x_codes16, y_codes16);
+                xy = _mm512_mullo_epi16(xy_sub, xy_sub);
+
+                // Convert to 32-bit integers
+                lower_half = _mm512_cvtepi32_ps(_mm512_cvtepu16_epi32(_mm512_castsi512_si256(xy)));
+                upper_half = _mm512_cvtepi32_ps(_mm512_cvtepu16_epi32(_mm512_extracti64x4_epi64(xy, 1)));
+
+                // Load alphaSqr values
+                alphaSqr_vec_low = _mm512_loadu_ps(alphaSqr + i);
+                alphaSqr_vec_high = _mm512_loadu_ps(alphaSqr + i + 16);
+                xy_vec = _mm512_fmadd_ps(lower_half, alphaSqr_vec_low, xy_vec);
+                xy_vec = _mm512_fmadd_ps(upper_half, alphaSqr_vec_high, xy_vec);
+            }
+            *result = _mm512_reduce_add_ps(xy_vec);
         }
 
         inline void compute_asym_ip_skylake_8bit(const float *x, const uint8_t *y, double *result, size_t dim,
