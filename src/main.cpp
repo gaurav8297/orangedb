@@ -2441,26 +2441,27 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.flush_to_disk(storagePath);
     }
     // index.quantizeVectors();
-    // auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-    //                              nMiniProbes);
-    auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                                                nMegaProbes, nMiniProbes);
-    printf("Recall: %f, Quantized Recall: %f\n", 0.0, quantizedRecall);
+    auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+                                 nMiniProbes);
+    // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+    //                                             nMegaProbes, nMiniProbes);
+    printf("Recall: %f, Recall: %f\n", 0.0, recall);
     index.printStats();
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
         printf("Iteration: %d\n", iter);
-        index.reclusterAllMiniCentroidsQuant();
-        // auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-        //                  nMiniProbes);
+        // index.reclusterAllMiniCentroidsQuant();
+        index.reclusterAllMegaCentroids();
+        recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+                         nMiniProbes);
         index.printStats();
-        quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                                             nMegaProbes, nMiniProbes);
-        printf("After reclustering only mega centroids, Recall: %f, Quantized Recall: %f\n", 0.0, quantizedRecall);
+        // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                             // nMegaProbes, nMiniProbes);
+        printf("After reclustering only mega centroids, Recall: %f, Quantized Recall: %f\n", recall, 0.0);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterFastQuant();
+            index.reclusterFast();
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
@@ -2469,11 +2470,11 @@ void benchmark_fast_reclustering(InputParser &input) {
             }
         }
         // index.quantizeVectors();
-        // recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-        //                          nMiniProbes);
-        quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                                     nMegaProbes, nMiniProbes);
-        printf("After micro reclustering, recall: %f, quantized recall: %f\n", 0, quantizedRecall);
+        recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+                                 nMiniProbes);
+        // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+        //                              nMegaProbes, nMiniProbes);
+        printf("After micro reclustering, recall: %f, quantized recall: %f\n", recall, 0.0);
         // printf("Recalculating scores\n");
         // index.storeScoreForMegaClusters();
         index.printStats();
