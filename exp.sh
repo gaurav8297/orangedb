@@ -286,3 +286,6 @@ cd ..
 ./apps/build_memory_index --data_type float --dist_fn cosine --data_path ~/vector_dataset/wiki/base.fbin --index_path_prefix ~/vector_dataset/wiki/diskann_inmem_filtered_index_R64_L200_B15_A1.2 -R 64 --FilteredLbuild 200 -T 32 --label_file ~/vector_dataset/wiki/labels.txt --universal_label 0
 # inmem stiched index
 COPY embeddings FROM (LOAD FROM "/home/centos/vector_dataset/wiki/embeddings_with_filters.parquet" RETURN cast(id as INT64) as id, cast(has_label_1 as BOOLEAN) as has_label_1, cast(has_label_2 as BOOLEAN) as has_label_2, cast(has_label_3 as BOOLEAN) as has_label_3, cast(has_label_6 as BOOLEAN) as has_label_6, cast(has_label_11 as BOOLEAN) as has_label_11, cast(embedding as FLOAT[1024]) as embedding);
+
+
+./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/wiki/base.fvecs -queryVectorPath /home/centos/vector_dataset/wiki/uncorrelated/queries.fvecs -groundTruthPath /home/centos/vector_dataset/wiki/uncorrelated/gt_100.bin -k 100 -numVectors 100000000 -sampleSize 100000000 -nIter 10 -nThreads 64 -numQueries 50 -clusterSize 500 -nProbes 20 -readFromDisk 0 -storagePath /home/centos/vector_dataset/wiki/faiss_ivf_flat_index.bin

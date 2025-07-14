@@ -2200,7 +2200,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
-
+    auto sampleSizeAdjusted = std::min((size_t)sampleSize, baseNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -2209,8 +2209,8 @@ void benchmark_faiss_clustering(InputParser &input) {
     faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, faiss::METRIC_INNER_PRODUCT);
     faiss::IndexIVFFlat* index = &idx;
     index->cp.niter = nIter;
-    index->cp.max_points_per_centroid = (sampleSize / numCentroids);
-    index->cp.min_points_per_centroid = (sampleSize / numCentroids) * 0.5;
+    index->cp.max_points_per_centroid = (sampleSizeAdjusted / numCentroids);
+    index->cp.min_points_per_centroid = (sampleSizeAdjusted / numCentroids) * 0.5;
     printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
            index->cp.max_points_per_centroid, index->cp.min_points_per_centroid);
     index->cp.verbose = true;
