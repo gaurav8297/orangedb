@@ -2394,6 +2394,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const bool useIP = stoi(input.getCmdOption("-useIP"));
     const float quantTrainPercentage = stof(input.getCmdOption("-quantTrainPercentage"));
     const bool quantBuild = stoi(input.getCmdOption("-quantBuild"));
+    const int avgSubCellSize = stoi(input.getCmdOption("-avgSubCellSize"));
     omp_set_num_threads(numThreads);
 
     // Read dataset
@@ -2443,6 +2444,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.quantizeVectors();
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
+    index.computeAllSubCells(avgSubCellSize);
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
     printf("Recall: %f, Recall: %f\n", 0.0, recall);

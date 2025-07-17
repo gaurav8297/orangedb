@@ -60,6 +60,11 @@ namespace orangedb {
         }
     };
 
+    struct SubCells {
+        std::vector<float> centroids;  // The centroids of the sub-cells
+        std::vector<std::pair<int, int>> start_end_idxes;   // Start and end indices of the vectors in the sub-cell
+    };
+
     class ReclusteringIndex {
     public:
         explicit ReclusteringIndex(int dim, ReclusteringIndexConfig config, RandomGenerator* rg);
@@ -94,6 +99,8 @@ namespace orangedb {
 
         void storeScoreForMegaClusters();
 
+        void computeAllSubCells(int avgSubCellSize);
+
         void quantizeVectors();
 
         void printStats();
@@ -107,6 +114,8 @@ namespace orangedb {
             int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
 
     private:
+        void computeMiniClusterSubcells(int miniClusterId, int avgSubCellSize);
+
         vector_idx_t getWorstMegaCentroid();
 
         std::vector<vector_idx_t> reclusterFullMegaCentroids(std::vector<vector_idx_t> megaClusterIds);
@@ -236,6 +245,9 @@ namespace orangedb {
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
         std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
+
+        // Minicluster subcells
+        std::vector<SubCells> miniClusterSubCells;
 
         // New Mini centroids (Buffering space)
         std::vector<float> newMiniCentroids;

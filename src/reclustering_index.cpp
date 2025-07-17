@@ -513,7 +513,72 @@ namespace orangedb {
                                newMiniClusterVectorIds);
     }
 
+    void ReclusteringIndex::computeAllSubCells(int avgSubCellSize) {
+        auto miniClusterSize = miniCentroids.size() / dim;
+        if (miniClusterSize == 0) {
+            return;
+        }
+        miniClusterSubCells.resize(miniClusterSize);
+        printf("ReclusteringIndex::computeAllSubCells\n");
+        for (int i = 0; i < miniClusterSize; i++) {
+            computeMiniClusterSubcells(i, avgSubCellSize);
+        }
+    }
 
+    void ReclusteringIndex::computeMiniClusterSubcells(int miniClusterId, int avgSubCellSize) {
+        // Try different ideas:
+        // 1. Use simple k means / k-means++ to find subcells
+        // 2. Normalize vector and then use k means to find better subcells
+        // 3. Find k nearest centroids and divide based on mid-points
+        // 4. Use PCA and then k means to find subcells (Might be useful)
+        SubCells newSubCells;
+        auto miniClusterSize = miniClusters[miniClusterId].size() / dim;
+        if (miniClusterSize < avgSubCellSize * 2) {
+            miniClusterSubCells[miniClusterId] = std::move(newSubCells);
+            return;
+        }
+
+        std::vector<float> subCellCentroids;
+        std::vector<std::vector<float>> newMiniClusters;
+        std::vector<std::vector<vector_idx_t>> newMiniClusterVectorIds;
+        clusterData(miniClusters[miniClusterId].data(),
+                    miniClusterVectorIds[miniClusterId].data(),
+                    miniClusterSize, avgSubCellSize,
+                    newMiniCentroids, newMiniClusters, newMiniClusterVectorIds);
+        // Now we have new mini centroids, we need to update the miniClusters and miniClusterVectorIds
+
+        auto subCellSize = subCellCentroids.size() / dim;
+        if (subCellSize == 1) {
+            // No subcells created, just return
+            miniClusterSubCells[miniClusterId] = std::move(newSubCells);
+            return;
+        }
+
+        size_t totalVectors = 0;
+        for (const auto & cluster : newMiniClusters) {
+            totalVectors += (cluster.size() / dim);
+        }
+        assert(totalVectors == miniClusterSize);
+
+        newSubCells.centroids = std::move(subCellCentroids);
+        std::vector<float> sortedMiniCluster;
+        std::vector<vector_idx_t> sortedMiniClusterVectorIds;
+        sortedMiniCluster.reserve(totalVectors * dim);
+        sortedMiniClusterVectorIds.reserve(totalVectors);
+        newSubCells.start_end_idxes.resize(newMiniClusters.size());
+        auto start = 0;
+        for (size_t i = 0; i < newMiniClusters.size(); i++) {
+            auto &cluster = newMiniClusters[i];
+            auto &vectorIds = newMiniClusterVectorIds[i];
+            size_t numVectors = cluster.size() / dim;
+            sortedMiniCluster.insert(sortedMiniCluster.end(), cluster.begin(), cluster.end());
+            sortedMiniClusterVectorIds.insert(sortedMiniClusterVectorIds.end(), vectorIds.begin(), vectorIds.end());
+            newSubCells.start_end_idxes[i] = {start, start + numVectors};
+            start += numVectors;
+        }
+        assert(sortedMiniCluster.size() == totalVectors * dim);
+        miniClusterSubCells[miniClusterId] = std::move(newSubCells);
+   }
 
     vector_idx_t ReclusteringIndex::getWorstMegaCentroid() {
         vector_idx_t worstMegaCentroid = 0;
@@ -1549,6 +1614,22 @@ namespace orangedb {
         printf("Max size of clusters: %zu\n", maxSize);
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
+
+        if (!miniClusterSubCells.empty()) {
+            // Print stats for subcells
+            size_t totalSubCells = 0;
+            size_t avgSubCells = 0;
+            size_t maxSubCells = 0;
+            for (auto& subcell: miniClusterSubCells) {
+                totalSubCells += subcell.centroids.size() / dim;
+                avgSubCells += subcell.centroids.size() / dim;
+                maxSubCells = std::max(maxSubCells, subcell.centroids.size() / dim);
+            }
+            avgSubCells /= miniClusterSubCells.size();
+            printf("Total number of subcells: %zu\n", totalSubCells);
+            printf("Avg number of subcells: %zu\n", avgSubCells);
+            printf("Max number of subcells: %lu\n", maxSubCells);
+        }
 
         // printf("Number of quantized mini clusters: %zu\n", quantizedMiniCentroids.size() / quantizer->codeSize);
         // // print min, max, avg size of the quantized clusters
