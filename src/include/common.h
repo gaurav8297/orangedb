@@ -294,13 +294,7 @@ namespace orangedb {
         return arrow::Status::OK();
     }
 
-    static float* readParquetDir(const char *dir_path, size_t *d_out, size_t *n_out) {
-        std::vector<std::string> file_paths;
-        list_parquet_dir(dir_path, file_paths);
-        if (file_paths.empty()) {
-            throw std::runtime_error("No Parquet files found in the directory");
-        }
-
+    static float* readParquetFiles(const std::vector<std::string>& file_paths, size_t *d_out, size_t *n_out) {
         *n_out = 0;
         for (const auto& file_path : file_paths) {
             size_t total_rows = 0;
@@ -313,22 +307,28 @@ namespace orangedb {
         float *buffer;
         allocAligned(((void **) &buffer), *n_out * *d_out * sizeof(float), 8 * sizeof(float));
         printf("align_x: %p\n", buffer);
+        printf("Total vectors to read: %zu, Dimension: %zu\n", *n_out, *d_out);
 
         size_t idx = 0;
         for (const auto& file_path : file_paths) {
+            printf("Reading Parquet file: %s\n", file_path.c_str());
             size_t total_rows = 0;
             if (auto res = readParquetFile(file_path.c_str(), buffer + idx * (*d_out), &total_rows); !res.ok()) {
                 throw std::runtime_error("Failed to read Parquet file: " + res.ToString());
             }
             idx += total_rows;
         }
-        // Print file paths
-        printf("Read Parquet files from directory: %s\n", dir_path);
-        for (const auto& file_path : file_paths) {
-            printf(" - %s\n", file_path.c_str());
-        }
-        printf("Total vectors read: %zu, Dimension: %zu\n", *n_out, *d_out);
+        printf("Finished reading Parquet files. Total vectors read: %zu\n", idx);
         return buffer;
+    }
+
+    static float* readParquetDir(const char *dir_path, size_t *d_out, size_t *n_out) {
+        std::vector<std::string> file_paths;
+        list_parquet_dir(dir_path, file_paths);
+        if (file_paths.empty()) {
+            throw std::runtime_error("No Parquet files found in the directory");
+        }
+        return readParquetFiles(file_paths, d_out, n_out);
     }
 
     struct RandomGenerator {

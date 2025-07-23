@@ -2392,7 +2392,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
-    const int numInserts = stoi(input.getCmdOption("-numInserts"));
+    const bool isParquet = stoi(input.getCmdOption("-isParquet"));
+    int numInserts = stoi(input.getCmdOption("-numInserts"));
     const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const int k = stoi(input.getCmdOption("-k"));
     const int numIters = stoi(input.getCmdOption("-numIters"));
@@ -2417,7 +2418,22 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     // Read dataset
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs;
+    std::vector<std::string> filePaths;
+    if (isParquet) {
+        list_parquet_dir(baseVectorPath.c_str(), filePaths);
+        if (filePaths.empty()) {
+            fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
+            exit(1);
+        }
+        auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &baseNumVectors);
+        if (!status.ok()) {
+            fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
+            exit(1);
+        }
+    } else {
+        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    }
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
@@ -2427,7 +2443,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     DistanceType distanceType = useIP ? COSINE : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
                                    0, 0, quantTrainPercentage);
-    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 
@@ -2437,23 +2453,49 @@ void benchmark_fast_reclustering(InputParser &input) {
     if (readFromDisk) {
         index = ReclusteringIndex(storagePath, &rng);
     } else {
-        if (quantBuild) {
-            index.trainQuant(baseVecs, baseNumVectors);
-        }
-        printf("Building index\n");
-        auto chunkSize = baseNumVectors / numInserts;
-        printf("Chunk size: %d\n", chunkSize);
-        for (long i = 0; i < numInserts; i++) {
-            auto start = i * chunkSize;
-            auto end = (i + 1) * chunkSize;
-            if (i == (numInserts - 1)) {
-                end = baseNumVectors;
+        if (isParquet) {
+            auto numFiles = filePaths.size();
+            numInserts = std::min(numInserts, (int)numFiles);
+            auto chunkSize = numFiles / numInserts;
+            printf("Reading parquet files: %zu\n", numFiles);
+            auto totalVectors = 0;
+            for (int i = 0; i < numInserts; i++) {
+                auto start = i * chunkSize;
+                auto end = (i + 1) * chunkSize;
+                if (i == (numInserts - 1)) {
+                    end = numFiles;
+                }
+                std:vector<std::string> paths;
+                printf("Processing parquet files: %d, start: %d, end: %d\n", i, start, end);
+                for (int j = start; j < end; j++) {
+                    paths.push_back(filePaths[j]);
+                    printf("Working on parquet file: %s\n", filePaths[j].c_str());
+                }
+                auto data = readParquetFiles(paths, &baseDimension, &baseNumVectors);
+                index.naiveInsert(data, baseNumVectors);
+                totalVectors += baseNumVectors;
+                delete[] data;
             }
-            printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+            printf("Total vectors inserted: %d\n", totalVectors);
+        } else {
             if (quantBuild) {
-                index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
-            } else {
-                index.naiveInsert(baseVecs + start * baseDimension, end - start);
+                index.trainQuant(baseVecs, baseNumVectors);
+            }
+            printf("Building index\n");
+            auto chunkSize = baseNumVectors / numInserts;
+            printf("Chunk size: %d\n", chunkSize);
+            for (long i = 0; i < numInserts; i++) {
+                auto start = i * chunkSize;
+                auto end = (i + 1) * chunkSize;
+                if (i == (numInserts - 1)) {
+                    end = baseNumVectors;
+                }
+                printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+                if (quantBuild) {
+                    index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
+                } else {
+                    index.naiveInsert(baseVecs + start * baseDimension, end - start);
+                }
             }
         }
         printf("Writing index to disk\n");
@@ -2462,7 +2504,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.quantizeVectors();
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
-    index.computeAllSubCells(avgSubCellSize);
+    // index.computeAllSubCells(avgSubCellSize);
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
     printf("Recall: %f, Recall: %f\n", 0.0, recall);

@@ -287,5 +287,8 @@ cd ..
 # inmem stiched index
 COPY embeddings FROM (LOAD FROM "/home/centos/vector_dataset/wiki/embeddings_with_filters.parquet" RETURN cast(id as INT64) as id, cast(has_label_1 as BOOLEAN) as has_label_1, cast(has_label_2 as BOOLEAN) as has_label_2, cast(has_label_3 as BOOLEAN) as has_label_3, cast(has_label_6 as BOOLEAN) as has_label_6, cast(has_label_11 as BOOLEAN) as has_label_11, cast(embedding as FLOAT[1024]) as embedding);
 
-
 ./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/wiki/base.fvecs -queryVectorPath /home/centos/vector_dataset/wiki/uncorrelated/queries.fvecs -groundTruthPath /home/centos/vector_dataset/wiki/uncorrelated/gt_100.bin -k 100 -numVectors 100000000 -sampleSize 3000000 -nIter 10 -nThreads 64 -numQueries 50 -clusterSize 5000 -nProbes 10 -readFromDisk 1 -storagePath /home/centos/vector_dataset/wiki/faiss_ivf_flat_index.bin
+
+./orangedb/build/release/bin/orangedb_main -run generateGTParquet -dirPath /home/centos/vector_dataset/msmarco/corpus -queryPath /home/centos/vector_dataset/msmarco/questions.fvecs -k 100 -gtPath /home/centos/vector_dataset/msmarco/gt.bin
+
+./build/release/bin/orangedb_main -run benchmarkFastReclustering -baseVectorPath /home/centos/vector_dataset/msmarco/corpus -queryVectorPath /home/centos/vector_dataset/msmarco/questions.fvecs -groundTruthPath /home/centos/vector_dataset/msmarco/gt.bin -isParquet 1 -k 100 -numInserts 100 -numVectors 100000000 -numIters 10 -megaCentroidSize 100 -miniCentroidSize 5000 -numThreads 32 -iterations 20 -fast 0 -lambda 0 -numThreads 32 -nMegaProbes 5 -nMiniProbes 100 -numQueries 10 -numMegaReclusterCentroids 1 -reclusterOnScore 0 -readFromDisk 0 -storagePath /home/centos/vector_dataset/wiki/reclustering_fast_index.bin -useIP 1 -quantTrainPercentage 0.1 -quantBuild 1 -avgSubCellSize 1000
