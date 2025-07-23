@@ -2,11 +2,15 @@
 
 #include <sys/stat.h>
 #include <iostream>
+#include <filesystem>
 #include <sys/fcntl.h>
 #include <random>
 #include "spdlog/fmt/fmt.h"
 #include <unordered_map>
 #include <simsimd/simsimd.h>
+#include <arrow/api.h>
+#include <arrow/io/api.h>
+#include <parquet/arrow/reader.h>
 
 #define IS_ALIGNED(X, Y) ((uint64_t)(X) % (uint64_t)(Y) == 0)
 #define IS_512_ALIGNED(X) IS_ALIGNED(X, 512)
@@ -235,6 +239,96 @@ namespace orangedb {
 
         // Close the file
         fclose(f);
+    }
+
+    static void list_parquet_dir(const char *dir_path, std::vector<std::string> &file_paths) {
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(dir_path)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".parquet") {
+                    file_paths.emplace_back(entry.path().string());
+                }
+            }
+        } catch (const std::filesystem::filesystem_error& e) {
+            std::cerr << "Filesystem error: " << e.what() << '\n';
+        } catch (const std::exception& e) {
+            std::cerr << "General error: " << e.what() << '\n';
+        }
+    }
+
+    static arrow::Status readParquetFileStats(const char *fName, size_t *d_out, size_t *n_out) {
+        ARROW_ASSIGN_OR_RAISE(auto infile, arrow::io::ReadableFile::Open(std::string(fName)));
+        std::unique_ptr<parquet::ParquetFileReader> pq_reader =
+                parquet::ParquetFileReader::Open(infile);
+        std::shared_ptr<parquet::FileMetaData> meta = pq_reader->metadata();
+        *n_out = meta->num_rows();
+        const auto row_group_meta = meta->RowGroup(0);
+        *d_out = row_group_meta->ColumnChunk(1)->num_values() / row_group_meta->num_rows();
+        return arrow::Status::OK();
+    }
+
+    static arrow::Status readParquetFile(const char *fName, float* output, size_t *n_out) {
+        ARROW_ASSIGN_OR_RAISE(auto infile, arrow::io::ReadableFile::Open(std::string(fName)));
+        std::unique_ptr<parquet::arrow::FileReader> reader;
+        ARROW_ASSIGN_OR_RAISE(reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
+        std::shared_ptr<arrow::Schema> schema;
+        ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
+        int col_index = schema->GetFieldIndex("embedding");
+        if (col_index == -1) {
+            return arrow::Status::Invalid("Column 'embedding' not found");
+        }
+        std::shared_ptr<arrow::Table> table;
+        ARROW_RETURN_NOT_OK(reader->ReadTable({col_index}, &table));
+        const auto& col = table->column(0);
+        *n_out = table->num_rows();
+        int64_t dst = 0;
+        for (const auto& chunk_base : col->chunks()) {
+            const auto chunk =
+                std::static_pointer_cast<arrow::FixedSizeListArray>(chunk_base);
+            const auto values =
+                std::static_pointer_cast<arrow::FloatArray>(chunk->values());
+            std::memcpy(output + dst,
+                        values->raw_values(),
+                        static_cast<size_t>(values->length()) * sizeof(float));
+            dst += values->length();
+        }
+        return arrow::Status::OK();
+    }
+
+    static float* readParquetDir(const char *dir_path, size_t *d_out, size_t *n_out) {
+        std::vector<std::string> file_paths;
+        list_parquet_dir(dir_path, file_paths);
+        if (file_paths.empty()) {
+            throw std::runtime_error("No Parquet files found in the directory");
+        }
+
+        *n_out = 0;
+        for (const auto& file_path : file_paths) {
+            size_t total_rows = 0;
+            if (auto res = readParquetFileStats(file_path.c_str(), d_out, &total_rows); !res.ok()) {
+                throw std::runtime_error("Failed to read Parquet file stats: " + res.ToString());
+            }
+            *n_out += total_rows;
+        }
+
+        float *buffer;
+        allocAligned(((void **) &buffer), *n_out * *d_out * sizeof(float), 8 * sizeof(float));
+        printf("align_x: %p\n", buffer);
+
+        size_t idx = 0;
+        for (const auto& file_path : file_paths) {
+            size_t total_rows = 0;
+            if (auto res = readParquetFile(file_path.c_str(), buffer + idx * (*d_out), &total_rows); !res.ok()) {
+                throw std::runtime_error("Failed to read Parquet file: " + res.ToString());
+            }
+            idx += total_rows;
+        }
+        // Print file paths
+        printf("Read Parquet files from directory: %s\n", dir_path);
+        for (const auto& file_path : file_paths) {
+            printf(" - %s\n", file_path.c_str());
+        }
+        printf("Total vectors read: %zu, Dimension: %zu\n", *n_out, *d_out);
+        return buffer;
     }
 
     struct RandomGenerator {

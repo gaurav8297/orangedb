@@ -858,7 +858,7 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    auto dc = createDistanceComputer(vectors, dim, numVectors, L2);
+    auto dc = createDistanceComputer(vectors, dim, numVectors, COSINE);
 #pragma omp parallel
     {
         auto localDc = dc->clone();
@@ -872,6 +872,25 @@ void generateGroundTruth(
             printf("Query time: %lld ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count());
         }
     }
+}
+
+void generateGroundTruthParquet(InputParser &input) {
+    const std::string &dirPath = input.getCmdOption("-dirPath");
+    const std::string &queryPath = input.getCmdOption("-queryPath");
+    auto k = stoi(input.getCmdOption("-k"));
+    auto numVectors = stoi(input.getCmdOption("-numVectors"));
+    const std::string &gtPath = input.getCmdOption("-gtPath");
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readParquetDir(dirPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readFvecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+    printf("Base num vectors: %zu, Query num vectors: %zu\n", baseNumVectors, queryNumVectors);
+    generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
+    // serialize gtVecs to a file
+    writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 }
 
 void generateGroundTruth(InputParser &input) {
@@ -929,7 +948,6 @@ void benchmark_filtered_hnsw_queries(InputParser &input) {
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-
 
     HNSWConfig config(M, efConstruction, 100, minAlpha, maxAlpha, alphaDecay, 1, maxNeighboursCheck,
                       "none", storagePath, loadFromStorage, 20, 10, 1, "none");
@@ -2588,6 +2606,62 @@ void benchmark_splitting(InputParser &input) {
     // printf("Final Recall: %f\n", final_recall);
 }
 
+void generate_quantized_vectors() {
+    const int dims = 34;
+    const int numVectors = 10000;
+
+    // Generate random vectors with 50 dimensions
+    std::vector<float> random_vecs(numVectors * dims);
+    RandomGenerator rng(1234);
+    for (int i = 0; i < numVectors * dims; i++) {
+        random_vecs[i] = rng.randFloat();
+    }
+
+    // Normalize vectors
+    std::vector<float> normalize_vecs(numVectors * dims);
+    normalize_vectors(random_vecs.data(), dims, numVectors, normalize_vecs.data());
+
+    SQ8Bit quantizer(dims);
+    quantizer.batch_train(numVectors, normalize_vecs.data());
+
+    // print vmin and vmax
+    printf("vmin and vmax for each dimension:\n");
+    for (int i = 0; i < dims; i++) {
+        printf("%f, ", quantizer.vmin[i]);
+    }
+    printf("\n");
+    for (int i = 0; i < dims; i++) {
+        printf("%f, ", quantizer.vdiff[i]);
+    }
+    printf("\n");
+
+    quantizer.finalize_train();
+
+    std::vector<uint8_t> quantized_vectors(numVectors * quantizer.codeSize);
+    quantizer.encode(normalize_vecs.data(), quantized_vectors.data(), numVectors);
+
+    // print first encoded vector, and random normalized vector
+    printf("First normalized vector: ");
+    for (int i = 0; i < dims; i++) {
+        printf("%f, ", normalize_vecs[i]);
+    }
+    printf("\n");
+    printf("First encoded vector: ");
+    for (int i = 0; i < quantizer.codeSize; i++) {
+        printf("%d, ", quantized_vectors[i]);
+    }
+    printf("\n");
+    printf("random normalized vector: ");
+    for (int i = dims * 5485; i < dims * 5486; i++) {
+        printf("%f, ", normalize_vecs[i]);
+    }
+    printf("\n");
+    printf("random quantized vector: ");
+    for (int i = quantizer.codeSize * 5485; i < quantizer.codeSize * 5486; i++) {
+        printf("%d, ", quantized_vectors[i]);
+    }
+}
+
 void benchmark_quantized_dc(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
@@ -2660,6 +2734,15 @@ void benchmark_quantized_dc(InputParser &input) {
     printf("Actual Distance computation per sec: %f\n", (n * baseNumVectors) / (duration.count() / 1000.0));
 }
 
+void read_parquet_file(InputParser &input) {
+    const std::string &dirPath = input.getCmdOption("-dirPath");
+    size_t numVectors, dim;
+    // Read parquet file
+    auto data = readParquetDir(dirPath.c_str(), &dim, &numVectors);
+    // Print status
+    delete data;
+}
+
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
@@ -2676,6 +2759,8 @@ int main(int argc, char **argv) {
         benchmark_filtered_hnsw_queries(input);
     } else if (run == "benchmarkAcorn") {
         // benchmark_acorn(input);
+    } else if (run == "generateGTParquet") {
+        generateGroundTruthParquet(input);
     }
 #if 0
     else if (run == "benchmarkIoUring") {
@@ -2707,6 +2792,12 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkFaissClustering") {
         benchmark_faiss_clustering(input);
+    }
+    else if (run == "generateQuantizedData") {
+        generate_quantized_vectors();
+    }
+    else if (run == "readParquetFile") {
+        read_parquet_file(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();

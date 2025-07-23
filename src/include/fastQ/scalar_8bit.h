@@ -560,7 +560,7 @@ namespace fastq {
                 delete[] betaSqr;
             }
 
-        private:
+        public:
             float *vmin;
             float *vdiff;
 

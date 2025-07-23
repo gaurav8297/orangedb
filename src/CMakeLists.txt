@@ -7,7 +7,6 @@ add_library(orangedb
         partitioned_index.cpp
         file_handle.cpp
         reclustering_index.cpp
-        include/incremental_index.h
         incremental_index.cpp
 )
 
