@@ -2542,8 +2542,10 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.printStats();
         printf("Done iteration: %d\n", iter);
     }
-    // printf("Flushing to disk\n");
-    // index.flush_to_disk(storagePath);
+    if (iterations > 0) {
+        printf("Flushing to disk\n");
+        index.flush_to_disk(storagePath);
+    }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
