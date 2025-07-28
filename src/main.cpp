@@ -2787,6 +2787,28 @@ void read_parquet_file(InputParser &input) {
     delete data;
 }
 
+void check_omp_threads(InputParser &input) {
+    const int numThreads = stoi(input.getCmdOption("-numThreads"));
+    omp_set_num_threads(numThreads);
+    printf("Number of OpenMP threads set to: %d\n", numThreads);
+    // Print the thread id
+    auto thread_id = std::this_thread::get_id();
+    printf("Current thread id: %lu\n", std::hash<std::thread::id>()(thread_id));
+    auto num = 100000000;
+#pragma omp parallel
+    {
+        auto main_thread_id = std::hash<std::thread::id>()(thread_id);
+#pragma omp for
+        for (auto i = 0; i < num; i++) {
+            auto new_id = std::hash<std::thread::id>()(std::this_thread::get_id());
+            if (new_id != main_thread_id) {
+                printf("Thread id changed from %lu to %lu\n", main_thread_id, new_id);
+                main_thread_id = new_id;
+            }
+        }
+    }
+}
+
 int main(int argc, char **argv) {
 //    benchmarkPairWise();
     InputParser input(argc, argv);
@@ -2842,6 +2864,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "readParquetFile") {
         read_parquet_file(input);
+    }
+    else if (run == "checkOmpThreads") {
+        check_omp_threads(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
