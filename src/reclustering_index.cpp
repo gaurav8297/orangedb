@@ -1509,6 +1509,19 @@ namespace orangedb {
         }
     }
 
+    // Based on sillouette score for each mini cluster and mega cluster, pick more or less
+    void ReclusteringIndex::searchWithBadClusters(const float *query, uint16_t k,
+                                                  std::priority_queue<NodeDistCloser> &results,
+                                                  int nMegaProbes, int nMicroProbes,
+                                                  ReclusteringIndexStats &stats) {
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto numMiniCentroids = miniCentroids.size() / dim;
+        nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
+        nMicroProbes = std::min(nMicroProbes, (int)numMiniCentroids);
+
+
+    }
+
     void ReclusteringIndex::searchQuantized(const float *query, uint16_t k,
                                             std::priority_queue<NodeDistCloser> &results, int nMegaProbes,
                                             int nMicroProbes, ReclusteringIndexStats &stats) {

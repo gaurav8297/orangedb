@@ -110,6 +110,9 @@ namespace orangedb {
         void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
                     int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
 
+        void searchWithBadClusters(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
+                    int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
+
         void searchQuantized(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
             int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
 

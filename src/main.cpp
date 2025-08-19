@@ -2790,7 +2790,7 @@ void read_parquet_file(InputParser &input) {
 void check_omp_threads(InputParser &input) {
     const int numThreads = stoi(input.getCmdOption("-numThreads"));
     omp_set_num_threads(numThreads);
-    printf("Number of OpenMP threads set to: %d\n", numThreads);
+    printf("Number of OpenMP threads set to: %d\n", omp_get_num_threads());
     // Print the thread id
     auto thread_id = std::this_thread::get_id();
     printf("Current thread id: %lu\n", std::hash<std::thread::id>()(thread_id));
