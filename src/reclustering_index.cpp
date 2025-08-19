@@ -337,7 +337,7 @@ namespace orangedb {
         // Take all the existing mini centroids and merge them
         printf("ReclusteringIndex::reclusterFullMegaCentroids on %lu mega centroids\n",
                megaClusterIds.size());
-        auto totalVecs = 0;
+        size_t totalVecs = 0;
         for (auto megaCentroidId: megaClusterIds) {
             auto microCentroidIds = megaMiniCentroidIds[megaCentroidId];
             auto miniClusterSize = miniClusters.size();
@@ -347,10 +347,10 @@ namespace orangedb {
                 totalVecs += (cluster.size() / dim);
             }
         }
-        printf("Total vecs: %d\n", totalVecs);
+        printf("Total vecs: %lu\n", totalVecs);
 
         // Copy actual vecs and vectorIds here
-        std::vector<float> tempData(totalVecs * dim);
+        std::vector<float> tempData(totalVecs * (size_t)dim);
         std::vector<vector_idx_t> tempVectorIds(totalVecs);
         size_t idx = 0;
         for (auto megaCentroidId: megaClusterIds) {
