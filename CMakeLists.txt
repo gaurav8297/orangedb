@@ -19,6 +19,16 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
+include(FetchContent)
+
+# Also requires one of: libbfd (gnu binutils), libdwarf, libdw (elfutils)
+FetchContent_Declare(backward
+        GIT_REPOSITORY https://github.com/bombela/backward-cpp
+        GIT_TAG master  # or a version tag, such as v1.6
+        SYSTEM          # optional, the Backward include directory will be treated as system directory
+)
+FetchContent_MakeAvailable(backward)
+
 find_package(OpenMP REQUIRED)
 find_package(Arrow CONFIG REQUIRED)
 find_package(Parquet CONFIG REQUIRED)
@@ -62,7 +72,7 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
 # Add executable path
 add_executable(orangedb_main ${PROJECT_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX simsimd faiss Arrow::arrow_shared Parquet::parquet_shared)
+target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX simsimd faiss Arrow::arrow_shared Parquet::parquet_shared Backward::Interface)
 target_include_directories(orangedb_main PUBLIC
         ${PROJECT_SOURCE_DIR}/src/include
         ${PROJECT_SOURCE_DIR}/third_party/spdlog
