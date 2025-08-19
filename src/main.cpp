@@ -44,8 +44,7 @@ using namespace orangedb;
 #define PRAGMA_IMPRECISE_FUNCTION_END \
     _Pragma("GCC pop_options")
 #endif
-
-
+#include <backward.hpp>
 
 
 class InputParser {
@@ -2810,6 +2809,7 @@ void check_omp_threads(InputParser &input) {
 }
 
 int main(int argc, char **argv) {
+    backward::SignalHandling sh;
 //    benchmarkPairWise();
     InputParser input(argc, argv);
 //    benchmark_quantization(input);
