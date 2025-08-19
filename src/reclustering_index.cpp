@@ -347,6 +347,7 @@ namespace orangedb {
                 totalVecs += (cluster.size() / dim);
             }
         }
+        printf("Total vecs: %d\n", totalVecs);
 
         // Copy actual vecs and vectorIds here
         std::vector<float> tempData(totalVecs * dim);
