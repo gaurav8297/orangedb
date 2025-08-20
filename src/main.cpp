@@ -2545,6 +2545,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                          nMiniProbes);
         index.printStats();
+        break;
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         printf("After reclustering only mega centroids, Recall: %f\n", recall);
