@@ -1336,7 +1336,7 @@ namespace orangedb {
 
         // Collect centroids to check for silhouette
         std::vector<vector_idx_t> closestMiniCentroidIds;
-        findKClosestMiniCentroids(miniCentroids.data() + miniClusterId * dim, 100, megaAssign, closestMiniCentroidIds);
+        findKClosestMiniCentroids(miniCentroids.data() + miniClusterId * dim, 500, megaAssign, closestMiniCentroidIds);
 
         // Calculate the silhouette score
         double totalSilhouette = 0.0;
