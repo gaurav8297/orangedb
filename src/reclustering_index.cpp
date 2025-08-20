@@ -1486,6 +1486,9 @@ namespace orangedb {
 
         // Now iterate through mega clusters
         for (int i = 0; i < numMegaCentroids; i++) {
+            if (megaClusteringScore[i] < 0.01) {
+                continue;
+            }
             searchMegaCluster(query, k, results, i, nMiniProbesForBadClusters, stats);
         }
     }
