@@ -1284,12 +1284,10 @@ namespace orangedb {
 
     double ReclusteringIndex::calcScoreForMegaCluster(int megaClusterId) {
         auto miniCentroidIds = megaMiniCentroidIds[megaClusterId];
-        printf("ReclusteringIndex::calcScoreForMegaCluster %d\n", megaClusterId);
         double avgMiniScore = 0.0;
 #pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
         for (auto miniCentroidId : miniCentroidIds) {
             double s = calcScoreForMiniCluster(miniCentroidId);
-            printf("ReclusteringIndex::calcScoreForMegaCluster %d %llu %f\n", megaClusterId, miniCentroidId, s);
             avgMiniScore += s;
         }
 
@@ -1313,7 +1311,6 @@ namespace orangedb {
                 b = std::min(b, dist);
             }
 
-            printf("ReclusteringIndex::calcScoreForMegaCluster %d a %f b %f\n", megaClusterId, a, b);
             // 3) silhouette for this point
             double m = std::max(a, b);
             double s = (m > 0.0) ? (b - a) / m : 0.0;
@@ -1332,7 +1329,7 @@ namespace orangedb {
     double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
-        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 100, megaAssign);
+        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 50, megaAssign);
 
         // Collect centroids to check for silhouette
         std::vector<vector_idx_t> closestMiniCentroidIds;
