@@ -201,9 +201,10 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::reclusterFast() {
+    void ReclusteringIndex::reclusterFast(int n) {
+        auto megaClusterSize = std::min((size_t)n, megaCentroids.size() / dim);
         // List all mega centroids
-        std::vector<vector_idx_t> megaClusterIds(megaCentroids.size() / dim);
+        std::vector<vector_idx_t> megaClusterIds(megaClusterSize);
         for (size_t i = 0; i < megaClusterIds.size(); i++) {
             megaClusterIds[i] = i;
         }
@@ -400,15 +401,9 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::reclusterFastMegaCentroids(std::vector<vector_idx_t> megaClusterIds) {
-        // reclusterOnlyMegaCentroids(megaClusterIds);
-        // It's possible that after reclustering the mega centroids has reduced in size.
-        std::vector<vector_idx_t> newMegaClusterIds(megaCentroids.size() / dim);
-        for (size_t i = 0; i < newMegaClusterIds.size(); i++) {
-            newMegaClusterIds[i] = i;
-        }
+    void ReclusteringIndex::reclusterFastMegaCentroids(std::vector<vector_idx_t> megaClusterIdsToRecluster) {
         // Now recluster miniCentroids within the mega centroids
-        for (auto megaCentroidId: newMegaClusterIds) {
+        for (auto megaCentroidId: megaClusterIdsToRecluster) {
             reclusterInternalMegaCentroid(megaCentroidId);
         }
     }
@@ -1168,6 +1163,7 @@ namespace orangedb {
     }
 
     void ReclusteringIndex::storeScoreForMegaClusters(int n) {
+        printf("ReclusteringIndex::storeScoreForMegaClusters\n");
         auto numMegaCentroids = megaCentroids.size() / dim;
         megaClusteringScore.resize(numMegaCentroids);
         auto numToCalc = std::min(n, (int)numMegaCentroids);
@@ -1175,6 +1171,8 @@ namespace orangedb {
             megaClusteringScore[i] = calcScoreForMegaCluster(i);
         }
     }
+
+    void ReclusteringIndex::
 
     void ReclusteringIndex::quantizeVectors() {
         printf("ReclusteringIndex::quantizeVectors\n");
@@ -1319,11 +1317,9 @@ namespace orangedb {
 
         avgMegaScore /= miniCentroidIds.size();
         avgMiniScore /= miniCentroidIds.size();
-        printf("ReclusteringIndex::calcScoreForMegaCluster %d avgMegaScore %f avgMiniScore %f\n", megaClusterId,
-               avgMegaScore, avgMiniScore);
 
         // Weight the mega silhouette score more than the mini silhouette score
-        return 0.2 * avgMegaScore + 0.8 * avgMiniScore;
+        return avgMiniScore;
     }
 
     double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {
@@ -1705,6 +1701,17 @@ namespace orangedb {
         }
         avgMegaScore /= megaClusteringScore.size();
         printf("Avg mega cluster score: %f\n", avgMegaScore);
+
+        // Print top 5 scores for mega clusters in increasing order
+        std::vector<std::pair<double, int>> scores;
+        for (int i = 0; i < megaClusteringScore.size(); i++) {
+            scores.push_back(std::make_pair(megaClusteringScore[i], i));
+        }
+        std::sort(scores.begin(), scores.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+        printf("Top 5 mega cluster scores:\n");
+        for (int i = 0; i < 5; i++) {
+            printf("Mega cluster %d score: %f\n", scores[i].second, scores[i].first);
+        }
 
         // Print stats
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);

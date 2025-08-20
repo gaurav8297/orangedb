@@ -2507,11 +2507,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
     printf("Recall: %f\n", recall);
-    index.printStats();
 
-    index.storeScoreForMegaClusters(10);
+    index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
-
+    index.printStats();
     for (int iter = 0; iter < iterations; iter++) {
         printf("Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
@@ -2519,11 +2518,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                          nMiniProbes);
         index.printStats();
-        index.storeScoreForMegaClusters(10);
-        break;
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
-        printf("After reclustering only mega centroids, Recall: %f, Quantized Recall: %f\n", recall, 0.0);
+        printf("After reclustering only mega centroids, Recall: %f\n", recall);
         if (numMegaReclusterCentroids == 1) {
             index.reclusterFast();
         } else {
@@ -2538,16 +2535,15 @@ void benchmark_fast_reclustering(InputParser &input) {
                                  nMiniProbes);
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
-        printf("After micro reclustering, recall: %f, quantized recall: %f\n", recall, 0.0);
-        // printf("Recalculating scores\n");
-        // index.storeScoreForMegaClusters();
+        printf("After micro reclustering, recall: %f\n", recall);
+        index.storeScoreForMegaClusters();
         index.printStats();
         printf("Done iteration: %d\n", iter);
     }
-    if (iterations > 0) {
-        printf("Flushing to disk\n");
-        index.flush_to_disk(storagePath);
-    }
+    // if (iterations > 0) {
+    //     printf("Flushing to disk\n");
+    //     index.flush_to_disk(storagePath);
+    // }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,

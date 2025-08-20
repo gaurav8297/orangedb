@@ -85,7 +85,7 @@ namespace orangedb {
 
         void recluster(int n, bool fast = false);
 
-        void reclusterFast();
+        void reclusterFast(int n = INT_MAX);
 
         void reclusterFastQuant();
 
