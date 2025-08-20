@@ -1167,10 +1167,11 @@ namespace orangedb {
         return appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
     }
 
-    void ReclusteringIndex::storeScoreForMegaClusters() {
+    void ReclusteringIndex::storeScoreForMegaClusters(int n) {
         auto numMegaCentroids = megaCentroids.size() / dim;
         megaClusteringScore.resize(numMegaCentroids);
-        for (auto i = 0; i < numMegaCentroids; i++) {
+        auto numToCalc = std::min(n, (int)numMegaCentroids);
+        for (auto i = 0; i < numToCalc; i++) {
             megaClusteringScore[i] = calcScoreForMegaCluster(i);
         }
     }
@@ -1288,6 +1289,7 @@ namespace orangedb {
 #pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
         for (auto miniCentroidId : miniCentroidIds) {
             double s = calcScoreForMiniCluster(miniCentroidId);
+            printf("ReclusteringIndex::calcScoreForMegaCluster %d %llu %f\n", megaClusterId, miniCentroidId, s);
             avgMiniScore += s;
         }
 
@@ -1311,6 +1313,7 @@ namespace orangedb {
                 b = std::min(b, dist);
             }
 
+            printf("ReclusteringIndex::calcScoreForMegaCluster %d a %f b %f\n", megaClusterId, a, b);
             // 3) silhouette for this point
             double m = std::max(a, b);
             double s = (m > 0.0) ? (b - a) / m : 0.0;
@@ -1369,10 +1372,10 @@ namespace orangedb {
             // 3) silhouette for this point
             double m = std::max(a, b);
             double s = (m > 0.0) ? (b - a) / m : 0.0;
+            printf("ReclusteringIndex::calcScoreForMiniCluster a %f b %f s %f\n", a, b, s);
             totalSilhouette += s;
             totalPoints += 1;
         }
-
         return (totalPoints > 0)
                    ? totalSilhouette / double(totalPoints)
                    : 0.0;

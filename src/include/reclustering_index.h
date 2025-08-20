@@ -97,7 +97,7 @@ namespace orangedb {
 
         void reclusterAllMiniCentroidsQuant();
 
-        void storeScoreForMegaClusters();
+        void storeScoreForMegaClusters(int n = INT_MAX);
 
         void computeAllSubCells(int avgSubCellSize);
 

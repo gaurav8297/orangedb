@@ -2482,7 +2482,7 @@ void benchmark_fast_reclustering(InputParser &input) {
             }
             printf("Building index\n");
             auto chunkSize = baseNumVectors / numInserts;
-            printf("Chunk size: %d\n", chunkSize);
+            printf("Chunk size: %lu\n", chunkSize);
             for (long i = 0; i < numInserts; i++) {
                 auto start = i * chunkSize;
                 auto end = (i + 1) * chunkSize;
@@ -2506,10 +2506,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.computeAllSubCells(avgSubCellSize);
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
-    printf("Recall: %f, Recall: %f\n", 0.0, recall);
+    printf("Recall: %f\n", recall);
     index.printStats();
 
-    index.storeScoreForMegaClusters();
+    index.storeScoreForMegaClusters(1);
     // index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
@@ -2519,6 +2519,8 @@ void benchmark_fast_reclustering(InputParser &input) {
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                          nMiniProbes);
         index.printStats();
+        index.storeScoreForMegaClusters(10);
+        break;
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         printf("After reclustering only mega centroids, Recall: %f, Quantized Recall: %f\n", recall, 0.0);
