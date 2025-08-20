@@ -1172,8 +1172,6 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::
-
     void ReclusteringIndex::quantizeVectors() {
         printf("ReclusteringIndex::quantizeVectors\n");
         if (miniCentroids.empty()) {
