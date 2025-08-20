@@ -1362,17 +1362,16 @@ namespace orangedb {
 
             // 2) b = min distance to any other centroid
             double b = std::numeric_limits<double>::infinity();
-            for (int j = 0; j < closestMiniCentroidIds.size(); j++) {
-                if (j == miniClusterId) continue;
+            for (auto closestMiniCentroidId : closestMiniCentroidIds) {
+                if (closestMiniCentroidId == miniClusterId) continue;
                 double dist;
-                dc->computeDistance(closestMiniCentroidIds[j], &dist);
+                dc->computeDistance(closestMiniCentroidId, &dist);
                 b = std::min(b, dist);
             }
 
             // 3) silhouette for this point
             double m = std::max(a, b);
             double s = (m > 0.0) ? (b - a) / m : 0.0;
-            printf("ReclusteringIndex::calcScoreForMiniCluster a %f b %f s %f\n", a, b, s);
             totalSilhouette += s;
             totalPoints += 1;
         }
