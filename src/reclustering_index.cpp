@@ -1331,17 +1331,12 @@ namespace orangedb {
 
     double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {
         // Find 5 closest mega centroids
-        std::vector<vector_idx_t> megaAssign(3);
+        std::vector<vector_idx_t> megaAssign;
         findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 10, megaAssign);
 
         // Collect centroids to check for silhouette
         std::vector<vector_idx_t> closestMiniCentroidIds;
-        for (auto megaId: megaAssign) {
-            auto miniIds = megaMiniCentroidIds[megaId];
-            for (auto miniId: miniIds) {
-                closestMiniCentroidIds.push_back(miniId);
-            }
-        }
+        findKClosestMiniCentroids(miniCentroids.data() + miniClusterId * dim, 100, megaAssign, closestMiniCentroidIds);
 
         // Calculate the silhouette score
         double totalSilhouette = 0.0;
@@ -1610,6 +1605,41 @@ namespace orangedb {
             auto microId = closestMicro.top().id;
             closestMicro.pop();
             ids.push_back(microId);
+        }
+    }
+    
+
+    void ReclusteringIndex::findKClosestMiniCentroids(const float *query, int k,
+                                                      std::vector<vector_idx_t> &megaCentroids,
+                                                      std::vector<vector_idx_t> &ids) {
+        std::priority_queue<NodeDistCloser> closestMini;
+        auto numMiniCentroids = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
+        dc->setQuery(query);
+
+        // Iterate through the specified mega centroids
+        for (auto megaId : megaCentroids) {
+            // Get all mini centroids belonging to this mega centroid
+            auto miniIds = megaMiniCentroidIds[megaId];
+            for (auto miniId : miniIds) {
+                double d;
+                dc->computeDistance(miniId, &d);
+                if (closestMini.size() < k || d < closestMini.top().dist) {
+                    closestMini.emplace(miniId, d);
+                    if (closestMini.size() > k) {
+                        closestMini.pop();
+                    }
+                }
+            }
+        }
+
+        // Copy the ids to vector (in reverse order to get closest first)
+        ids.clear();
+        ids.reserve(closestMini.size());
+        while (!closestMini.empty()) {
+            auto miniId = closestMini.top().id;
+            closestMini.pop();
+            ids.push_back(miniId);
         }
     }
 
