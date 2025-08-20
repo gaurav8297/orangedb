@@ -111,7 +111,7 @@ namespace orangedb {
                     int nMegaProbes, int nMiniProbes, ReclusteringIndexStats &stats);
 
         void searchWithBadClusters(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
-                    int nMegaProbes, int nMiniProbes, int nMiniProbesForBadClusters, ReclusteringIndexStats &stats);
+                    int nMegaProbes, int nMiniProbes, int nMiniProbesForBadClusters, ReclusteringIndexStats &stats, bool skipBadClusters = false);
 
         void searchMegaCluster(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
             int megaClusterId, int nMiniProbes, ReclusteringIndexStats &stats);

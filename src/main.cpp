@@ -2300,7 +2300,7 @@ double get_recall_with_bad_clusters(ReclusteringIndex &index, float *queryVecs, 
     ReclusteringIndexStats stats;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
-        index.searchWithBadClusters(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, nMiniProbesForBadCluster, stats);
+        index.searchWithBadClusters(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, nMiniProbesForBadCluster, stats, true);
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();

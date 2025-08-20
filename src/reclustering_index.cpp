@@ -1468,7 +1468,7 @@ namespace orangedb {
     void ReclusteringIndex::searchWithBadClusters(const float *query, uint16_t k,
                                                   std::priority_queue<NodeDistCloser> &results,
                                                   int nMegaProbes, int nMicroProbes, int nMiniProbesForBadClusters,
-                                                  ReclusteringIndexStats &stats) {
+                                                  ReclusteringIndexStats &stats, bool skipBadClusters) {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
         nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
@@ -1484,12 +1484,15 @@ namespace orangedb {
         // Now find the closest vectors
         findKClosestVectors(query, k, miniAssign, results, stats);
 
+        if (skipBadClusters) {
+            return;
+        }
+
         // Now iterate through mega clusters
         for (int i = 0; i < numMegaCentroids; i++) {
             if (megaClusteringScore[i] >= 0.01) {
                 continue;
             }
-            printf("searching mega cluster %d with score %f\n", i, megaClusteringScore[i]);
             searchMegaCluster(query, k, results, i, nMiniProbesForBadClusters, stats);
         }
     }
