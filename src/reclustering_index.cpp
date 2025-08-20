@@ -1486,7 +1486,7 @@ namespace orangedb {
 
         // Now iterate through mega clusters
         for (int i = 0; i < numMegaCentroids; i++) {
-            if (megaClusteringScore[i] > 0.01) {
+            if (megaClusteringScore[i] >= 0.01) {
                 continue;
             }
             printf("searching mega cluster %d with score %f\n", i, megaClusteringScore[i]);
