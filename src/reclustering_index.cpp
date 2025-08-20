@@ -1326,17 +1326,17 @@ namespace orangedb {
                avgMegaScore, avgMiniScore);
 
         // Weight the mega silhouette score more than the mini silhouette score
-        return 0.3 * avgMegaScore + 0.7 * avgMiniScore;
+        return 0.2 * avgMegaScore + 0.8 * avgMiniScore;
     }
 
     double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
-        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 10, megaAssign);
+        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 50, megaAssign);
 
         // Collect centroids to check for silhouette
         std::vector<vector_idx_t> closestMiniCentroidIds;
-        findKClosestMiniCentroids(miniCentroids.data() + miniClusterId * dim, 500, megaAssign, closestMiniCentroidIds);
+        findKClosestMiniCentroids(miniCentroids.data() + miniClusterId * dim, 1000, megaAssign, closestMiniCentroidIds);
 
         // Calculate the silhouette score
         double totalSilhouette = 0.0;
