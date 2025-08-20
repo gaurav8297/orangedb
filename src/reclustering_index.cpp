@@ -252,7 +252,7 @@ namespace orangedb {
             auto worstMegaClusterId = getWorstMegaCentroid();
             // Find the closest mega centroid
             std::vector<vector_idx_t> megaAssign;
-            findKClosestMegaCentroids(megaCentroids.data() + (worstMegaClusterId * dim), n, megaAssign);
+            findKClosestMegaCentroids(megaCentroids.data() + (worstMegaClusterId * dim), n, megaAssign, stats);
             if (megaAssign.empty()) {
                 continue;
             }
@@ -618,7 +618,7 @@ namespace orangedb {
                                                        std::vector<vector_idx_t> newMiniCentroidBatch) {
         // Find the closest mega centroid
         std::vector<vector_idx_t> megaAssign;
-        findKClosestMegaCentroids(newMegaCentroid, config.numMegaReclusterCentroids, megaAssign);
+        findKClosestMegaCentroids(newMegaCentroid, config.numMegaReclusterCentroids, megaAssign, stats);
 
         auto totalVecs = 0;
         for (auto i = 0; i < newMiniCentroidBatch.size(); i++) {
@@ -1323,11 +1323,11 @@ namespace orangedb {
     double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
-        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 50, megaAssign);
+        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 50, megaAssign, stats);
 
         // Collect centroids to check for silhouette
         std::vector<vector_idx_t> closestMiniCentroidIds;
-        findKClosestMiniCentroids(miniCentroids.data() + miniClusterId * dim, 1000, megaAssign, closestMiniCentroidIds);
+        findKClosestMiniCentroids(miniCentroids.data() + miniClusterId * dim, 1000, megaAssign, closestMiniCentroidIds, stats);
 
         // Calculate the silhouette score
         double totalSilhouette = 0.0;
@@ -1454,63 +1454,51 @@ namespace orangedb {
 
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
-        findKClosestMegaCentroids(query, nMegaProbes, megaAssign);
-
-        auto numMicroCentroids = miniCentroids.size() / dim;
-        auto dc = getDistanceComputer(miniCentroids.data(), numMicroCentroids);
-        dc->setQuery(query);
+        findKClosestMegaCentroids(query, nMegaProbes, megaAssign, stats);
 
         // Now find the closest micro centroids
-        std::priority_queue<NodeDistCloser> closestMicro;
-        for (auto megaId : megaAssign) {
-            auto microIds = megaMiniCentroidIds[megaId];
-            for (auto microId: microIds) {
-                double d;
-                dc->computeDistance(microId, &d);
-                stats.numDistanceCompForSearch++;
-                if (closestMicro.size() < nMicroProbes || d < closestMicro.top().dist) {
-                    closestMicro.emplace(microId, d);
-                    if (closestMicro.size() > nMicroProbes) {
-                        closestMicro.pop();
-                    }
-                }
-            }
-        }
+        std::vector<vector_idx_t> miniAssign;
+        findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
 
-        // Now we have the closest micro centroids, let's find the closest vectors
-        while (!closestMicro.empty()) {
-            auto microId = closestMicro.top().id;
-            closestMicro.pop();
-            auto cluster = miniClusters[microId];
-            auto ids = miniClusterVectorIds[microId];
-            auto clusterSize = ids.size();
-            auto clusterDc = getDistanceComputer(cluster.data(), clusterSize);
-            clusterDc->setQuery(query);
-            for (int j = 0; j < clusterSize; j++) {
-                double dist;
-                clusterDc->computeDistance(j, &dist);
-                stats.numDistanceCompForSearch++;
-                if (results.size() <= k || dist < results.top().dist) {
-                    results.emplace(ids[j], dist);
-                    if (results.size() > k) {
-                        results.pop();
-                    }
-                }
-            }
-        }
+        // Now find the closest vectors
+        findKClosestVectors(query, k, miniAssign, results, stats);
     }
 
-    // Based on sillouette score for each mini cluster and mega cluster, pick more or less
+    // Simplest Idea: Based on sillouhette score, we can find the bad clusters and search them separately.
     void ReclusteringIndex::searchWithBadClusters(const float *query, uint16_t k,
                                                   std::priority_queue<NodeDistCloser> &results,
-                                                  int nMegaProbes, int nMicroProbes,
+                                                  int nMegaProbes, int nMicroProbes, int nMiniProbesForBadClusters,
                                                   ReclusteringIndexStats &stats) {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
         nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
         nMicroProbes = std::min(nMicroProbes, (int)numMiniCentroids);
 
+        std::vector<vector_idx_t> megaAssign;
+        findKClosestMegaCentroids(query, nMegaProbes, megaAssign, stats, true);
 
+        // Now find the closest micro centroids
+        std::vector<vector_idx_t> miniAssign;
+        findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
+
+        // Now find the closest vectors
+        findKClosestVectors(query, k, miniAssign, results, stats);
+
+        // Now iterate through mega clusters
+        for (int i = 0; i < numMegaCentroids; i++) {
+            searchMegaCluster(query, k, results, i, nMiniProbesForBadClusters, stats);
+        }
+    }
+
+    void ReclusteringIndex::searchMegaCluster(const float *query, uint16_t k,
+                                              std::priority_queue<NodeDistCloser> &results, int megaClusterId,
+                                              int nMiniProbes, ReclusteringIndexStats &stats) {
+        std::vector<vector_idx_t> megaClusterIds;
+        megaClusterIds.emplace_back(megaClusterId);
+        std::vector<vector_idx_t> miniClusterIds;
+        findKClosestMiniCentroids(query, nMiniProbes, megaClusterIds, miniClusterIds, stats);
+        // Now find the closest vectors
+        findKClosestVectors(query, k, miniClusterIds, results, stats);
     }
 
     void ReclusteringIndex::searchQuantized(const float *query, uint16_t k,
@@ -1528,7 +1516,7 @@ namespace orangedb {
 
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
-        findKClosestMegaCentroids(query, nMegaProbes, megaAssign);
+        findKClosestMegaCentroids(query, nMegaProbes, megaAssign, stats);
 
         auto numMicroCentroids = quantizedMiniCentroids.size() / quantizer->codeSize;
         auto dc = getQuantizedDistanceComputer(quantizedMiniCentroids.data(), numMicroCentroids);
@@ -1575,13 +1563,17 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids) {
+    void ReclusteringIndex::findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats, bool onlyGoodClusters) {
         std::priority_queue<NodeDistCloser> closestMicro;
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
         dc->setQuery(query);
         for (int i = 0; i < numMegaCentroids; i++) {
+            if (onlyGoodClusters && megaClusteringScore[i] < 0.01) {
+                continue;
+            }
             double d;
+            stats.numDistanceCompForSearch++;
             dc->computeDistance(i, &d);
             if (closestMicro.size() < k || d < closestMicro.top().dist) {
                 closestMicro.emplace(i, d);
@@ -1601,8 +1593,8 @@ namespace orangedb {
     
 
     void ReclusteringIndex::findKClosestMiniCentroids(const float *query, int k,
-                                                      std::vector<vector_idx_t> &megaCentroids,
-                                                      std::vector<vector_idx_t> &ids) {
+                                                      std::vector<vector_idx_t> megaCentroids,
+                                                      std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats) {
         std::priority_queue<NodeDistCloser> closestMini;
         auto numMiniCentroids = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
@@ -1614,6 +1606,7 @@ namespace orangedb {
             auto miniIds = megaMiniCentroidIds[megaId];
             for (auto miniId : miniIds) {
                 double d;
+                stats.numDistanceCompForSearch++;
                 dc->computeDistance(miniId, &d);
                 if (closestMini.size() < k || d < closestMini.top().dist) {
                     closestMini.emplace(miniId, d);
@@ -1633,6 +1626,31 @@ namespace orangedb {
             ids.push_back(miniId);
         }
     }
+
+    void ReclusteringIndex::findKClosestVectors(const float *query, int k, std::vector<vector_idx_t> miniCentroids,
+                                                std::priority_queue<NodeDistCloser> &results, ReclusteringIndexStats &stats) {
+
+        // Now we have the closest micro centroids, let's find the closest vectors
+        for (auto miniId : miniCentroids) {
+            auto cluster = miniClusters[miniId];
+            auto ids = miniClusterVectorIds[miniId];
+            auto clusterSize = ids.size();
+            auto clusterDc = getDistanceComputer(cluster.data(), clusterSize);
+            clusterDc->setQuery(query);
+            for (int j = 0; j < clusterSize; j++) {
+                double dist;
+                clusterDc->computeDistance(j, &dist);
+                stats.numDistanceCompForSearch++;
+                if (results.size() <= k || dist < results.top().dist) {
+                    results.emplace(ids[j], dist);
+                    if (results.size() > k) {
+                        results.pop();
+                    }
+                }
+            }
+        }
+    }
+
 
     void ReclusteringIndex::printStats() {
         printf("ReclusteringIndex::printStats\n");

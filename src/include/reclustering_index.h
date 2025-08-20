@@ -108,13 +108,16 @@ namespace orangedb {
         void flush_to_disk(const std::string &file_path) const;
 
         void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
-                    int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
+                    int nMegaProbes, int nMiniProbes, ReclusteringIndexStats &stats);
 
         void searchWithBadClusters(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
-                    int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
+                    int nMegaProbes, int nMiniProbes, int nMiniProbesForBadClusters, ReclusteringIndexStats &stats);
+
+        void searchMegaCluster(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
+            int megaClusterId, int nMiniProbes, ReclusteringIndexStats &stats);
 
         void searchQuantized(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
-            int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats);
+            int nMegaProbes, int nMiniProbes, ReclusteringIndexStats &stats);
 
     private:
         void computeMiniClusterSubcells(int miniClusterId, int avgSubCellSize);
@@ -199,9 +202,12 @@ namespace orangedb {
 
         inline void updateTotalDataWrittenByUser(const size_t n);
 
-        void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids);
+        void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats, bool onlyGoodClusters = false);
 
-        void findKClosestMiniCentroids(const float *query, int k, std::vector<vector_idx_t> &megaCentroids, std::vector<vector_idx_t> &ids);
+        void findKClosestMiniCentroids(const float *query, int k, std::vector<vector_idx_t> megaCentroids, std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats);
+
+        void findKClosestVectors(const float *query, int k, std::vector<vector_idx_t> miniCentroids,
+                                 std::priority_queue<NodeDistCloser> &results, ReclusteringIndexStats &stats);
 
         double calcScoreForMegaCluster(int megaClusterId);
 

@@ -2415,29 +2415,9 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int avgSubCellSize = stoi(input.getCmdOption("-avgSubCellSize"));
     omp_set_num_threads(numThreads);
 
-    // Read dataset
-    size_t baseDimension, baseNumVectors;
-    float *baseVecs;
-    std::vector<std::string> filePaths;
-    if (isParquet) {
-        list_parquet_dir(baseVectorPath.c_str(), filePaths);
-        if (filePaths.empty()) {
-            fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
-            exit(1);
-        }
-        auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &baseNumVectors);
-        if (!status.ok()) {
-            fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
-            exit(1);
-        }
-    } else {
-        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
-    }
-
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
-    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
     DistanceType distanceType = useIP ? COSINE : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
@@ -2447,11 +2427,31 @@ void benchmark_fast_reclustering(InputParser &input) {
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 
     RandomGenerator rng(1234);
-    ReclusteringIndex index(baseDimension, config, &rng);
+    ReclusteringIndex index(queryDimension, config, &rng);
 
     if (readFromDisk) {
         index = ReclusteringIndex(storagePath, &rng);
     } else {
+        // Read dataset
+        size_t baseDimension, baseNumVectors;
+        float *baseVecs;
+        std::vector<std::string> filePaths;
+        if (isParquet) {
+            list_parquet_dir(baseVectorPath.c_str(), filePaths);
+            if (filePaths.empty()) {
+                fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
+                exit(1);
+            }
+            auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &baseNumVectors);
+            if (!status.ok()) {
+                fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
+                exit(1);
+            }
+        } else {
+            baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+        }
+        baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+        assert(baseDimension == queryDimension);
         if (isParquet) {
             auto numFiles = filePaths.size();
             numInserts = std::min(numInserts, (int)numFiles);
