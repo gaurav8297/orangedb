@@ -2509,7 +2509,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     printf("Recall: %f\n", recall);
     index.printStats();
 
-    index.storeScoreForMegaClusters(1);
+    index.storeScoreForMegaClusters(10);
     // index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
