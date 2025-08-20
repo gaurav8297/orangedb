@@ -2522,7 +2522,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                                              // nMegaProbes, nMiniProbes);
         printf("After reclustering only mega centroids, Recall: %f\n", recall);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast();
+            index.reclusterFast(50);
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
@@ -2540,10 +2540,10 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.printStats();
         printf("Done iteration: %d\n", iter);
     }
-    // if (iterations > 0) {
-    //     printf("Flushing to disk\n");
-    //     index.flush_to_disk(storagePath);
-    // }
+    if (iterations > 0) {
+        printf("Flushing to disk\n");
+        index.flush_to_disk(storagePath);
+    }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
