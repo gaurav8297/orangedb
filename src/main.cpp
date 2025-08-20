@@ -2507,10 +2507,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
     printf("Recall: %f\n", recall);
-
-    index.storeScoreForMegaClusters();
-    // index.flush_to_disk(storagePath);
     index.printStats();
+
+    // index.storeScoreForMegaClusters();
+    // index.flush_to_disk(storagePath);
     for (int iter = 0; iter < iterations; iter++) {
         printf("Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
