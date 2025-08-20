@@ -1319,9 +1319,11 @@ namespace orangedb {
 
         avgMegaScore /= miniCentroidIds.size();
         avgMiniScore /= miniCentroidIds.size();
+        printf("ReclusteringIndex::calcScoreForMegaCluster %d avgMegaScore %f avgMiniScore %f\n", megaClusterId,
+               avgMegaScore, avgMiniScore);
 
         // Weight the mega silhouette score more than the mini silhouette score
-        return 0.2 * avgMegaScore + 0.8 * avgMiniScore;
+        return 0.3 * avgMegaScore + 0.7 * avgMiniScore;
     }
 
     double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {

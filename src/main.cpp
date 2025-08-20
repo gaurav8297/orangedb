@@ -2508,7 +2508,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     //                                             nMegaProbes, nMiniProbes);
     printf("Recall: %f, Recall: %f\n", 0.0, recall);
     index.printStats();
-    // index.storeScoreForMegaClusters();
+
+    index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
 
     for (int iter = 0; iter < iterations; iter++) {
