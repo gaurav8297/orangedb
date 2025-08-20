@@ -1489,7 +1489,7 @@ namespace orangedb {
             if (megaClusteringScore[i] < 0.01) {
                 continue;
             }
-            printf("searching mega cluster %d\n", i);
+            printf("searching mega cluster %d with score %f\n", i, megaClusteringScore[i]);
             searchMegaCluster(query, k, results, i, nMiniProbesForBadClusters, stats);
         }
     }
