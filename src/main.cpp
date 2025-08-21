@@ -2553,13 +2553,13 @@ void benchmark_fast_reclustering(InputParser &input) {
                                              // nMegaProbes, nMiniProbes);
         printf("After reclustering only mega centroids, Recall: %f\n", recall);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast(nMegaProbes);
+            index.reclusterFast(nMegaRecluster);
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
             } else {
                 index.reclusterFull(numMegaReclusterCentroids);
-            }
+            }g
         }
         // index.quantizeVectors();
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
