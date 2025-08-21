@@ -2564,6 +2564,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.quantizeVectors();
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
+        index.reclusterAllMegaCentroids();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
         printf("After micro reclustering, recall: %f\n", recall);
