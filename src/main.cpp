@@ -2435,6 +2435,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const bool quantBuild = stoi(input.getCmdOption("-quantBuild"));
     const int avgSubCellSize = stoi(input.getCmdOption("-avgSubCellSize"));
     const int nMiniProbesForBadCluster = stoi(input.getCmdOption("-nMiniProbesForBadCluster"));
+    const int nMegaRecluster = stoi(input.getCmdOption("-nMegaRecluster"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -2525,17 +2526,18 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.quantizeVectors();
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
-    auto recallWithoutBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
-                                            queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
-                                            nMiniProbesForBadCluster, true);
+    // auto recallWithoutBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
+    //                                         queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
+    //                                         nMiniProbesForBadCluster, true);
+    //
+    // auto recallWithBadCluster = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
+    //                                         queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
+    //                                         nMiniProbesForBadCluster, false);
 
-    auto recallWithBadCluster = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
-                                            queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
-                                            nMiniProbesForBadCluster, false);
     // index.computeAllSubCells(avgSubCellSize);
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
-    printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
+    // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     index.printStats();
 
     // index.storeScoreForMegaClusters();
@@ -2544,14 +2546,14 @@ void benchmark_fast_reclustering(InputParser &input) {
         printf("Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
         index.reclusterAllMegaCentroids();
-        recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-                         nMiniProbes);
-        index.printStats();
+        // recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+        //                  nMiniProbes);
+        // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         printf("After reclustering only mega centroids, Recall: %f\n", recall);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast(50);
+            index.reclusterFast(nMegaProbes);
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
