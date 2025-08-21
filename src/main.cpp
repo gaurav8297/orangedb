@@ -2210,36 +2210,46 @@ void benchmark_faiss_clustering(InputParser &input) {
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const int isParquet = stoi(input.getCmdOption("-isParquet"));
 
-    // Read dataset
-    size_t baseDimension, baseNumVectors;
-    float *baseVecs;
+    size_t baseDimension, totalBaseNumVectors;
+    std::vector<std::string> filePaths;
+    
+    // Get file information first
     if (isParquet) {
-        std::vector<std::string> filePaths;
         list_parquet_dir(baseVectorPath.c_str(), filePaths);
         if (filePaths.empty()) {
             fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
             exit(1);
         }
-        auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &baseNumVectors);
+        auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &totalBaseNumVectors);
         if (!status.ok()) {
             fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
             exit(1);
         }
-        baseVecs = readParquetFiles(filePaths, &baseDimension, &baseNumVectors);
+        // Calculate total vectors across all files
+        totalBaseNumVectors = 0;
+        for (const auto& path : filePaths) {
+            size_t fileVectors;
+            auto status = readParquetFileStats(path.c_str(), &baseDimension, &fileVectors);
+            if (status.ok()) {
+                totalBaseNumVectors += fileVectors;
+            }
+        }
     } else {
-        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+        float *tempVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+        delete[] tempVecs; // Just read to get stats
     }
-    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+    totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
-    auto sampleSizeAdjusted = std::min((size_t)sampleSize, baseNumVectors);
+    auto sampleSizeAdjusted = std::min((size_t)sampleSize, totalBaseNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    
     auto quantizer = faiss::IndexFlatIP(baseDimension);
-    auto numCentroids = baseNumVectors / clusterSize;
+    auto numCentroids = totalBaseNumVectors / clusterSize;
     faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, faiss::METRIC_INNER_PRODUCT);
     faiss::IndexIVFFlat* index = &idx;
     index->cp.niter = nIter;
@@ -2248,17 +2258,90 @@ void benchmark_faiss_clustering(InputParser &input) {
     printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
            index->cp.max_points_per_centroid, index->cp.min_points_per_centroid);
     index->cp.verbose = true;
+    
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
-        // Print grond truth num vectors
-        printf("Building index\n");
-        auto start = std::chrono::high_resolution_clock::now();
-        index->train(baseNumVectors, baseVecs);
-        index->add(baseNumVectors, baseVecs);
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-        printf("Building time: %lld ms\n", duration.count());
-        printf("Writing the index on disk!");
+        
+        // Phase 1: Train index with sample data
+        printf("Phase 1: Training index with sample of %zu vectors\n", sampleSizeAdjusted);
+        float *sampleVecs = nullptr;
+        
+        if (isParquet) {
+            // Read first few parquet files for training sample
+            std::vector<std::string> sampleFilePaths;
+            size_t sampledVectors = 0;
+            for (const auto& path : filePaths) {
+                sampleFilePaths.push_back(path);
+                size_t fileVectors;
+                auto status = readParquetFileStats(path.c_str(), &baseDimension, &fileVectors);
+                if (status.ok()) {
+                    sampledVectors += fileVectors;
+                    if (sampledVectors >= sampleSizeAdjusted) break;
+                }
+            }
+            size_t actualSampleDim, actualSampleVectors;
+            sampleVecs = readParquetFiles(sampleFilePaths, &actualSampleDim, &actualSampleVectors);
+            actualSampleVectors = std::min(actualSampleVectors, sampleSizeAdjusted);
+            
+            auto trainStart = std::chrono::high_resolution_clock::now();
+            index->train(actualSampleVectors, sampleVecs);
+            auto trainEnd = std::chrono::high_resolution_clock::now();
+            auto trainDuration = std::chrono::duration_cast<std::chrono::milliseconds>(trainEnd - trainStart);
+            printf("Training time: %lld ms\n", trainDuration.count());
+            
+            delete[] sampleVecs; // Free sample data
+        } else {
+            sampleVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+            totalBaseNumVectors = std::min(totalBaseNumVectors, sampleSizeAdjusted);
+            
+            auto trainStart = std::chrono::high_resolution_clock::now();
+            index->train(totalBaseNumVectors, sampleVecs);
+            auto trainEnd = std::chrono::high_resolution_clock::now();
+            auto trainDuration = std::chrono::duration_cast<std::chrono::milliseconds>(trainEnd - trainStart);
+            printf("Training time: %lld ms\n", trainDuration.count());
+        }
+        
+        // // Save trained index
+        // std::string trainedIndexPath = storagePath + "_trained";
+        // faiss::write_index(index, trainedIndexPath.c_str());
+        // printf("Saved trained index to: %s\n", trainedIndexPath.c_str());
+        
+        // Phase 2: Add all data in batches
+        printf("Phase 2: Adding all data in batches\n");
+        size_t totalAdded = 0;
+        auto addStart = std::chrono::high_resolution_clock::now();
+        
+        if (isParquet) {
+            // Process parquet files in batches
+            for (size_t i = 0; i < filePaths.size(); i++) {
+                std::vector<std::string> batchPaths;
+                batchPaths.push_back(filePaths[i]);
+                
+                size_t batchDim, batchVectors;
+                float *batchData = readParquetFiles(batchPaths, &batchDim, &batchVectors);
+                
+                printf("Adding batch %zu/%zu with %zu vectors\n", i + 1, filePaths.size(), batchVectors);
+                index->add(batchVectors, batchData);
+                totalAdded += batchVectors;
+                
+                delete[] batchData; // Free batch data immediately
+                
+                if (totalAdded >= totalBaseNumVectors) break;
+            }
+        } else {
+            // For non-parquet files, add in chunks
+            float *allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+            totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
+            index->add(totalBaseNumVectors, allVecs);
+            delete[] allVecs;
+        }
+        
+        auto addEnd = std::chrono::high_resolution_clock::now();
+        auto addDuration = std::chrono::duration_cast<std::chrono::milliseconds>(addEnd - addStart);
+        printf("Adding time: %lld ms\n", addDuration.count());
+        printf("Total vectors added: %zu\n", totalAdded);
+        
+        printf("Writing final index to disk: %s\n", storagePath.c_str());
         faiss::write_index(index, storagePath.c_str());
     } else {
         index = dynamic_cast<faiss::IndexIVFFlat *>(faiss::read_index(storagePath.c_str()));
