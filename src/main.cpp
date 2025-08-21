@@ -2312,15 +2312,25 @@ void benchmark_faiss_clustering(InputParser &input) {
         auto addStart = std::chrono::high_resolution_clock::now();
         
         if (isParquet) {
-            // Process parquet files in batches
-            for (size_t i = 0; i < filePaths.size(); i++) {
+            // Process parquet files in batches of 10 files
+            const size_t filesPerBatch = 10;
+            size_t numBatches = (filePaths.size() + filesPerBatch - 1) / filesPerBatch;
+            
+            for (size_t batchIdx = 0; batchIdx < numBatches; batchIdx++) {
                 std::vector<std::string> batchPaths;
-                batchPaths.push_back(filePaths[i]);
+                size_t startIdx = batchIdx * filesPerBatch;
+                size_t endIdx = std::min(startIdx + filesPerBatch, filePaths.size());
+                
+                // Collect files for this batch
+                for (size_t i = startIdx; i < endIdx; i++) {
+                    batchPaths.push_back(filePaths[i]);
+                }
                 
                 size_t batchDim, batchVectors;
                 float *batchData = readParquetFiles(batchPaths, &batchDim, &batchVectors);
                 
-                printf("Adding batch %zu/%zu with %zu vectors\n", i + 1, filePaths.size(), batchVectors);
+                printf("Adding batch %zu/%zu (%zu files: %zu-%zu) with %zu vectors\n", 
+                       batchIdx + 1, numBatches, batchPaths.size(), startIdx, endIdx - 1, batchVectors);
                 index->add(batchVectors, batchData);
                 totalAdded += batchVectors;
                 
