@@ -1014,7 +1014,6 @@ namespace orangedb {
                 idx++;
             }
         } else {
-            printf("newMiniCentroidsSize <= miniCentroidsSize\n");
             std::unordered_map<vector_idx_t, vector_idx_t> mappedMiniClusterIds;
             auto lastCentroidId = (miniCentroids.size() / dim) - 1;
             // If the new mini centroid smaller than oldMiniClusterIds.size()
