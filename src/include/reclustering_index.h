@@ -119,6 +119,8 @@ namespace orangedb {
         void searchQuantized(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
             int nMegaProbes, int nMiniProbes, ReclusteringIndexStats &stats);
 
+        void checkDuplicateMiniClusters();
+
     private:
         void computeMiniClusterSubcells(int miniClusterId, int avgSubCellSize);
 

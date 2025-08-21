@@ -1593,6 +1593,19 @@ namespace orangedb {
         }
     }
 
+    void ReclusteringIndex::checkDuplicateMiniClusters() {
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        for (int i = 0; i < numMegaCentroids; i++) {
+            auto miniIds = megaMiniCentroidIds[i];
+            // Check if there are duplicates
+            auto actualSize = miniIds.size();
+            auto uniqueSize = std::unordered_set<vector_idx_t>(miniIds.begin(), miniIds.end()).size();
+            if (actualSize != uniqueSize) {
+                printf("Duplicate mini clusters in mega cluster %d size: %lu actual: %llu\n", i, uniqueSize, actualSize);
+            }
+        }
+    }
+
     void ReclusteringIndex::findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats, bool onlyGoodClusters) {
         std::priority_queue<NodeDistCloser> closestMicro;
         auto numMegaCentroids = megaCentroids.size() / dim;

@@ -2540,8 +2540,9 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
-    index.printStats();
+    // index.printStats();
     auto recall = 0.0;
+    index.checkDuplicateMiniClusters();
 
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
