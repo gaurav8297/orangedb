@@ -1333,7 +1333,7 @@ namespace orangedb {
     double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
-        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 50, megaAssign, stats);
+        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 100, megaAssign, stats);
 
         // Collect centroids to check for silhouette
         std::vector<vector_idx_t> closestMiniCentroidIds;
