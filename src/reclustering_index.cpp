@@ -1495,12 +1495,16 @@ namespace orangedb {
                 continue;
             }
 
-            badMegaClusters.emplace_back(i);
+            badMegaClusters.push_back(i);
             // searchMegaCluster(query, k, results, i, nMiniProbesForBadClusters, stats);
         }
 
+        printf("Found %lu bad mega clusters\n", badMegaClusters.size());
+
         std::vector<vector_idx_t> badMiniAssign;
         findKClosestMiniCentroids(query, nMiniProbesForBadClusters, badMegaClusters, badMiniAssign, stats);
+
+        printf("Found %lu bad mini clusters\n", badMiniAssign.size());
 
         // Now find the closest vectors
         findKClosestVectors(query, k, badMiniAssign, results, stats);
