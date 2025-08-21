@@ -1600,9 +1600,7 @@ namespace orangedb {
             // Check if there are duplicates
             auto actualSize = miniIds.size();
             auto uniqueSize = std::unordered_set<vector_idx_t>(miniIds.begin(), miniIds.end()).size();
-            if (actualSize != uniqueSize) {
-                printf("Duplicate mini clusters in mega cluster %d size: %lu actual: %llu\n", i, uniqueSize, actualSize);
-            }
+            printf("Duplicate mini clusters in mega cluster %d size: %lu actual: %llu\n", i, uniqueSize, actualSize);
         }
     }
 
