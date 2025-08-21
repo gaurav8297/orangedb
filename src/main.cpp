@@ -2524,21 +2524,22 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.flush_to_disk(storagePath);
     }
     // index.quantizeVectors();
-    auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-                                 nMiniProbes);
-    auto recallWithoutBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
-                                            queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
-                                            nMiniProbesForBadCluster, true);
-
-    auto recallWithBadCluster = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
-                                            queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
-                                            nMiniProbesForBadCluster, false);
+    // auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+    //                              nMiniProbes);
+    // auto recallWithoutBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
+    //                                         queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
+    //                                         nMiniProbesForBadCluster, true);
+    //
+    // auto recallWithBadCluster = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
+    //                                         queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
+    //                                         nMiniProbesForBadCluster, false);
 
     // index.computeAllSubCells(avgSubCellSize);
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
-    printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
+    // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     index.printStats();
+    auto recall = 0.0;
 
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
