@@ -1739,15 +1739,16 @@ namespace orangedb {
         printf("Avg mega cluster score: %f\n", avgMegaScore);
 
         // Print top 5 scores for mega clusters in increasing order
-        std::vector<std::pair<double, int>> scores;
+        // std::vector<std::pair<double, int>> scores;
         for (int i = 0; i < megaClusteringScore.size(); i++) {
-            scores.push_back(std::make_pair(megaClusteringScore[i], i));
+            printf("Mega cluster %d score: %f\n", i, megaClusteringScore[i]);
+            // scores.push_back(std::make_pair(megaClusteringScore[i], i));
         }
-        std::sort(scores.begin(), scores.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
-        printf("Top 5 mega cluster scores:\n");
-        for (int i = 0; i < 5; i++) {
-            printf("Mega cluster %d score: %f\n", scores[i].second, scores[i].first);
-        }
+        // std::sort(scores.begin(), scores.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+        // printf("Top 5 mega cluster scores:\n");
+        // for (int i = 0; i < 5; i++) {
+        //     printf("Mega cluster %d score: %f\n", scores[i].second, scores[i].first);
+        // }
 
         // Print stats
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
