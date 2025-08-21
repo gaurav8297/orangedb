@@ -2208,14 +2208,31 @@ void benchmark_faiss_clustering(InputParser &input) {
     const int nProbes = stoi(input.getCmdOption("-nProbes"));
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
+    const int isParquet = stoi(input.getCmdOption("-isParquet"));
 
     // Read dataset
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs;
+    if (isParquet) {
+        std::vector<std::string> filePaths;
+        list_parquet_dir(baseVectorPath.c_str(), filePaths);
+        if (filePaths.empty()) {
+            fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
+            exit(1);
+        }
+        auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &baseNumVectors);
+        if (!status.ok()) {
+            fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
+            exit(1);
+        }
+        baseVecs = readParquetFiles(filePaths, &baseDimension, &baseNumVectors);
+    } else {
+        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    }
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
 
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
-    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
     auto sampleSizeAdjusted = std::min((size_t)sampleSize, baseNumVectors);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
