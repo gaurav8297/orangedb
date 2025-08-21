@@ -2559,7 +2559,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
             } else {
                 index.reclusterFull(numMegaReclusterCentroids);
-            }g
+            }
         }
         // index.quantizeVectors();
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
