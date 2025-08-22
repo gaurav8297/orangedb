@@ -2956,6 +2956,159 @@ void check_omp_threads(InputParser &input) {
     }
 }
 
+void benchmark_faiss_flat(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const int nThreads = stoi(input.getCmdOption("-nThreads"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numQueries = stoi(input.getCmdOption("-numQueries"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
+    const int isParquet = stoi(input.getCmdOption("-isParquet"));
+    const int batchSize = input.getCmdOption("-batchSize").empty() ? 10000 : stoi(input.getCmdOption("-batchSize"));
+
+    size_t baseDimension, totalBaseNumVectors;
+    std::vector<std::string> filePaths;
+
+    // Get file information first
+    if (isParquet) {
+        list_parquet_dir(baseVectorPath.c_str(), filePaths);
+        if (filePaths.empty()) {
+            fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
+            exit(1);
+        }
+        auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &totalBaseNumVectors);
+        if (!status.ok()) {
+            fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
+            exit(1);
+        }
+        // Calculate total vectors across all files
+        totalBaseNumVectors = 0;
+        for (const auto& path : filePaths) {
+            size_t fileVectors;
+            auto status = readParquetFileStats(path.c_str(), &baseDimension, &fileVectors);
+            if (status.ok()) {
+                totalBaseNumVectors += fileVectors;
+            }
+        }
+    } else {
+        float *tempVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+        delete[] tempVecs; // Just read to get stats
+    }
+    totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    // Create Flat IP index
+    faiss::IndexFlatIP index(baseDimension);
+    faiss::IndexFlatIP* flatIndex = &index;
+
+    if (!readFromDisk) {
+        omp_set_num_threads(nThreads);
+
+        printf("Building Flat IP index with %zu total vectors\n", totalBaseNumVectors);
+        size_t totalAdded = 0;
+        auto buildStart = std::chrono::high_resolution_clock::now();
+
+        if (isParquet) {
+            // Process parquet files in batches of 10 files
+            const size_t filesPerBatch = 10;
+            size_t numBatches = (filePaths.size() + filesPerBatch - 1) / filesPerBatch;
+
+            for (size_t batchIdx = 0; batchIdx < numBatches; batchIdx++) {
+                std::vector<std::string> batchPaths;
+                size_t startIdx = batchIdx * filesPerBatch;
+                size_t endIdx = std::min(startIdx + filesPerBatch, filePaths.size());
+
+                // Collect files for this batch
+                for (size_t i = startIdx; i < endIdx; i++) {
+                    batchPaths.push_back(filePaths[i]);
+                }
+
+                size_t batchDim, batchVectors;
+                float *batchData = readParquetFiles(batchPaths, &batchDim, &batchVectors);
+
+                printf("Adding batch %zu/%zu (%zu files: %zu-%zu) with %zu vectors\n",
+                       batchIdx + 1, numBatches, batchPaths.size(), startIdx, endIdx - 1, batchVectors);
+                flatIndex->add(batchVectors, batchData);
+                totalAdded += batchVectors;
+
+                delete[] batchData; // Free batch data immediately
+
+                if (totalAdded >= totalBaseNumVectors) break;
+            }
+        } else {
+            // For non-parquet files, add in chunks
+            float *allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+            totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
+
+            for (size_t offset = 0; offset < totalBaseNumVectors; offset += batchSize) {
+                size_t currentBatchSize = std::min((size_t)batchSize, totalBaseNumVectors - offset);
+                printf("Adding batch starting at %zu with %zu vectors\n", offset, currentBatchSize);
+                flatIndex->add(currentBatchSize, allVecs + (offset * baseDimension));
+                totalAdded += currentBatchSize;
+            }
+            delete[] allVecs;
+        }
+        
+        auto buildEnd = std::chrono::high_resolution_clock::now();
+        auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEnd - buildStart);
+        printf("Building time: %lld ms\n", buildDuration.count());
+        printf("Total vectors added: %zu\n", totalAdded);
+
+        printf("Writing index to disk: %s\n", storagePath.c_str());
+        faiss::write_index(flatIndex, storagePath.c_str());
+    } else {
+        flatIndex = dynamic_cast<faiss::IndexFlatIP *>(faiss::read_index(storagePath.c_str()));
+        if (!flatIndex) {
+            fprintf(stderr, "Failed to load IndexFlatIP from disk\n");
+            exit(1);
+        }
+    }
+
+    omp_set_num_threads(1);
+    auto recall = 0.0;
+    auto labels = new faiss::idx_t[k];
+    auto distances = new float[k];
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    // Perform searches
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        flatIndex->search(1, queryVecs + (i * baseDimension), k, distances, labels);
+        auto gt = gtVecs + i * k;
+        for (int j = 0; j < k; j++) {
+            if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
+                recall++;
+            }
+        }
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+    auto recallPerQuery = recall / queryNumVectors;
+
+    // Print results
+    std::cout << "=== Flat IP Index Results ===" << std::endl;
+    std::cout << "Index Type: IndexFlatIP (Exact Search)" << std::endl;
+    std::cout << "Recall: " << (recallPerQuery / k) * 100 << "%" << std::endl;
+    std::cout << "Query time: " << duration_search << " ms" << std::endl;
+    std::cout << "Avg query time: " << (double)duration_search / queryNumVectors << " ms" << std::endl;
+
+    // Cleanup
+    delete[] labels;
+    delete[] distances;
+    delete[] gtVecs;
+    delete[] queryVecs;
+}
+
+
 int main(int argc, char **argv) {
     backward::SignalHandling sh;
 //    benchmarkPairWise();
@@ -3006,6 +3159,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkFaissClustering") {
         benchmark_faiss_clustering(input);
+    }
+    else if (run == "benchmarkFaissFlat") {
+        benchmark_faiss_flat(input);
     }
     else if (run == "generateQuantizedData") {
         generate_quantized_vectors();
