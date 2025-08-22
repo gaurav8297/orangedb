@@ -3019,7 +3019,7 @@ void benchmark_faiss_flat(InputParser &input) {
 
         if (isParquet) {
             // Process parquet files in batches of 10 files
-            const size_t filesPerBatch = 10;
+            const size_t filesPerBatch = 4;
             size_t numBatches = (filePaths.size() + filesPerBatch - 1) / filesPerBatch;
 
             for (size_t batchIdx = 0; batchIdx < numBatches; batchIdx++) {
@@ -3057,7 +3057,7 @@ void benchmark_faiss_flat(InputParser &input) {
             }
             delete[] allVecs;
         }
-        
+
         auto buildEnd = std::chrono::high_resolution_clock::now();
         auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEnd - buildStart);
         printf("Building time: %lld ms\n", buildDuration.count());
