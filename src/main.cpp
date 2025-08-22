@@ -2362,10 +2362,12 @@ void benchmark_faiss_clustering(InputParser &input) {
     auto labels = new faiss::idx_t[k];
     auto distances = new float[k];
     auto startTime = std::chrono::high_resolution_clock::now();
+    printf("baseDimension: %lu\n", baseDimension);
     for (size_t i = 0; i < queryNumVectors; i++) {
         index->search(1, queryVecs + (i * baseDimension), k, distances, labels);
         auto gt = gtVecs + i * k;
         for (int j = 0; j < k; j++) {
+            printf("label: %lld, gt: %llu\n", labels[j], gt[j]);
             if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
                 recall++;
             }

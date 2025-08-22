@@ -289,7 +289,7 @@ COPY embeddings FROM (LOAD FROM "/home/centos/vector_dataset/wiki/embeddings_wit
 
 ./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/wiki/base.fvecs -queryVectorPath /home/centos/vector_dataset/wiki/uncorrelated/queries.fvecs -groundTruthPath /home/centos/vector_dataset/wiki/uncorrelated/gt_100.bin -k 100 -numVectors 100000000 -sampleSize 3000000 -nIter 10 -nThreads 64 -numQueries 50 -clusterSize 5000 -nProbes 10 -readFromDisk 1 -storagePath /home/centos/vector_dataset/wiki/faiss_ivf_flat_index.bin
 
-./orangedb/build/release/bin/orangedb_main -run generateGTParquet -dirPath /home/centos/vector_dataset/msmarco/corpus -queryPath /home/centos/vector_dataset/msmarco/questions.fvecs -k 100 -gtPath /home/centos/vector_dataset/msmarco/gt.bin
+./build/release/bin/orangedb_main -run generateGTParquet -dirPath /home/centos/vector_dataset/msmarco/corpus -queryPath /home/centos/vector_dataset/msmarco/new_question.fvecs -k 100 -numVectors 1000000000 -gtPath /home/centos/vector_dataset/msmarco/new_gt.bin
 
 strace -f -e trace=clone ./build/release/bin/orangedb_main -run checkOmpThreads -numThreads 3
 
@@ -300,3 +300,4 @@ strace -f -e trace=clone ./build/release/bin/orangedb_main -run checkOmpThreads 
 
 ./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/vector_dataset/msmarco/corpus -queryVectorPath /home/centos/vector_dataset/msmarco/questions.fvecs -groundTruthPath /home/centos/vector_dataset/msmarco/gt.bin -isParquet 1 -k 100 -numInserts 15 -numVectors 200000000 -numIters 10 -clusterSize 1000 -miniCentroidSize 500 -numThreads 64 -numQueries 50 -sampleSize 5000000 -nProbes 20 -readFromDisk 0 -storagePath /home/centos/vector_dataset/msmarco/faiss_ivf_flat_index.bin
 
+./build/release/bin/orangedb_main -run generateGTParquet -dirPath /home/centos/vector_dataset/msmarco/corpus -queryPath /home/centos/vector_dataset/msmarco/new_question.fvecs -k 100 -numVectors 1000000000 -gtPath /home/centos/vector_dataset/msmarco/new_gt.bin
