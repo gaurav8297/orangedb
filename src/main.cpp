@@ -2552,7 +2552,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
 
-    DistanceType distanceType = useIP ? COSINE : L2;
+    DistanceType distanceType = useIP ? IP : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
                                    0, 0, quantTrainPercentage);
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
@@ -2659,15 +2659,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         printf("Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
         index.reclusterAllMegaCentroids();
-        recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
-                         nMiniProbes);
         // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
-        printf("After reclustering only mega centroids, Recall: %f\n", recall);
-        index.storeScoreForMegaClusters();
-        index.printStats();
-        break;
         if (numMegaReclusterCentroids == 1) {
             index.reclusterFast(nMegaRecluster);
         } else {
@@ -2684,14 +2678,14 @@ void benchmark_fast_reclustering(InputParser &input) {
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
         printf("After micro reclustering, recall: %f\n", recall);
-        index.storeScoreForMegaClusters();
         index.printStats();
         printf("Done iteration: %d\n", iter);
     }
-    // if (iterations > 0) {
-    //     printf("Flushing to disk\n");
-    //     index.flush_to_disk(storagePath);
-    // }
+    index.storeScoreForMegaClusters();
+    if (iterations > 0) {
+        printf("Flushing to disk\n");
+        index.flush_to_disk(storagePath);
+    }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
