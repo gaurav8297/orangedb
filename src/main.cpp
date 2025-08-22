@@ -2651,7 +2651,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     //                                             nMegaProbes, nMiniProbes);
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     // index.printStats();
-    auto recall = 0.0;
+    auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
+                            nMiniProbes);
+     // = 0.0;
+    printf("Recall: %f\n", recall);
 
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
