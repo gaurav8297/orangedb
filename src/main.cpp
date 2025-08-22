@@ -3042,7 +3042,7 @@ void benchmark_faiss_flat(InputParser &input) {
     printf("Building time: %lld ms\n", buildDuration.count());
     printf("Total vectors stored: %zu\n", totalBaseNumVectors);
 
-    omp_set_num_threads(1);
+    omp_set_num_threads(nThreads);
     auto recall = 0.0;
     auto labels = new faiss::idx_t[k];
     auto distances = new float[k];
@@ -3050,13 +3050,17 @@ void benchmark_faiss_flat(InputParser &input) {
 
     // Perform searches
     for (size_t i = 0; i < queryNumVectors; i++) {
+        printf("Searching for query %zu\n", i);
         index.search(1, queryVecs + (i * baseDimension), k, distances, labels);
         auto gt = gtVecs + i * k;
+        auto localRecall = 0.0;
         for (int j = 0; j < k; j++) {
             if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
                 recall++;
+                localRecall++;
             }
         }
+        printf("Recall for query %zu: %.2f%%\n", i, (localRecall / k) * 100);
     }
 
     auto endTime = std::chrono::high_resolution_clock::now();
