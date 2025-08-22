@@ -2964,10 +2964,7 @@ void benchmark_faiss_flat(InputParser &input) {
     const int nThreads = stoi(input.getCmdOption("-nThreads"));
     const int k = stoi(input.getCmdOption("-k"));
     const int numQueries = stoi(input.getCmdOption("-numQueries"));
-    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
-    const std::string &storagePath = input.getCmdOption("-storagePath");
     const int isParquet = stoi(input.getCmdOption("-isParquet"));
-    const int batchSize = input.getCmdOption("-batchSize").empty() ? 10000 : stoi(input.getCmdOption("-batchSize"));
 
     size_t baseDimension, totalBaseNumVectors;
     std::vector<std::string> filePaths;
@@ -3010,68 +3007,40 @@ void benchmark_faiss_flat(InputParser &input) {
     faiss::IndexFlatIP index(baseDimension);
     faiss::IndexFlatIP* flatIndex = &index;
 
-    if (!readFromDisk) {
-        omp_set_num_threads(nThreads);
+    omp_set_num_threads(nThreads);
 
-        printf("Building Flat IP index with %zu total vectors\n", totalBaseNumVectors);
-        size_t totalAdded = 0;
-        auto buildStart = std::chrono::high_resolution_clock::now();
+    printf("Building Flat IP index with %zu total vectors\n", totalBaseNumVectors);
+    auto buildStart = std::chrono::high_resolution_clock::now();
 
-        if (isParquet) {
-            // Process parquet files in batches of 10 files
-            const size_t filesPerBatch = 4;
-            size_t numBatches = (filePaths.size() + filesPerBatch - 1) / filesPerBatch;
-
-            for (size_t batchIdx = 0; batchIdx < numBatches; batchIdx++) {
-                std::vector<std::string> batchPaths;
-                size_t startIdx = batchIdx * filesPerBatch;
-                size_t endIdx = std::min(startIdx + filesPerBatch, filePaths.size());
-
-                // Collect files for this batch
-                for (size_t i = startIdx; i < endIdx; i++) {
-                    batchPaths.push_back(filePaths[i]);
-                }
-
-                size_t batchDim, batchVectors;
-                float *batchData = readParquetFiles(batchPaths, &batchDim, &batchVectors);
-
-                printf("Adding batch %zu/%zu (%zu files: %zu-%zu) with %zu vectors\n",
-                       batchIdx + 1, numBatches, batchPaths.size(), startIdx, endIdx - 1, batchVectors);
-                flatIndex->add(batchVectors, batchData);
-                totalAdded += batchVectors;
-
-                delete[] batchData; // Free batch data immediately
-
-                if (totalAdded >= totalBaseNumVectors) break;
-            }
-        } else {
-            // For non-parquet files, add in chunks
-            float *allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
-            totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
-
-            for (size_t offset = 0; offset < totalBaseNumVectors; offset += batchSize) {
-                size_t currentBatchSize = std::min((size_t)batchSize, totalBaseNumVectors - offset);
-                printf("Adding batch starting at %zu with %zu vectors\n", offset, currentBatchSize);
-                flatIndex->add(currentBatchSize, allVecs + (offset * baseDimension));
-                totalAdded += currentBatchSize;
-            }
-            delete[] allVecs;
-        }
-
-        auto buildEnd = std::chrono::high_resolution_clock::now();
-        auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEnd - buildStart);
-        printf("Building time: %lld ms\n", buildDuration.count());
-        printf("Total vectors added: %zu\n", totalAdded);
-
-        printf("Writing index to disk: %s\n", storagePath.c_str());
-        faiss::write_index(flatIndex, storagePath.c_str());
+    if (isParquet) {
+        // Allocate memory for all vectors at once
+        size_t fileDim, fileVectors;
+        float* fileData = readParquetFiles(filePaths, &fileDim, &fileVectors);
+        
+        // Directly assign to IndexFlatIP codes without copying
+        index.ntotal = fileVectors;
+        index.codes = faiss::MaybeOwnedVector<uint8_t>::create_view(reinterpret_cast<uint8_t *>(fileData),
+                                                                    fileVectors * fileDim * sizeof(float), nullptr);
     } else {
-        flatIndex = dynamic_cast<faiss::IndexFlatIP *>(faiss::read_index(storagePath.c_str()));
-        if (!flatIndex) {
-            fprintf(stderr, "Failed to load IndexFlatIP from disk\n");
-            exit(1);
-        }
+        // For non-parquet files
+        float *allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+        totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
+        
+        // Directly assign to codes
+        size_t totalSizeBytes = totalBaseNumVectors * baseDimension * sizeof(float);
+        index.ntotal = totalBaseNumVectors;
+        index.codes.resize(totalSizeBytes);
+        
+        // Cast float data to uint8_t and assign to codes
+        memcpy(index.codes.data(), allVecs, totalSizeBytes);
+        
+        delete[] allVecs;
     }
+    
+    auto buildEnd = std::chrono::high_resolution_clock::now();
+    auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEnd - buildStart);
+    printf("Building time: %lld ms\n", buildDuration.count());
+    printf("Total vectors stored: %zu\n", totalBaseNumVectors);
 
     omp_set_num_threads(1);
     auto recall = 0.0;
@@ -3081,7 +3050,7 @@ void benchmark_faiss_flat(InputParser &input) {
 
     // Perform searches
     for (size_t i = 0; i < queryNumVectors; i++) {
-        flatIndex->search(1, queryVecs + (i * baseDimension), k, distances, labels);
+        index.search(1, queryVecs + (i * baseDimension), k, distances, labels);
         auto gt = gtVecs + i * k;
         for (int j = 0; j < k; j++) {
             if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
@@ -3096,6 +3065,7 @@ void benchmark_faiss_flat(InputParser &input) {
 
     // Print results
     std::cout << "=== Flat IP Index Results ===" << std::endl;
+    std::cout << "Total Vectors: " << totalBaseNumVectors << std::endl;
     std::cout << "Index Type: IndexFlatIP (Exact Search)" << std::endl;
     std::cout << "Recall: " << (recallPerQuery / k) * 100 << "%" << std::endl;
     std::cout << "Query time: " << duration_search << " ms" << std::endl;
