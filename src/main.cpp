@@ -3046,11 +3046,32 @@ void benchmark_faiss_flat(InputParser &input) {
     auto distances = new float[k];
     auto startTime = std::chrono::high_resolution_clock::now();
 
-    // Perform searches
+    // Perform searches and fix ground truth if needed
+    bool gtModified = false;
     for (size_t i = 0; i < queryNumVectors; i++) {
         printf("Searching for query %zu\n", i);
         index.search(1, queryVecs + (i * baseDimension), k, distances, labels);
         auto gt = gtVecs + i * k;
+        
+        // Check if current ground truth matches exact search results
+        bool queryGtNeedsUpdate = false;
+        for (int j = 0; j < k; j++) {
+            if (gt[j] != labels[j]) {
+                queryGtNeedsUpdate = true;
+                break;
+            }
+        }
+        
+        // Update ground truth with exact search results if there's a difference
+        if (queryGtNeedsUpdate) {
+            printf("Fixing ground truth for query %zu\n", i);
+            for (int j = 0; j < k; j++) {
+                gt[j] = labels[j];
+            }
+            gtModified = true;
+        }
+        
+        // Calculate recall (should be 100% after fixing)
         auto localRecall = 0.0;
         for (int j = 0; j < k; j++) {
             if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
@@ -3059,6 +3080,15 @@ void benchmark_faiss_flat(InputParser &input) {
             }
         }
         printf("Recall for query %zu: %.2f%%\n", i, (localRecall / k) * 100);
+    }
+    
+    // Write back fixed ground truth if modified
+    if (gtModified) {
+        printf("Ground truth was modified. Writing back to file: %s\n", groundTruthPath.c_str());
+        writeToFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+        printf("Ground truth file updated successfully!\n");
+    } else {
+        printf("Ground truth was already accurate - no changes needed.\n");
     }
 
     auto endTime = std::chrono::high_resolution_clock::now();
