@@ -2519,7 +2519,6 @@ void benchmark_reclustering_index(InputParser &input) {
 }
 
 void benchmark_fast_reclustering(InputParser &input) {
-    setvbuf(stdout, NULL, _IONBF, 0);
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
@@ -3083,6 +3082,7 @@ void benchmark_faiss_flat(InputParser &input) {
 
 
 int main(int argc, char **argv) {
+    setvbuf(stdout, NULL, _IONBF, 0);
     backward::SignalHandling sh;
 //    benchmarkPairWise();
     InputParser input(argc, argv);
