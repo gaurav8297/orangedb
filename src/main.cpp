@@ -3015,8 +3015,7 @@ void benchmark_faiss_flat(InputParser &input) {
     if (isParquet) {
         // Allocate memory for all vectors at once
         size_t fileDim, fileVectors;
-        float* fileData = readParquetFiles({filePaths.at(0).c_str()}, &fileDim, &fileVectors);
-        
+        float* fileData = readParquetFiles(filePaths, &fileDim, &fileVectors);
         // Directly assign to IndexFlatIP codes without copying
         index.ntotal = fileVectors;
         index.codes = faiss::MaybeOwnedVector<uint8_t>::create_view(reinterpret_cast<uint8_t *>(fileData),
