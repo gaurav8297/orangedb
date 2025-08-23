@@ -2543,8 +2543,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     const bool useIP = stoi(input.getCmdOption("-useIP"));
     const float quantTrainPercentage = stof(input.getCmdOption("-quantTrainPercentage"));
     const bool quantBuild = stoi(input.getCmdOption("-quantBuild"));
-    const int avgSubCellSize = stoi(input.getCmdOption("-avgSubCellSize"));
-    const int nMiniProbesForBadCluster = stoi(input.getCmdOption("-nMiniProbesForBadCluster"));
+    // const int avgSubCellSize = stoi(input.getCmdOption("-avgSubCellSize"));
+    // const int nMiniProbesForBadCluster = stoi(input.getCmdOption("-nMiniProbesForBadCluster"));
     const int nMegaRecluster = stoi(input.getCmdOption("-nMegaRecluster"));
     int nFiles = stoi(input.getCmdOption("-nFiles"));
     omp_set_num_threads(numThreads);
@@ -3023,12 +3023,8 @@ void benchmark_faiss_flat(InputParser &input) {
     auto startTime = std::chrono::high_resolution_clock::now();
 
     for (size_t i = 0; i < queryNumVectors; i++) {
-        if (i % 100 == 0) {
-            printf("Processing query %zu/%zu\n", i, queryNumVectors);
-        }
-        
+        printf("Processing query %zu/%zu\n", i, queryNumVectors);
         index.search(1, queryVecs + (i * queryDimension), k, distances, labels);
-        
         // Copy exact search results to ground truth
         for (int j = 0; j < k; j++) {
             gtVecs[i * k + j] = labels[j];
