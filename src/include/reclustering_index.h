@@ -234,12 +234,12 @@ namespace orangedb {
 
         inline int getMinCentroidSize(int numVectors, int numCentroids) const {
             // 50% of the average size
-            return (numVectors / numCentroids) * 0.5;
+            return (numVectors / numCentroids) * 0.3;
         }
 
         inline int getMaxCentroidSize(int numVectors, int numCentroids) const {
             // 120% of the average size such all vecs are used during reclustering
-            return (numVectors / numCentroids) * 1.2;
+            return (numVectors / numCentroids) * 1.1;
         }
 
         void load_from_disk(const std::string &file_path);
