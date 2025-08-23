@@ -2209,6 +2209,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const int isParquet = stoi(input.getCmdOption("-isParquet"));
+    int nFiles = stoi(input.getCmdOption("-nFiles"));
 
     size_t baseDimension, totalBaseNumVectors;
     std::vector<std::string> filePaths;
@@ -2219,6 +2220,14 @@ void benchmark_faiss_clustering(InputParser &input) {
         if (filePaths.empty()) {
             fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
             exit(1);
+        }
+        nFiles = std::min(nFiles, (int) filePaths.size());
+        if (nFiles != filePaths.size()) {
+            std::vector<std::string> temp(nFiles);
+            for (int i = 0; i < nFiles; i++) {
+                temp[i] = filePaths[i];
+            }
+            filePaths = temp;
         }
         auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &totalBaseNumVectors);
         if (!status.ok()) {
@@ -2651,11 +2660,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
-    // index.printStats();
+    index.printStats();
     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                             nMiniProbes);
     printf("Recall: %f\n", recall);
-    index.printStats();
 
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
@@ -2676,14 +2684,13 @@ void benchmark_fast_reclustering(InputParser &input) {
             }
         }
         // index.quantizeVectors();
+        index.reclusterAllMegaCentroids();
         recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes,
                                  nMiniProbes);
-        index.reclusterAllMegaCentroids();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
-        printf("After micro reclustering, recall: %f\n", recall);
+        printf("Done iteration: %d, recall: %f\n", iter, recall);
         index.printStats();
-        printf("Done iteration: %d\n", iter);
     }
     index.storeScoreForMegaClusters();
     index.printStats();

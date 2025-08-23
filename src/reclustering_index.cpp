@@ -1418,7 +1418,6 @@ namespace orangedb {
             double s = calcScoreForMiniCluster(miniCentroidId);
             avgMiniScore += s;
         }
-        printf("avgMiniScore for mega cluster %d: %f\n", megaClusterId, avgMiniScore);
 
         double avgMegaScore = 0.0;
         auto numMegaCentroids = megaCentroids.size() / dim;
