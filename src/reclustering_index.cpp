@@ -1300,6 +1300,7 @@ namespace orangedb {
         auto numToCalc = std::min(n, (int)numMegaCentroids);
         for (auto i = 0; i < numToCalc; i++) {
             megaClusteringScore[i] = calcScoreForMegaCluster(i);
+            printf("Mega cluster %d score: %f\n", i, megaClusteringScore[i]);
         }
     }
 
