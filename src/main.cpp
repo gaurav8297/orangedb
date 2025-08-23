@@ -2394,19 +2394,11 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();
-            printf("[id: %lld, dist: %f] ", res.id, res.dist);
             results.pop();
             if (std::find(gt, gt + k, res.id) != (gt + k)) {
                 recall++;
             }
         }
-        printf("\n");
-        // print gt
-        for (int j = 0; j < k; j++) {
-            printf("[gt: %llu] ", gt[j]);
-        }
-        printf("\n");
-        break;
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
     return recall / queryNumVectors;
