@@ -93,14 +93,17 @@ namespace orangedb {
 
         inline void computeDistance(const float *dest, double *result) override {
             simsimd_dot_f32(query, dest, dim, result);
+            *result = -*result;
         }
 
         inline void computeSymDistance(const float *src, const float *dest, double *result) override {
             simsimd_dot_f32(src, dest, dim, result);
+            *result = -*result;
         }
 
         inline void computeAsymDistance(const float *src, const float *dest, double *result) override {
             simsimd_dot_f32(src, dest, dim, result);
+            *result = -*result;
         }
 
         inline void setQuery(const float *query) override {
