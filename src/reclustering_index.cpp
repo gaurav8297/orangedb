@@ -1418,7 +1418,6 @@ namespace orangedb {
             double s = calcScoreForMiniCluster(miniCentroidId);
             avgMiniScore += s;
         }
-
         printf("avgMiniScore for mega cluster %d: %f\n", megaClusterId, avgMiniScore);
 
         double avgMegaScore = 0.0;
@@ -1491,6 +1490,7 @@ namespace orangedb {
 
             // 3) silhouette for this point
             double m = std::max(a, b);
+            printf("a: %f, b: %f, m: %f\n", a, b, m);
             double s = (m > 0.0) ? (b - a) / m : 0.0;
             totalSilhouette += s;
             totalPoints += 1;
