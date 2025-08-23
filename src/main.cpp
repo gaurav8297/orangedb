@@ -2685,7 +2685,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.printStats();
         printf("Done iteration: %d\n", iter);
     }
-    index.storeScoreForMegaClusters();
+    // index.storeScoreForMegaClusters();
     if (iterations > 0) {
         printf("Flushing to disk\n");
         index.flush_to_disk(storagePath);
