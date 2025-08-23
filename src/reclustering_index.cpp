@@ -1442,7 +1442,10 @@ namespace orangedb {
 
             // 3) silhouette for this point
             double m = std::max(a, b);
-            double s = (m > 0.0) ? (b - a) / m : 0.0;
+            if (m < 0) {
+                m = std::max(-a, -b);
+            }
+            double s = (m != 0.0) ? (b - a) / m : 0.0;
             avgMegaScore += s;
         }
 
@@ -1490,8 +1493,10 @@ namespace orangedb {
 
             // 3) silhouette for this point
             double m = std::max(a, b);
-            printf("a: %f, b: %f, m: %f\n", a, b, m);
-            double s = (m > 0.0) ? (b - a) / m : 0.0;
+            if (m < 0) {
+                m = std::max(-a, -b);
+            }
+            double s = (m != 0.0) ? (b - a) / m : 0.0;
             totalSilhouette += s;
             totalPoints += 1;
         }
