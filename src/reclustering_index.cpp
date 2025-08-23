@@ -1298,9 +1298,9 @@ namespace orangedb {
         auto numMegaCentroids = megaCentroids.size() / dim;
         megaClusteringScore.resize(numMegaCentroids);
         auto numToCalc = std::min(n, (int)numMegaCentroids);
+        printf("numToCalc: %d\n", numToCalc);
         for (auto i = 0; i < numToCalc; i++) {
             megaClusteringScore[i] = calcScoreForMegaCluster(i);
-            printf("Mega cluster %d score: %f\n", i, megaClusteringScore[i]);
         }
     }
 
@@ -1418,6 +1418,8 @@ namespace orangedb {
             double s = calcScoreForMiniCluster(miniCentroidId);
             avgMiniScore += s;
         }
+
+        printf("avgMiniScore for mega cluster %d: %f\n", megaClusterId, avgMiniScore);
 
         double avgMegaScore = 0.0;
         auto numMegaCentroids = megaCentroids.size() / dim;
