@@ -1,5 +1,7 @@
 #include "include/reclustering_index.h"
 
+#include "faiss/IndexFlat.h"
+
 namespace orangedb {
     ReclusteringIndex::ReclusteringIndex(int dim, ReclusteringIndexConfig config, RandomGenerator *rg)
         : dim(dim), config(config), size(0), rg(rg) {
@@ -796,17 +798,19 @@ namespace orangedb {
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
                                         std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
-        auto dc = createDistanceComputer(data, dim, n, config.distanceType);
-        clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds,
-                            dc.get(), dim, [](const float x, int d) { return x; });
+        // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
+        // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds,
+        //                     dc.get(), dim, [](const float x, int d) { return x; });
+        clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds);
     }
 
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids,
                                         std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
-        auto dc = createDistanceComputer(data, dim, n, config.distanceType);
-        clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
-                            dc.get(), dim, [](const float x, int d) { return x; });
+        // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
+        // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
+        //                     dc.get(), dim, [](const float x, int d) { return x; });
+        clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds);
     }
 
     void ReclusteringIndex::clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -826,6 +830,123 @@ namespace orangedb {
         auto q = quantizer.get();
         clusterData_<uint8_t>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
                               dc.get(), q->codeSize, [&](const uint8_t x, int d) { return q->decode_one(x, d); });
+    }
+
+    void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                                 std::vector<float> &centroids,
+                                                 std::vector<std::vector<float> > &clusters,
+                                                 std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        // Create the clustering object
+        auto numClusters = getNumCentroids(n, avgClusterSize);
+        // printf("Performing mini-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
+        if (numClusters <= 1) {
+            calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
+            return;
+        }
+
+        faiss::ClusteringParameters cl;
+        cl.niter = 10;
+        if (config.distanceType == IP) {
+            cl.spherical = true;
+        }
+        cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
+        cl.min_points_per_centroid = getMaxCentroidSize(n, numClusters);
+        cl.verbose = true;
+        faiss::Clustering clustering(dim, numClusters, cl);
+        // TODO: This is a hack
+        auto index = faiss::IndexFlatIP(dim);
+
+        // Initialize the centroids
+        clustering.train(n, data, index);
+
+
+        // Assign the centroids
+        std::vector<int64_t> assign(n);
+        index.assign(n, data, assign.data());
+
+        // Get the hist
+        std::vector<int> hist(numClusters, 0);
+        for (int i = 0; i < n; i++) {
+            hist[assign[i]]++;
+        }
+
+        // Copy the centroids
+        centroids.resize(numClusters * dim);
+        memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
+        clusters.resize(numClusters);
+        clusterVectorIds.resize(numClusters);
+        for (int i = 0; i < numClusters; i++) {
+            std::vector<float> cluster(hist[i] * dim);
+            clusters[i] = cluster;
+            std::vector<vector_idx_t> vectorId(hist[i]);
+            clusterVectorIds[i] = vectorId;
+            hist[i] = 0;
+        }
+
+        for (int i = 0; i < n; i++) {
+            auto assignId = assign[i];
+            auto idx = hist[assignId];
+            auto &cluster = clusters[assignId];
+            memcpy(cluster.data() + idx * dim, data + i * dim, dim * sizeof(float));
+            clusterVectorIds[assignId][idx] = vectorIds[i];
+            hist[assignId]++;
+        }
+        stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
+    }
+
+    void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                                 std::vector<float> &centroids,
+                                                 std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        // Create the clustering object
+        auto numClusters = getNumCentroids(n, avgClusterSize);
+        // printf("Performing mega-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
+        if (numClusters <= 1) {
+            calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
+            return;
+        }
+
+        faiss::ClusteringParameters cl;
+        cl.niter = 10;
+        if (config.distanceType == IP) {
+            cl.spherical = true;
+        }
+        cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
+        cl.min_points_per_centroid = getMaxCentroidSize(n, numClusters);
+        cl.verbose = true;
+        faiss::Clustering clustering(dim, numClusters, cl);
+        // TODO: This is a hack
+        auto index = faiss::IndexFlatIP(dim);
+
+        // Initialize the centroids
+        clustering.train(n, data, index);
+
+        // Assign the centroids
+        std::vector<int64_t> assign(n);
+        index.assign(n, data, assign.data());
+
+        // Get the hist
+        std::vector<int> hist(numClusters, 0);
+        for (int i = 0; i < n; i++) {
+            hist[assign[i]]++;
+        }
+
+        // Copy the centroids
+        centroids.resize(numClusters * dim);
+        memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
+        clusterVectorIds.resize(numClusters);
+        for (int i = 0; i < numClusters; i++) {
+            std::vector<vector_idx_t> vectorId(hist[i]);
+            clusterVectorIds[i] = vectorId;
+            hist[i] = 0;
+        }
+
+        for (int i = 0; i < n; i++) {
+            auto assignId = assign[i];
+            auto idx = hist[assignId];
+            clusterVectorIds[assignId][idx] = vectorIds[i];
+            hist[assignId]++;
+        }
+        stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
     }
 
     template <typename T>

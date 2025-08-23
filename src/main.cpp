@@ -2546,6 +2546,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int avgSubCellSize = stoi(input.getCmdOption("-avgSubCellSize"));
     const int nMiniProbesForBadCluster = stoi(input.getCmdOption("-nMiniProbesForBadCluster"));
     const int nMegaRecluster = stoi(input.getCmdOption("-nMegaRecluster"));
+    int nFiles = stoi(input.getCmdOption("-nFiles"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -2586,7 +2587,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
         assert(baseDimension == queryDimension);
         if (isParquet) {
-            auto numFiles = filePaths.size();
+            auto numFiles = std::min(nFiles, (int)filePaths.size());
             numInserts = std::min(numInserts, (int)numFiles);
             auto chunkSize = numFiles / numInserts;
             printf("Reading parquet files: %zu\n", numFiles);
@@ -2962,144 +2963,88 @@ void benchmark_faiss_flat(InputParser &input) {
     const int k = stoi(input.getCmdOption("-k"));
     const int numQueries = stoi(input.getCmdOption("-numQueries"));
     const int isParquet = stoi(input.getCmdOption("-isParquet"));
+    int nFiles = stoi(input.getCmdOption("-nFiles"));
 
     size_t baseDimension, totalBaseNumVectors;
     std::vector<std::string> filePaths;
 
-    // Get file information first
+    // Load base vectors
     if (isParquet) {
         list_parquet_dir(baseVectorPath.c_str(), filePaths);
         if (filePaths.empty()) {
             fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
             exit(1);
         }
-        auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &totalBaseNumVectors);
-        if (!status.ok()) {
-            fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
-            exit(1);
-        }
-        // Calculate total vectors across all files
-        totalBaseNumVectors = 0;
-        for (const auto& path : filePaths) {
-            size_t fileVectors;
-            auto status = readParquetFileStats(path.c_str(), &baseDimension, &fileVectors);
-            if (status.ok()) {
-                totalBaseNumVectors += fileVectors;
-            }
-        }
     } else {
         float *tempVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
-        delete[] tempVecs; // Just read to get stats
+        delete[] tempVecs;
     }
     totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
 
+    // Load query vectors
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
 
-    // Create Flat IP index
+    // Create Flat IP index for exact search
     faiss::IndexFlatIP index(baseDimension);
-    faiss::IndexFlatIP* flatIndex = &index;
-
     omp_set_num_threads(nThreads);
 
-    printf("Building Flat IP index with %zu total vectors\n", totalBaseNumVectors);
-    auto buildStart = std::chrono::high_resolution_clock::now();
+    printf("Generating ground truth using Flat IP index with %zu vectors\n", totalBaseNumVectors);
 
+    // Load base vectors into index
     if (isParquet) {
         // Allocate memory for all vectors at once
+        nFiles = std::min(nFiles, (int) filePaths.size());
+        std::vector<std::string> newFilePaths(nFiles);
+        for (int i = 0; i < nFiles; i++) {
+            newFilePaths[i] = filePaths[i];
+        }
         size_t fileDim, fileVectors;
-        float* fileData = readParquetFiles(filePaths, &fileDim, &fileVectors);
+        float* fileData = readParquetFiles(newFilePaths, &fileDim, &fileVectors);
         // Directly assign to IndexFlatIP codes without copying
         index.ntotal = fileVectors;
         index.codes = faiss::MaybeOwnedVector<uint8_t>::create_view(reinterpret_cast<uint8_t *>(fileData),
                                                                     fileVectors * fileDim * sizeof(float), nullptr);
     } else {
-        // For non-parquet files
         float *allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
-        totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
-        
-        // Directly assign to codes
-        size_t totalSizeBytes = totalBaseNumVectors * baseDimension * sizeof(float);
-        index.ntotal = totalBaseNumVectors;
-        index.codes.resize(totalSizeBytes);
-        
-        // Cast float data to uint8_t and assign to codes
-        memcpy(index.codes.data(), allVecs, totalSizeBytes);
-        
+        index.add(totalBaseNumVectors, allVecs);
         delete[] allVecs;
     }
-    
-    auto buildEnd = std::chrono::high_resolution_clock::now();
-    auto buildDuration = std::chrono::duration_cast<std::chrono::milliseconds>(buildEnd - buildStart);
-    printf("Building time: %lld ms\n", buildDuration.count());
-    printf("Total vectors stored: %zu\n", totalBaseNumVectors);
 
-    omp_set_num_threads(nThreads);
-    auto recall = 0.0;
-    auto labels = new faiss::idx_t[k];
-    auto distances = new float[k];
+    // Generate ground truth
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    auto *labels = new faiss::idx_t[k];
+    auto *distances = new float[k];
+
+    printf("Generating ground truth for %zu queries with k=%d\n", queryNumVectors, k);
     auto startTime = std::chrono::high_resolution_clock::now();
 
-    // Perform searches and fix ground truth if needed
-    bool gtModified = false;
     for (size_t i = 0; i < queryNumVectors; i++) {
-        printf("Searching for query %zu\n", i);
+        if (i % 100 == 0) {
+            printf("Processing query %zu/%zu\n", i, queryNumVectors);
+        }
+        
         index.search(1, queryVecs + (i * baseDimension), k, distances, labels);
-        auto gt = gtVecs + i * k;
         
-        // Check if current ground truth matches exact search results
-        bool queryGtNeedsUpdate = false;
+        // Copy exact search results to ground truth
         for (int j = 0; j < k; j++) {
-            if (gt[j] != labels[j]) {
-                queryGtNeedsUpdate = true;
-                break;
-            }
+            gtVecs[i * k + j] = labels[j];
         }
-        
-        // Update ground truth with exact search results if there's a difference
-        if (queryGtNeedsUpdate) {
-            printf("Fixing ground truth for query %zu\n", i);
-            for (int j = 0; j < k; j++) {
-                gt[j] = labels[j];
-            }
-            gtModified = true;
-        }
-        
-        // Calculate recall (should be 100% after fixing)
-        auto localRecall = 0.0;
-        for (int j = 0; j < k; j++) {
-            if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
-                recall++;
-                localRecall++;
-            }
-        }
-        printf("Recall for query %zu: %.2f%%\n", i, (localRecall / k) * 100);
-    }
-    
-    // Write back fixed ground truth if modified
-    if (gtModified) {
-        printf("Ground truth was modified. Writing back to file: %s\n", groundTruthPath.c_str());
-        writeToFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-        printf("Ground truth file updated successfully!\n");
-    } else {
-        printf("Ground truth was already accurate - no changes needed.\n");
     }
 
     auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    auto recallPerQuery = recall / queryNumVectors;
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
 
-    // Print results
-    std::cout << "=== Flat IP Index Results ===" << std::endl;
-    std::cout << "Total Vectors: " << totalBaseNumVectors << std::endl;
-    std::cout << "Index Type: IndexFlatIP (Exact Search)" << std::endl;
-    std::cout << "Recall: " << (recallPerQuery / k) * 100 << "%" << std::endl;
-    std::cout << "Query time: " << duration_search << " ms" << std::endl;
-    std::cout << "Avg query time: " << (double)duration_search / queryNumVectors << " ms" << std::endl;
+    // Save ground truth to file
+    printf("Writing ground truth to: %s\n", groundTruthPath.c_str());
+    writeToFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    printf("Ground truth generation completed!\n");
+    printf("Time taken: %lld ms\n", duration.count());
+    printf("Queries processed: %zu\n", queryNumVectors);
+    printf("k value: %d\n", k);
 
     // Cleanup
     delete[] labels;

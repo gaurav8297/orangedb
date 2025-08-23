@@ -161,6 +161,14 @@ namespace orangedb {
         void clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                  std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds);
 
+        void clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                  std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
+                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
+
+        void clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                  std::vector<float> &centroids,
+                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
+
         // Generic clustering method
         template <typename T>
         void clusterData_(T *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
