@@ -2978,17 +2978,16 @@ void benchmark_faiss_flat(InputParser &input) {
     } else {
         float *tempVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
         delete[] tempVecs;
+        totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
     }
-    totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
 
     // Load query vectors
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
-    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
 
     // Create Flat IP index for exact search
-    faiss::IndexFlatIP index(baseDimension);
+    faiss::IndexFlatIP index(queryDimension);
     omp_set_num_threads(nThreads);
 
     printf("Generating ground truth using Flat IP index with %zu vectors\n", totalBaseNumVectors);
@@ -3001,12 +3000,14 @@ void benchmark_faiss_flat(InputParser &input) {
         for (int i = 0; i < nFiles; i++) {
             newFilePaths[i] = filePaths[i];
         }
-        size_t fileDim, fileVectors;
-        float* fileData = readParquetFiles(newFilePaths, &fileDim, &fileVectors);
+        totalBaseNumVectors = 0;
+        float* fileData = readParquetFiles(newFilePaths, &baseDimension, &totalBaseNumVectors);
+        CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+        printf("Total number of vectors: %zu\n", totalBaseNumVectors);
         // Directly assign to IndexFlatIP codes without copying
-        index.ntotal = fileVectors;
+        index.ntotal = totalBaseNumVectors;
         index.codes = faiss::MaybeOwnedVector<uint8_t>::create_view(reinterpret_cast<uint8_t *>(fileData),
-                                                                    fileVectors * fileDim * sizeof(float), nullptr);
+                                                                    totalBaseNumVectors * baseDimension * sizeof(float), nullptr);
     } else {
         float *allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
         index.add(totalBaseNumVectors, allVecs);
@@ -3026,7 +3027,7 @@ void benchmark_faiss_flat(InputParser &input) {
             printf("Processing query %zu/%zu\n", i, queryNumVectors);
         }
         
-        index.search(1, queryVecs + (i * baseDimension), k, distances, labels);
+        index.search(1, queryVecs + (i * queryDimension), k, distances, labels);
         
         // Copy exact search results to ground truth
         for (int j = 0; j < k; j++) {
