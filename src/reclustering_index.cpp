@@ -412,8 +412,7 @@ namespace orangedb {
 
     void ReclusteringIndex::reclusterInternalMegaCentroid(vector_idx_t megaClusterId) {
         // Take all the existing mini centroids and merge them
-        printf("Running reclusterInternalMegaCentroid on %llu\n", megaClusterId);
-        auto totalVecs = 0;
+        size_t totalVecs = 0;
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
         auto miniClusterSize = miniClusters.size();
         for (auto microCentroidId: microCentroidIds) {
@@ -421,6 +420,7 @@ namespace orangedb {
             auto cluster = miniClusters[microCentroidId];
             totalVecs += (cluster.size() / dim);
         }
+        printf("Running reclusterInternalMegaCentroid on %llu with %lu vectors\n", megaClusterId, totalVecs);
 
         // Copy actual vecs and vectorIds here
         std::vector<float> tempData(totalVecs * dim);
@@ -735,7 +735,7 @@ namespace orangedb {
     void ReclusteringIndex::reclusterOnlyMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds) {
         printf("Reclustering only mega centroids with size %lu\n", oldMegaCentroidIds.size());
 
-        auto totalVec = 0;
+        size_t totalVec = 0;
         for (auto megaId: oldMegaCentroidIds) {
             totalVec += megaMiniCentroidIds[megaId].size();
         }
@@ -755,7 +755,8 @@ namespace orangedb {
         // Cluster data and write the mega and micro back again
         std::vector<float> tempMegaCentroids;
         std::vector<std::vector<vector_idx_t>> tempMiniClusterIds;
-        clusterData(tempMiniCentroids.data(), tempMiniCentroidIds.data(), totalVec, config.megaCentroidSize, tempMegaCentroids, tempMiniClusterIds);
+        clusterData(tempMiniCentroids.data(), tempMiniCentroidIds.data(), totalVec, config.megaCentroidSize,
+                    tempMegaCentroids, tempMiniClusterIds, oldMegaCentroidIds.size());
 
         // Append back to mini centroids
         appendOrMergeMegaCentroids(oldMegaCentroidIds, tempMegaCentroids, tempMiniClusterIds);
@@ -809,11 +810,11 @@ namespace orangedb {
 
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids,
-                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters) {
         // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
         // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
         //                     dc.get(), dim, [](const float x, int d) { return x; });
-        clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds);
+        clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds, nClusters);
     }
 
     void ReclusteringIndex::clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -899,9 +900,9 @@ namespace orangedb {
 
     void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                                  std::vector<float> &centroids,
-                                                 std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+                                                 std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters) {
         // Create the clustering object
-        auto numClusters = getNumCentroids(n, avgClusterSize);
+        auto numClusters = nClusters > 0 ? nClusters : getNumCentroids(n, avgClusterSize);
         // printf("Performing mega-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
         if (numClusters <= 1) {
             calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
