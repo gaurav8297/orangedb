@@ -1629,7 +1629,7 @@ namespace orangedb {
         std::vector<vector_idx_t> badMegaClusters;
         // Now iterate through mega clusters
         for (int i = 0; i < numMegaCentroids; i++) {
-            if (megaClusteringScore[i] >= 0.001) {
+            if (megaClusteringScore[i] >= 0.01) {
                 continue;
             }
             if (searchEachBadCluster) {
