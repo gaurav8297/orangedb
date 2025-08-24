@@ -1614,11 +1614,14 @@ namespace orangedb {
         nMiniProbesForBadClusters = std::min(nMiniProbesForBadClusters, (int)numMiniCentroids);
 
         std::vector<vector_idx_t> megaAssign;
-        findKClosestMegaCentroids(query, nMegaProbes, megaAssign, stats);
+        findKClosestMegaCentroids(query, nMegaProbes, megaAssign, stats, true);
 
         if (!searchEachBadCluster) {
             for (int i = 0; i < numMegaCentroids; i++) {
                 if (megaClusteringScore[i] >= 0.01) {
+                    continue;
+                }
+                if (std::find(megaAssign.begin(), megaAssign.end(), i) != megaAssign.end()) {
                     continue;
                 }
                 megaAssign.push_back(i);
