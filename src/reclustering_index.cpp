@@ -1756,6 +1756,9 @@ namespace orangedb {
         while (!closestMicro.empty()) {
             auto microId = closestMicro.top().id;
             closestMicro.pop();
+            if (std::find(ids.begin(), ids.end(), microId) != ids.end()) {
+                continue;
+            }
             ids.push_back(microId);
         }
     }
@@ -1792,6 +1795,9 @@ namespace orangedb {
         while (!closestMini.empty()) {
             auto miniId = closestMini.top().id;
             closestMini.pop();
+            if (std::find(ids.begin(), ids.end(), miniId) != ids.end()) {
+                continue;
+            }
             ids.push_back(miniId);
         }
     }
