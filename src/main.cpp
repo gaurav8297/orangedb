@@ -2415,13 +2415,13 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
 double get_recall_with_bad_clusters(ReclusteringIndex &index, float *queryVecs, size_t queryDimension,
                                     size_t queryNumVectors, int k,
                                     vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes,
-                                    int nMiniProbesForBadCluster, bool skipBadClusters, bool searchEachBadCluster) {
+                                    int nMiniProbesForBadCluster, bool searchEachBadCluster) {
     // search
     double recall = 0;
     ReclusteringIndexStats stats;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
-        index.searchWithBadClusters(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, nMiniProbesForBadCluster, stats, skipBadClusters, searchEachBadCluster);
+        index.searchWithBadClusters(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, nMiniProbesForBadCluster, stats, searchEachBadCluster);
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();
@@ -2669,15 +2669,20 @@ void benchmark_fast_reclustering(InputParser &input) {
             auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
                                     nMiniProbe);
             printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f\n", nMegaProbe, nMiniProbe, recall);
+            recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                                  nMegaProbe,
+                                                  nMiniProbe, 5, false);
+            printf(
+                "searchEachBadCluster: false, nMegaProbes: %d, nMiniProbes: %d, Recall: %f\n",
+                nMegaProbe, nMiniProbe, recall);
 
-            for (auto nMiniProbeForBadCluster : nMiniProbesForBadCluster) {
-                recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                    nMiniProbe, nMiniProbeForBadCluster, false, true);
-                printf("searchEachBadCluster: true, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n", nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
-
-                recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                    nMiniProbe, nMiniProbeForBadCluster, false, false);
-                printf("searchEachBadCluster: false, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n", nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
+            for (auto nMiniProbeForBadCluster: nMiniProbesForBadCluster) {
+                recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                                      nMegaProbe,
+                                                      nMiniProbe, nMiniProbeForBadCluster, true);
+                printf(
+                    "searchEachBadCluster: true, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n",
+                    nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
             }
         }
     }
