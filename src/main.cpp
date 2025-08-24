@@ -2676,14 +2676,14 @@ void benchmark_fast_reclustering(InputParser &input) {
                 "searchEachBadCluster: false, nMegaProbes: %d, nMiniProbes: %d, Recall: %f\n",
                 nMegaProbe, nMiniProbe, recall);
 
-            for (auto nMiniProbeForBadCluster: nMiniProbesForBadCluster) {
-                recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                                                      nMegaProbe,
-                                                      nMiniProbe, nMiniProbeForBadCluster, true);
-                printf(
-                    "searchEachBadCluster: true, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n",
-                    nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
-            }
+            // for (auto nMiniProbeForBadCluster: nMiniProbesForBadCluster) {
+            //     recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+            //                                           nMegaProbe,
+            //                                           nMiniProbe, nMiniProbeForBadCluster, true);
+            //     printf(
+            //         "searchEachBadCluster: true, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n",
+            //         nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
+            // }
         }
     }
 
