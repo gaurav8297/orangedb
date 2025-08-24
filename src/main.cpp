@@ -2412,14 +2412,16 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     return recall / queryNumVectors;
 }
 
-double get_recall_with_bad_clusters(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
-                  vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes, int nMiniProbesForBadCluster, bool skipBadClusters) {
+double get_recall_with_bad_clusters(ReclusteringIndex &index, float *queryVecs, size_t queryDimension,
+                                    size_t queryNumVectors, int k,
+                                    vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes,
+                                    int nMiniProbesForBadCluster, bool skipBadClusters, bool searchEachBadCluster) {
     // search
     double recall = 0;
     ReclusteringIndexStats stats;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
-        index.searchWithBadClusters(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, nMiniProbesForBadCluster, stats, skipBadClusters);
+        index.searchWithBadClusters(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, nMiniProbesForBadCluster, stats, skipBadClusters, searchEachBadCluster);
         auto gt = gtVecs + i * k;
         while (!results.empty()) {
             auto res = results.top();
@@ -2552,7 +2554,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const float quantTrainPercentage = stof(input.getCmdOption("-quantTrainPercentage"));
     const bool quantBuild = stoi(input.getCmdOption("-quantBuild"));
     // const int avgSubCellSize = stoi(input.getCmdOption("-avgSubCellSize"));
-    // const int nMiniProbesForBadCluster = stoi(input.getCmdOption("-nMiniProbesForBadCluster"));
+    auto nMiniProbesForBadCluster = parseCommaSeparatedIntegers(input.getCmdOption("-nMiniProbesForBadCluster"));
     const int nMegaRecluster = stoi(input.getCmdOption("-nMegaRecluster"));
     int nFiles = stoi(input.getCmdOption("-nFiles"));
     omp_set_num_threads(numThreads);
@@ -2650,21 +2652,33 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto recallWithoutBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
     //                                         queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
     //                                         nMiniProbesForBadCluster, true);
-    //
+    index.storeScoreForMegaClusters();
     // auto recallWithBadCluster = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
-    //                                         queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
-    //                                         nMiniProbesForBadCluster, false);
+    //                                          queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
+    //                                          nMiniProbesForBadCluster, false);
 
     // index.computeAllSubCells(avgSubCellSize);
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     index.printStats();
+    index.flush_to_disk(storagePath);
+
     for (auto nMegaProbe : nMegaProbes) {
         for (auto nMiniProbe : nMiniProbes) {
             auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
                                     nMiniProbe);
             printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f\n", nMegaProbe, nMiniProbe, recall);
+
+            for (auto nMiniProbeForBadCluster : nMiniProbesForBadCluster) {
+                recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
+                                    nMiniProbe, nMiniProbeForBadCluster, false, true);
+                printf("searchEachBadCluster: true, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n", nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
+
+                recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
+                    nMiniProbe, nMiniProbeForBadCluster, false, false);
+                printf("searchEachBadCluster: false, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n", nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
+            }
         }
     }
 
@@ -2673,7 +2687,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     for (int iter = 0; iter < iterations; iter++) {
         printf("Started Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
-        index.reclusterAllMegaCentroids();
+        index.reclusterAllMegaCentroids(nMegaRecluster);
         // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
@@ -2687,7 +2701,7 @@ void benchmark_fast_reclustering(InputParser &input) {
             }
         }
         // index.quantizeVectors();
-        index.reclusterAllMegaCentroids();
+        index.reclusterAllMegaCentroids(nMegaRecluster);
         for (auto nMegaProbe : nMegaProbes) {
             for (auto nMiniProbe : nMiniProbes) {
                 auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,

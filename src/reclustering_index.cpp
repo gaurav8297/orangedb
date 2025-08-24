@@ -591,12 +591,12 @@ namespace orangedb {
         return worstMegaCentroid;
     }
 
-    void ReclusteringIndex::reclusterAllMegaCentroids() {
+    void ReclusteringIndex::reclusterAllMegaCentroids(int n) {
         auto numMegaCentroids = megaCentroids.size() / dim;
         if (numMegaCentroids == 0) {
             return;
         }
-
+        numMegaCentroids = std::min(numMegaCentroids, (size_t)n);
         std::vector<vector_idx_t> megaCentroidIds(numMegaCentroids);
         for (size_t i = 0; i < numMegaCentroids; i++) {
             megaCentroidIds[i] = i;
@@ -1606,7 +1606,7 @@ namespace orangedb {
     void ReclusteringIndex::searchWithBadClusters(const float *query, uint16_t k,
                                                   std::priority_queue<NodeDistCloser> &results,
                                                   int nMegaProbes, int nMicroProbes, int nMiniProbesForBadClusters,
-                                                  ReclusteringIndexStats &stats, bool skipBadClusters) {
+                                                  ReclusteringIndexStats &stats, bool skipBadClusters, bool searchEachBadCluster) {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
         nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
@@ -1629,20 +1629,22 @@ namespace orangedb {
         std::vector<vector_idx_t> badMegaClusters;
         // Now iterate through mega clusters
         for (int i = 0; i < numMegaCentroids; i++) {
-            if (megaClusteringScore[i] >= 0.01) {
+            if (megaClusteringScore[i] >= 0.001) {
                 continue;
             }
-
-            badMegaClusters.push_back(i);
-            // searchMegaCluster(query, k, results, i, nMiniProbesForBadClusters, stats);
+            if (searchEachBadCluster) {
+                searchMegaCluster(query, k, results, i, nMiniProbesForBadClusters, stats);
+            } else {
+                badMegaClusters.push_back(i);
+            }
         }
 
-        printf("Found %lu bad mega clusters\n", badMegaClusters.size());
+        if (searchEachBadCluster) {
+            return;
+        }
 
         std::vector<vector_idx_t> badMiniAssign;
         findKClosestMiniCentroids(query, nMiniProbesForBadClusters, badMegaClusters, badMiniAssign, stats);
-
-        printf("Found %lu bad mini clusters\n", badMiniAssign.size());
 
         // Now find the closest vectors
         findKClosestVectors(query, k, badMiniAssign, results, stats);
