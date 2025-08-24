@@ -2652,7 +2652,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto recallWithoutBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
     //                                         queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
     //                                         nMiniProbesForBadCluster, true);
-    index.storeScoreForMegaClusters();
+    // index.storeScoreForMegaClusters();
     // auto recallWithBadCluster = get_recall_with_bad_clusters(index, queryVecs, queryDimension,
     //                                          queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes,
     //                                          nMiniProbesForBadCluster, false);
@@ -2662,7 +2662,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     //                                             nMegaProbes, nMiniProbes);
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     index.printStats();
-    index.flush_to_disk(storagePath);
+    // index.flush_to_disk(storagePath);
 
     for (auto nMegaProbe : nMegaProbes) {
         for (auto nMiniProbe : nMiniProbes) {
