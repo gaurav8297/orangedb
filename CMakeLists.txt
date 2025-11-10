@@ -41,9 +41,11 @@ message(STATUS "Parquet includes: ${PARQUET_INCLUDE}")
 # Global compiler flags for debug and release
 #set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer -mavx2 -mfma -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw")
 set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -rdynamic -fno-omit-frame-pointer")
+# for now remove -march=native
 set(CMAKE_CXX_FLAGS_RELEASE "-fopenmp -O3 -g -rdynamic -fno-omit-frame-pointer")
 #set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer -mavx2 -mfma -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw")
 set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -rdynamic -fno-omit-frame-pointer")
+# for now remove -march=native
 set(CMAKE_C_FLAGS_RELEASE "-fopenmp -O3 -g -rdynamic -fno-omit-frame-pointer")
 #set(CMAKE_OSX_ARCHITECTURES "x86_64")
 
