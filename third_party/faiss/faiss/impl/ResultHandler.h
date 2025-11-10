@@ -165,6 +165,7 @@ struct Top1BlockResultHandler : BlockResultHandler<C, use_sel> {
             for (size_t j = j0; j < j1; j++) {
                 T distance = dis_tab_i[j];
                 // TODO: Optimize this potentially by removing if condition
+                printf("going here");
                 if (C::is_max) {
                     distance += lambda * hist[j];
                 } else {
