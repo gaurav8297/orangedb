@@ -899,11 +899,13 @@ void generateGroundTruth(InputParser &input) {
     auto k = stoi(input.getCmdOption("-k"));
     auto numVectors = stoi(input.getCmdOption("-numVectors"));
     const std::string &gtPath = input.getCmdOption("-gtPath");
+    auto numQueries = stoi(input.getCmdOption("-numQueries"));
 
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(basePath.c_str(), &baseDimension, &baseNumVectors, numVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
+    queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     printf("Base num vectors: %zu, Query num vectors: %zu\n", baseNumVectors, queryNumVectors);
