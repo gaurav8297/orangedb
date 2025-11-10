@@ -857,7 +857,7 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    omp_set_num_threads(8);
+    omp_set_num_threads(32);
     auto dc = createDistanceComputer(vectors, dim, numVectors, L2);
 #pragma omp parallel
     {
