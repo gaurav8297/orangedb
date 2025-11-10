@@ -145,6 +145,37 @@ namespace orangedb {
         return align_x;
     }
 
+    static void writeFvecFile(const char *fName, const float *data, size_t d, size_t n) {
+        // Open the file in binary write mode
+        FILE *f = fopen(fName, "wb");
+        if (!f) {
+            fprintf(stderr, "could not open %s for writing\n", fName);
+            perror("");
+            abort();
+        }
+
+        // Allocate a temporary buffer for storing dimension + float values
+        auto *buffer = new float[(d + 1) * n]; // dimension (1 float/4 bytes) + d floats per vector
+
+        // Fill the buffer with dimension + vector data
+        for (size_t i = 0; i < n; i++) {
+            // Store the dimension as an int (reinterpreted as float storage)
+            int dimension = static_cast<int>(d);
+            memcpy(buffer + i * (d + 1), &dimension, sizeof(int));
+
+            // Copy the float vector data
+            memcpy(buffer + i * (d + 1) + 1, data + i * d, d * sizeof(float));
+        }
+
+        // Write the buffer to the file
+        size_t elements_written = fwrite(buffer, sizeof(float), n * (d + 1), f);
+        CHECK_ARGUMENT(elements_written == n * (d + 1), "could not write whole file");
+
+        // Free the buffer and close the file
+        delete[] buffer;
+        fclose(f);
+    }
+
     static void writeBvecFile(const char *fName, const float *data, size_t d, size_t n) {
         // Open the file in binary write mode
         FILE *f = fopen(fName, "wb");

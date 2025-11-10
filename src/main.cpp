@@ -2563,6 +2563,30 @@ void benchmark_reclustering_index(InputParser &input) {
     index.printStats();
 }
 
+void read_and_write_chunk(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    int numInserts = stoi(input.getCmdOption("-numInserts"));
+    int idx = stoi(input.getCmdOption("-idx"));
+    size_t baseDimension, baseNumVectors;
+    float* baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
+
+    auto chunkSize = baseNumVectors / numInserts;
+    printf("Chunk size: %lu\n", chunkSize);
+    for (long i = 0; i < numInserts; i++) {
+        auto start = i * chunkSize;
+        auto end = (i + 1) * chunkSize;
+        if (i == (numInserts - 1)) {
+            end = baseNumVectors;
+        }
+        if (i != idx) {
+            continue;
+        }
+        printf("processing chunk: %ld, start: %lu, end: %lu\n", i, start, end);
+        writeFvecFile("out.fvecs", baseVecs + start * baseDimension, baseDimension, end - start);
+    }
+}
+
 void benchmark_fast_reclustering(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
@@ -3263,6 +3287,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "testSomething") {
         test_something(input);
+    }
+    else if (run == "read_and_write_chunk") {
+        read_and_write_chunk(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
