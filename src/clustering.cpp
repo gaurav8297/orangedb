@@ -315,13 +315,18 @@ namespace orangedb {
         auto localDc = dc->clone();
         // Find the k nearest neighbors
         localDc->setQuery(query);
-        std::priority_queue<NodeDistFarther> res;
+        std::priority_queue<NodeDistCloser> res;
         for (int i = 0; i < numEntries; i++) {
             double d;
             localDc->computeDistance(i, &d);
-            res.emplace(i, d);
+            if (res.size() < k || d < res.top().dist) {
+                res.emplace(i, d);
+                if (res.size() > k) {
+                    res.pop();
+                }
+            }
         }
-        for (int i = 0; i < k; i++) {
+        for (int i = k-1; i <= 0; i--) {
             resultIds[i] = res.top().id;
             distance[i] = res.top().dist;
             res.pop();
@@ -333,17 +338,21 @@ namespace orangedb {
         auto localDc = dc->clone();
         // Find the k nearest neighbors
         localDc->setQuery(query);
-        std::priority_queue<NodeDistFarther> res;
+        std::priority_queue<NodeDistCloser> res;
         for (int i = 0; i < numEntries; i++) {
             if (filteredMask[i]) {
                 double d;
                 localDc->computeDistance(i, &d);
-                // TODO: Optimize this to only keep top k elements
-                res.emplace(i, d);
+                if (res.size() < k || d < res.top().dist) {
+                    res.emplace(i, d);
+                    if (res.size() > k) {
+                        res.pop();
+                    }
+                }
             }
         }
         printf("Size of res: %d\n", res.size());
-        for (int i = 0; i < k; i++) {
+        for (int i = k-1; i <= 0; i--) {
             resultIds[i] = res.top().id;
             distance[i] = res.top().dist;
             res.pop();

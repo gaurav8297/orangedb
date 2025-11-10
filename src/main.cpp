@@ -857,6 +857,7 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
+    omp_set_num_threads(8);
     auto dc = createDistanceComputer(vectors, dim, numVectors, L2);
 #pragma omp parallel
     {
@@ -905,6 +906,7 @@ void generateGroundTruth(InputParser &input) {
     float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+    printf("Base num vectors: %zu, Query num vectors: %zu\n", baseNumVectors, queryNumVectors);
     generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
     // serialize gtVecs to a file
     writeToFile(gtPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
