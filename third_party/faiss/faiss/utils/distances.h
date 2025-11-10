@@ -299,7 +299,8 @@ void knn_inner_product(
         size_t nx,
         size_t ny,
         float_minheap_array_t* res,
-        const IDSelector* sel = nullptr);
+        const IDSelector* sel = nullptr,
+        const double lambda = 0);
 
 /**  Return the k nearest neighbors of each of the nx vectors x among the ny
  *  vector y, for the inner product metric.
@@ -318,7 +319,8 @@ void knn_inner_product(
         size_t k,
         float* distances,
         int64_t* indexes,
-        const IDSelector* sel = nullptr);
+        const IDSelector* sel = nullptr,
+        const double lambda = 0);
 
 /** Return the k nearest neighbors of each of the nx vectors x among the ny
  *  vector y, for the L2 distance
@@ -336,7 +338,8 @@ void knn_L2sqr(
         size_t ny,
         float_maxheap_array_t* res,
         const float* y_norm2 = nullptr,
-        const IDSelector* sel = nullptr);
+        const IDSelector* sel = nullptr,
+        const double lambda = 0);
 
 /**  Return the k nearest neighbors of each of the nx vectors x among the ny
  *  vector y, for the L2 distance
@@ -358,7 +361,8 @@ void knn_L2sqr(
         float* distances,
         int64_t* indexes,
         const float* y_norm2 = nullptr,
-        const IDSelector* sel = nullptr);
+        const IDSelector* sel = nullptr,
+        const double lambda = 0);
 
 /** Find the max inner product neighbors for nx queries in a set of ny vectors
  * indexed by ids. May be useful for re-ranking a pre-selected vector list

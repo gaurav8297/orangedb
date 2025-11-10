@@ -263,7 +263,7 @@ void IndexFlatCodes::search(
     Run_search_with_decompress_res r;
     const IDSelector* sel = params ? params->sel : nullptr;
     dispatch_knn_ResultHandler(
-            n, distances, labels, k, metric_type, sel, r, this, x);
+            n, ntotal, distances, labels, k, metric_type, sel, 0, r, this, x);
 }
 
 void IndexFlatCodes::range_search(

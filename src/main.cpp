@@ -857,7 +857,7 @@ void generateGroundTruth(
         size_t queryNumVectors,
         int k,
         vector_idx_t *gtVecs) {
-    auto dc = createDistanceComputer(vectors, dim, numVectors, IP);
+    auto dc = createDistanceComputer(vectors, dim, numVectors, L2);
 #pragma omp parallel
     {
         auto localDc = dc->clone();
@@ -900,9 +900,9 @@ void generateGroundTruth(InputParser &input) {
     const std::string &gtPath = input.getCmdOption("-gtPath");
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readFvecFile(basePath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(basePath.c_str(), &baseDimension, &baseNumVectors, numVectors);
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readFvecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readVecFile(queryPath.c_str(), &queryDimension, &queryNumVectors);
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     generateGroundTruth(baseVecs, baseDimension, baseNumVectors, queryVecs, queryNumVectors, k, gtVecs);
@@ -2201,6 +2201,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const int clusterSize = stoi(input.getCmdOption("-clusterSize"));
     const int nIter = stoi(input.getCmdOption("-nIter"));
+    const float lambda = stof(input.getCmdOption("-lambda"));
     const int nThreads = stoi(input.getCmdOption("-nThreads"));
     const int k = stoi(input.getCmdOption("-k"));
     const int numQueries = stoi(input.getCmdOption("-numQueries"));
@@ -2209,10 +2210,13 @@ void benchmark_faiss_clustering(InputParser &input) {
     const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
     const std::string &storagePath = input.getCmdOption("-storagePath");
     const int isParquet = stoi(input.getCmdOption("-isParquet"));
-    int nFiles = stoi(input.getCmdOption("-nFiles"));
+    int nFiles = isParquet ? stoi(input.getCmdOption("-nFiles")) : 0;
+    const int useIP = stoi(input.getCmdOption("-useIP"));
 
     size_t baseDimension, totalBaseNumVectors;
     std::vector<std::string> filePaths;
+
+    float *baseVecs = nullptr;
     
     // Get file information first
     if (isParquet) {
@@ -2244,8 +2248,7 @@ void benchmark_faiss_clustering(InputParser &input) {
             }
         }
     } else {
-        float *tempVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
-        delete[] tempVecs; // Just read to get stats
+        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
     }
     totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
 
@@ -2256,10 +2259,11 @@ void benchmark_faiss_clustering(InputParser &input) {
     CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
-    
-    auto quantizer = faiss::IndexFlatIP(baseDimension);
+
+    auto metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+    auto quantizer = faiss::IndexFlat(baseDimension, metric);
     auto numCentroids = totalBaseNumVectors / clusterSize;
-    faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, faiss::METRIC_INNER_PRODUCT);
+    faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, metric);
     faiss::IndexIVFFlat* index = &idx;
     index->cp.niter = nIter;
     index->cp.max_points_per_centroid = (sampleSizeAdjusted / numCentroids);
@@ -2267,7 +2271,8 @@ void benchmark_faiss_clustering(InputParser &input) {
     printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
            index->cp.max_points_per_centroid, index->cp.min_points_per_centroid);
     index->cp.verbose = true;
-    
+    index->cp.lambda = lambda;
+
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
         
@@ -2300,11 +2305,8 @@ void benchmark_faiss_clustering(InputParser &input) {
             
             delete[] sampleVecs; // Free sample data
         } else {
-            sampleVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
-            totalBaseNumVectors = std::min(totalBaseNumVectors, sampleSizeAdjusted);
-            
             auto trainStart = std::chrono::high_resolution_clock::now();
-            index->train(totalBaseNumVectors, sampleVecs);
+            index->train(totalBaseNumVectors, baseVecs);
             auto trainEnd = std::chrono::high_resolution_clock::now();
             auto trainDuration = std::chrono::duration_cast<std::chrono::milliseconds>(trainEnd - trainStart);
             printf("Training time: %lld ms\n", trainDuration.count());
@@ -2349,10 +2351,7 @@ void benchmark_faiss_clustering(InputParser &input) {
             }
         } else {
             // For non-parquet files, add in chunks
-            float *allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
-            totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
-            index->add(totalBaseNumVectors, allVecs);
-            delete[] allVecs;
+            index->add(totalBaseNumVectors, baseVecs);
         }
         
         auto addEnd = std::chrono::high_resolution_clock::now();
@@ -2365,6 +2364,37 @@ void benchmark_faiss_clustering(InputParser &input) {
     } else {
         index = dynamic_cast<faiss::IndexIVFFlat *>(faiss::read_index(storagePath.c_str()));
     }
+
+    if (!isParquet) {
+        omp_set_num_threads(nThreads);
+        std::vector<int64_t> assignment(totalBaseNumVectors);
+        quantizer.assign(totalBaseNumVectors, baseVecs, assignment.data());
+
+        std::vector<int> histogram(numCentroids, 0);
+        for (size_t i = 0; i < totalBaseNumVectors; ++i) {
+            if (assignment[i] >= 0 && assignment[i] < numCentroids) {
+                histogram[assignment[i]]++;
+            }
+        }
+
+        int min_cluster_size = *std::min_element(histogram.begin(), histogram.end());
+        int max_cluster_size = *std::max_element(histogram.begin(), histogram.end());
+        double avg_cluster_size = static_cast<double>(totalBaseNumVectors) / numCentroids;
+
+        double sum_squared_diff = 0.0;
+        for (int count : histogram) {
+            double diff = count - avg_cluster_size;
+            sum_squared_diff += diff * diff;
+        }
+        double std_dev = std::sqrt(sum_squared_diff / numCentroids);
+
+        printf("Assignment histogram statistics:\n");
+        printf("  Min cluster size: %d\n", min_cluster_size);
+        printf("  Max cluster size: %d\n", max_cluster_size);
+        printf("  Average cluster size: %.2f\n", avg_cluster_size);
+        printf("  Standard deviation: %.2f\n", std_dev);
+    }
+
     omp_set_num_threads(1);
     index->nprobe = nProbes;
     auto recall = 0.0;
@@ -2372,6 +2402,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     auto distances = new float[k];
     auto startTime = std::chrono::high_resolution_clock::now();
     printf("baseDimension: %lu\n", baseDimension);
+    printf("queryNumVectors: %zu\n", queryNumVectors);
     for (size_t i = 0; i < queryNumVectors; i++) {
         index->search(1, queryVecs + (i * baseDimension), k, distances, labels);
         auto gt = gtVecs + i * k;
@@ -2592,7 +2623,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 exit(1);
             }
         } else {
-            baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+            baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
         }
         baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
         assert(baseDimension == queryDimension);
@@ -2661,28 +2692,29 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
     //                                             nMegaProbes, nMiniProbes);
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
+    index.reclusterAllMegaCentroids(nMegaRecluster);
     index.printStats();
     // index.flush_to_disk(storagePath);
 
-    // for (auto nMegaProbe : nMegaProbes) {
-    //     for (auto nMiniProbe : nMiniProbes) {
-    //         auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-    //                                 nMiniProbe);
-    //         auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-    //                                               nMegaProbe,
-    //                                               nMiniProbe, 5, false);
-    //         printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe, nMiniProbe, recall, recallWithBadClusters);
-    //
-    //         // for (auto nMiniProbeForBadCluster: nMiniProbesForBadCluster) {
-    //         //     recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-    //         //                                           nMegaProbe,
-    //         //                                           nMiniProbe, nMiniProbeForBadCluster, true);
-    //         //     printf(
-    //         //         "searchEachBadCluster: true, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n",
-    //         //         nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
-    //         // }
-    //     }
-    // }
+    for (auto nMegaProbe : nMegaProbes) {
+        for (auto nMiniProbe : nMiniProbes) {
+            auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
+                                    nMiniProbe);
+            // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+            //                                       nMegaProbe,
+            //                                       nMiniProbe, 5, false);
+            printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe, nMiniProbe, recall, 0.0f);
+
+            // for (auto nMiniProbeForBadCluster: nMiniProbesForBadCluster) {
+            //     recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+            //                                           nMegaProbe,
+            //                                           nMiniProbe, nMiniProbeForBadCluster, true);
+            //     printf(
+            //         "searchEachBadCluster: true, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n",
+            //         nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
+            // }
+        }
+    }
 
     // index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
@@ -2709,10 +2741,10 @@ void benchmark_fast_reclustering(InputParser &input) {
             for (auto nMiniProbe : nMiniProbes) {
                 auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
                                         nMiniProbe);
-                auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                                                      nMegaProbe,
-                                                      nMiniProbe, 5, false);
-                printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe, nMiniProbe, recall, recallWithBadClusters);
+                // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                //                                       nMegaProbe,
+                //                                       nMiniProbe, 5, false);
+                printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe, nMiniProbe, recall, 0.0f);
 
             }
         }
@@ -3086,6 +3118,77 @@ void benchmark_faiss_flat(InputParser &input) {
     delete[] queryVecs;
 }
 
+void benchmark_balanced_clustering(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const int clusterSize = stoi(input.getCmdOption("-clusterSize"));
+    const int nIter = stoi(input.getCmdOption("-nIter"));
+    const int nThreads = stoi(input.getCmdOption("-nThreads"));
+    const float lambda = stof(input.getCmdOption("-lambda"));
+    const int sampleSize = stoi(input.getCmdOption("-sampleSize"));
+    const bool useIP = stoi(input.getCmdOption("-useIP"));
+
+    auto metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    auto numCentroids = baseNumVectors / clusterSize;
+    faiss::Clustering clustering(baseDimension, clusterSize);
+
+    omp_set_num_threads(nThreads);
+    auto sampleSizeAdjusted = std::min((size_t)sampleSize, baseNumVectors);
+    clustering.niter = nIter;
+    clustering.max_points_per_centroid = (sampleSizeAdjusted / numCentroids);
+    clustering.min_points_per_centroid = (sampleSizeAdjusted / numCentroids) * 0.3;
+    printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
+           clustering.max_points_per_centroid, clustering.min_points_per_centroid);
+    clustering.verbose = true;
+    clustering.lambda = lambda;
+
+    faiss::IndexFlat index(baseDimension, metric);
+    clustering.train(baseNumVectors, baseVecs, index);
+
+    std::vector<int64_t> assignment(baseNumVectors);
+    index.assign(baseNumVectors, baseVecs, assignment.data());
+
+    std::vector<int> histogram(numCentroids, 0);
+    for (size_t i = 0; i < baseNumVectors; ++i) {
+        if (assignment[i] >= 0 && assignment[i] < numCentroids) {
+            histogram[assignment[i]]++;
+        }
+    }
+    
+    int min_cluster_size = *std::min_element(histogram.begin(), histogram.end());
+    int max_cluster_size = *std::max_element(histogram.begin(), histogram.end());
+    double avg_cluster_size = static_cast<double>(baseNumVectors) / numCentroids;
+    
+    double sum_squared_diff = 0.0;
+    for (int count : histogram) {
+        double diff = count - avg_cluster_size;
+        sum_squared_diff += diff * diff;
+    }
+    double std_dev = std::sqrt(sum_squared_diff / numCentroids);
+    
+    printf("Assignment histogram statistics:\n");
+    printf("  Min cluster size: %d\n", min_cluster_size);
+    printf("  Max cluster size: %d\n", max_cluster_size);
+    printf("  Average cluster size: %.2f\n", avg_cluster_size);
+    printf("  Standard deviation: %.2f\n", std_dev);
+}
+
+void test_something(InputParser &input) {
+    RandomGenerator rg(1234);
+    auto total_selected = 0;
+    auto tota_rows = 0;
+    for (int i = 0; i < 100; i++) {
+        if (rg.randFloat() < 0.1) {
+            total_selected += 1;
+        }
+        tota_rows++;
+    }
+    printf("total_selected: %d, total_rows: %d, Average selected: %f\n", total_selected, tota_rows,
+           (double) total_selected / tota_rows);
+}
+
 
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -3150,6 +3253,12 @@ int main(int argc, char **argv) {
     }
     else if (run == "checkOmpThreads") {
         check_omp_threads(input);
+    }
+    else if (run == "benchmarkBalancedClustering") {
+        benchmark_balanced_clustering(input);
+    }
+    else if (run == "testSomething") {
+        test_something(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();

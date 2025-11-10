@@ -57,6 +57,9 @@ struct ClusteringParameters {
     /// Whether to use splitmix64-based random number generator for subsampling,
     /// which is faster, but may pick duplicate points.
     bool use_faster_subsampling = false;
+
+    // Lambda value for fast balanced clustering
+    double lambda = 0;
 };
 
 struct ClusteringIterationStats {

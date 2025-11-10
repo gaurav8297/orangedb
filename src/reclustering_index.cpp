@@ -855,6 +855,7 @@ namespace orangedb {
         }
         cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
         cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
+        cl.lambda = config.lambda;
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack
@@ -916,6 +917,7 @@ namespace orangedb {
         }
         cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
         cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
+        cl.lambda = config.lambda;
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack

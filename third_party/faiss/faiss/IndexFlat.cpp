@@ -31,15 +31,16 @@ void IndexFlat::search(
         idx_t* labels,
         const SearchParameters* params) const {
     IDSelector* sel = params ? params->sel : nullptr;
+    double lambda = params ? params->lambda : 0;
     FAISS_THROW_IF_NOT(k > 0);
 
     // we see the distances and labels as heaps
     if (metric_type == METRIC_INNER_PRODUCT) {
         float_minheap_array_t res = {size_t(n), size_t(k), labels, distances};
-        knn_inner_product(x, get_xb(), d, n, ntotal, &res, sel);
+        knn_inner_product(x, get_xb(), d, n, ntotal, &res, sel, lambda);
     } else if (metric_type == METRIC_L2) {
         float_maxheap_array_t res = {size_t(n), size_t(k), labels, distances};
-        knn_L2sqr(x, get_xb(), d, n, ntotal, &res, nullptr, sel);
+        knn_L2sqr(x, get_xb(), d, n, ntotal, &res, nullptr, sel, lambda);
     } else {
         FAISS_THROW_IF_NOT(!sel); // TODO implement with selector
         knn_extra_metrics(

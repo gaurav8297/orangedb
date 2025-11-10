@@ -842,7 +842,8 @@ void knn_inner_product(
         size_t k,
         float* vals,
         int64_t* ids,
-        const IDSelector* sel) {
+        const IDSelector* sel,
+        const double lambda) {
     int64_t imin = 0;
     if (auto selr = dynamic_cast<const IDSelectorRange*>(sel)) {
         imin = std::max(selr->imin, int64_t(0));
@@ -859,7 +860,7 @@ void knn_inner_product(
 
     Run_search_inner_product r;
     dispatch_knn_ResultHandler(
-            nx, vals, ids, k, METRIC_INNER_PRODUCT, sel, r, x, y, d, nx, ny);
+            nx, ny, vals, ids, k, METRIC_INNER_PRODUCT, sel, lambda, r, x, y, d, nx, ny);
 
     if (imin != 0) {
         for (size_t i = 0; i < nx * k; i++) {
@@ -877,9 +878,10 @@ void knn_inner_product(
         size_t nx,
         size_t ny,
         float_minheap_array_t* res,
-        const IDSelector* sel) {
+        const IDSelector* sel,
+        const double lambda) {
     FAISS_THROW_IF_NOT(nx == res->nh);
-    knn_inner_product(x, y, d, nx, ny, res->k, res->val, res->ids, sel);
+    knn_inner_product(x, y, d, nx, ny, res->k, res->val, res->ids, sel, lambda);
 }
 
 void knn_L2sqr(
@@ -892,7 +894,8 @@ void knn_L2sqr(
         float* vals,
         int64_t* ids,
         const float* y_norm2,
-        const IDSelector* sel) {
+        const IDSelector* sel,
+        const double lambda) {
     int64_t imin = 0;
     if (auto selr = dynamic_cast<const IDSelectorRange*>(sel)) {
         imin = std::max(selr->imin, int64_t(0));
@@ -908,7 +911,7 @@ void knn_L2sqr(
 
     Run_search_L2sqr r;
     dispatch_knn_ResultHandler(
-            nx, vals, ids, k, METRIC_L2, sel, r, x, y, d, nx, ny, y_norm2);
+            nx, ny, vals, ids, k, METRIC_L2, sel, lambda, r, x, y, d, nx, ny, y_norm2);
 
     if (imin != 0) {
         for (size_t i = 0; i < nx * k; i++) {
@@ -927,9 +930,10 @@ void knn_L2sqr(
         size_t ny,
         float_maxheap_array_t* res,
         const float* y_norm2,
-        const IDSelector* sel) {
+        const IDSelector* sel,
+        const double lambda) {
     FAISS_THROW_IF_NOT(res->nh == nx);
-    knn_L2sqr(x, y, d, nx, ny, res->k, res->val, res->ids, y_norm2, sel);
+    knn_L2sqr(x, y, d, nx, ny, res->k, res->val, res->ids, y_norm2, sel, lambda);
 }
 
 /***************************************************************************

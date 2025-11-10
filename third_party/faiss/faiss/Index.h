@@ -64,6 +64,7 @@ struct DistanceComputer;
 struct SearchParameters {
     /// if non-null, only these IDs will be considered during search.
     IDSelector* sel = nullptr;
+    double lambda = 0;
     /// make sure we can dynamic_cast this
     virtual ~SearchParameters() {}
 };

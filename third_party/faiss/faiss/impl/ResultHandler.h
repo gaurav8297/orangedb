@@ -96,15 +96,20 @@ struct Top1BlockResultHandler : BlockResultHandler<C, use_sel> {
     T* dis_tab;
     // contains exactly nq elements
     TI* ids_tab;
+    double lambda;
+    // histogram
+    std::vector<size_t> hist;
 
     Top1BlockResultHandler(
             size_t nq,
             T* dis_tab,
             TI* ids_tab,
+            size_t nd,
+            double lambda = 0,
             const IDSelector* sel = nullptr)
             : BlockResultHandler<C, use_sel>(nq, sel),
               dis_tab(dis_tab),
-              ids_tab(ids_tab) {}
+              ids_tab(ids_tab), hist(nd, 0), lambda(lambda) {}
 
     struct SingleResultHandler : ResultHandler<C> {
         Top1BlockResultHandler& hr;
@@ -158,13 +163,20 @@ struct Top1BlockResultHandler : BlockResultHandler<C, use_sel> {
             auto& min_index = this->ids_tab[i];
 
             for (size_t j = j0; j < j1; j++) {
-                const T distance = dis_tab_i[j];
+                T distance = dis_tab_i[j];
+                // TODO: Optimize this potentially by removing if condition
+                if (C::is_max) {
+                    distance += lambda * hist[j];
+                } else {
+                    distance -= lambda * hist[j];
+                }
 
                 if (C::cmp(min_distance, distance)) {
                     min_distance = distance;
                     min_index = j;
                 }
             }
+            ++hist[min_index];
         }
     }
 
@@ -617,23 +629,25 @@ FAISS_API extern int distance_compute_min_k_reservoir;
 template <class Consumer, class... Types>
 typename Consumer::T dispatch_knn_ResultHandler(
         size_t nx,
+        size_t ny,
         float* vals,
         int64_t* ids,
         size_t k,
         MetricType metric,
         const IDSelector* sel,
+        double lambda,
         Consumer& consumer,
         Types... args) {
-#define DISPATCH_C_SEL(C, use_sel)                                          \
-    if (k == 1) {                                                           \
-        Top1BlockResultHandler<C, use_sel> res(nx, vals, ids, sel);         \
-        return consumer.template f<>(res, args...);                         \
-    } else if (k < distance_compute_min_k_reservoir) {                      \
-        HeapBlockResultHandler<C, use_sel> res(nx, vals, ids, k, sel);      \
-        return consumer.template f<>(res, args...);                         \
-    } else {                                                                \
-        ReservoirBlockResultHandler<C, use_sel> res(nx, vals, ids, k, sel); \
-        return consumer.template f<>(res, args...);                         \
+#define DISPATCH_C_SEL(C, use_sel)                                              \
+    if (k == 1) {                                                               \
+        Top1BlockResultHandler<C, use_sel> res(nx, vals, ids, ny, lambda, sel); \
+        return consumer.template f<>(res, args...);                             \
+    } else if (k < distance_compute_min_k_reservoir) {                          \
+        HeapBlockResultHandler<C, use_sel> res(nx, vals, ids, k, sel);          \
+        return consumer.template f<>(res, args...);                             \
+    } else {                                                                    \
+        ReservoirBlockResultHandler<C, use_sel> res(nx, vals, ids, k, sel);     \
+        return consumer.template f<>(res, args...);                             \
     }
 
     if (is_similarity_metric(metric)) {

@@ -443,12 +443,15 @@ void Clustering::train_encoded(
             double t0s = getmillisecs();
 
             if (!codec) {
+                SearchParameters params;
+                params.lambda = lambda;
                 index.search(
                         nx,
                         reinterpret_cast<const float*>(x),
                         1,
                         dis.get(),
-                        assign.get());
+                        assign.get(),
+                        &params);
             } else {
                 // search by blocks of decode_block_size vectors
                 size_t code_size = codec->sa_code_size();
