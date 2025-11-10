@@ -849,7 +849,7 @@ namespace orangedb {
         }
 
         faiss::ClusteringParameters cl;
-        cl.niter = 10;
+        cl.niter = config.nIter;
         if (config.distanceType == IP) {
             cl.spherical = true;
         }
@@ -859,7 +859,7 @@ namespace orangedb {
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack
-        auto index = faiss::IndexFlatIP(dim);
+        auto index = faiss::IndexFlatL2(dim);
 
         // Initialize the centroids
         clustering.train(n, data, index);
@@ -918,7 +918,7 @@ namespace orangedb {
         }
 
         faiss::ClusteringParameters cl;
-        cl.niter = 10;
+        cl.niter = config.nIter;
         if (config.distanceType == IP) {
             cl.spherical = true;
         }
@@ -928,7 +928,7 @@ namespace orangedb {
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack
-        auto index = faiss::IndexFlatIP(dim);
+        auto index = faiss::IndexFlatL2(dim);
 
         // Initialize the centroids
         clustering.train(n, data, index);
