@@ -875,6 +875,13 @@ namespace orangedb {
             hist[assign[i]]++;
         }
 
+        // Validate that no histo is greating than 4500
+        for (int i = 0; i < numClusters; i++) {
+            if (hist[i] > 2500) {
+                printf("Warning: Cluster %d has size %d greater than 2500\n", i, hist[i]);
+            }
+        }
+
         // Copy the centroids
         centroids.resize(numClusters * dim);
         memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
@@ -934,6 +941,13 @@ namespace orangedb {
         std::vector<int> hist(numClusters, 0);
         for (int i = 0; i < n; i++) {
             hist[assign[i]]++;
+        }
+
+        // Validate that no histo is greating than 4500
+        for (int i = 0; i < numClusters; i++) {
+            if (hist[i] > 2500) {
+                printf("Warning: Cluster %d has size %d greater than 2500\n", i, hist[i]);
+            }
         }
 
         // Copy the centroids
