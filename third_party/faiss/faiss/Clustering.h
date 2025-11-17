@@ -14,6 +14,8 @@
 #include <vector>
 #include <atomic>
 #include <array>
+#include <cmath>
+#include <limits>
 
 namespace faiss {
 
