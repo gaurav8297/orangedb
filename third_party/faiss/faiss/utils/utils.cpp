@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <atomic>
 
 #ifdef _MSC_VER
 #define NOMINMAX
