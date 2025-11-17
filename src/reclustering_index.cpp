@@ -841,7 +841,7 @@ namespace orangedb {
         auto dc = createDistanceComputer(data, dim, num_rows, config.distanceType);
         auto num_rows_per_cluster = num_rows / num_clusters;
         sample_size = std::min(sample_size, num_rows);
-        double lambda = std::numeric_limits<float>::lowest();
+        double lambda = std::numeric_limits<double>::lowest();
 
         for (int i = 0; i <= sample_size; i++) {
             size_t idx1 = rg->randInt(num_rows);
