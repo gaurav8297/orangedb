@@ -166,6 +166,12 @@ namespace orangedb {
         void clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                  std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds);
 
+        float findAppropriateLambda(const float *data,
+                                    size_t num_rows,
+                                    int dim,
+                                    int num_clusters,
+                                    size_t sample_size = 10000);
+
         void clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                   std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
                                   std::vector<std::vector<vector_idx_t> > &clusterVectorIds);

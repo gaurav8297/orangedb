@@ -836,6 +836,25 @@ namespace orangedb {
                               dc.get(), q->codeSize, [&](const uint8_t x, int d) { return q->decode_one(x, d); });
     }
 
+    float ReclusteringIndex::findAppropriateLambda(const float *data, size_t num_rows, int dim, int num_clusters,
+                                                   size_t sample_size) {
+        auto dc = createDistanceComputer(data, dim, num_rows, config.distanceType);
+        auto num_rows_per_cluster = num_rows / num_clusters;
+        sample_size = std::min(sample_size, num_rows);
+        double lambda = std::numeric_limits<float>::lowest();
+
+        for (int i = 0; i <= sample_size; i++) {
+            size_t idx1 = rg->randInt(num_rows);
+            size_t idx2 = rg->randInt(num_rows);
+            // Take the absolute distance to cover both L2 and Inner Product cases
+            double dist;
+            dc->computeDistance(idx1, idx2, &dist);
+            dist = std::abs(dist);
+            lambda = std::max(lambda, dist);
+        }
+        return (lambda / num_rows_per_cluster);
+    }
+
     void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                                  std::vector<float> &centroids,
                                                  std::vector<std::vector<float> > &clusters,
@@ -857,9 +876,10 @@ namespace orangedb {
         cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
         std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
         if (config.lambda > 0) {
-            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, config.lambda);
+            auto lambda = findAppropriateLambda(data, n, dim, numClusters);
+            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, lambda);
             cl.dist_modifier = distModifier.get();
-            printf("cl.lambda = %f\n", config.lambda);
+            printf("cl.lambda = %f\n", lambda);
         }
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
@@ -939,9 +959,10 @@ namespace orangedb {
         cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
         std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
         if (config.lambda > 0) {
-            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, config.lambda);
+            auto lambda = findAppropriateLambda(data, n, dim, numClusters);
+            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, lambda);
             cl.dist_modifier = distModifier.get();
-            printf("cl.lambda = %f\n", config.lambda);
+            printf("cl.lambda = %f\n", lambda);
         }
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
