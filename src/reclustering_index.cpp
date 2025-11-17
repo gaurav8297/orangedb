@@ -910,7 +910,7 @@ namespace orangedb {
 
         // Validate that no histo is greating than 4500
         for (int i = 0; i < numClusters; i++) {
-            if (hist[i] > 2500) {
+            if (config.hardClusterSizeLimit > 0 && hist[i] >= config.hardClusterSizeLimit) {
                 printf("Warning: Cluster %d has size %d greater than 2500\n", i, hist[i]);
             }
         }
@@ -992,7 +992,7 @@ namespace orangedb {
 
         // Validate that no histo is greating than 4500
         for (int i = 0; i < numClusters; i++) {
-            if (hist[i] > 2500) {
+            if (config.hardClusterSizeLimit > 0 && hist[i] >= config.hardClusterSizeLimit) {
                 printf("Warning: Cluster %d has size %d greater than 2500\n", i, hist[i]);
             }
         }

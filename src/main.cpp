@@ -2620,7 +2620,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
 
     DistanceType distanceType = useIP ? IP : L2;
@@ -3072,23 +3072,19 @@ void benchmark_faiss_flat(InputParser &input) {
             fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
             exit(1);
         }
-    } else {
-        float *tempVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
-        delete[] tempVecs;
-        totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
     }
 
     // Load query vectors
     size_t queryDimension, queryNumVectors;
-    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
 
     // Create Flat IP index for exact search
-    faiss::IndexFlatIP index(queryDimension);
+    faiss::IndexFlatL2 index(queryDimension);
     omp_set_num_threads(nThreads);
 
     printf("Generating ground truth using Flat IP index with %zu vectors\n", totalBaseNumVectors);
-
+    float *allVecs;
     // Load base vectors into index
     if (isParquet) {
         // Allocate memory for all vectors at once
@@ -3106,9 +3102,11 @@ void benchmark_faiss_flat(InputParser &input) {
         index.codes = faiss::MaybeOwnedVector<uint8_t>::create_view(reinterpret_cast<uint8_t *>(fileData),
                                                                     totalBaseNumVectors * baseDimension * sizeof(float), nullptr);
     } else {
-        float *allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
-        index.add(totalBaseNumVectors, allVecs);
-        delete[] allVecs;
+        allVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors, numVectors);
+        index.ntotal = std::min(totalBaseNumVectors, (size_t) numVectors);
+        index.codes = faiss::MaybeOwnedVector<uint8_t>::create_view(reinterpret_cast<uint8_t *>(allVecs),
+                                                                    totalBaseNumVectors * baseDimension * sizeof(float),
+                                                                    nullptr);
     }
 
     // Generate ground truth
@@ -3145,6 +3143,7 @@ void benchmark_faiss_flat(InputParser &input) {
     delete[] distances;
     delete[] gtVecs;
     delete[] queryVecs;
+    delete[] allVecs;
 }
 
 void benchmark_balanced_clustering(InputParser &input) {
