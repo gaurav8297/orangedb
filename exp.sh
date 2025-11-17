@@ -316,3 +316,5 @@ strace -f -e trace=clone ./build/release/bin/orangedb_main -run checkOmpThreads 
 
 ./build/release/bin/orangedb_main -run benchmarkFastReclustering -baseVectorPath /home/centos/bigann_base.bvecs -queryVectorPath /home/centos/bigann_query.bvecs -groundTruthPath /home/centos/sift_gt_10M.bin -isParquet 0 -k 100 -numInserts 10 -numVectors 10000000 -numIters 10 -megaCentroidSize 1000 -miniCentroidSize 1000 -numThreads 32 -iterations 1 -fast 0 -lambda 0 -nMegaProbes 20 -nMiniProbes 100 -numQueries 100 -numMegaReclusterCentroids 1 -reclusterOnScore 0 -readFromDisk 0 -storagePath /home/centos//sift_10M_clustering.bin -useIP 0 -quantTrainPercentage 0.1 -quantBuild 0 -avgSubCellSize 1000 -nMiniProbesForBadCluster 50 -nMegaRecluster 1000000000 -nFiles 25 -hardClusterSizeLimit 0
  > a4.out
+
+./build/release/bin/orangedb_main -run benchmarkFaissFlat -baseVectorPath /home/centos/bigann_base.bvecs -queryVectorPath /home/centos/bigann_query.bvecs -groundTruthPath /home/centos/sift_gt_10M.bin -isParquet 0 -k 100 -numVectors 10000000 -nFiles 10 -nThreads 32 -numQueries 100

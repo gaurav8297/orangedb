@@ -2002,6 +2002,7 @@ namespace orangedb {
                   sizeof(config.numNewMiniReclusterCentroids));
         out.write(reinterpret_cast<const char *>(&config.quantizationTrainPercentage),
                   sizeof(config.quantizationTrainPercentage));
+        out.write(reinterpret_cast<const char *>(&config.hardClusterSizeLimit), sizeof(config.hardClusterSizeLimit));
 
         // Write mega centroids
         size_t megaCentroidSize = megaCentroids.size();
@@ -2123,6 +2124,7 @@ namespace orangedb {
                 sizeof(config.numNewMiniReclusterCentroids));
         in.read(reinterpret_cast<char *>(&config.quantizationTrainPercentage),
                 sizeof(config.quantizationTrainPercentage));
+        in.read(reinterpret_cast<char *>(&config.hardClusterSizeLimit), sizeof(config.hardClusterSizeLimit));
 
         // Read mega centroids
         size_t megaCentroidsCount;
