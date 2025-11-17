@@ -12,6 +12,8 @@
 #include <faiss/Index.h>
 
 #include <vector>
+#include <atomic>
+#include <array>
 
 namespace faiss {
 
