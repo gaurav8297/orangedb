@@ -15,8 +15,6 @@
 #include <cstdio>
 #include <cstring>
 
-#include <sys/types.h>
-
 #ifdef _MSC_VER
 #define NOMINMAX
 #include <windows.h>
@@ -32,10 +30,10 @@
 #include <set>
 #include <type_traits>
 #include <vector>
+#include <thread>
 
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/FaissAssert.h>
-#include <faiss/impl/platform_macros.h>
 #include <faiss/utils/random.h>
 
 #ifndef FINTEGER
@@ -562,6 +560,27 @@ bool check_openmp() {
     }
 
     return true;
+}
+
+bool check_no_openmp() {
+    omp_set_num_threads(10);
+    // Check that we are not in parallel by validating that the thread ID is
+    // same across all iterations.
+    auto main_thread_id = std::hash<std::thread::id>()(std::this_thread::get_id());
+    std::atomic_bool failed(true);
+#pragma omp parallel for
+    for (auto i = 0; i < 1000000; i++) {
+        auto numThreads = omp_get_num_threads();
+        if (numThreads != 1) {
+            failed = false;
+        }
+        auto new_id = std::hash<std::thread::id>()(std::this_thread::get_id());
+        if (new_id != main_thread_id) {
+            failed = false;
+        }
+    }
+
+    return failed;
 }
 
 namespace {

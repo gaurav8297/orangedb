@@ -46,17 +46,22 @@ namespace orangedb {
         int numExistingMegaReclusterCentroids = 5;
         // Quantization train percentage
         float quantizationTrainPercentage = 0.1;
+        // limit to max cluster size
+        uint64_t hardClusterSizeLimit = 0;
 
         explicit ReclusteringIndexConfig() = default;
 
         explicit ReclusteringIndexConfig(const int nIter, const int megaCentroidSize, const int miniCentroidSize,
                                          const int newMiniCentroidSize, const float lambda, const float searchThreshold,
                                          const DistanceType distanceType, const int numMegaReclusterCentroids,
-                                         const int numNewMiniReclusterCentroids, const float quantizationTrainPercentage = 0.1)
+                                         const int numNewMiniReclusterCentroids,
+                                         const float quantizationTrainPercentage = 0.1,
+                                         const uint64_t hardClusterSizeLimit = 0)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
-              numNewMiniReclusterCentroids(numNewMiniReclusterCentroids), quantizationTrainPercentage(quantizationTrainPercentage) {
+              numNewMiniReclusterCentroids(numNewMiniReclusterCentroids),
+              quantizationTrainPercentage(quantizationTrainPercentage), hardClusterSizeLimit(hardClusterSizeLimit) {
         }
     };
 

@@ -61,8 +61,6 @@ struct HNSW {
 
     typedef std::pair<float, storage_idx_t> Node;
 
-    typedef std::array<storage_idx_t, 4096> node_array_t;
-
     /** Heap structure that allows fast
      */
     struct MinimaxHeap {
@@ -204,87 +202,6 @@ struct HNSW {
             ResultHandler<C>& res,
             VisitedTable& vt,
             const SearchParameters* params = nullptr) const;
-
-    /// Navix Hybrid Search!!!
-    inline void navix_push_to_results(int k, float *D, idx_t *I, float dist, idx_t v, int &nres) const {
-        if (nres < k) {
-            faiss::maxheap_push(++nres, D, I, dist, v);
-        } else if (dist < D[0]) {
-            faiss::maxheap_replace_top(nres, D, I, dist, v);
-        }
-    }
-
-    inline int navix_batch_compute_distance(
-        node_array_t &node_array,
-        int &size,
-        DistanceComputer &qdis,
-        MinimaxHeap &candidates,
-        ResultHandler<C> &res,
-        HNSWStats &stats) const;
-
-    inline void navix_one_hop(
-        size_t begin,
-        size_t end,
-        VisitedTable &vt,
-        const char *filter_id_map,
-        node_array_t &node_array,
-        int &size) const;
-
-    inline int navix_batch_directed_compute_distance(
-        node_array_t &node_array,
-        int &size,
-        const char *filter_id_map,
-        DistanceComputer &qdis,
-        std::priority_queue<NodeDistFarther> &nbrs_to_explore,
-        MinimaxHeap &candidates,
-        ResultHandler<C> &res,
-        HNSWStats &stats) const;
-
-    inline int navix_directed(
-        size_t begin,
-        size_t end,
-        DistanceComputer &qdis,
-        MinimaxHeap &candidates,
-        ResultHandler<C> &res,
-        VisitedTable &vt,
-        const char *filter_id_map,
-        int filter_nbrs_to_find,
-        node_array_t &node_array,
-        int &size,
-        HNSWStats &stats) const;
-
-    inline void navix_blind(
-        size_t begin,
-        size_t end,
-        VisitedTable &vt,
-        const char *filter_id_map,
-        int filter_nbrs_to_find,
-        node_array_t &node_array,
-        int &size,
-        HNSWStats &stats) const;
-
-    inline void navix_full_two_hop(
-        size_t begin,
-        size_t end,
-        VisitedTable &vt,
-        const char *filter_id_map,
-        node_array_t &node_array,
-        int &size,
-        HNSWStats &stats) const;
-
-    inline int navix_add_filtered_nodes_to_candidates(
-        DistanceComputer &qdis,
-        MinimaxHeap &candidates,
-        ResultHandler<C> &res,
-        VisitedTable &vt,
-        const char* filter_id_map,
-        int num_of_nodes) const;
-
-    HNSWStats navix_hybrid_search(
-            DistanceComputer &qdis,
-            ResultHandler<C> &res,
-            VisitedTable &vt,
-            const char* filter_id_map) const;
 
     /// search only in level 0 from a given vertex
     void search_level_0(

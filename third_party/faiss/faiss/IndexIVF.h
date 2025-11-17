@@ -210,18 +210,26 @@ struct IndexIVF : Index, IndexIVFInterface {
             size_t d,
             size_t nlist,
             size_t code_size,
-            MetricType metric = METRIC_L2);
+            MetricType metric = METRIC_L2,
+            bool own_invlists = true);
 
     void reset() override;
 
     /// Trains the quantizer and calls train_encoder to train sub-quantizers
     void train(idx_t n, const float* x) override;
+    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// Calls add_with_ids with NULL ids
     void add(idx_t n, const float* x) override;
+    void add(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// default implementation that calls encode_vectors
     void add_with_ids(idx_t n, const float* x, const idx_t* xids) override;
+    void add_with_ids(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
+            const idx_t* xids) override;
 
     /** Implementation of vector addition where the vector assignments are
      * predefined. The default implementation hands over the code extraction to
@@ -252,6 +260,20 @@ struct IndexIVF : Index, IndexIVFInterface {
             const idx_t* list_nos,
             uint8_t* codes,
             bool include_listno = false) const = 0;
+
+    /** Decodes a set of vectors as they would appear in a given set of inverted
+     * lists (inverse of encode_vectors)
+     *
+     * @param codes      input codes, size n * code_size
+     * @param x          output decoded vectors
+     * @param list_nos   input listnos, size n
+     *
+     */
+    virtual void decode_vectors(
+            idx_t n,
+            const uint8_t* codes,
+            const idx_t* list_nos,
+            float* x) const;
 
     /** Add vectors that are computed with the standalone codec
      *
@@ -302,6 +324,14 @@ struct IndexIVF : Index, IndexIVFInterface {
             float* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
+    void search(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
+            idx_t k,
+            float* distances,
+            idx_t* labels,
+            const SearchParameters* params = nullptr) const override;
 
     void range_search(
             idx_t n,
@@ -312,11 +342,14 @@ struct IndexIVF : Index, IndexIVFInterface {
 
     /** Get a scanner for this index (store_pairs means ignore labels)
      *
-     * The default search implementation uses this to compute the distances
+     * The default search implementation uses this to compute the distances.
+     * Use sel instead of params->sel, because sel is initialized with
+     * params->sel, but may get overridden by IndexIVF's internal logic.
      */
     virtual InvertedListScanner* get_InvertedListScanner(
             bool store_pairs = false,
-            const IDSelector* sel = nullptr) const;
+            const IDSelector* sel = nullptr,
+            const IVFSearchParameters* params = nullptr) const;
 
     /** reconstruct a vector. Works only if maintain_direct_map is set to 1 or 2
      */

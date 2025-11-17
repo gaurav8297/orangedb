@@ -855,8 +855,12 @@ namespace orangedb {
         }
         cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
         cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
-        cl.lambda = config.lambda;
-        printf("cl.lambda = %f\n", cl.lambda);
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
+        if (config.lambda > 0) {
+            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, config.lambda);
+            cl.dist_modifier = distModifier.get();
+            printf("cl.lambda = %f\n", config.lambda);
+        }
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack
@@ -868,7 +872,15 @@ namespace orangedb {
 
         // Assign the centroids
         std::vector<int64_t> assign(n);
-        index.assign(n, data, assign.data());
+        std::vector<float> distances(n);
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
+        faiss::SearchParameters params;
+        if (config.hardClusterSizeLimit > 0) {
+            hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
+            params.dist_modifier = hardLimitDistModifier.get();
+            printf("hard limit = %llu\n", config.hardClusterSizeLimit);
+        }
+        index.search(n, data, 1, distances.data(), assign.data(), &params);
 
         // Get the hist
         std::vector<int> hist(numClusters, 0);
@@ -925,8 +937,12 @@ namespace orangedb {
         }
         cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
         cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
-        cl.lambda = config.lambda;
-        printf("cl.lambda = %f\n", cl.lambda);
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
+        if (config.lambda > 0) {
+            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, config.lambda);
+            cl.dist_modifier = distModifier.get();
+            printf("cl.lambda = %f\n", config.lambda);
+        }
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack
@@ -937,7 +953,15 @@ namespace orangedb {
 
         // Assign the centroids
         std::vector<int64_t> assign(n);
-        index.assign(n, data, assign.data());
+        std::vector<float> distances(n);
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
+        faiss::SearchParameters params;
+        if (config.hardClusterSizeLimit > 0) {
+            hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
+            params.dist_modifier = hardLimitDistModifier.get();
+            printf("hard limit = %llu\n", config.hardClusterSizeLimit);
+        }
+        index.search(n, data, 1, distances.data(), assign.data(), &params);
 
         // Get the hist
         std::vector<int> hist(numClusters, 0);

@@ -39,8 +39,9 @@ void Clustering::post_process_centroids() {
     }
 
     if (int_centroids) {
-        for (size_t i = 0; i < centroids.size(); i++)
+        for (size_t i = 0; i < centroids.size(); i++) {
             centroids[i] = roundf(centroids[i]);
+        }
     }
 }
 
@@ -57,68 +58,6 @@ void Clustering::train(
             weights);
 }
 
-namespace {
-
-uint64_t get_actual_rng_seed(const int seed) {
-    return (seed >= 0)
-            ? seed
-            : static_cast<uint64_t>(std::chrono::high_resolution_clock::now()
-                                            .time_since_epoch()
-                                            .count());
-}
-
-idx_t subsample_training_set(
-        const Clustering& clus,
-        idx_t nx,
-        const uint8_t* x,
-        size_t line_size,
-        const float* weights,
-        uint8_t** x_out,
-        float** weights_out) {
-    if (clus.verbose) {
-        printf("Sampling a subset of %zd / %" PRId64 " for training\n",
-               clus.k * clus.max_points_per_centroid,
-               nx);
-    }
-
-    const uint64_t actual_seed = get_actual_rng_seed(clus.seed);
-
-    std::vector<int> perm;
-    if (clus.use_faster_subsampling) {
-        // use subsampling with splitmix64 rng
-        SplitMix64RandomGenerator rng(actual_seed);
-
-        const idx_t new_nx = clus.k * clus.max_points_per_centroid;
-        perm.resize(new_nx);
-        for (idx_t i = 0; i < new_nx; i++) {
-            perm[i] = rng.rand_int(nx);
-        }
-    } else {
-        // use subsampling with a default std rng
-        perm.resize(nx);
-        rand_perm(perm.data(), nx, actual_seed);
-    }
-
-    nx = clus.k * clus.max_points_per_centroid;
-    uint8_t* x_new = new uint8_t[nx * line_size];
-    *x_out = x_new;
-
-    // might be worth omp-ing as well
-    for (idx_t i = 0; i < nx; i++) {
-        memcpy(x_new + i * line_size, x + perm[i] * line_size, line_size);
-    }
-    if (weights) {
-        float* weights_new = new float[nx];
-        for (idx_t i = 0; i < nx; i++) {
-            weights_new[i] = weights[perm[i]];
-        }
-        *weights_out = weights_new;
-    } else {
-        *weights_out = nullptr;
-    }
-    return nx;
-}
-
 /** compute centroids as (weighted) sum of training points
  *
  * @param x            training vectors, size n * code_size (from codec)
@@ -131,8 +70,7 @@ idx_t subsample_training_set(
  *                     should be 0 on input
  *
  */
-
-void compute_centroids(
+void Clustering::compute_centroids(
         size_t d,
         size_t k,
         size_t n,
@@ -201,6 +139,68 @@ void compute_centroids(
             c[j] *= norm;
         }
     }
+}
+
+namespace {
+
+uint64_t get_actual_rng_seed(const int seed) {
+    return (seed >= 0)
+            ? seed
+            : static_cast<uint64_t>(std::chrono::high_resolution_clock::now()
+                                            .time_since_epoch()
+                                            .count());
+}
+
+idx_t subsample_training_set(
+        const Clustering& clus,
+        idx_t nx,
+        const uint8_t* x,
+        size_t line_size,
+        const float* weights,
+        uint8_t** x_out,
+        float** weights_out) {
+    if (clus.verbose) {
+        printf("Sampling a subset of %zd / %" PRId64 " for training\n",
+               clus.k * clus.max_points_per_centroid,
+               nx);
+    }
+
+    const uint64_t actual_seed = get_actual_rng_seed(clus.seed);
+
+    std::vector<int> perm;
+    if (clus.use_faster_subsampling) {
+        // use subsampling with splitmix64 rng
+        SplitMix64RandomGenerator rng(actual_seed);
+
+        const idx_t new_nx = clus.k * clus.max_points_per_centroid;
+        perm.resize(new_nx);
+        for (idx_t i = 0; i < new_nx; i++) {
+            perm[i] = rng.rand_int(nx);
+        }
+    } else {
+        // use subsampling with a default std rng
+        perm.resize(nx);
+        rand_perm(perm.data(), nx, actual_seed);
+    }
+
+    nx = clus.k * clus.max_points_per_centroid;
+    uint8_t* x_new = new uint8_t[nx * line_size];
+    *x_out = x_new;
+
+    // might be worth omp-ing as well
+    for (idx_t i = 0; i < nx; i++) {
+        memcpy(x_new + i * line_size, x + perm[i] * line_size, line_size);
+    }
+    if (weights) {
+        float* weights_new = new float[nx];
+        for (idx_t i = 0; i < nx; i++) {
+            weights_new[i] = weights[perm[i]];
+        }
+        *weights_out = weights_new;
+    } else {
+        *weights_out = nullptr;
+    }
+    return nx;
 }
 
 // a bit above machine epsilon for float16
@@ -441,10 +441,9 @@ void Clustering::train_encoded(
         float obj = 0;
         for (int i = 0; i < niter; i++) {
             double t0s = getmillisecs();
-
+            SearchParameters params;
+            params.dist_modifier = dist_modifier;
             if (!codec) {
-                SearchParameters params;
-                params.lambda = lambda;
                 index.search(
                         nx,
                         reinterpret_cast<const float*>(x),
@@ -467,7 +466,8 @@ void Clustering::train_encoded(
                             decode_buffer.data(),
                             1,
                             dis.get() + i0,
-                            assign.get() + i0);
+                            assign.get() + i0,
+                            &params);
                 }
             }
 
@@ -522,6 +522,11 @@ void Clustering::train_encoded(
 
             post_process_centroids();
 
+            // reset the balanced clustering distance modifier for the next iteration
+            if (dist_modifier) {
+                dist_modifier->reset();
+            }
+
             // add centroids to index for the next iteration (or for output)
 
             index.reset();
@@ -533,8 +538,9 @@ void Clustering::train_encoded(
             InterruptCallback::check();
         }
 
-        if (verbose)
+        if (verbose) {
             printf("\n");
+        }
         if (nredo > 1) {
             if ((lower_is_better && obj < best_obj) ||
                 (!lower_is_better && obj > best_obj)) {

@@ -45,6 +45,13 @@ void IndexScalarQuantizer::train(idx_t n, const float* x) {
     is_trained = true;
 }
 
+void IndexScalarQuantizer::train(
+        idx_t n,
+        const void* x,
+        NumericType numeric_type) {
+    Index::train(n, x, numeric_type);
+}
+
 void IndexScalarQuantizer::search(
         idx_t n,
         const float* x,
@@ -89,6 +96,17 @@ void IndexScalarQuantizer::search(
     }
 }
 
+void IndexScalarQuantizer::search(
+        idx_t n,
+        const void* x,
+        NumericType numeric_type,
+        idx_t k,
+        float* distances,
+        idx_t* labels,
+        const SearchParameters* params) const {
+    Index::search(n, x, numeric_type, k, distances, labels, params);
+}
+
 FlatCodesDistanceComputer* IndexScalarQuantizer::get_FlatCodesDistanceComputer()
         const {
     ScalarQuantizer::SQDistanceComputer* dc =
@@ -122,12 +140,15 @@ IndexIVFScalarQuantizer::IndexIVFScalarQuantizer(
         size_t nlist,
         ScalarQuantizer::QuantizerType qtype,
         MetricType metric,
-        bool by_residual)
-        : IndexIVF(quantizer, d, nlist, 0, metric), sq(d, qtype) {
+        bool by_residual,
+        bool own_invlists)
+        : IndexIVF(quantizer, d, nlist, 0, metric, own_invlists), sq(d, qtype) {
     code_size = sq.code_size;
     this->by_residual = by_residual;
-    // was not known at construction time
-    invlists->code_size = code_size;
+    if (invlists) {
+        // was not known at construction time
+        invlists->code_size = code_size;
+    }
     is_trained = false;
 }
 
@@ -177,6 +198,15 @@ void IndexIVFScalarQuantizer::encode_vectors(
             }
         }
     }
+}
+
+void IndexIVFScalarQuantizer::decode_vectors(
+        idx_t n,
+        const uint8_t* codes,
+        const idx_t*,
+        float* x) const {
+    FAISS_THROW_IF_NOT(is_trained);
+    return sq.decode(codes, x, n);
 }
 
 void IndexIVFScalarQuantizer::sa_decode(idx_t n, const uint8_t* codes, float* x)
@@ -254,7 +284,8 @@ void IndexIVFScalarQuantizer::add_core(
 
 InvertedListScanner* IndexIVFScalarQuantizer::get_InvertedListScanner(
         bool store_pairs,
-        const IDSelector* sel) const {
+        const IDSelector* sel,
+        const IVFSearchParameters*) const {
     return sq.select_InvertedListScanner(
             metric_type, quantizer, store_pairs, sel, by_residual);
 }

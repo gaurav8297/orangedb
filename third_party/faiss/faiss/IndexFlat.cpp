@@ -31,16 +31,17 @@ void IndexFlat::search(
         idx_t* labels,
         const SearchParameters* params) const {
     IDSelector* sel = params ? params->sel : nullptr;
-    double lambda = params ? params->lambda : 0;
     FAISS_THROW_IF_NOT(k > 0);
+    BalancedClusteringDistModifier* dist_modifier =
+            params ? params->dist_modifier : nullptr;
 
     // we see the distances and labels as heaps
     if (metric_type == METRIC_INNER_PRODUCT) {
         float_minheap_array_t res = {size_t(n), size_t(k), labels, distances};
-        knn_inner_product(x, get_xb(), d, n, ntotal, &res, sel, lambda);
+        knn_inner_product(x, get_xb(), d, n, ntotal, &res, dist_modifier, sel);
     } else if (metric_type == METRIC_L2) {
         float_maxheap_array_t res = {size_t(n), size_t(k), labels, distances};
-        knn_L2sqr(x, get_xb(), d, n, ntotal, &res, nullptr, sel, lambda);
+        knn_L2sqr(x, get_xb(), d, n, ntotal, &res, nullptr, dist_modifier, sel);
     } else {
         FAISS_THROW_IF_NOT(!sel); // TODO implement with selector
         knn_extra_metrics(
@@ -55,6 +56,17 @@ void IndexFlat::search(
                 distances,
                 labels);
     }
+}
+
+void IndexFlat::search(
+        idx_t n,
+        const void* x,
+        NumericType numeric_type,
+        idx_t k,
+        float* distances,
+        idx_t* labels,
+        const SearchParameters* params) const {
+    Index::search(n, x, numeric_type, k, distances, labels, params);
 }
 
 void IndexFlat::range_search(
@@ -240,6 +252,7 @@ FlatCodesDistanceComputer* IndexFlat::get_FlatCodesDistanceComputer() const {
 }
 
 void IndexFlat::reconstruct(idx_t key, float* recons) const {
+    FAISS_THROW_IF_NOT(key < ntotal);
     memcpy(recons, &(codes[key * code_size]), code_size);
 }
 
@@ -400,8 +413,13 @@ void IndexFlat1D::update_permutation() {
 
 void IndexFlat1D::add(idx_t n, const float* x) {
     IndexFlatL2::add(n, x);
-    if (continuous_update)
+    if (continuous_update) {
         update_permutation();
+    }
+}
+
+void IndexFlat1D::add(idx_t n, const void* x, NumericType numeric_type) {
+    Index::add(n, x, numeric_type);
 }
 
 void IndexFlat1D::reset() {
@@ -453,10 +471,11 @@ void IndexFlat1D::search(
 
         while (i0 + 1 < i1) {
             idx_t imed = (i0 + i1) / 2;
-            if (xb[perm[imed]] <= q)
+            if (xb[perm[imed]] <= q) {
                 i0 = imed;
-            else
+            } else {
                 i1 = imed;
+            }
         }
 
         // query is between xb[perm[i0]] and xb[perm[i1]]
@@ -516,6 +535,17 @@ void IndexFlat1D::search(
         }
     done:;
     }
+}
+
+void IndexFlat1D::search(
+        idx_t n,
+        const void* x,
+        NumericType numeric_type,
+        idx_t k,
+        float* distances,
+        idx_t* labels,
+        const SearchParameters* params) const {
+    Index::search(n, x, numeric_type, k, distances, labels, params);
 }
 
 } // namespace faiss

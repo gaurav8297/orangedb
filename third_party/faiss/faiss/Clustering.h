@@ -15,6 +15,85 @@
 
 namespace faiss {
 
+static constexpr int MAX_VECTOR_INDEX_NUM_CLUSTERS = 50000;
+
+/**
+ * This struct is used for balanced k-means clustering. It is passed to the
+ * index.search() function to add weights to the distance values to
+ * equalize the number of points assigned to each cluster.
+ */
+struct BalancedClusteringDistModifier {
+    virtual void assign_vector(idx_t cluster_id) = 0;
+    virtual float get_weight(idx_t cluster_id) const = 0;
+    virtual void reset() = 0;
+    virtual ~BalancedClusteringDistModifier() {}
+};
+
+/**
+ * This is the lambda-based balanced k-means clustering implementation of
+ * BalancedClusteringDistModifier. It's based on this paper:
+ * https://ieeexplore.ieee.org/document/8621917/
+ */
+struct LambdaBasedDistModifier : BalancedClusteringDistModifier {
+    std::array<std::atomic_int64_t, MAX_VECTOR_INDEX_NUM_CLUSTERS> cluster_sizes;
+    float lambda;
+
+    explicit LambdaBasedDistModifier(const int num_clusters, const float _lambda) : lambda(_lambda) {
+        FAISS_ASSERT(num_clusters <= MAX_VECTOR_INDEX_NUM_CLUSTERS);
+        FAISS_ASSERT(_lambda > 0);
+        reset();
+    }
+
+    void assign_vector(int64_t cluster_id) override {
+        ++cluster_sizes[cluster_id];
+    }
+
+    float get_weight(int64_t cluster_id) const override {
+        return cluster_sizes[cluster_id].load(std::memory_order_relaxed) * lambda;
+    }
+
+    void reset() override {
+        for (auto & cluster_size : cluster_sizes) {
+            cluster_size = 0;
+        }
+    }
+};
+
+struct ClusterSizeCapDistModifier : BalancedClusteringDistModifier {
+    std::array<std::atomic_int64_t, MAX_VECTOR_INDEX_NUM_CLUSTERS> cluster_sizes;
+    std::array<std::atomic<float>, MAX_VECTOR_INDEX_NUM_CLUSTERS> cluster_weights;
+    uint32_t _max_cluster_size;
+
+    explicit ClusterSizeCapDistModifier(int num_clusters, uint32_t max_cluster_size) : _max_cluster_size(
+        max_cluster_size) {
+        FAISS_ASSERT(num_clusters <= MAX_VECTOR_INDEX_NUM_CLUSTERS);
+        FAISS_ASSERT(max_cluster_size > 0);
+        reset();
+    }
+
+    void assign_vector(int64_t cluster_id) override {
+        auto new_size = ++cluster_sizes[cluster_id];
+        if (new_size >= _max_cluster_size) {
+            // Only update weight if not already set to infinity
+            float current_weight = cluster_weights[cluster_id].load();
+            if (!std::isinf(current_weight)) {
+                cluster_weights[cluster_id].store(std::numeric_limits<float>::infinity());
+            }
+        }
+    }
+
+    float get_weight(int64_t cluster_id) const override {
+        return cluster_weights[cluster_id].load();
+    }
+
+    void reset() override {
+        for (int i = 0; i < cluster_sizes.size(); i++) {
+            cluster_sizes[i] = 0;
+            cluster_weights[i] = 0.0f;
+        }
+    }
+};
+
 /** Class for the clustering parameters. Can be passed to the
  * constructor of the Clustering object.
  */
@@ -58,8 +137,8 @@ struct ClusteringParameters {
     /// which is faster, but may pick duplicate points.
     bool use_faster_subsampling = false;
 
-    // Lambda value for fast balanced clustering
-    double lambda = 0;
+    /// This is the distance modifier used for balanced clustering.
+    BalancedClusteringDistModifier* dist_modifier = nullptr;
 };
 
 struct ClusteringIterationStats {
@@ -124,6 +203,18 @@ struct Clustering : ClusteringParameters {
             const Index* codec,
             Index& index,
             const float* weights = nullptr);
+
+    virtual void compute_centroids(
+        size_t d,
+        size_t k,
+        size_t n,
+        size_t k_frozen,
+        const uint8_t* x,
+        const Index* codec,
+        const int64_t* assign,
+        const float* weights,
+        float* hassign,
+        float* centroids);
 
     /// Post-process the centroids after each centroid update.
     /// includes optional L2 normalization and nearest integer rounding

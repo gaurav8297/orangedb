@@ -10,6 +10,7 @@
 #pragma once
 
 #include <vector>
+#include "faiss/Index.h"
 
 #include <faiss/IndexFlat.h>
 #include <faiss/IndexPQ.h>
@@ -52,9 +53,11 @@ struct IndexHNSW : Index {
     ~IndexHNSW() override;
 
     void add(idx_t n, const float* x) override;
+    void add(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// Trains the storage if needed
     void train(idx_t n, const float* x) override;
+    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// entry point for search
     void search(
@@ -64,33 +67,14 @@ struct IndexHNSW : Index {
             float* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
-
-    /// navix search
-    void single_search(
-        const float* query,
-        idx_t k,
-        float* distances,
-        idx_t* labels,
-        VisitedTable &vt,
-        HNSWStats& stats) const;
-
-    void navix_search(
-         idx_t n,
-         const float* x,
-         idx_t k,
-         float* distances,
-         idx_t* labels,
-         const char* filter_masks,
-         const SearchParameters* params = nullptr) const;
-
-    void navix_single_search(
-            const float* query,
+    void search(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
             idx_t k,
             float* distances,
             idx_t* labels,
-            const char* filter_mask,
-            VisitedTable &vt,
-            HNSWStats& stats) const;
+            const SearchParameters* params = nullptr) const override;
 
     void range_search(
             idx_t n,
@@ -163,9 +147,10 @@ struct IndexHNSWPQ : IndexHNSW {
             int pq_nbits = 8,
             MetricType metric = METRIC_L2);
     void train(idx_t n, const float* x) override;
+    void train(idx_t n, const void* x, NumericType numeric_type) override;
 };
 
-/** SQ index topped with with a HNSW structure to access elements
+/** SQ index topped with a HNSW structure to access elements
  *  more efficiently.
  */
 struct IndexHNSWSQ : IndexHNSW {
@@ -193,11 +178,23 @@ struct IndexHNSW2Level : IndexHNSW {
             float* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
+    void search(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
+            idx_t k,
+            float* distances,
+            idx_t* labels,
+            const SearchParameters* params = nullptr) const override;
 };
 
 struct IndexHNSWCagra : IndexHNSW {
     IndexHNSWCagra();
-    IndexHNSWCagra(int d, int M, MetricType metric = METRIC_L2);
+    IndexHNSWCagra(
+            int d,
+            int M,
+            MetricType metric = METRIC_L2,
+            NumericType numeric_type = NumericType::Float32);
 
     /// When set to true, the index is immutable.
     /// This option is used to copy the knn graph from GpuIndexCagra
@@ -213,6 +210,7 @@ struct IndexHNSWCagra : IndexHNSW {
     int num_base_level_search_entrypoints = 32;
 
     void add(idx_t n, const float* x) override;
+    void add(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// entry point for search
     void search(
@@ -222,6 +220,18 @@ struct IndexHNSWCagra : IndexHNSW {
             float* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
+    void search(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
+            idx_t k,
+            float* distances,
+            idx_t* labels,
+            const SearchParameters* params = nullptr) const override;
+
+    faiss::NumericType get_numeric_type() const;
+    void set_numeric_type(faiss::NumericType numeric_type);
+    NumericType numeric_type_;
 };
 
 } // namespace faiss

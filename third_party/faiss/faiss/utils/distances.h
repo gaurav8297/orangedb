@@ -19,6 +19,7 @@
 namespace faiss {
 
 struct IDSelector;
+struct BalancedClusteringDistModifier;
 
 /*********************************************************
  * Optimized distance/norm/inner prod computations
@@ -299,8 +300,8 @@ void knn_inner_product(
         size_t nx,
         size_t ny,
         float_minheap_array_t* res,
-        const IDSelector* sel = nullptr,
-        const double lambda = 0);
+        BalancedClusteringDistModifier* dist_modifier = nullptr,
+        const IDSelector* sel = nullptr);
 
 /**  Return the k nearest neighbors of each of the nx vectors x among the ny
  *  vector y, for the inner product metric.
@@ -319,8 +320,8 @@ void knn_inner_product(
         size_t k,
         float* distances,
         int64_t* indexes,
-        const IDSelector* sel = nullptr,
-        const double lambda = 0);
+        BalancedClusteringDistModifier* dist_modifier = nullptr,
+        const IDSelector* sel = nullptr);
 
 /** Return the k nearest neighbors of each of the nx vectors x among the ny
  *  vector y, for the L2 distance
@@ -338,8 +339,8 @@ void knn_L2sqr(
         size_t ny,
         float_maxheap_array_t* res,
         const float* y_norm2 = nullptr,
-        const IDSelector* sel = nullptr,
-        const double lambda = 0);
+        BalancedClusteringDistModifier* dist_modifier = nullptr,
+        const IDSelector* sel = nullptr);
 
 /**  Return the k nearest neighbors of each of the nx vectors x among the ny
  *  vector y, for the L2 distance
@@ -361,8 +362,30 @@ void knn_L2sqr(
         float* distances,
         int64_t* indexes,
         const float* y_norm2 = nullptr,
-        const IDSelector* sel = nullptr,
-        const double lambda = 0);
+        BalancedClusteringDistModifier* dist_modifier = nullptr,
+        const IDSelector* sel = nullptr);
+
+/**  Return the k nearest neighbors of each of the nx vectors x among the ny
+ *  vector y, for the L2 distance. This function is a simple implementation
+ *  that does not use any BLAS or other optimization. As we are not
+ *  bottlenecked by the distance computation, this is fine for now. It also
+ *  helps us avoid the overflow issue in the distance computation.
+ *
+ * @param x    query vectors, size nx * d
+ * @param y    database vectors, size ny * d
+ * @param distances  output distances, size nq * k
+ * @param indexes    output vector ids, size nq * k
+ */
+void knn_L2sqr_simple(
+        const float* x,
+        const float* y,
+        size_t d,
+        size_t nx,
+        size_t ny,
+        size_t k,
+        float* distances,
+        int64_t* indexes,
+        BalancedClusteringDistModifier* dist_modifier = nullptr);
 
 /** Find the max inner product neighbors for nx queries in a set of ny vectors
  * indexed by ids. May be useful for re-ranking a pre-selected vector list

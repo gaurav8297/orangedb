@@ -190,6 +190,10 @@ typedef uint64_t size_t;
 
 #include <faiss/IndexNeuralNetCodec.h>
 
+#include <faiss/impl/RaBitQuantizer.h>
+#include <faiss/IndexRaBitQ.h>
+#include <faiss/IndexIVFRaBitQ.h>
+
 %}
 
 /********************************************************
@@ -402,6 +406,8 @@ int64_t cast_cudastream_t_to_integer(hipStream_t x) {
 
 %shared_ptr(faiss::gpu::GpuResources);
 %shared_ptr(faiss::gpu::StandardGpuResourcesImpl);
+%shared_ptr(faiss::gpu::IVFPQBuildCagraConfig);
+%shared_ptr(faiss::gpu::IVFPQSearchCagraConfig);
 
 %{
 
@@ -410,6 +416,7 @@ int64_t cast_cudastream_t_to_integer(hipStream_t x) {
 #include <faiss/gpu/GpuClonerOptions.h>
 #include <faiss/gpu/GpuIndex.h>
 #include <faiss/gpu/GpuIndexCagra.h>
+#include <faiss/gpu/GpuIndexBinaryCagra.h>
 #include <faiss/gpu/GpuIndexFlat.h>
 #include <faiss/gpu/GpuIndexIVF.h>
 #include <faiss/gpu/GpuIndexIVFPQ.h>
@@ -650,6 +657,9 @@ struct faiss::simd16uint16 {};
 
 %include <faiss/IndexNeuralNetCodec.h>
 
+%include <faiss/impl/RaBitQuantizer.h>
+%include <faiss/IndexRaBitQ.h>
+%include <faiss/IndexIVFRaBitQ.h>
 
 %ignore faiss::BufferList::Buffer;
 %ignore faiss::RangeSearchPartialResult::QueryResult;
@@ -699,6 +709,7 @@ struct faiss::simd16uint16 {};
 %include  <faiss/gpu/GpuIndex.h>
 #ifdef FAISS_ENABLE_CUVS
 %include  <faiss/gpu/GpuIndexCagra.h>
+%include  <faiss/gpu/GpuIndexBinaryCagra.h>
 #endif
 %include  <faiss/gpu/GpuIndexFlat.h>
 %include  <faiss/gpu/GpuIndexIVF.h>
@@ -761,6 +772,8 @@ struct faiss::simd16uint16 {};
     DOWNCAST ( IndexShardsIVF )
     DOWNCAST2 ( IndexShards, IndexShardsTemplateT_faiss__Index_t )
     DOWNCAST2 ( IndexReplicas, IndexReplicasTemplateT_faiss__Index_t )
+    DOWNCAST ( IndexRaBitQ )
+    DOWNCAST ( IndexIVFRaBitQ )
     DOWNCAST ( IndexIVFIndependentQuantizer)
     DOWNCAST ( IndexIVFPQR )
     DOWNCAST ( IndexIVFPQ )
@@ -816,6 +829,7 @@ struct faiss::simd16uint16 {};
 #ifdef GPU_WRAPPER
 #ifdef FAISS_ENABLE_CUVS
     DOWNCAST_GPU ( GpuIndexCagra )
+    DOWNCAST_GPU ( GpuIndexBinaryCagra )
 #endif
     DOWNCAST_GPU ( GpuIndexIVFPQ )
     DOWNCAST_GPU ( GpuIndexIVFFlat )

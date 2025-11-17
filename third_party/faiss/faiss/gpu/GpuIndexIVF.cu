@@ -16,6 +16,7 @@
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/gpu/impl/IVFBase.cuh>
 #include <faiss/gpu/utils/CopyUtils.cuh>
+#include "GpuIndexIVF.h"
 
 namespace faiss {
 namespace gpu {
@@ -154,7 +155,7 @@ void GpuIndexIVF::copyFrom(const faiss::IndexIVF* index) {
     FAISS_ASSERT(index->nlist > 0);
     nlist = index->nlist;
 
-    validateNProbe(index->nprobe);
+    validateNProbe(index->nprobe, should_use_cuvs(config_));
     nprobe = index->nprobe;
 
     // The metric type may have changed as well, so we might have to
@@ -297,6 +298,14 @@ void GpuIndexIVF::addImpl_(idx_t n, const float* x, const idx_t* xids) {
     ntotal += n;
 }
 
+void GpuIndexIVF::addImpl_(
+        idx_t n,
+        const void* x,
+        NumericType numeric_type,
+        const idx_t* ids) {
+    GpuIndex::addImpl_(n, x, numeric_type, ids);
+}
+
 int GpuIndexIVF::getCurrentNProbe_(const SearchParameters* params) const {
     size_t use_nprobe = nprobe;
     if (params) {
@@ -317,7 +326,7 @@ int GpuIndexIVF::getCurrentNProbe_(const SearchParameters* params) const {
         }
     }
 
-    validateNProbe(use_nprobe);
+    validateNProbe(use_nprobe, should_use_cuvs(config_));
     // We use int internally for nprobe
     return int(use_nprobe);
 }
@@ -345,6 +354,17 @@ void GpuIndexIVF::searchImpl_(
             quantizer, queries, use_nprobe, k, outDistances, outLabels);
 }
 
+void GpuIndexIVF::searchImpl_(
+        idx_t n,
+        const void* x,
+        NumericType numeric_type,
+        int k,
+        float* distances,
+        idx_t* labels,
+        const SearchParameters* params) const {
+    GpuIndex::searchImpl_(n, x, numeric_type, k, distances, labels, params);
+}
+
 void GpuIndexIVF::search_preassigned(
         idx_t n,
         const float* x,
@@ -367,7 +387,7 @@ void GpuIndexIVF::search_preassigned(
     FAISS_THROW_IF_NOT_MSG(this->is_trained, "GpuIndexIVF not trained");
     FAISS_ASSERT(baseIndex_);
 
-    validateKSelect(k);
+    validateKSelect(k, should_use_cuvs(config_));
 
     if (n == 0 || k == 0) {
         // nothing to search
@@ -375,7 +395,7 @@ void GpuIndexIVF::search_preassigned(
     }
 
     idx_t use_nprobe = params ? params->nprobe : this->nprobe;
-    validateNProbe(use_nprobe);
+    validateNProbe(use_nprobe, should_use_cuvs(config_));
 
     size_t max_codes = params ? params->max_codes : this->max_codes;
     FAISS_THROW_IF_NOT_FMT(

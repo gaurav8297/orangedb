@@ -29,8 +29,8 @@ struct IndexScalarQuantizer : IndexFlatCodes {
     /** Constructor.
      *
      * @param d      dimensionality of the input vectors
-     * @param M      number of subquantizers
-     * @param nbits  number of bit per subvector index
+     * @param qtype  type of scalar quantizer (e.g., QT_4bit)
+     * @param metric distance metric used for search (default: METRIC_L2)
      */
     IndexScalarQuantizer(
             int d,
@@ -40,10 +40,19 @@ struct IndexScalarQuantizer : IndexFlatCodes {
     IndexScalarQuantizer();
 
     void train(idx_t n, const float* x) override;
+    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     void search(
             idx_t n,
             const float* x,
+            idx_t k,
+            float* distances,
+            idx_t* labels,
+            const SearchParameters* params = nullptr) const override;
+    void search(
+            idx_t n,
+            const void* x,
+            NumericType numeric_type,
             idx_t k,
             float* distances,
             idx_t* labels,
@@ -72,7 +81,8 @@ struct IndexIVFScalarQuantizer : IndexIVF {
             size_t nlist,
             ScalarQuantizer::QuantizerType qtype,
             MetricType metric = METRIC_L2,
-            bool by_residual = true);
+            bool by_residual = true,
+            bool own_invlists = true);
 
     IndexIVFScalarQuantizer();
 
@@ -87,6 +97,12 @@ struct IndexIVFScalarQuantizer : IndexIVF {
             uint8_t* codes,
             bool include_listnos = false) const override;
 
+    void decode_vectors(
+            idx_t n,
+            const uint8_t* codes,
+            const idx_t* list_nos,
+            float* x) const override;
+
     void add_core(
             idx_t n,
             const float* x,
@@ -96,7 +112,8 @@ struct IndexIVFScalarQuantizer : IndexIVF {
 
     InvertedListScanner* get_InvertedListScanner(
             bool store_pairs,
-            const IDSelector* sel) const override;
+            const IDSelector* sel,
+            const IVFSearchParameters* params) const override;
 
     void reconstruct_from_offset(int64_t list_no, int64_t offset, float* recons)
             const override;

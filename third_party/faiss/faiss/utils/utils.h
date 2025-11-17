@@ -162,6 +162,9 @@ uint64_t hash_bytes(const uint8_t* bytes, int64_t n);
 /** Whether OpenMP annotations were respected. */
 bool check_openmp();
 
+/** Check that OpenMP is not used. */
+bool check_no_openmp();
+
 /** This class is used to combine range and knn search results
  * in contrib.exhaustive_search.range_search_gpu */
 

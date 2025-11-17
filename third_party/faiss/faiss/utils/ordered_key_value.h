@@ -46,6 +46,9 @@ struct CMin {
     inline static bool cmp(T a, T b) {
         return a < b;
     }
+    inline static double add_weight(T a, T weight) {
+        return a - weight;
+    }
     // Similar to cmp(), but also breaks ties
     // by comparing the second pair of arguments.
     inline static bool cmp2(T a1, T b1, TI a2, TI b2) {
@@ -68,6 +71,9 @@ struct CMax {
     typedef CMin<T_, TI_> Crev;
     inline static bool cmp(T a, T b) {
         return a > b;
+    }
+    inline static double add_weight(T a, T weight) {
+        return a + weight;
     }
     // Similar to cmp(), but also breaks ties
     // by comparing the second pair of arguments.

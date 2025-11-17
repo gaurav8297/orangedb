@@ -1561,7 +1561,7 @@ void benchmark_navix(InputParser &input) {
                     // if (selectivity == "100") {
                     //     hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
                     // } else {
-                    hnsw_index->navix_single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+                    // hnsw_index->navix_single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
                     // }
                     auto gt = gtVecs + j * k;
                     for (int m = 0; m < k; m++) {
@@ -1590,7 +1590,7 @@ void benchmark_navix(InputParser &input) {
             // if (selectivity == "100") {
             // hnsw_index->single_search(queryVecs + (j * baseDimension), k, distances, labels, visited, stats);
             // } else {
-            hnsw_index->navix_single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
+            // hnsw_index->navix_single_search(queryVecs + (j * baseDimension), k, distances, labels, reinterpret_cast<char*>(filteredMask), visited, stats);
             // }
             auto endTime = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
@@ -2275,7 +2275,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
            index->cp.max_points_per_centroid, index->cp.min_points_per_centroid);
     index->cp.verbose = true;
-    index->cp.lambda = lambda;
+    // index->cp.lambda = lambda;
 
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
@@ -2616,6 +2616,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     auto nMiniProbesForBadCluster = parseCommaSeparatedIntegers(input.getCmdOption("-nMiniProbesForBadCluster"));
     const int nMegaRecluster = stoi(input.getCmdOption("-nMegaRecluster"));
     int nFiles = stoi(input.getCmdOption("-nFiles"));
+    int hardClusterSizeLimit = stoi(input.getCmdOption("-hardClusterSizeLimit"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -2624,7 +2625,7 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     DistanceType distanceType = useIP ? IP : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
-                                   0, 0, quantTrainPercentage);
+                                   0, 0, quantTrainPercentage, hardClusterSizeLimit);
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -3170,7 +3171,7 @@ void benchmark_balanced_clustering(InputParser &input) {
     printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
            clustering.max_points_per_centroid, clustering.min_points_per_centroid);
     clustering.verbose = true;
-    clustering.lambda = lambda;
+    // clustering.lambda = lambda;
 
     faiss::IndexFlat index(baseDimension, metric);
     clustering.train(baseNumVectors, baseVecs, index);
