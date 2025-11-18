@@ -67,15 +67,17 @@ struct ClusterSizeCapDistModifier : BalancedClusteringDistModifier {
     std::array<std::atomic_int64_t, MAX_VECTOR_INDEX_NUM_CLUSTERS> cluster_sizes;
     std::array<std::atomic<float>, MAX_VECTOR_INDEX_NUM_CLUSTERS> cluster_weights;
     uint32_t _max_cluster_size;
+    int _num_clusters;
 
     explicit ClusterSizeCapDistModifier(int num_clusters, uint32_t max_cluster_size) : _max_cluster_size(
-        max_cluster_size) {
+        max_cluster_size), _num_clusters(num_clusters) {
         FAISS_ASSERT(num_clusters <= MAX_VECTOR_INDEX_NUM_CLUSTERS);
         FAISS_ASSERT(max_cluster_size > 0);
         reset();
     }
 
     void assign_vector(int64_t cluster_id) override {
+        FAISS_ASSERT(cluster_id >= 0 && cluster_id < _num_clusters);
         auto new_size = ++cluster_sizes[cluster_id];
         if (new_size >= _max_cluster_size) {
             // Only update weight if not already set to infinity
@@ -88,6 +90,15 @@ struct ClusterSizeCapDistModifier : BalancedClusteringDistModifier {
 
     float get_weight(int64_t cluster_id) const override {
         return cluster_weights[cluster_id].load();
+    }
+
+    void populate_weights(int64_t* cluster_sizes, int num_clusters) {
+        for (int i = 0; i < num_clusters; i++) {
+            this->cluster_sizes[i] = cluster_sizes[i];
+            if (cluster_sizes[i] >= _max_cluster_size) {
+                cluster_weights[i].store(std::numeric_limits<float>::infinity());
+            }
+        }
     }
 
     void reset() override {

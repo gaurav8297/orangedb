@@ -3217,6 +3217,41 @@ void test_something(InputParser &input) {
            (double) total_selected / tota_rows);
 }
 
+void test_bug(InputParser &input) {
+    const std::string &dataPath = input.getCmdOption("-dataPath");
+    const std::string &centroidsPath = input.getCmdOption("-centroidsPath");
+    const std::string &clusterSizePath = input.getCmdOption("-clusterSizePath");
+    omp_set_num_threads(32);
+    size_t numCentroids = 5710;
+    size_t dimension = 128;
+    size_t numVectors = 3078;
+    auto hardLimit = 3800;
+    // Allocate centroids
+    std::vector<float> centroids(numCentroids * dimension);
+    std::vector<float> data(numVectors * dimension);
+    std::vector<int64_t> clusterSizes(numCentroids, 0);
+    loadFromFile(dataPath,
+                 reinterpret_cast<uint8_t *>(centroids.data()),
+                 numCentroids * dimension * sizeof(float));
+    loadFromFile(centroidsPath,
+                 reinterpret_cast<uint8_t *>(data.data()),
+                 numVectors * dimension * sizeof(float));
+    loadFromFile(clusterSizePath,
+                 reinterpret_cast<uint8_t *>(clusterSizes.data()),
+                 numCentroids * sizeof(int64_t));
+
+    for (size_t i = 0; i < 100; i++) {
+        auto index = faiss::IndexFlatL2(dimension);
+        index.add(numCentroids, centroids.data());
+        std::vector<int64_t> assign(numVectors);
+        std::vector<float> distances(numVectors);
+        faiss::ClusterSizeCapDistModifier hardLimitDistModifier(numCentroids, hardLimit);
+        hardLimitDistModifier.populate_weights(clusterSizes.data(), numCentroids);
+        faiss::SearchParameters params;
+        params.dist_modifier = &hardLimitDistModifier;
+        index.search(numVectors, data.data(), 1, distances.data(), assign.data(), &params);
+    }
+}
 
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -3290,6 +3325,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "read_and_write_chunk") {
         read_and_write_chunk(input);
+    }
+    else if (run == "testBug") {
+        test_bug(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
