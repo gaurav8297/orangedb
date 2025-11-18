@@ -416,6 +416,9 @@ namespace orangedb {
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
         auto miniClusterSize = miniClusters.size();
         for (auto microCentroidId: microCentroidIds) {
+            if (microCentroidId >= miniClusterSize) {
+                printf("Error: microCentroidId %llu >= miniClusterSize %lu\n", microCentroidId, miniClusterSize);
+            }
             assert(microCentroidId < miniClusterSize);
             auto cluster = miniClusters[microCentroidId];
             totalVecs += (cluster.size() / dim);
@@ -1212,6 +1215,7 @@ namespace orangedb {
                     lastCentroidId--;
                 }
                 if (currCentroidId > lastCentroidId) {
+                    printf("skipping mini centroid %llu as it's beyond lastCentroidId %lu\n", currCentroidId, lastCentroidId);
                     // No need to delete from megaMiniCentroidIds since it'll be taken care when we append mega centroids.
                     continue;
                 }
