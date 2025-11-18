@@ -1213,6 +1213,7 @@ namespace orangedb {
                 auto currCentroidId = oldMiniClusterIds[i];
                 while (std::find(oldMiniClusterIds.begin() + newMiniCentroidsSize, oldMiniClusterIds.end(), lastCentroidId) != oldMiniClusterIds.end()) {
                     lastCentroidId--;
+                    printf("Skipping lastCentroidId %llu as it's in oldMiniClusterIds\n", lastCentroidId);
                 }
                 if (currCentroidId > lastCentroidId) {
                     printf("skipping mini centroid %llu as it's beyond lastCentroidId %lu\n", currCentroidId, lastCentroidId);
