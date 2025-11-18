@@ -1225,6 +1225,9 @@ namespace orangedb {
                 miniClusterVectorIds[currCentroidId] = std::move(miniClusterVectorIds[lastCentroidId]);
                 mappedMiniClusterIds[lastCentroidId] = currCentroidId;
                 // printf("Removing mini centroid %d with miniCentroid %d\n", lastCentroidId, currCentroidId);
+                if (lastCentroidId == 98603) {
+                    printf("Found at lastCentroidId %llu\n", lastCentroidId);
+                }
                 lastCentroidId--;
             }
 
@@ -1256,6 +1259,9 @@ namespace orangedb {
         for (auto & ids : miniCentroidIds) {
             for (auto &id: ids) {
                 id = newToOldCentroidIdMap[id];
+                if (id == 98603) {
+                    printf("Found updated mini centroid id %llu\n", id);
+                }
             }
         }
 
