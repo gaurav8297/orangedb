@@ -3227,15 +3227,15 @@ void test_bug(InputParser &input) {
     size_t numVectors = 3078;
     auto hardLimit = 3800;
     // Allocate centroids
-    std::vector<float> centroids(numCentroids * dimension);
     std::vector<float> data(numVectors * dimension);
+    std::vector<float> centroids(numCentroids * dimension);
     std::vector<int64_t> clusterSizes(numCentroids, 0);
     loadFromFile(dataPath,
+             reinterpret_cast<uint8_t *>(data.data()),
+             numVectors * dimension * sizeof(float));
+    loadFromFile(centroidsPath,
                  reinterpret_cast<uint8_t *>(centroids.data()),
                  numCentroids * dimension * sizeof(float));
-    loadFromFile(centroidsPath,
-                 reinterpret_cast<uint8_t *>(data.data()),
-                 numVectors * dimension * sizeof(float));
     loadFromFile(clusterSizePath,
                  reinterpret_cast<uint8_t *>(clusterSizes.data()),
                  numCentroids * sizeof(int64_t));
