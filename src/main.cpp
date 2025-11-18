@@ -3221,7 +3221,8 @@ void test_bug(InputParser &input) {
     const std::string &dataPath = input.getCmdOption("-dataPath");
     const std::string &centroidsPath = input.getCmdOption("-centroidsPath");
     const std::string &clusterSizePath = input.getCmdOption("-clusterSizePath");
-    omp_set_num_threads(32);
+    const int nThreads = stoi(input.getCmdOption("-nThreads"));
+    omp_set_num_threads(nThreads);
     size_t numCentroids = 5710;
     size_t dimension = 128;
     size_t numVectors = 3078;
@@ -3241,6 +3242,7 @@ void test_bug(InputParser &input) {
                  numCentroids * sizeof(int64_t));
 
     for (size_t i = 0; i < 100; i++) {
+        printf("Running iteration %zu\n", i);
         auto index = faiss::IndexFlatL2(dimension);
         index.add(numCentroids, centroids.data());
         std::vector<int64_t> assign(numVectors);
