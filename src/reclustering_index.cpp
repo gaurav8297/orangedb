@@ -1265,6 +1265,14 @@ namespace orangedb {
             }
         }
 
+        for (auto &ids : megaMiniCentroidIds) {
+            for (auto &id: ids) {
+                if (id == 98603) {
+                    printf("Found mini centroid again id %llu\n", id);
+                }
+            }
+        }
+
         // Copy the mega clusters
         return appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
     }
