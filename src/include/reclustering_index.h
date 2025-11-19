@@ -48,6 +48,8 @@ namespace orangedb {
         float quantizationTrainPercentage = 0.1;
         // limit to max cluster size
         uint64_t hardClusterSizeLimit = 0;
+        // Sampling percentage for kmeans clustering
+        float kmeansSamplingRatio = 0.2;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -56,12 +58,14 @@ namespace orangedb {
                                          const DistanceType distanceType, const int numMegaReclusterCentroids,
                                          const int numNewMiniReclusterCentroids,
                                          const float quantizationTrainPercentage = 0.1,
-                                         const uint64_t hardClusterSizeLimit = 0)
+                                         const uint64_t hardClusterSizeLimit = 0,
+                                         const float kmeansSamplingRatio = 1.0)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
               numNewMiniReclusterCentroids(numNewMiniReclusterCentroids),
-              quantizationTrainPercentage(quantizationTrainPercentage), hardClusterSizeLimit(hardClusterSizeLimit) {
+              quantizationTrainPercentage(quantizationTrainPercentage), hardClusterSizeLimit(hardClusterSizeLimit),
+              kmeansSamplingRatio(kmeansSamplingRatio) {
         }
     };
 
@@ -245,12 +249,15 @@ namespace orangedb {
 
         inline int getMinCentroidSize(int numVectors, int numCentroids) const {
             // 50% of the average size
-            return (numVectors / numCentroids) * 0.3;
+            // Adjust based on sample size
+            auto sampleSize = std::max(int(numVectors * config.kmeansSamplingRatio), 50000);
+            return (sampleSize / numCentroids) * 0.4;
         }
 
         inline int getMaxCentroidSize(int numVectors, int numCentroids) const {
             // 120% of the average size such all vecs are used during reclustering
-            return (numVectors / numCentroids) * 1.1;
+            auto sampleSize = std::max(int(numVectors * config.kmeansSamplingRatio), 50000);
+            return (sampleSize / numCentroids) + 1;
         }
 
         void load_from_disk(const std::string &file_path);

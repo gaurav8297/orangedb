@@ -2617,6 +2617,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int nMegaRecluster = stoi(input.getCmdOption("-nMegaRecluster"));
     int nFiles = stoi(input.getCmdOption("-nFiles"));
     int hardClusterSizeLimit = stoi(input.getCmdOption("-hardClusterSizeLimit"));
+    float kmeansSamplingRatio = stof(input.getCmdOption("-kmeansSamplingRatio"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -2625,7 +2626,7 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     DistanceType distanceType = useIP ? IP : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
-                                   0, 0, quantTrainPercentage, hardClusterSizeLimit);
+                                   0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio);
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
