@@ -1213,10 +1213,8 @@ namespace orangedb {
                 auto currCentroidId = oldMiniClusterIds[i];
                 while (std::find(oldMiniClusterIds.begin() + newMiniCentroidsSize, oldMiniClusterIds.end(), lastCentroidId) != oldMiniClusterIds.end()) {
                     lastCentroidId--;
-                    printf("Skipping lastCentroidId %llu as it's in oldMiniClusterIds\n", lastCentroidId);
                 }
                 if (currCentroidId > lastCentroidId) {
-                    printf("skipping mini centroid %llu as it's beyond lastCentroidId %lu\n", currCentroidId, lastCentroidId);
                     // No need to delete from megaMiniCentroidIds since it'll be taken care when we append mega centroids.
                     continue;
                 }
@@ -1225,9 +1223,6 @@ namespace orangedb {
                 miniClusterVectorIds[currCentroidId] = std::move(miniClusterVectorIds[lastCentroidId]);
                 mappedMiniClusterIds[lastCentroidId] = currCentroidId;
                 // printf("Removing mini centroid %d with miniCentroid %d\n", lastCentroidId, currCentroidId);
-                if (lastCentroidId == 98603) {
-                    printf("Found at lastCentroidId %llu\n", lastCentroidId);
-                }
                 lastCentroidId--;
             }
 
@@ -1239,6 +1234,10 @@ namespace orangedb {
                         id = it->second;
                     }
                 }
+                // Remove IDs that are greater than lastCentroidId
+                ids.erase(std::remove_if(ids.begin(), ids.end(),
+                    [lastCentroidId](vector_idx_t id) { return id > lastCentroidId; }),
+                    ids.end());
             }
 
             // Update newToOldCentroidIdMap
@@ -1259,17 +1258,6 @@ namespace orangedb {
         for (auto & ids : miniCentroidIds) {
             for (auto &id: ids) {
                 id = newToOldCentroidIdMap[id];
-                if (id == 98603) {
-                    printf("Found updated mini centroid id %llu\n", id);
-                }
-            }
-        }
-
-        for (auto &ids : megaMiniCentroidIds) {
-            for (auto &id: ids) {
-                if (id == 98603) {
-                    printf("Found mini centroid again id %llu\n", id);
-                }
             }
         }
 
