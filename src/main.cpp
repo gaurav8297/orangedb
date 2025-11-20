@@ -2431,19 +2431,31 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     // search
     double recall = 0;
     ReclusteringIndexStats stats;
+    double max_recall = 0;
+    double min_recall = 0;
+    double num_recall_below_75 = 0;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
         index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats);
         auto gt = gtVecs + i * k;
+        double localRecall = 0;
         while (!results.empty()) {
             auto res = results.top();
             results.pop();
             if (std::find(gt, gt + k, res.id) != (gt + k)) {
                 recall++;
+                localRecall++;
             }
+        }
+        localRecall = (localRecall / k) * 100;
+        max_recall = std::max(max_recall, localRecall);
+        min_recall = std::min(min_recall, localRecall);
+        if (localRecall < 75.0) {
+            num_recall_below_75++;
         }
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
+    printf("Max Recall: %f, Min Recall: %f, Num Recall below 70%%: %f\n", max_recall, min_recall, num_recall_below_70);
     return recall / queryNumVectors;
 }
 
