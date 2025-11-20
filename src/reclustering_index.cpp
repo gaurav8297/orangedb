@@ -1672,6 +1672,11 @@ namespace orangedb {
         std::vector<vector_idx_t> miniAssign;
         findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
 
+        // Print the shilloute score for each mini centroid
+        for (auto miniId : miniAssign) {
+            printf("Mini centroid %llu silhouette score: %f\n", miniId, calcScoreForMiniCluster(miniId));
+        }
+
         // Now find the closest vectors
         findKClosestVectors(query, k, miniAssign, results, stats);
     }
