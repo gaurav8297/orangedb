@@ -2432,7 +2432,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     double recall = 0;
     ReclusteringIndexStats stats;
     double max_recall = 0;
-    double min_recall = 0;
+    double min_recall = std::numeric_limits<double>::max();
     double num_recall_below_75 = 0;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
