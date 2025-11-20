@@ -2453,6 +2453,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
         if (localRecall < 75.0) {
             num_recall_below_75++;
         }
+        printf("Query %d: Recall: %f%%\n", i, localRecall);
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
     printf("Max Recall: %f, Min Recall: %f, Num Recall below 75%%: %f\n", max_recall, min_recall, num_recall_below_75);
