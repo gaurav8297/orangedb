@@ -1618,9 +1618,9 @@ namespace orangedb {
 #pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
         for (auto miniCentroidId : miniCentroidIds) {
             double s = calcScoreForMiniCluster(miniCentroidId);
-            if (s < 0) {
-                printf("MegaCluster %d, MiniCluster %llu, Silhouette Score: %f\n", megaClusterId, miniCentroidId, s);
-            }
+            // if (s < 0) {
+            //     printf("MegaCluster %d, MiniCluster %llu, Silhouette Score: %f\n", megaClusterId, miniCentroidId, s);
+            // }
             avgMiniScore += s;
         }
 
@@ -1802,6 +1802,15 @@ namespace orangedb {
         // Now find the closest micro centroids
         std::vector<vector_idx_t> miniAssign;
         findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
+
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
+        dc->setQuery(query);
+        // Find the min and max distance from miniAssign
+        for (auto miniId : miniAssign) {
+            double dist;
+            dc->computeDistance(miniId, &dist);
+            printf("Mini centroid %llu distance: %f\n", miniId, dist);
+        }
 
         // Print the shilloute score for each mini centroid
 //         auto num_of_negative_silhouette = 0;
