@@ -1802,15 +1802,16 @@ namespace orangedb {
         // Now find the closest micro centroids
         std::vector<vector_idx_t> miniAssign;
         findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
+        printf("Total mini centroids to search: %zu\n", miniAssign.size());
 
-        auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
-        dc->setQuery(query);
-        // Find the min and max distance from miniAssign
-        for (auto miniId : miniAssign) {
-            double dist;
-            dc->computeDistance(miniId, &dist);
-            printf("Mini centroid %llu distance: %f\n", miniId, dist);
-        }
+        // auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
+        // dc->setQuery(query);
+        // // Find the min and max distance from miniAssign
+        // for (auto miniId : miniAssign) {
+        //     double dist;
+        //     dc->computeDistance(miniId, &dist);
+        //     printf("Mini centroid %llu distance: %f\n", miniId, dist);
+        // }
 
         // Print the shilloute score for each mini centroid
 //         auto num_of_negative_silhouette = 0;
