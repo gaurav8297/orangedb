@@ -1880,6 +1880,7 @@ namespace orangedb {
                 printf("\n");
                 printf("count of L1s: %zu\n", l2s.second.size());
             }
+            printf("Total count of L1s: %zu\n", closerL1s.size());
         }
 
         // printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
