@@ -2101,7 +2101,7 @@ namespace orangedb {
         }
         printf("Mini cluster %llu is at boundary: distDiff: %f, maxDist: %f, ratio: %f\n",
                miniClusterId, distDiff, maxDist, distDiff / maxDist);
-        if ((distDiff / maxDist) < 0.1) {
+        if ((distDiff / maxDist) <= 0.2) {
             return true;
         }
         return false;
