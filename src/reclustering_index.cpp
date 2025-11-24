@@ -2013,12 +2013,13 @@ namespace orangedb {
         // Copy the ids to vector
         while (!closestMicro.empty()) {
             auto microId = closestMicro.top().id;
+            auto dist = closestMicro.top().dist;
             closestMicro.pop();
             if (std::find(ids.begin(), ids.end(), microId) != ids.end()) {
                 continue;
             }
             ids.push_back(microId);
-            distances.push_back(closestMicro.top().dist);
+            distances.push_back(dist);
         }
     }
 
