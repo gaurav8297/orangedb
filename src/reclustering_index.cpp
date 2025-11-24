@@ -2076,7 +2076,7 @@ namespace orangedb {
             if (std::find(ids.begin(), ids.end(), miniId) != ids.end()) {
                 continue;
             }
-            if (dist > minDistance * 2.0) {
+            if (dist > minDistance * 1.6) {
                 continue;
             }
             ids.push_back(miniId);
