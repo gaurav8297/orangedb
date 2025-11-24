@@ -242,7 +242,7 @@ namespace orangedb {
 
         double calcScoreForMegaCluster(int megaClusterId);
 
-        double calcScoreForMiniCluster(int miniClusterId);
+        double calcScoreForMiniCluster(int miniClusterId, std::unordered_set<vector_idx_t> *closerL1s = nullptr);
 
         inline int getNumCentroids(int numVectors, int avgClusterSize) const {
             double ret =  (double)numVectors / avgClusterSize;

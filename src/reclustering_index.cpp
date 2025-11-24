@@ -1660,7 +1660,7 @@ namespace orangedb {
         return avgMiniScore;
     }
 
-    double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId) {
+    double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId, std::unordered_set<vector_idx_t> *closerL1s) {
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
         findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 100, megaAssign, stats);
@@ -1687,12 +1687,16 @@ namespace orangedb {
             dc->computeDistance(miniClusterId, &a);
 
             // 2) b = min distance to any other centroid
+            vector_idx_t minCentroid;
             double b = std::numeric_limits<double>::infinity();
             for (auto closestMiniCentroidId : closestMiniCentroidIds) {
                 if (closestMiniCentroidId == miniClusterId) continue;
                 double dist;
                 dc->computeDistance(closestMiniCentroidId, &dist);
                 b = std::min(b, dist);
+                if (b == dist) {
+                    minCentroid = closestMiniCentroidId;
+                }
             }
 
             // 3) silhouette for this point
@@ -1701,6 +1705,11 @@ namespace orangedb {
                 m = std::max(-a, -b);
             }
             double s = (m != 0.0) ? (b - a) / m : 0.0;
+
+            if (closerL1s != nullptr && s < -0.009) {
+                closerL1s->insert(minCentroid);
+            }
+
             totalSilhouette += s;
             totalPoints += 1;
         }
@@ -1798,12 +1807,12 @@ namespace orangedb {
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
         findKClosestMegaCentroids(query, nMegaProbes, megaAssign, stats);
-        printf("Total mega centroids to search: %zu\n", megaAssign.size());
+        // printf("Total mega centroids to search: %zu\n", megaAssign.size());
 
         // Now find the closest micro centroids
         std::vector<vector_idx_t> miniAssign;
         findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
-        printf("Total mini centroids to search: %zu\n", miniAssign.size());
+        // printf("Total mini centroids to search: %zu\n", miniAssign.size());
 
         // auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
         // dc->setQuery(query);
@@ -1815,29 +1824,63 @@ namespace orangedb {
         // }
 
         // Print the shilloute score for each mini centroid
-//         auto num_of_negative_silhouette = 0;
-// #pragma omp parallel for reduction(+: num_of_negative_silhouette) schedule(dynamic)
-//         for (auto miniId : miniAssign) {
-//             auto score = calcScoreForMiniCluster(miniId);
-//             if (score < -0.01) {
-//                 // Find two closest mega centroids
-//                 std::vector<vector_idx_t> ids;
-//                 std::vector<float> distances;
-//                 findKClosestMegaCentroids(miniCentroids.data() + miniId * dim, 2, ids, distances);
-//                 // Find the mega cluster id
-//                 auto megaClusterId = -1;
-//                 for (int i = 0; i < megaMiniCentroidIds.size(); i++) {
-//                     if (auto &miniIds = megaMiniCentroidIds[i]; std::find(miniIds.begin(), miniIds.end(), miniId) != miniIds.end()) {
-//                         megaClusterId = i;
-//                         break;
-//                     }
-//                 }
-//                 printf(
-//                     "Mini centroid %llu in mega cluster %d with [%lu: %f, %lu: %f] has negative silhouette score: %f\n",
-//                     miniId, megaClusterId, ids[0], distances[0], ids[1], distances[1], score);
-//                 num_of_negative_silhouette++;
-//             }
-//         }
+        // auto num_of_negative_silhouette = 0;
+        double most_negative_silhouette = 0.0;
+        auto most_neg_id = -1;
+
+#pragma omp parallel for schedule(dynamic)
+        for (std::size_t i = 0; i < miniAssign.size(); ++i) {
+            auto miniId = miniAssign[i];
+            auto score = calcScoreForMiniCluster(miniId);
+
+            if (score < most_negative_silhouette) {
+#pragma omp critical
+                {
+                    if (score < most_negative_silhouette) {
+                        most_negative_silhouette = score;
+                        most_neg_id = miniId;
+                    }
+                }
+            }
+        }
+
+        printf("Most negative silhouette mini centroid id: %d with score: %f\n", most_neg_id, most_negative_silhouette);
+
+        // Now we want to print the L1s and L2s cz of which it's negative silhouette
+        if (most_neg_id != -1) {
+            std::unordered_set<vector_idx_t> closerL1s;
+            calcScoreForMiniCluster(most_neg_id, &closerL1s);
+            std::unordered_map<vector_idx_t, std::unordered_set<vector_idx_t>> closerL2s;
+            auto mega_most_neg_id = -1;
+            // Find which mega centroid it belongs to
+            for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+                auto &miniIds = megaMiniCentroidIds[megaId];
+                if (std::find(miniIds.begin(), miniIds.end(), most_neg_id) != miniIds.end()) {
+                    mega_most_neg_id = megaId;
+                    break;
+                }
+            }
+
+            for (const auto &l1 : closerL1s) {
+                for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+                    auto &miniIds = megaMiniCentroidIds[megaId];
+                    if (std::find(miniIds.begin(), miniIds.end(), l1) != miniIds.end()) {
+                        closerL2s[megaId].insert(l1);
+                        break;
+                    }
+                }
+            }
+            printf("Mega centroid id for mini centroid %d is %d\n", most_neg_id, mega_most_neg_id);
+            printf("L1 centroids closer than own mini centroid:\n");
+            for (const auto &l2s : closerL2s) {
+                printf("  Mega centroid %llu: ", l2s.first);
+                for (const auto &l1 : l2s.second) {
+                    printf("%llu ", l1);
+                }
+                printf("\n");
+                printf("count of L1s: %zu\n", l2s.second.size());
+            }
+        }
 
         // printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
 
@@ -1980,7 +2023,8 @@ namespace orangedb {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
         dc->setQuery(query);
-        auto k = std::max(minK, 100);
+        // auto k = std::max(minK, 100);
+        auto k = minK;
         auto minDistance = std::numeric_limits<double>::infinity();
         for (int i = 0; i < numMegaCentroids; i++) {
             if (onlyGoodClusters && megaClusteringScore[i] < 0.01) {
@@ -2008,14 +2052,14 @@ namespace orangedb {
         // Copy the ids to vector
         while (!results.empty()) {
             auto microId = results.top().id;
-            auto dist = results.top().dist;
+            // auto dist = results.top().dist;
             results.pop();
             if (std::find(ids.begin(), ids.end(), microId) != ids.end()) {
                 continue;
             }
-            if (inserted >= minK && dist > minDistance * 1.7) {
-                break;
-            }
+            // if (inserted >= minK && dist > minDistance * 1.7) {
+            //     break;
+            // }
             ids.push_back(microId);
             inserted++;
         }
@@ -2060,7 +2104,8 @@ namespace orangedb {
         auto numMiniCentroids = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
         dc->setQuery(query);
-        auto k = std::max(minK, 2000);
+        // auto k = std::max(minK, 2000);
+        auto k = minK;
         auto minDistance = std::numeric_limits<double>::infinity();
 
         // Iterate through the specified mega centroids
@@ -2093,14 +2138,14 @@ namespace orangedb {
         ids.clear();
         while (!results.empty()) {
             auto miniId = results.top().id;
-            auto dist = results.top().dist;
+            // auto dist = results.top().dist;
             results.pop();
             if (std::find(ids.begin(), ids.end(), miniId) != ids.end()) {
                 continue;
             }
-            if (inserted >= minK && dist > minDistance * 1.7) {
-                break;
-            }
+            // if (inserted >= minK && dist > minDistance * 1.7) {
+            //     break;
+            // }
             ids.push_back(miniId);
             inserted++;
         }
