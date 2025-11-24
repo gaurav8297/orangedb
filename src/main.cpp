@@ -2796,12 +2796,12 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.printStats();
     }
 
-    if (iterations > 0) {
-        // index.storeScoreForMegaClusters();
-        // index.printStats();
-        printf("Flushing to disk\n");
-        index.flush_to_disk(storagePath);
-    }
+    // if (iterations > 0) {
+    //     // index.storeScoreForMegaClusters();
+    //     // index.printStats();
+    //     printf("Flushing to disk\n");
+    //     index.flush_to_disk(storagePath);
+    // }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
