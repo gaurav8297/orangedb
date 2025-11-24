@@ -2099,8 +2099,8 @@ namespace orangedb {
         if (maxDist == 0) {
             return false;
         }
-        printf("Mini cluster %llu is at boundary: distDiff: %f, maxDist: %f, ratio: %f\n",
-               miniClusterId, distDiff, maxDist, distDiff / maxDist);
+        // printf("Mini cluster %llu is at boundary: distDiff: %f, maxDist: %f, ratio: %f\n",
+        //        miniClusterId, distDiff, maxDist, distDiff / maxDist);
         if ((distDiff / maxDist) <= 0.3) {
             return true;
         }
@@ -2130,20 +2130,27 @@ namespace orangedb {
 
         auto numMiniCentroids = miniCentroids.size() / dim;
         auto totalWithBadScore = 0;
+        auto totalWithBadScoreAtBoundary = 0;
         auto totalAtBoundary = 0;
 #pragma omp parallel for reduction(+: totalWithBadScore, totalAtBoundary) schedule(dynamic)
         for (int miniCentroidId = 0; miniCentroidId < numMiniCentroids; miniCentroidId++) {
             double s = calcScoreForMiniCluster(miniCentroidId);
+            bool isB = isAtBoundary(miniCentroidId);
             if (s < -0.009) {
-                if (isAtBoundary(miniCentroidId)) {
-                    totalAtBoundary++;
+                if (isB) {
+                    totalWithBadScoreAtBoundary++;
                 }
                 totalWithBadScore++;
                 printf("MiniCluster %d, Silhouette Score: %f\n", miniCentroidId, s);
+            } else {
+                if (isB) {
+                    totalAtBoundary++;
+                }
             }
         }
         printf("Number of mini clusters with bad silhouette score: %d out of %zu\n", totalWithBadScore, numMiniCentroids);
-        printf("Number of mini clusters at boundary: %d out of %d\n", totalAtBoundary, totalWithBadScore);
+        printf("Number of mini clusters at boundary: %d out of %d\n", totalWithBadScoreAtBoundary, totalWithBadScore);
+        printf("Number of mini clusters at boundary (w/o bad score): %d out of %zu\n", totalAtBoundary, numMiniCentroids - totalWithBadScore);
 
         //
         // // Print vectors
