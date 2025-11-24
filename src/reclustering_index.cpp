@@ -536,6 +536,43 @@ namespace orangedb {
         // Take all the existing mini centroids and merge them
         size_t totalVecs = 0;
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
+        std::vector<vector_idx_t> someIds = {
+            9403, 5713, 2418, 9887, 1638, 462, 7729, 2108, 1813, 2368, 7619, 2475, 1893, 5370, 35, 6827, 4686, 1414,
+            2010, 5895, 262, 8604, 445, 3340, 8384, 508, 8050, 279, 4721, 5982, 726, 6698, 2700, 4640, 4207, 6050, 7877,
+            3526, 2449, 7426, 7980, 4488, 1919, 173, 9485, 1704, 8979, 1130, 9537, 6433, 115, 9233, 7196, 2928, 3730,
+            1111, 2088, 3446, 3349, 5853, 6532, 3913, 524, 718, 5815, 5524, 1353, 1741, 5136, 6628, 9538, 7936, 564,
+            6772, 3494, 8538, 7762, 2921, 4990, 4587, 7497, 1774, 2466, 6152, 6835, 4317, 6160, 6115, 5048, 628, 1307,
+            5478, 1634, 6387, 6969, 6193, 409, 5313, 3179, 7264, 8610, 8161, 4542, 2203, 9864, 5693, 9829, 6351, 1661,
+            8699, 6473, 3143, 1203, 2190, 2537, 7369, 3891, 4657, 8925, 7607, 1108, 9929, 2224, 7616, 9976, 8133, 9717,
+            3137, 3090, 4111, 9834, 1357, 7177, 8358, 9328, 4353, 5761, 2851, 7436, 4235, 4601, 7705, 6921, 6436, 2906,
+            6107, 4967, 925, 3479, 3032, 5402, 804, 6951, 5165, 5669, 3940, 8498, 6925, 6643, 5662, 2509, 1819, 1713,
+            8107, 2920, 6334, 1665, 4055, 201, 1374, 270, 7362, 2991, 9431, 9086, 9273, 8484, 3354, 9842, 3662, 1265,
+            4986, 336,
+            2686, 7425, 7709, 3886, 2283, 4340, 821, 8519, 8403, 4102, 1398, 4697, 8037, 1413, 6916, 4660, 7236, 6291,
+            3125, 2499, 6990, 7629,
+            1002, 8287, 5953
+        };
+        for (auto microCentroidId: microCentroidIds) {
+            if (microCentroidId == 6541) {
+                // Print out of someIds how many part of microCentroidIds
+                size_t count = 0;
+                for (auto id: someIds) {
+                    if (std::find(microCentroidIds.begin(), microCentroidIds.end(), id) != microCentroidIds.end()) {
+                        count++;
+                    }
+                }
+                printf("Fount id 6541 in megaCentroidId %llu with %lu/%lu of someIds\n",
+                       megaClusterId, count, someIds.size());
+                // Now print all microCentroidIds
+                printf("microCentroidIds: ");
+                for (auto id: microCentroidIds) {
+                    printf("%llu,", id);
+                }
+                printf("\n");
+                break;
+            }
+        }
+
         auto miniClusterSize = miniClusters.size();
         for (auto microCentroidId: microCentroidIds) {
             if (microCentroidId >= miniClusterSize) {
