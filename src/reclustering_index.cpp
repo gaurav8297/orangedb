@@ -1979,6 +1979,8 @@ namespace orangedb {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
         dc->setQuery(query);
+        k = std::max(k, 100);
+        auto minDistance = std::numeric_limits<double>::infinity();
         for (int i = 0; i < numMegaCentroids; i++) {
             if (onlyGoodClusters && megaClusteringScore[i] < 0.01) {
                 continue;
@@ -1986,6 +1988,7 @@ namespace orangedb {
             double d;
             stats.numDistanceCompForSearch++;
             dc->computeDistance(i, &d);
+            minDistance = std::min(minDistance, d);
             if (closestMicro.size() < k || d < closestMicro.top().dist) {
                 closestMicro.emplace(i, d);
                 if (closestMicro.size() > k) {
@@ -1997,8 +2000,12 @@ namespace orangedb {
         // Copy the ids to vector
         while (!closestMicro.empty()) {
             auto microId = closestMicro.top().id;
+            auto dist = closestMicro.top().dist;
             closestMicro.pop();
             if (std::find(ids.begin(), ids.end(), microId) != ids.end()) {
+                continue;
+            }
+            if (dist > minDistance * 1.7) {
                 continue;
             }
             ids.push_back(microId);
@@ -2044,7 +2051,7 @@ namespace orangedb {
         auto numMiniCentroids = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
         dc->setQuery(query);
-        k = std::max(k, 3000);
+        k = std::max(k, 2000);
         auto minDistance = std::numeric_limits<double>::infinity();
 
         // Iterate through the specified mega centroids
