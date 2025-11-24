@@ -2065,6 +2065,7 @@ namespace orangedb {
             }
         }
 
+
         // Copy the ids to vector (in reverse order to get closest first)
         ids.clear();
         ids.reserve(closestMini.size());
@@ -2075,7 +2076,7 @@ namespace orangedb {
             if (std::find(ids.begin(), ids.end(), miniId) != ids.end()) {
                 continue;
             }
-            if (dist > minDistance * 1.5) {
+            if (dist > minDistance * 2.0) {
                 continue;
             }
             ids.push_back(miniId);
