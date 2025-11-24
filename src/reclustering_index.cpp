@@ -1975,12 +1975,12 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats, bool onlyGoodClusters) {
+    void ReclusteringIndex::findKClosestMegaCentroids(const float *query, int minK, std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats, bool onlyGoodClusters) {
         std::priority_queue<NodeDistCloser> closestMicro;
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
         dc->setQuery(query);
-        k = std::max(k, 100);
+        auto k = std::max(minK, 100);
         auto minDistance = std::numeric_limits<double>::infinity();
         for (int i = 0; i < numMegaCentroids; i++) {
             if (onlyGoodClusters && megaClusteringScore[i] < 0.01) {
@@ -1997,19 +1997,27 @@ namespace orangedb {
                 }
             }
         }
-
-        // Copy the ids to vector
+        // reverse the pq
+        std::priority_queue<NodeDistFarther> results;
         while (!closestMicro.empty()) {
-            auto microId = closestMicro.top().id;
-            auto dist = closestMicro.top().dist;
+            results.emplace(closestMicro.top().id, closestMicro.top().dist);
             closestMicro.pop();
+        }
+
+        int inserted = 0;
+        // Copy the ids to vector
+        while (!results.empty()) {
+            auto microId = results.top().id;
+            auto dist = results.top().dist;
+            results.pop();
             if (std::find(ids.begin(), ids.end(), microId) != ids.end()) {
                 continue;
             }
-            if (dist > minDistance * 1.7) {
-                continue;
+            if (inserted >= minK && dist > minDistance * 1.7) {
+                break;
             }
             ids.push_back(microId);
+            inserted++;
         }
     }
 
@@ -2045,14 +2053,14 @@ namespace orangedb {
 
     
 
-    void ReclusteringIndex::findKClosestMiniCentroids(const float *query, int k,
+    void ReclusteringIndex::findKClosestMiniCentroids(const float *query, int minK,
                                                       std::vector<vector_idx_t> megaCentroids,
                                                       std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats) {
         std::priority_queue<NodeDistCloser> closestMini;
         auto numMiniCentroids = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
         dc->setQuery(query);
-        k = std::max(k, 2000);
+        auto k = std::max(minK, 2000);
         auto minDistance = std::numeric_limits<double>::infinity();
 
         // Iterate through the specified mega centroids
@@ -2073,21 +2081,28 @@ namespace orangedb {
             }
         }
 
+        // reverse the pq
+        std::priority_queue<NodeDistFarther> results;
+        while (!closestMini.empty()) {
+            results.emplace(closestMini.top().id, closestMini.top().dist);
+            closestMini.pop();
+        }
 
+        int inserted = 0;
         // Copy the ids to vector (in reverse order to get closest first)
         ids.clear();
-        ids.reserve(closestMini.size());
-        while (!closestMini.empty()) {
-            auto miniId = closestMini.top().id;
-            auto dist = closestMini.top().dist;
-            closestMini.pop();
+        while (!results.empty()) {
+            auto miniId = results.top().id;
+            auto dist = results.top().dist;
+            results.pop();
             if (std::find(ids.begin(), ids.end(), miniId) != ids.end()) {
                 continue;
             }
-            if (dist > minDistance * 1.7) {
-                continue;
+            if (inserted >= minK && dist > minDistance * 1.7) {
+                break;
             }
             ids.push_back(miniId);
+            inserted++;
         }
     }
 
