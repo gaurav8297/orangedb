@@ -1798,6 +1798,7 @@ namespace orangedb {
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
         findKClosestMegaCentroids(query, nMegaProbes, megaAssign, stats);
+        printf("Total mega centroids to search: %zu\n", megaAssign.size());
 
         // Now find the closest micro centroids
         std::vector<vector_idx_t> miniAssign;
