@@ -2087,6 +2087,26 @@ namespace orangedb {
         }
     }
 
+    bool ReclusteringIndex::isAtBoundary(vector_idx_t miniClusterId) {
+        std::vector<vector_idx_t> ids;
+        std::vector<float> distances;
+        findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 2, ids, distances);
+        if (distances.size() < 2) {
+            return false;
+        }
+        auto distDiff = std::abs(distances[1] - distances[0]);
+        auto maxDist = std::max(std::abs(distances[0]), std::abs(distances[1]));
+        if (maxDist == 0) {
+            return false;
+        }
+        printf("Mini cluster %llu is at boundary: distDiff: %f, maxDist: %f, ratio: %f\n",
+               miniClusterId, distDiff, maxDist, distDiff / maxDist);
+        if ((distDiff / maxDist) < 0.1) {
+            return true;
+        }
+        return false;
+    }
+
 
     void ReclusteringIndex::printStats() {
         printf("ReclusteringIndex::printStats\n");
@@ -2110,15 +2130,20 @@ namespace orangedb {
 
         auto numMiniCentroids = miniCentroids.size() / dim;
         auto totalWithBadScore = 0;
-#pragma omp parallel for reduction(+: totalWithBadScore) schedule(dynamic)
+        auto totalAtBoundary = 0;
+#pragma omp parallel for reduction(+: totalWithBadScore, totalAtBoundary) schedule(dynamic)
         for (int miniCentroidId = 0; miniCentroidId < numMiniCentroids; miniCentroidId++) {
             double s = calcScoreForMiniCluster(miniCentroidId);
             if (s < -0.009) {
+                if (isAtBoundary(miniCentroidId)) {
+                    totalAtBoundary++;
+                }
                 totalWithBadScore++;
-                printf("MiniCluster %llu, Silhouette Score: %f\n", miniCentroidId, s);
+                printf("MiniCluster %d, Silhouette Score: %f\n", miniCentroidId, s);
             }
         }
         printf("Number of mini clusters with bad silhouette score: %d out of %zu\n", totalWithBadScore, numMiniCentroids);
+        printf("Number of mini clusters at boundary: %d out of %d\n", totalAtBoundary, totalWithBadScore);
 
         //
         // // Print vectors

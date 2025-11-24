@@ -133,6 +133,8 @@ namespace orangedb {
         void checkDuplicateMiniClusters();
 
     private:
+        bool isAtBoundary(vector_idx_t miniClusterId);
+
         void computeMiniClusterSubcells(int miniClusterId, int avgSubCellSize);
 
         vector_idx_t getWorstMegaCentroid();
