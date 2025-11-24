@@ -1003,6 +1003,7 @@ namespace orangedb {
         }
         cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
         cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
+        cl.seed = -1;
         std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
         if (config.lambda > 0) {
             auto lambda = findAppropriateLambda(data, n, dim, numClusters);
@@ -1081,6 +1082,7 @@ namespace orangedb {
 
         faiss::ClusteringParameters cl;
         cl.niter = config.nIter;
+        cl.seed = -1;
         if (config.distanceType == IP) {
             cl.spherical = true;
         }
@@ -2128,29 +2130,29 @@ namespace orangedb {
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
 
-        auto numMiniCentroids = miniCentroids.size() / dim;
-        auto totalWithBadScore = 0;
-        auto totalWithBadScoreAtBoundary = 0;
-        auto totalAtBoundary = 0;
-#pragma omp parallel for reduction(+: totalWithBadScore, totalAtBoundary) schedule(dynamic)
-        for (int miniCentroidId = 0; miniCentroidId < numMiniCentroids; miniCentroidId++) {
-            double s = calcScoreForMiniCluster(miniCentroidId);
-            bool isB = isAtBoundary(miniCentroidId);
-            if (s < -0.009) {
-                if (isB) {
-                    totalWithBadScoreAtBoundary++;
-                }
-                totalWithBadScore++;
-                printf("MiniCluster %d, Silhouette Score: %f\n", miniCentroidId, s);
-            } else {
-                if (isB) {
-                    totalAtBoundary++;
-                }
-            }
-        }
-        printf("Number of mini clusters with bad silhouette score: %d out of %zu\n", totalWithBadScore, numMiniCentroids);
-        printf("Number of mini clusters at boundary: %d out of %d\n", totalWithBadScoreAtBoundary, totalWithBadScore);
-        printf("Number of mini clusters at boundary (w/o bad score): %d out of %zu\n", totalAtBoundary, numMiniCentroids - totalWithBadScore);
+//         auto numMiniCentroids = miniCentroids.size() / dim;
+//         auto totalWithBadScore = 0;
+//         auto totalWithBadScoreAtBoundary = 0;
+//         auto totalAtBoundary = 0;
+// #pragma omp parallel for reduction(+: totalWithBadScore, totalAtBoundary) schedule(dynamic)
+//         for (int miniCentroidId = 0; miniCentroidId < numMiniCentroids; miniCentroidId++) {
+//             double s = calcScoreForMiniCluster(miniCentroidId);
+//             bool isB = isAtBoundary(miniCentroidId);
+//             if (s < -0.009) {
+//                 if (isB) {
+//                     totalWithBadScoreAtBoundary++;
+//                 }
+//                 totalWithBadScore++;
+//                 printf("MiniCluster %d, Silhouette Score: %f\n", miniCentroidId, s);
+//             } else {
+//                 if (isB) {
+//                     totalAtBoundary++;
+//                 }
+//             }
+//         }
+//         printf("Number of mini clusters with bad silhouette score: %d out of %zu\n", totalWithBadScore, numMiniCentroids);
+//         printf("Number of mini clusters at boundary: %d out of %d\n", totalWithBadScoreAtBoundary, totalWithBadScore);
+//         printf("Number of mini clusters at boundary (w/o bad score): %d out of %zu\n", totalAtBoundary, numMiniCentroids - totalWithBadScore);
 
         //
         // // Print vectors
