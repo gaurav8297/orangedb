@@ -1848,6 +1848,7 @@ namespace orangedb {
 
         // Now we want to print the L1s and L2s cz of which it's negative silhouette
         if (most_neg_id != -1) {
+            auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
             std::unordered_set<vector_idx_t> closerL1s;
             calcScoreForMiniCluster(most_neg_id, &closerL1s);
             std::unordered_map<vector_idx_t, std::unordered_set<vector_idx_t>> closerL2s;
@@ -1860,6 +1861,9 @@ namespace orangedb {
                     break;
                 }
             }
+            double most_neg_dist = 0.0;
+            dc->setQuery(miniCentroids.data() + most_neg_id * dim);
+            dc->computeDistance(mega_most_neg_id, &most_neg_dist);
 
             for (const auto &l1 : closerL1s) {
                 for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
@@ -1870,15 +1874,18 @@ namespace orangedb {
                     }
                 }
             }
-            printf("Mega centroid id for mini centroid %d is %d\n", most_neg_id, mega_most_neg_id);
+            printf("Mega centroid id for mini centroid %d is [%d, %f]\n", most_neg_id, mega_most_neg_id, most_neg_dist);
             printf("L1 centroids closer than own mini centroid:\n");
             for (const auto &l2s : closerL2s) {
-                printf("  Mega centroid %llu: ", l2s.first);
+                double l2_dist = 0.0;
+                dc->computeDistance(l2s.first, &l2_dist);
+                printf("Mega centroid [%llu, %f]: ", l2s.first, l2_dist);
                 for (const auto &l1 : l2s.second) {
                     printf("%llu ", l1);
                 }
                 printf("\n");
                 printf("count of L1s: %zu\n", l2s.second.size());
+                printf("\n");
             }
             printf("Total count of L1s: %zu\n", closerL1s.size());
         }
