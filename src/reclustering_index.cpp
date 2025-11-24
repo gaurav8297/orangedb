@@ -1826,7 +1826,7 @@ namespace orangedb {
             }
         }
 
-        // printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
+        printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
 
         // Now find the closest vectors
         findKClosestVectors(query, k, miniAssign, results, stats);
