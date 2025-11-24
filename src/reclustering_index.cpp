@@ -2043,6 +2043,8 @@ namespace orangedb {
         auto numMiniCentroids = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
         dc->setQuery(query);
+        k = std::max(k, 3000);
+        auto minDistance = std::numeric_limits<double>::infinity();
 
         // Iterate through the specified mega centroids
         for (auto megaId : megaCentroids) {
@@ -2052,6 +2054,7 @@ namespace orangedb {
                 double d;
                 stats.numDistanceCompForSearch++;
                 dc->computeDistance(miniId, &d);
+                minDistance = std::min(minDistance, d);
                 if (closestMini.size() < k || d < closestMini.top().dist) {
                     closestMini.emplace(miniId, d);
                     if (closestMini.size() > k) {
@@ -2066,8 +2069,12 @@ namespace orangedb {
         ids.reserve(closestMini.size());
         while (!closestMini.empty()) {
             auto miniId = closestMini.top().id;
+            auto dist = closestMini.top().dist;
             closestMini.pop();
             if (std::find(ids.begin(), ids.end(), miniId) != ids.end()) {
+                continue;
+            }
+            if (dist > minDistance * 1.5) {
                 continue;
             }
             ids.push_back(miniId);
