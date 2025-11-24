@@ -1802,31 +1802,31 @@ namespace orangedb {
         findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
 
         // Print the shilloute score for each mini centroid
-        auto num_of_negative_silhouette = 0;
-#pragma omp parallel for reduction(+: num_of_negative_silhouette) schedule(dynamic)
-        for (auto miniId : miniAssign) {
-            auto score = calcScoreForMiniCluster(miniId);
-            if (score < -0.01) {
-                // Find two closest mega centroids
-                std::vector<vector_idx_t> ids;
-                std::vector<float> distances;
-                findKClosestMegaCentroids(miniCentroids.data() + miniId * dim, 2, ids, distances);
-                // Find the mega cluster id
-                auto megaClusterId = -1;
-                for (int i = 0; i < megaMiniCentroidIds.size(); i++) {
-                    if (auto &miniIds = megaMiniCentroidIds[i]; std::find(miniIds.begin(), miniIds.end(), miniId) != miniIds.end()) {
-                        megaClusterId = i;
-                        break;
-                    }
-                }
-                printf(
-                    "Mini centroid %llu in mega cluster %d with [%lu: %f, %lu: %f] has negative silhouette score: %f\n",
-                    miniId, megaClusterId, ids[0], distances[0], ids[1], distances[1], score);
-                num_of_negative_silhouette++;
-            }
-        }
+//         auto num_of_negative_silhouette = 0;
+// #pragma omp parallel for reduction(+: num_of_negative_silhouette) schedule(dynamic)
+//         for (auto miniId : miniAssign) {
+//             auto score = calcScoreForMiniCluster(miniId);
+//             if (score < -0.01) {
+//                 // Find two closest mega centroids
+//                 std::vector<vector_idx_t> ids;
+//                 std::vector<float> distances;
+//                 findKClosestMegaCentroids(miniCentroids.data() + miniId * dim, 2, ids, distances);
+//                 // Find the mega cluster id
+//                 auto megaClusterId = -1;
+//                 for (int i = 0; i < megaMiniCentroidIds.size(); i++) {
+//                     if (auto &miniIds = megaMiniCentroidIds[i]; std::find(miniIds.begin(), miniIds.end(), miniId) != miniIds.end()) {
+//                         megaClusterId = i;
+//                         break;
+//                     }
+//                 }
+//                 printf(
+//                     "Mini centroid %llu in mega cluster %d with [%lu: %f, %lu: %f] has negative silhouette score: %f\n",
+//                     miniId, megaClusterId, ids[0], distances[0], ids[1], distances[1], score);
+//                 num_of_negative_silhouette++;
+//             }
+//         }
 
-        printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
+        // printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
 
         // Now find the closest vectors
         findKClosestVectors(query, k, miniAssign, results, stats);
@@ -2107,6 +2107,19 @@ namespace orangedb {
         printf("Max size of clusters: %zu\n", maxSize);
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
+
+        auto numMiniCentroids = miniCentroids.size();
+        auto totalWithBadScore = 0;
+#pragma omp parallel for reduction(+: totalWithBadScore) schedule(dynamic)
+        for (auto miniCentroidId : numMiniCentroids) {
+            double s = calcScoreForMiniCluster(miniCentroidId);
+            if (s < -0.009) {
+                totalWithBadScore++;
+                printf("MiniCluster %llu, Silhouette Score: %f\n", miniCentroidId, s);
+            }
+        }
+        printf("Number of mini clusters with bad silhouette score: %d out of %zu\n", totalWithBadScore, numMiniCentroids);
+
         //
         // // Print vectors
         // auto numMegaCentroids = megaCentroids.size() / dim;
