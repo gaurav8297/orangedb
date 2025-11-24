@@ -3269,6 +3269,184 @@ void test_bug(InputParser &input) {
     }
 }
 
+void test_another_bug(InputParser &input) {
+    omp_set_num_threads(8);
+    int dimension = 100;
+    int numVectors = 65536;
+    int avg_cluster_size = 128;
+    RandomGenerator rg(1234);
+    std::vector<float> data(numVectors * dimension);
+    for (int i = 0; i < numVectors; i++) {
+        data[i * dimension + 0] = 0;
+        data[i * dimension + 1] = (i % 512) * 1000;
+        for (int d = 2; d < dimension; d++) {
+            data[i * dimension + d] = rg.randFloat();
+        }
+    }
+
+    faiss::ClusteringParameters cl;
+    cl.niter = 20;
+    cl.nredo = 1;
+    cl.min_points_per_centroid = avg_cluster_size * 0.5;
+    cl.max_points_per_centroid = avg_cluster_size * 1.7;
+    std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
+    cl.verbose = true;
+    auto numCentroids = numVectors / avg_cluster_size + 1;
+    faiss::Clustering clustering(dimension, numCentroids, cl);
+    auto index = faiss::IndexFlatL2(dimension);
+    clustering.train(numVectors, data.data(), index);
+
+    std::vector<int64_t> assign(numVectors);
+    index.assign(numVectors, data.data(), assign.data());
+
+    // Print histogram
+    std::vector<int> histogram(numCentroids, 0);
+    for (int i = 0; i < numVectors; i++) {
+        histogram[assign[i]]++;
+    }
+    // for (int i = 0; i < numCentroids; i++) {
+    //     printf("Cluster %d: Size %d\n", i, histogram[i]);
+    // }
+    // if any centroid is greater than 128 then print the vector assigned to it
+    // for (int i = 0; i < numCentroids; i++) {
+    //     if (histogram[i] > avg_cluster_size) {
+    //         printf("Centroid %d has size %d, Vectors assigned:\n", i, histogram[i]);
+    //         for (int j = 0; j < numVectors; j++) {
+    //             if (assign[j] == i) {
+    //                 printf("Vector %d: ", j);
+    //                 for (int d = 0; d < dimension; d++) {
+    //                     printf("%f, ", data[j * dimension + d]);
+    //                 }
+    //                 printf("\n");
+    //             }
+    //         }
+    //     }
+    // }
+}
+
+void test_final_bug(InputParser &input) {
+    int dimension = 3;
+    int avg_cluster_size = 10;
+    int numL2s = 10;
+    int numL1s = 100;
+    int numVectors = numL2s * numL1s;
+    RandomGenerator rg(1234);
+    std::vector<float> data(numVectors * dimension);
+    for (int i = 0; i < numVectors; i++) {
+        data[i * dimension + 0] = 100000 * (i % numL2s);
+        data[i * dimension + 1] = 100 * (i % numL1s);
+        data[i * dimension + 2] = rg.randFloat();
+    }
+
+    ReclusteringIndexConfig config;
+    config.megaCentroidSize = avg_cluster_size;
+    config.miniCentroidSize = avg_cluster_size;
+    config.nIter = 20;
+    ReclusteringIndex index(dimension, config, &rg);
+    index.simpleInsertWithoutClustering(data.data(), numVectors);
+    index.storeScoreForMegaClusters();
+    index.printStats();
+    for (int iter = 0; iter < 5; iter++) {
+        printf("Iteration %d\n", iter);
+        index.reclusterAllMegaCentroids();
+        index.reclusterFast();
+    }
+    index.storeScoreForMegaClusters();
+    index.printStats();
+    // ReclusteringIndex index(dimension, 10, 10, 10, 0.5, L2);
+}
+
+void test_final_bug_2(InputParser &input) {
+    // omp_set_num_threads(8);
+    // size_t baseDimension, baseNumVectors;
+    // auto filePath = "/Users/gaurav.sehgal/work/orangedb/data/ifmwcvluoe.parquet";
+    // std::vector<std::string> file_paths;
+    // file_paths.push_back(filePath);
+    // auto data = readParquetFiles(file_paths, &baseDimension, &baseNumVectors);
+    // printf("Read %zu vectors of dimension %zu from %s\n", baseNumVectors, baseDimension, filePath);
+    // RandomGenerator rg(1234);
+    // ReclusteringIndexConfig config;
+    // config.megaCentroidSize = 1000;
+    // config.miniCentroidSize = 1000;
+    // config.kmeansSamplingRatio = 0.2;
+    // config.nIter = 20;
+    // ReclusteringIndex index(baseDimension, config, &rg);
+    // index.naiveInsert(data, baseNumVectors);
+    // // index.storeScoreForMegaClusters();
+    // // index.printStats();
+    // for (int iter = 0; iter < 1; iter++) {
+    //     printf("Iteration %d\n", iter);
+    //     index.reclusterAllMegaCentroids();
+    //     index.reclusterFast();
+    // }
+    // // index.storeScoreForMegaClusters();
+    // // index.printStats();
+    //
+    // int numQueries = 10;
+    // std::vector<float> queryVecs(baseDimension * 10);
+    // for (size_t i = 0; i < baseDimension * numQueries; i++) {
+    //     queryVecs[i] = 30 * rg.randFloat();
+    // }
+    // int k = 10;
+    //
+    // faiss::IndexFlatL2 flat_ind(baseDimension);
+    // faiss::IndexIVFFlat ivf_index(&flat_ind, baseDimension, 1048, faiss::METRIC_L2);
+    // ivf_index.cp.max_points_per_centroid = 200;
+    // ivf_index.nprobe = 700;
+    // ivf_index.cp.verbose = true;
+    // ivf_index.cp.niter = 20;
+    // ivf_index.train(baseNumVectors, data);
+    // ivf_index.add(baseNumVectors, data);
+    // printf("Added data to faiss index\n");
+    // std::vector<faiss::idx_t> act_gt_labels(numQueries * k);
+    // std::vector<float> act_gt_distances(numQueries * k);
+    // ivf_index.search(numQueries, queryVecs.data(), k, act_gt_distances.data(), act_gt_labels.data());
+    //
+    // faiss::IndexFlatL2 flat_index(baseDimension);
+    // flat_index.add(baseNumVectors, data);
+    // std::vector<faiss::idx_t> gt_labels(numQueries * k);
+    // std::vector<float> gt_distances(numQueries * k);
+    // flat_index.search(numQueries, queryVecs.data(), k, gt_distances.data(), gt_labels.data());
+    //
+    // // Check recall
+    // for (int i = 0; i < numQueries; i++) {
+    //     double localRecall = 0;
+    //     auto gt = gt_labels.data() + i * k;
+    //     auto act_gt = act_gt_labels.data() + i * k;
+    //     for (int j = 0; j < k; j++) {
+    //         if (std::find(gt, gt + k, act_gt[j]) != (gt + k)) {
+    //             localRecall++;
+    //         }
+    //     }
+    //     printf("Query %d: Faiss IVF Recall: %f\n", i, (localRecall / k) * 100.0);
+    // }
+    //
+    // for (int i = 0; i < numQueries; i++) {
+    //     std::priority_queue<NodeDistCloser> results;
+    //     ReclusteringIndexStats stats;
+    //     index.search(queryVecs.data() + i * baseDimension, k, results, 10, 500, stats);
+    //     auto gt = gt_labels.data() + i * k;
+    //     double localRecall = 0;
+    //     while (!results.empty()) {
+    //         auto res = results.top();
+    //         results.pop();
+    //         if (std::find(gt, gt + k, res.id) != (gt + k)) {
+    //             localRecall++;
+    //         }
+    //     }
+    //     printf("Query %d: Recall: %f\n", i, (localRecall / k) * 100.0);
+    // }
+
+    std::vector<float> queryVec = {1.0, 2.0, 8.0, 31.0, 19.0, 3.0, 0.0, 0.0, 1.0, 47.0, 86.0, 27.0, 7.0, 0.0, 5.0, 2.0, 2.0, 42.0, 75.0, 10.0, 7.0, 6.0, 7.0, 1.0, 7.0, 8.0, 5.0, 2.0, 4.0, 3.0, 1.0, 1.0, 0.0, 0.0, 62.0, 120.0, 31.0, 0.0, 0.0, 0.0, 4.0, 41.0, 120.0, 120.0, 37.0, 8.0, 7.0, 4.0, 117.0, 120.0, 120.0, 11.0, 0.0, 1.0, 4.0, 15.0, 77.0, 31.0, 3.0, 1.0, 1.0, 3.0, 1.0, 2.0, 9.0, 3.0, 103.0, 86.0, 3.0, 10.0, 77.0, 73.0, 5.0, 5.0, 22.0, 70.0, 20.0, 92.0, 120.0, 38.0, 120.0, 30.0, 9.0, 3.0, 1.0, 9.0, 60.0, 120.0, 107.0, 12.0, 1.0, 3.0, 4.0, 0.0, 0.0, 11.0, 46.0, 15.0, 5.0, 0.0, 3.0, 24.0, 41.0, 74.0, 0.0, 0.0, 9.0, 2.0, 6.0, 53.0, 98.0, 20.0, 16.0, 2.0, 16.0, 2.0, 0.0, 2.0, 59.0, 72.0, 20.0, 8.0, 27.0, 5.0, 0.0, 0.0, 0.0, 10.0};
+    std::vector<float> vec1 = {0.0, 11.0, 32.0, 16.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 80.0, 39.0, 32.0, 16.0, 3.0, 0.0, 17.0, 35.0, 40.0, 11.0, 17.0, 25.0, 46.0, 43.0, 26.0, 11.0, 0.0, 0.0, 3.0, 3.0, 7.0, 44.0, 0.0, 5.0, 76.0, 125.0, 28.0, 1.0, 0.0, 0.0, 6.0, 22.0, 126.0, 126.0, 48.0, 13.0, 6.0, 5.0, 126.0, 126.0, 126.0, 18.0, 2.0, 2.0, 6.0, 25.0, 80.0, 44.0, 0.0, 0.0, 0.0, 1.0, 1.0, 6.0, 16.0, 17.0, 81.0, 64.0, 21.0, 17.0, 17.0, 12.0, 16.0, 6.0, 20.0, 55.0, 52.0, 57.0, 122.0, 58.0, 126.0, 45.0, 9.0, 7.0, 3.0, 10.0, 69.0, 121.0, 116.0, 31.0, 6.0, 1.0, 1.0, 0.0, 0.0, 10.0, 34.0, 11.0, 0.0, 1.0, 1.0, 14.0, 37.0, 26.0, 15.0, 5.0, 5.0, 8.0, 4.0, 20.0, 89.0, 36.0, 56.0, 28.0, 15.0, 8.0, 3.0, 9.0, 54.0, 70.0, 44.0, 37.0, 14.0, 0.0, 0.0, 0.0, 1.0, 37.0};
+    std::vector<float> vec2 = {0.0, 0.0, 12.0, 15.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 47.0, 45.0, 0.0, 0.0, 0.0, 0.0, 0.0, 31.0, 58.0, 7.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0, 9.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 129.0, 110.0, 0.0, 0.0, 1.0, 0.0, 5.0, 21.0, 129.0, 129.0, 14.0, 14.0, 7.0, 3.0, 129.0, 129.0, 123.0, 43.0, 2.0, 3.0, 4.0, 19.0, 35.0, 31.0, 11.0, 2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 87.0, 68.0, 0.0, 2.0, 100.0, 94.0, 6.0, 4.0, 29.0, 63.0, 20.0, 111.0, 129.0, 51.0, 129.0, 28.0, 7.0, 9.0, 3.0, 25.0, 114.0, 129.0, 41.0, 7.0, 9.0, 3.0, 0.0, 0.0, 0.0, 13.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.0, 68.0, 60.0, 0.0, 0.0, 3.0, 4.0, 2.0, 20.0, 65.0, 11.0, 1.0, 1.0, 14.0, 2.0, 0.0, 5.0, 40.0, 26.0, 1.0, 1.0, 6.0, 4.0, 1.0, 0.0, 0.0, 2.0};
+
+    auto dist = std::sqrt(faiss::fvec_L2sqr(queryVec.data(), vec1.data(), queryVec.size()));
+    auto dist2 = std::sqrt(faiss::fvec_L2sqr(queryVec.data(), vec2.data(), queryVec.size()));
+    printf("Distance to vec1: %f\n", dist);
+    printf("Distance to vec2: %f\n", dist2);
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     backward::SignalHandling sh;
@@ -3343,7 +3521,7 @@ int main(int argc, char **argv) {
         read_and_write_chunk(input);
     }
     else if (run == "testBug") {
-        test_bug(input);
+        test_final_bug_2(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();

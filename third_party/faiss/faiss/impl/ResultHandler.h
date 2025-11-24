@@ -186,6 +186,7 @@ struct Top1BlockResultHandler : TopkBlockResultHandler<C, use_sel> {
             for (size_t j = j0; j < j1; j++) {
                 T distance = dis_tab_i[j];
                 if (dist_modifier) {
+                    printf("not going here");
                     distance = C::add_weight(distance, dist_modifier->get_weight(j));
                 }
 

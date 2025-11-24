@@ -49,7 +49,7 @@ namespace orangedb {
         // limit to max cluster size
         uint64_t hardClusterSizeLimit = 0;
         // Sampling percentage for kmeans clustering
-        float kmeansSamplingRatio = 0.2;
+        float kmeansSamplingRatio = 1.0;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -81,6 +81,8 @@ namespace orangedb {
         explicit ReclusteringIndex(const std::string &file_path, RandomGenerator* rg);
 
         void insert(float *data, size_t n);
+
+        void simpleInsertWithoutClustering(float *data, size_t n);
 
         void naiveInsert(float *data, size_t n);
 
@@ -250,13 +252,13 @@ namespace orangedb {
         inline int getMinCentroidSize(int numVectors, int numCentroids) const {
             // 50% of the average size
             // Adjust based on sample size
-            auto sampleSize = std::max(int(numVectors * config.kmeansSamplingRatio), 50000);
+            auto sampleSize = std::min(std::max(int(numVectors * config.kmeansSamplingRatio), 50000), numVectors);
             return (sampleSize / numCentroids) * 0.4;
         }
 
         inline int getMaxCentroidSize(int numVectors, int numCentroids) const {
             // 120% of the average size such all vecs are used during reclustering
-            auto sampleSize = std::max(int(numVectors * config.kmeansSamplingRatio), 50000);
+            auto sampleSize = std::min(std::max(int(numVectors * config.kmeansSamplingRatio), 50000), numVectors);
             return (sampleSize / numCentroids) + 1;
         }
 

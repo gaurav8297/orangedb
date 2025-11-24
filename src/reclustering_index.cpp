@@ -66,6 +66,128 @@ namespace orangedb {
         quantizer->finalize_train();
     }
 
+    void ReclusteringIndex::simpleInsertWithoutClustering(float *data, size_t n) {
+        std::vector<vector_idx_t> vectorIds(n);
+        for (size_t i = 0; i < n; i++) {
+            vectorIds[i] = i + size;
+        }
+
+        // Calculate how many mini clusters we can create
+        int numMiniClusters = (n + config.miniCentroidSize - 1) / config.miniCentroidSize;
+
+        std::vector<float> newMiniCentroids;
+        std::vector<std::vector<float>> newMiniClusters;
+        std::vector<std::vector<vector_idx_t>> newMiniClusterVectorIds;
+        newMiniCentroids.reserve(numMiniClusters * dim);
+        newMiniClusters.reserve(numMiniClusters);
+        newMiniClusterVectorIds.reserve(numMiniClusters);
+
+        // Create mini clusters by taking mean of each miniCentroidSize batch
+        for (size_t batchStart = 0; batchStart < n; batchStart += config.miniCentroidSize) {
+            size_t batchEnd = std::min(batchStart + config.miniCentroidSize, n);
+            size_t batchSize = batchEnd - batchStart;
+
+            // Calculate mean centroid for this batch
+            std::vector<float> meanCentroid(dim, 0.0f);
+            for (size_t i = batchStart; i < batchEnd; i++) {
+                for (int j = 0; j < dim; j++) {
+                    meanCentroid[j] += data[i * dim + j];
+                }
+            }
+            float norm = 1.0f / batchSize;
+            for (int j = 0; j < dim; j++) {
+                meanCentroid[j] *= norm;
+            }
+
+            // Store the mini centroid
+            newMiniCentroids.insert(newMiniCentroids.end(), meanCentroid.begin(), meanCentroid.end());
+
+            // Store the vectors in this mini cluster
+            std::vector<float> clusterVectors;
+            clusterVectors.reserve(batchSize * dim);
+            std::vector<vector_idx_t> clusterVectorIds;
+            clusterVectorIds.reserve(batchSize);
+
+            for (size_t i = batchStart; i < batchEnd; i++) {
+                clusterVectors.insert(clusterVectors.end(), data + i * dim, data + (i + 1) * dim);
+                clusterVectorIds.push_back(vectorIds[i]);
+            }
+
+            newMiniClusters.push_back(std::move(clusterVectors));
+            newMiniClusterVectorIds.push_back(std::move(clusterVectorIds));
+        }
+
+        // Assign mini cluster unique ids
+        auto curMiniClusterSize = miniCentroids.size() / dim;
+        auto newMiniClusterSize = newMiniCentroids.size() / dim;
+        std::vector<vector_idx_t> newMiniClusterIds(newMiniClusterSize);
+        for (size_t i = 0; i < newMiniClusterSize; i++) {
+            newMiniClusterIds[i] = curMiniClusterSize + i;
+        }
+
+        // Copy mini centroids and clusters to main storage
+        miniCentroids.resize((curMiniClusterSize + newMiniClusterSize) * dim);
+        memcpy(miniCentroids.data() + curMiniClusterSize * dim, newMiniCentroids.data(),
+               newMiniCentroids.size() * sizeof(float));
+        miniClusters.resize(curMiniClusterSize + newMiniClusterSize);
+        miniClusterVectorIds.resize(curMiniClusterSize + newMiniClusterSize);
+        for (size_t i = 0; i < newMiniClusterSize; i++) {
+            miniClusters[curMiniClusterSize + i] = std::move(newMiniClusters[i]);
+            miniClusterVectorIds[curMiniClusterSize + i] = std::move(newMiniClusterVectorIds[i]);
+        }
+
+        // Create mega centroids by taking mean of mini centroids when we have enough
+        // Group mini centroids in batches of megaCentroidSize
+        int numMegaClusters = (newMiniClusterSize + config.megaCentroidSize - 1) / config.megaCentroidSize;
+        std::vector<float> newMegaCentroids;
+        std::vector<std::vector<vector_idx_t>> newMegaMiniClusterIds;
+        newMegaCentroids.reserve(numMegaClusters * dim);
+        newMegaMiniClusterIds.reserve(numMegaClusters);
+
+        for (size_t megaBatchStart = 0; megaBatchStart < newMiniClusterSize; megaBatchStart += config.megaCentroidSize) {
+            size_t megaBatchEnd = std::min(megaBatchStart + config.megaCentroidSize, newMiniClusterSize);
+            size_t megaBatchSize = megaBatchEnd - megaBatchStart;
+
+            // Calculate mean of mini centroids for this mega cluster
+            std::vector<float> megaMeanCentroid(dim, 0.0f);
+            for (size_t i = megaBatchStart; i < megaBatchEnd; i++) {
+                for (int j = 0; j < dim; j++) {
+                    megaMeanCentroid[j] += newMiniCentroids[i * dim + j];
+                }
+            }
+            float megaNorm = 1.0f / megaBatchSize;
+            for (int j = 0; j < dim; j++) {
+                megaMeanCentroid[j] *= megaNorm;
+            }
+
+            // Store the mega centroid
+            newMegaCentroids.insert(newMegaCentroids.end(), megaMeanCentroid.begin(), megaMeanCentroid.end());
+
+            // Store which mini clusters belong to this mega cluster
+            std::vector<vector_idx_t> megaClusterMiniIds;
+            megaClusterMiniIds.reserve(megaBatchSize);
+            for (size_t i = megaBatchStart; i < megaBatchEnd; i++) {
+                megaClusterMiniIds.push_back(newMiniClusterIds[i]);
+            }
+            newMegaMiniClusterIds.push_back(std::move(megaClusterMiniIds));
+        }
+
+        // Copy the new mega centroids
+        auto curMegaClusterSize = megaCentroids.size() / dim;
+        auto newMegaClusterSize = newMegaCentroids.size() / dim;
+        megaCentroids.resize((curMegaClusterSize + newMegaClusterSize) * dim);
+        memcpy(megaCentroids.data() + curMegaClusterSize * dim, newMegaCentroids.data(),
+               newMegaCentroids.size() * sizeof(float));
+        megaMiniCentroidIds.resize(curMegaClusterSize + newMegaClusterSize);
+        for (size_t i = 0; i < newMegaClusterSize; i++) {
+            megaMiniCentroidIds[curMegaClusterSize + i] = std::move(newMegaMiniClusterIds[i]);
+        }
+        megaClusteringScore.resize(curMegaClusterSize + newMegaClusterSize);
+
+        size += n;
+        updateTotalDataWrittenByUser(n);
+    }
+
     void ReclusteringIndex::naiveInsert(float *data, size_t n) {
         std::vector<vector_idx_t> vectorIds(n);
         for (size_t i = 0; i < n; i++) {
@@ -424,6 +546,10 @@ namespace orangedb {
             totalVecs += (cluster.size() / dim);
         }
         printf("Running reclusterInternalMegaCentroid on %llu with %lu vectors\n", megaClusterId, totalVecs);
+        if (totalVecs == 0) {
+            printf("No vectors to recluster for mega centroid %llu\n", megaClusterId);
+            return;
+        }
 
         // Copy actual vecs and vectorIds here
         std::vector<float> tempData(totalVecs * dim);
@@ -1490,6 +1616,9 @@ namespace orangedb {
 #pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
         for (auto miniCentroidId : miniCentroidIds) {
             double s = calcScoreForMiniCluster(miniCentroidId);
+            if (s < 0) {
+                printf("MegaCluster %d, MiniCluster %llu, Silhouette Score: %f\n", megaClusterId, miniCentroidId, s);
+            }
             avgMiniScore += s;
         }
 
@@ -1678,11 +1807,20 @@ namespace orangedb {
         for (auto miniId : miniAssign) {
             auto score = calcScoreForMiniCluster(miniId);
             if (score < -0.01) {
+                // Find the mega cluster id
+                auto megaClusterId = -1;
+                for (int i = 0; i < megaMiniCentroidIds.size(); i++) {
+                    if (auto &miniIds = megaMiniCentroidIds[i]; std::find(miniIds.begin(), miniIds.end(), miniId) != miniIds.end()) {
+                        megaClusterId = i;
+                        break;
+                    }
+                }
+                printf("Mini centroid %llu in mega cluster %d has negative silhouette score: %f\n", miniId, megaClusterId, score);
                 num_of_negative_silhouette++;
             }
         }
 
-        printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
+        // printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
 
         // Now find the closest vectors
         findKClosestVectors(query, k, miniAssign, results, stats);
@@ -1932,6 +2070,36 @@ namespace orangedb {
         printf("Max size of clusters: %zu\n", maxSize);
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
+        //
+        // // Print vectors
+        // auto numMegaCentroids = megaCentroids.size() / dim;
+        // for (int i = 0; i < numMegaCentroids; i++) {
+        //     printf("Mega cluster %d centroid: ", i);
+        //     // Print mega centroid
+        //     for (int d = 0; d < dim; d++) {
+        //         printf("%f ", megaCentroids[i * dim + d]);
+        //     }
+        //     printf("\n");
+        //     for (auto miniId : megaMiniCentroidIds[i]) {
+        //         printf("Mini cluster %llu centroid: ", miniId);
+        //         // Print mini centroid
+        //         for (int d = 0; d < dim; d++) {
+        //             printf("%f ", miniCentroids[miniId * dim + d]);
+        //         }
+        //         printf("\n");
+        //         printf("Vectors in mini cluster %llu:\n", miniId);
+        //         // Print the vectors in the mini cluster
+        //         auto &miniCluster = miniClusters[miniId];
+        //         auto numVectors = miniCluster.size() / dim;
+        //         for (int j = 0; j < numVectors; j++) {
+        //             for (int d = 0; d < dim; d++) {
+        //                 printf("%f ", miniCluster[j * dim + d]);
+        //             }
+        //             printf("\n");
+        //         }
+        //     }
+        //     printf("\n\n");
+        // }
 
         if (!miniClusterSubCells.empty()) {
             // Print stats for subcells

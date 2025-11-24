@@ -303,7 +303,7 @@ namespace orangedb {
         ARROW_ASSIGN_OR_RAISE(reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
         std::shared_ptr<arrow::Schema> schema;
         ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
-        int col_index = schema->GetFieldIndex("embedding");
+        int col_index = schema->GetFieldIndex("myvec");
         if (col_index == -1) {
             return arrow::Status::Invalid("Column 'embedding' not found");
         }
