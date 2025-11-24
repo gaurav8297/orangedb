@@ -2108,10 +2108,10 @@ namespace orangedb {
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
 
-        auto numMiniCentroids = miniCentroids.size();
+        auto numMiniCentroids = miniCentroids.size() / dim;
         auto totalWithBadScore = 0;
 #pragma omp parallel for reduction(+: totalWithBadScore) schedule(dynamic)
-        for (auto miniCentroidId : numMiniCentroids) {
+        for (int miniCentroidId = 0; miniCentroidId < numMiniCentroids; miniCentroidId++) {
             double s = calcScoreForMiniCluster(miniCentroidId);
             if (s < -0.009) {
                 totalWithBadScore++;
