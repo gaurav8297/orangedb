@@ -231,6 +231,8 @@ namespace orangedb {
 
         void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats, bool onlyGoodClusters = false);
 
+        void findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids, std::vector<float> &distances);
+
         void findKClosestMiniCentroids(const float *query, int k, std::vector<vector_idx_t> megaCentroids, std::vector<vector_idx_t> &ids, ReclusteringIndexStats &stats);
 
         void findKClosestVectors(const float *query, int k, std::vector<vector_idx_t> miniCentroids,

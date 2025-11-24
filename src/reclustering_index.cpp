@@ -1807,6 +1807,10 @@ namespace orangedb {
         for (auto miniId : miniAssign) {
             auto score = calcScoreForMiniCluster(miniId);
             if (score < -0.01) {
+                // Find two closest mega centroids
+                std::vector<vector_idx_t> ids;
+                std::vector<float> distances;
+                findKClosestMegaCentroids(miniCentroids.data() + miniId * dim, 2, ids, distances);
                 // Find the mega cluster id
                 auto megaClusterId = -1;
                 for (int i = 0; i < megaMiniCentroidIds.size(); i++) {
@@ -1815,7 +1819,9 @@ namespace orangedb {
                         break;
                     }
                 }
-                printf("Mini centroid %llu in mega cluster %d has negative silhouette score: %f\n", miniId, megaClusterId, score);
+                printf(
+                    "Mini centroid %llu in mega cluster %d with [%lu: %f, %lu: %f] has negative silhouette score: %f\n",
+                    miniId, megaClusterId, ids[0], distances[0], ids[1], distances[1], score);
                 num_of_negative_silhouette++;
             }
         }
@@ -1986,6 +1992,36 @@ namespace orangedb {
             ids.push_back(microId);
         }
     }
+
+    void ReclusteringIndex::findKClosestMegaCentroids(const float *query, int k, std::vector<vector_idx_t> &ids, std::vector<float> &distances) {
+        std::priority_queue<NodeDistCloser> closestMicro;
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
+        dc->setQuery(query);
+        for (int i = 0; i < numMegaCentroids; i++) {
+            double d;
+            stats.numDistanceCompForSearch++;
+            dc->computeDistance(i, &d);
+            if (closestMicro.size() < k || d < closestMicro.top().dist) {
+                closestMicro.emplace(i, d);
+                if (closestMicro.size() > k) {
+                    closestMicro.pop();
+                }
+            }
+        }
+
+        // Copy the ids to vector
+        while (!closestMicro.empty()) {
+            auto microId = closestMicro.top().id;
+            closestMicro.pop();
+            if (std::find(ids.begin(), ids.end(), microId) != ids.end()) {
+                continue;
+            }
+            ids.push_back(microId);
+            distances.push_back(closestMicro.top().dist);
+        }
+    }
+
     
 
     void ReclusteringIndex::findKClosestMiniCentroids(const float *query, int k,
