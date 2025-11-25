@@ -890,14 +890,13 @@ namespace orangedb {
                               newMiniCentroids, newMiniClusters, newMiniClusterVectorIds, closestMiniCentroids);
         miniClusteringScore.resize(miniCentroids.size() / dim);
         auto newMiniCentroidSize = miniCentroids.size() / dim;
+#pragma omp parallel for
         for (size_t i = oldMiniCentroidSize; i < newMiniCentroidSize; i++) {
-            printf("Calculating score for mini centroid %lu\n", i);
             miniClusteringScore[i] = calcScoreForMiniCluster(i);
         }
-// #pragma omp parallel for
+#pragma omp parallel for
         for (auto miniId : closestMiniCentroids) {
             if (miniId < newMiniCentroidSize) {
-                printf("Calculating score for mini centroid %llu\n", miniId);
                 miniClusteringScore[miniId] = calcScoreForMiniCluster(miniId);
             }
         }
