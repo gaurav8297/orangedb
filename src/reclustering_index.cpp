@@ -2272,6 +2272,7 @@ namespace orangedb {
 
         int inserted = 0;
         // Copy the ids to vector
+        ids.reserve(results.size());
         while (!results.empty()) {
             auto microId = results.top().id;
             // auto dist = results.top().dist;
@@ -2357,6 +2358,7 @@ namespace orangedb {
 
         int inserted = 0;
         // Copy the ids to vector (in reverse order to get closest first)
+        ids.reserve(results.size());
         ids.clear();
         while (!results.empty()) {
             auto miniId = results.top().id;
