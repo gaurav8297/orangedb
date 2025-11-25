@@ -798,35 +798,35 @@ namespace orangedb {
 
     void ReclusteringIndex::fixBoundaryMiniCentroids(int n) {
         // Find the most negative Mini
-        // for (int i = 0; i < n; i++) {
-        //     auto worstMiniCentroid = -1;
-        //     double worstScore = std::numeric_limits<double>::max();
-        //     for (int j = 0; j < miniClusteringScore.size(); j++) {
-        //         if (miniClusteringScore[j] < worstScore && miniClusteringScore[j] < -0.02) {
-        //             worstScore = miniClusteringScore[j];
-        //             worstMiniCentroid = j;
-        //         }
-        //     }
-        //     if (worstMiniCentroid == -1) {
-        //         printf("No more boundary mini centroids to fix\n");
-        //         break;
-        //     }
-        //     printf("Fixing boundary mini centroid %d with score %f\n", worstMiniCentroid, worstScore);
-        //     fixBoundaryMiniCentroid(worstMiniCentroid);
-        // }
-
-        // For each mega centroid, find mini centroids with negative score and fix them
-        auto numMegaCentroids = megaCentroids.size() / dim;
-        for (int megaId = 0; megaId < numMegaCentroids; megaId++) {
-            auto miniCentroidIds = megaMiniCentroidIds[megaId];
-            for (auto miniId : miniCentroidIds) {
-                if (miniClusteringScore[miniId] < -0.009) {
-                    printf("Fixing boundary mini centroid %llu in mega centroid %d with score %f\n",
-                           miniId, megaId, miniClusteringScore[miniId]);
-                    fixBoundaryMiniCentroidV2(miniId);
+        for (int i = 0; i < n; i++) {
+            auto worstMiniCentroid = -1;
+            double worstScore = std::numeric_limits<double>::max();
+            for (int j = 0; j < miniClusteringScore.size(); j++) {
+                if (miniClusteringScore[j] < worstScore && miniClusteringScore[j] < -0.02) {
+                    worstScore = miniClusteringScore[j];
+                    worstMiniCentroid = j;
                 }
             }
+            if (worstMiniCentroid == -1) {
+                printf("No more boundary mini centroids to fix\n");
+                break;
+            }
+            printf("Fixing boundary mini centroid %d with score %f\n", worstMiniCentroid, worstScore);
+            fixBoundaryMiniCentroid(worstMiniCentroid);
         }
+
+        // For each mega centroid, find mini centroids with negative score and fix them
+        // auto numMegaCentroids = megaCentroids.size() / dim;
+        // for (int megaId = 0; megaId < numMegaCentroids; megaId++) {
+        //     auto miniCentroidIds = megaMiniCentroidIds[megaId];
+        //     for (auto miniId : miniCentroidIds) {
+        //         if (miniClusteringScore[miniId] < -0.009) {
+        //             printf("Fixing boundary mini centroid %llu in mega centroid %d with score %f\n",
+        //                    miniId, megaId, miniClusteringScore[miniId]);
+        //             fixBoundaryMiniCentroidV2(miniId);
+        //         }
+        //     }
+        // }
     }
 
     void ReclusteringIndex::fixBoundaryMiniCentroidV2(int miniCentroidId) {
