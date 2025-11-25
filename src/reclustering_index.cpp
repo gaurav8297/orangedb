@@ -798,27 +798,29 @@ namespace orangedb {
 
     void ReclusteringIndex::fixBoundaryMiniCentroids(int n) {
         // Find the most negative Mini
-        std::unordered_set<size_t> alreadyFixed;
-        for (int i = 0; i < n; i++) {
-            auto worstMiniCentroid = -1;
-            double worstScore = std::numeric_limits<double>::max();
-            for (int j = 0; j < miniClusteringScore.size(); j++) {
-                if (alreadyFixed.contains(j)) {
-                    continue;
-                }
-                if (miniClusteringScore[j] < worstScore) {
-                    worstScore = miniClusteringScore[j];
-                    worstMiniCentroid = j;
-                }
-            }
-            if (worstMiniCentroid == -1) {
-                printf("No more boundary mini centroids to fix\n");
-                break;
-            }
-            printf("Fixing boundary mini centroid %d with score %f\n", worstMiniCentroid, worstScore);
-            fixBoundaryMiniCentroid(worstMiniCentroid);
-            alreadyFixed.emplace(worstMiniCentroid);
-        }
+        // std::unordered_set<size_t> alreadyFixed;
+        // for (int i = 0; i < n; i++) {
+        //     auto worstMiniCentroid = -1;
+        //     double worstScore = std::numeric_limits<double>::max();
+        //     for (int j = 0; j < miniClusteringScore.size(); j++) {
+        //         if (alreadyFixed.contains(j)) {
+        //             continue;
+        //         }
+        //         if (miniClusteringScore[j] < worstScore) {
+        //             worstScore = miniClusteringScore[j];
+        //             worstMiniCentroid = j;
+        //         }
+        //     }
+        //     if (worstMiniCentroid == -1) {
+        //         printf("No more boundary mini centroids to fix\n");
+        //         break;
+        //     }
+        //     printf("Fixing boundary mini centroid %d with score %f\n", worstMiniCentroid, worstScore);
+        //     fixBoundaryMiniCentroid(worstMiniCentroid);
+        //     alreadyFixed.emplace(worstMiniCentroid);
+        // }
+
+        fixBoundaryMiniCentroid(6541);
     }
 
     void ReclusteringIndex::fixBoundaryMiniCentroidsV2(int n) {
