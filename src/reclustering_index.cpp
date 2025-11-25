@@ -1781,16 +1781,13 @@ namespace orangedb {
 
     double ReclusteringIndex::calcScoreForMegaCluster(int megaClusterId) {
         auto miniCentroidIds = megaMiniCentroidIds[megaClusterId];
-        printf("Calculating silhouette for mega cluster %d with %lu mini clusters\n", megaClusterId, miniCentroidIds.size());
         double avgMiniScore = 0.0;
-#pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
+// #pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
         for (auto miniCentroidId : miniCentroidIds) {
             double s = calcScoreForMiniCluster(miniCentroidId);
-            // miniClusteringScore[miniCentroidId] = s;
+            miniClusteringScore[miniCentroidId] = s;
             avgMiniScore += s;
         }
-
-        printf("Calculated mini silhouette for mega cluster %d: %f\n", megaClusterId, avgMiniScore / miniCentroidIds.size());
 
         double avgMegaScore = 0.0;
         auto numMegaCentroids = megaCentroids.size() / dim;
