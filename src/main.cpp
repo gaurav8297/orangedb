@@ -2410,11 +2410,14 @@ void benchmark_faiss_clustering(InputParser &input) {
     for (size_t i = 0; i < queryNumVectors; i++) {
         index->search(1, queryVecs + (i * baseDimension), k, distances, labels);
         auto gt = gtVecs + i * k;
+        auto localRecall = 0;
         for (int j = 0; j < k; j++) {
             if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
                 recall++;
+                localRecall++;
             }
         }
+        printf("Query %zu: Recall: %f%%\n", i, (localRecall / (double)k) * 100);
     }
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration_search = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
