@@ -820,14 +820,14 @@ namespace orangedb {
         // 1. Find 200 closest mini centroids
         std::vector<vector_idx_t> megaAssign;
         // First find relevant mega centroids to search
-        findKClosestMegaCentroids(miniCentroids.data() + miniCentroidId * dim, 5, megaAssign, stats);
+        findKClosestMegaCentroids(miniCentroids.data() + miniCentroidId * dim, 10, megaAssign, stats);
 
         // Then find closest mini centroids
         std::vector<vector_idx_t> closestMiniCentroids;
         findKClosestMiniCentroids(miniCentroids.data() + miniCentroidId * dim, 200, megaAssign, closestMiniCentroids, stats);
 
-        if (std::find(closestMiniCentroids.begin(), closestMiniCentroids.end(), miniCentroidId) != closestMiniCentroids.end()) {
-            printf("Mini centroid %d is already in closest mini centroids, skipping\n", miniCentroidId);
+        if (std::find(closestMiniCentroids.begin(), closestMiniCentroids.end(), miniCentroidId) == closestMiniCentroids.end()) {
+            closestMiniCentroids.push_back(miniCentroidId);
         }
 
         // 2. Find which mega centroids these mini centroids belong to
