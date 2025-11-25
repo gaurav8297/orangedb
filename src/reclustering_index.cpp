@@ -1789,6 +1789,8 @@ namespace orangedb {
             avgMiniScore += s;
         }
 
+        printf("Calculated mini silhouette for mega cluster %d: %f\n", megaClusterId, avgMiniScore / miniCentroidIds.size());
+
         double avgMegaScore = 0.0;
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
@@ -1826,6 +1828,7 @@ namespace orangedb {
     }
 
     double ReclusteringIndex::calcScoreForMiniCluster(int miniClusterId, std::unordered_set<vector_idx_t> *closerL1s) {
+        printf("Calculating silhouette for mini cluster %d\n", miniClusterId);
         // Find 5 closest mega centroids
         std::vector<vector_idx_t> megaAssign;
         findKClosestMegaCentroids(miniCentroids.data() + miniClusterId * dim, 100, megaAssign, stats);
@@ -1878,6 +1881,7 @@ namespace orangedb {
             totalSilhouette += s;
             totalPoints += 1;
         }
+        printf("Calculated silhouette for mini cluster %d\n", miniClusterId);
         return (totalPoints > 0)
                    ? totalSilhouette / double(totalPoints)
                    : 0.0;
