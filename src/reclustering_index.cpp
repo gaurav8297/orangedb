@@ -1056,7 +1056,7 @@ namespace orangedb {
         std::vector<float> tempMegaCentroids;
         std::vector<std::vector<vector_idx_t>> tempMiniClusterIds;
         clusterData(tempMiniCentroids.data(), tempMiniCentroidIds.data(), totalVec, config.megaCentroidSize,
-                    tempMegaCentroids, tempMiniClusterIds, oldMegaCentroidIds.size());
+                    tempMegaCentroids, tempMiniClusterIds);
 
         // Append back to mini centroids
         appendOrMergeMegaCentroids(oldMegaCentroidIds, tempMegaCentroids, tempMiniClusterIds);
