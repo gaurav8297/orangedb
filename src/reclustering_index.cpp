@@ -826,6 +826,10 @@ namespace orangedb {
         std::vector<vector_idx_t> closestMiniCentroids;
         findKClosestMiniCentroids(miniCentroids.data() + miniCentroidId * dim, 200, megaAssign, closestMiniCentroids, stats);
 
+        if (std::find(closestMiniCentroids.begin(), closestMiniCentroids.end(), miniCentroidId) != closestMiniCentroids.end()) {
+            printf("Mini centroid %d is already in closest mini centroids, skipping\n", miniCentroidId);
+        }
+
         // 2. Find which mega centroids these mini centroids belong to
         std::unordered_set<vector_idx_t> affectedMegaCentroids;
         for (auto miniId : closestMiniCentroids) {
