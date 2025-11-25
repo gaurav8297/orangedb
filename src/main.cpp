@@ -2759,11 +2759,12 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
     }
 
-    // index.storeScoreForMegaClusters();
+    index.storeScoreForMegaClusters();
     // index.flush_to_disk(storagePath);
     for (int iter = 0; iter < iterations; iter++) {
         printf("Started Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
+        index.fixBoundaryMiniCentroids(200);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,

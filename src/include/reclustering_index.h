@@ -108,6 +108,8 @@ namespace orangedb {
 
         void reclusterAllMiniCentroidsQuant();
 
+        void fixBoundaryMiniCentroids(int n = INT_MAX);
+
         void storeScoreForMegaClusters(int n = INT_MAX);
 
         void computeAllSubCells(int avgSubCellSize);
@@ -133,6 +135,8 @@ namespace orangedb {
         void checkDuplicateMiniClusters();
 
     private:
+        void fixBoundaryMiniCentroid(int miniCentroidId);
+
         bool isAtBoundary(vector_idx_t miniClusterId);
 
         void computeMiniClusterSubcells(int miniClusterId, int avgSubCellSize);
@@ -210,7 +214,8 @@ namespace orangedb {
             std::vector<std::vector<vector_idx_t>> &miniClusterIds,
             std::vector<float> &newMiniCentroids,
             std::vector<std::vector<float>> &newMiniClusters,
-            std::vector<std::vector<vector_idx_t>> &newMiniClusterVectorIds);
+            std::vector<std::vector<vector_idx_t>> &newMiniClusterVectorIds,
+            std::vector<vector_idx_t> existingOldMiniClusterIds = std::vector<vector_idx_t>());
 
         // Quantization methods!
         std::vector<vector_idx_t> appendOrMergeCentroidsQuant(
@@ -291,6 +296,7 @@ namespace orangedb {
         std::vector<double> megaClusteringScore;
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
+        std::vector<double> miniClusteringScore;
         std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
 
         // Minicluster subcells
