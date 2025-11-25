@@ -887,7 +887,7 @@ namespace orangedb {
                    newMiniCentroids.size() / dim, newMiniClusterVectorIds.size());
         }
         assert(newMiniCentroids.size() / dim == newMiniClusters.size());
-        assert(newMiniClusters.size() / dim == newMiniClusterVectorIds.size());
+        assert(newMiniCentroids.size() / dim == newMiniClusterVectorIds.size());
 
         // 5. Create mega centroid ids for the new mini centroids and cluster them
         std::vector<vector_idx_t> miniCentroidIds(newMiniCentroids.size() / dim);
