@@ -137,6 +137,8 @@ namespace orangedb {
     private:
         void fixBoundaryMiniCentroid(int miniCentroidId);
 
+        void fixBoundaryMiniCentroidV2(int miniCentroidId);
+
         bool isAtBoundary(vector_idx_t miniClusterId);
 
         void computeMiniClusterSubcells(int miniClusterId, int avgSubCellSize);

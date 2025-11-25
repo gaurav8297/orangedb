@@ -814,7 +814,115 @@ namespace orangedb {
         //     printf("Fixing boundary mini centroid %d with score %f\n", worstMiniCentroid, worstScore);
         //     fixBoundaryMiniCentroid(worstMiniCentroid);
         // }
-        fixBoundaryMiniCentroid(7707);
+
+        // For each mega centroid, find mini centroids with negative score and fix them
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        for (int megaId = 0; megaId < numMegaCentroids; megaId++) {
+            auto miniCentroidIds = megaMiniCentroidIds[megaId];
+            for (auto miniId : miniCentroidIds) {
+                if (miniClusteringScore[miniId] < -0.009) {
+                    printf("Fixing boundary mini centroid %llu in mega centroid %d with score %f\n",
+                           miniId, megaId, miniClusteringScore[miniId]);
+                    fixBoundaryMiniCentroidV2(miniId);
+                }
+            }
+        }
+    }
+
+    void ReclusteringIndex::fixBoundaryMiniCentroidV2(int miniCentroidId) {
+        // 1. Find 200 closest mini centroids
+        std::vector<vector_idx_t> megaAssign;
+        // First find relevant mega centroids to search
+        findKClosestMegaCentroids(miniCentroids.data() + miniCentroidId * dim, 10, megaAssign, stats);
+
+        // Then find closest mini centroids
+        std::vector<vector_idx_t> closestMiniCentroids;
+        findKClosestMiniCentroids(miniCentroids.data() + miniCentroidId * dim, 200, megaAssign, closestMiniCentroids, stats);
+
+        // Add the target mini centroid if not already in the list
+        if (std::find(closestMiniCentroids.begin(), closestMiniCentroids.end(), miniCentroidId) == closestMiniCentroids.end()) {
+            closestMiniCentroids.push_back(miniCentroidId);
+        }
+
+        // 2. Create new empty assignments for each mini centroid
+        std::vector<std::vector<float>> newAssignments(closestMiniCentroids.size());
+        std::vector<std::vector<vector_idx_t>> newAssignmentVectorIds(closestMiniCentroids.size());
+
+        // 3. For each vector in each mini centroid, find its closest mini centroid and reassign
+#pragma omp parallel
+        {
+            // Each thread gets its own distance computer for thread safety
+            auto dc = getDistanceComputer(miniCentroids.data(), miniCentroids.size() / dim);
+#pragma omp for schedule(dynamic)
+            for (size_t i = 0; i < closestMiniCentroids.size(); i++) {
+                auto miniId = closestMiniCentroids[i];
+                auto& cluster = miniClusters[miniId];
+                auto& vectorIds = miniClusterVectorIds[miniId];
+                size_t numVectors = cluster.size() / dim;
+
+                // Local buffers for this thread to avoid contention
+                std::vector<std::vector<float>> localAssignments(closestMiniCentroids.size());
+                std::vector<std::vector<vector_idx_t>> localAssignmentVectorIds(closestMiniCentroids.size());
+
+                for (size_t j = 0; j < numVectors; j++) {
+                    const float* vec = cluster.data() + j * dim;
+
+                    // Find closest mini centroid among the candidates
+                    int bestMiniIdx = 0;
+                    float bestDist = std::numeric_limits<float>::max();
+
+                    dc->setQuery(vec);
+                    for (size_t k = 0; k < closestMiniCentroids.size(); k++) {
+                        double dist;
+                        dc->computeDistance(closestMiniCentroids[k], &dist);
+                        if (dist < bestDist) {
+                            bestDist = dist;
+                            bestMiniIdx = k;
+                        }
+                    }
+
+                    // Assign vector to its closest mini centroid in local buffer
+                    localAssignments[bestMiniIdx].insert(
+                        localAssignments[bestMiniIdx].end(),
+                        vec,
+                        vec + dim
+                    );
+                    localAssignmentVectorIds[bestMiniIdx].push_back(vectorIds[j]);
+                }
+
+                // Merge local buffers into global buffers with critical section
+                for (size_t k = 0; k < closestMiniCentroids.size(); k++) {
+                    if (!localAssignments[k].empty()) {
+#pragma omp critical
+                        {
+                            newAssignments[k].insert(
+                                newAssignments[k].end(),
+                                localAssignments[k].begin(),
+                                localAssignments[k].end()
+                            );
+                            newAssignmentVectorIds[k].insert(
+                                newAssignmentVectorIds[k].end(),
+                                localAssignmentVectorIds[k].begin(),
+                                localAssignmentVectorIds[k].end()
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Update the mini clusters with the new assignments (keeping centroids as-is)
+        for (size_t i = 0; i < closestMiniCentroids.size(); i++) {
+            auto miniId = closestMiniCentroids[i];
+            miniClusters[miniId] = std::move(newAssignments[i]);
+            miniClusterVectorIds[miniId] = std::move(newAssignmentVectorIds[i]);
+        }
+
+        // 5. Recalculate clustering score for affected mini centroids
+#pragma omp parallel for
+        for (auto miniId: closestMiniCentroids) {
+            miniClusteringScore[miniId] = calcScoreForMiniCluster(miniId);
+        }
     }
 
     void ReclusteringIndex::fixBoundaryMiniCentroid(int miniCentroidId) {

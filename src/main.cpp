@@ -2741,6 +2741,11 @@ void benchmark_fast_reclustering(InputParser &input) {
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     // index.reclusterAllMegaCentroids(nMegaRecluster);
     // index.flush_to_disk(storagePath);
+    index.storeScoreForMegaClusters();
+    index.fixBoundaryMiniCentroids(numFixBoundaries);
+    index.printStats();
+    index.storeScoreForMegaClusters();
+    index.printStats();
 
     for (auto nMegaProbe : nMegaProbes) {
         for (auto nMiniProbe : nMiniProbes) {
@@ -2762,8 +2767,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
     }
 
-    index.storeScoreForMegaClusters();
-    index.printStats();
+    // index.printStats();
     printf("Starting reclustering iterations\n");
     // index.flush_to_disk(storagePath);
     for (int iter = 0; iter < iterations; iter++) {
