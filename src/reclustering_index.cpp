@@ -536,30 +536,30 @@ namespace orangedb {
         // Take all the existing mini centroids and merge them
         size_t totalVecs = 0;
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
-        std::vector<vector_idx_t> oldVectorIds;
-        for (auto microCentroidId: microCentroidIds) {
-            if (microCentroidId == nextMiniCentroidId) {
-                std::unordered_set<vector_idx_t> nearL1Ids;
-                calcScoreForMiniCluster(microCentroidId, &nearL1Ids);
-                oldVectorIds = miniClusterVectorIds[microCentroidId];
-                // Print out of someIds how many part of microCentroidIds
-                size_t count = 0;
-                for (auto id: nearL1Ids) {
-                    if (std::find(microCentroidIds.begin(), microCentroidIds.end(), id) != microCentroidIds.end()) {
-                        count++;
-                    }
-                }
-                printf("Fount id %lu in megaCentroidId %llu with %lu/%lu of someIds\n",
-                       nextMiniCentroidId, megaClusterId, count, nearL1Ids.size());
-                // Now print all microCentroidIds
-                // printf("microCentroidIds: ");
-                // for (auto id: microCentroidIds) {
-                //     printf("%llu,", id);
-                // }
-                // printf("\n");
-                break;
-            }
-        }
+        // std::vector<vector_idx_t> oldVectorIds;
+        // for (auto microCentroidId: microCentroidIds) {
+        //     if (microCentroidId == nextMiniCentroidId) {
+        //         std::unordered_set<vector_idx_t> nearL1Ids;
+        //         calcScoreForMiniCluster(microCentroidId, &nearL1Ids);
+        //         oldVectorIds = miniClusterVectorIds[microCentroidId];
+        //         // Print out of someIds how many part of microCentroidIds
+        //         size_t count = 0;
+        //         for (auto id: nearL1Ids) {
+        //             if (std::find(microCentroidIds.begin(), microCentroidIds.end(), id) != microCentroidIds.end()) {
+        //                 count++;
+        //             }
+        //         }
+        //         printf("Fount id %lu in megaCentroidId %llu with %lu/%lu of someIds\n",
+        //                nextMiniCentroidId, megaClusterId, count, nearL1Ids.size());
+        //         // Now print all microCentroidIds
+        //         // printf("microCentroidIds: ");
+        //         // for (auto id: microCentroidIds) {
+        //         //     printf("%llu,", id);
+        //         // }
+        //         // printf("\n");
+        //         break;
+        //     }
+        // }
 
         auto miniClusterSize = miniClusters.size();
         for (auto microCentroidId: microCentroidIds) {
@@ -612,30 +612,30 @@ namespace orangedb {
                                newMiniClusters,
                                newMiniClusterVectorIds);
 
-        if (oldVectorIds.empty()) {
-            return;
-        }
-        // Find the new mini centroid that contains oldVectorIds
-        auto max_match_count = 0;
-        auto max_match_id = -1;
-        for (auto miniId: megaMiniCentroidIds[megaClusterId]) {
-            auto vectorIds = miniClusterVectorIds[miniId];
-            size_t matchCount = 0;
-            for (auto oldId: oldVectorIds) {
-                if (std::find(vectorIds.begin(), vectorIds.end(), oldId) != vectorIds.end()) {
-                    matchCount++;
-                }
-            }
-            if (matchCount > max_match_count) {
-                max_match_count = matchCount;
-                max_match_id = miniId;
-            }
-        }
-        if (max_match_id != -1) {
-            printf("After reclustering, old mini centroid %llu has max match count %d in new mini centroid %d\n",
-                   nextMiniCentroidId, max_match_count, max_match_id);
-            nextMiniCentroidId = max_match_id;
-        }
+        // if (oldVectorIds.empty()) {
+        //     return;
+        // }
+        // // Find the new mini centroid that contains oldVectorIds
+        // auto max_match_count = 0;
+        // auto max_match_id = -1;
+        // for (auto miniId: megaMiniCentroidIds[megaClusterId]) {
+        //     auto vectorIds = miniClusterVectorIds[miniId];
+        //     size_t matchCount = 0;
+        //     for (auto oldId: oldVectorIds) {
+        //         if (std::find(vectorIds.begin(), vectorIds.end(), oldId) != vectorIds.end()) {
+        //             matchCount++;
+        //         }
+        //     }
+        //     if (matchCount > max_match_count) {
+        //         max_match_count = matchCount;
+        //         max_match_id = miniId;
+        //     }
+        // }
+        // if (max_match_id != -1) {
+        //     printf("After reclustering, old mini centroid %llu has max match count %d in new mini centroid %d\n",
+        //            nextMiniCentroidId, max_match_count, max_match_id);
+        //     nextMiniCentroidId = max_match_id;
+        // }
     }
 
     void ReclusteringIndex::reclusterInternalMegaCentroidQuant(vector_idx_t megaClusterId) {
