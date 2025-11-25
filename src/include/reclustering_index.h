@@ -137,7 +137,7 @@ namespace orangedb {
         void checkDuplicateMiniClusters();
 
     private:
-        void fixBoundaryMiniCentroid(int miniCentroidId);
+        void fixBoundaryMiniCentroid(int miniCentroidId, std::unordered_set<vector_idx_t> *alreadyFixed = nullptr);
 
         void fixBoundaryMiniCentroidV2(int miniCentroidId);
 
