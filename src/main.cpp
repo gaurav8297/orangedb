@@ -2808,7 +2808,7 @@ void benchmark_fast_reclustering(InputParser &input) {
             }
         }
         // index.quantizeVectors();
-        index.reclusterAllMegaCentroids(nMegaRecluster);
+        index.fixBoundaryMiniCentroidsV2();
         index.storeScoreForMegaClusters();
         for (auto nMegaProbe : nMegaProbes) {
             for (auto nMiniProbe : nMiniProbes) {

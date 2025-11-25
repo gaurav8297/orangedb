@@ -110,6 +110,8 @@ namespace orangedb {
 
         void fixBoundaryMiniCentroids(int n = INT_MAX);
 
+        void fixBoundaryMiniCentroidsV2(int n = INT_MAX);
+
         void storeScoreForMegaClusters(int n = INT_MAX);
 
         void computeAllSubCells(int avgSubCellSize);
