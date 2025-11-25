@@ -798,22 +798,23 @@ namespace orangedb {
 
     void ReclusteringIndex::fixBoundaryMiniCentroids(int n) {
         // Find the most negative Mini
-        for (int i = 0; i < n; i++) {
-            auto worstMiniCentroid = -1;
-            double worstScore = std::numeric_limits<double>::max();
-            for (int j = 0; j < miniClusteringScore.size(); j++) {
-                if (miniClusteringScore[j] < worstScore && miniClusteringScore[j] < -0.02) {
-                    worstScore = miniClusteringScore[j];
-                    worstMiniCentroid = j;
-                }
-            }
-            if (worstMiniCentroid == -1) {
-                printf("No more boundary mini centroids to fix\n");
-                break;
-            }
-            printf("Fixing boundary mini centroid %d with score %f\n", worstMiniCentroid, worstScore);
-            fixBoundaryMiniCentroid(worstMiniCentroid);
-        }
+        // for (int i = 0; i < n; i++) {
+        //     auto worstMiniCentroid = -1;
+        //     double worstScore = std::numeric_limits<double>::max();
+        //     for (int j = 0; j < miniClusteringScore.size(); j++) {
+        //         if (miniClusteringScore[j] < worstScore && miniClusteringScore[j] < -0.02) {
+        //             worstScore = miniClusteringScore[j];
+        //             worstMiniCentroid = j;
+        //         }
+        //     }
+        //     if (worstMiniCentroid == -1) {
+        //         printf("No more boundary mini centroids to fix\n");
+        //         break;
+        //     }
+        //     printf("Fixing boundary mini centroid %d with score %f\n", worstMiniCentroid, worstScore);
+        //     fixBoundaryMiniCentroid(worstMiniCentroid);
+        // }
+        fixBoundaryMiniCentroids(7707);
     }
 
     void ReclusteringIndex::fixBoundaryMiniCentroid(int miniCentroidId) {
