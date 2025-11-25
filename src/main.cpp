@@ -2252,7 +2252,7 @@ void benchmark_faiss_clustering(InputParser &input) {
             }
         }
     } else {
-        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors, numVectors);
     }
     totalBaseNumVectors = std::min(totalBaseNumVectors, (size_t) numVectors);
 
