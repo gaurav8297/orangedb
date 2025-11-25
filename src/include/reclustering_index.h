@@ -277,6 +277,8 @@ namespace orangedb {
             return createQuantizedDistanceComputer(data, dim, n, config.distanceType, quantizer.get(), symmetric);
         }
 
+        void printStatsForTrackId();
+
     private:
         int dim;
         ReclusteringIndexConfig config;
@@ -307,5 +309,8 @@ namespace orangedb {
 
         // Stats
         ReclusteringIndexStats stats;
+
+        // Track micro centroid id
+        vector_idx_t nextMiniCentroidId = 6541;
     };
 }

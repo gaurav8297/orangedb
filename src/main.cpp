@@ -2787,8 +2787,8 @@ void benchmark_fast_reclustering(InputParser &input) {
                 // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                 //                                       nMegaProbe,
                 //                                       nMiniProbe, 5, false);
-                printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe, nMiniProbe, recall, 0.0f);
-
+                printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe,
+                       nMiniProbe, recall, 0.0f);
             }
         }
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,

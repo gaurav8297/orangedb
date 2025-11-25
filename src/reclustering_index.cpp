@@ -536,39 +536,27 @@ namespace orangedb {
         // Take all the existing mini centroids and merge them
         size_t totalVecs = 0;
         auto microCentroidIds = megaMiniCentroidIds[megaClusterId];
-        std::vector<vector_idx_t> someIds = {
-            9403, 5713, 2418, 9887, 1638, 462, 7729, 2108, 1813, 2368, 7619, 2475, 1893, 5370, 35, 6827, 4686, 1414,
-            2010, 5895, 262, 8604, 445, 3340, 8384, 508, 8050, 279, 4721, 5982, 726, 6698, 2700, 4640, 4207, 6050, 7877,
-            3526, 2449, 7426, 7980, 4488, 1919, 173, 9485, 1704, 8979, 1130, 9537, 6433, 115, 9233, 7196, 2928, 3730,
-            1111, 2088, 3446, 3349, 5853, 6532, 3913, 524, 718, 5815, 5524, 1353, 1741, 5136, 6628, 9538, 7936, 564,
-            6772, 3494, 8538, 7762, 2921, 4990, 4587, 7497, 1774, 2466, 6152, 6835, 4317, 6160, 6115, 5048, 628, 1307,
-            5478, 1634, 6387, 6969, 6193, 409, 5313, 3179, 7264, 8610, 8161, 4542, 2203, 9864, 5693, 9829, 6351, 1661,
-            8699, 6473, 3143, 1203, 2190, 2537, 7369, 3891, 4657, 8925, 7607, 1108, 9929, 2224, 7616, 9976, 8133, 9717,
-            3137, 3090, 4111, 9834, 1357, 7177, 8358, 9328, 4353, 5761, 2851, 7436, 4235, 4601, 7705, 6921, 6436, 2906,
-            6107, 4967, 925, 3479, 3032, 5402, 804, 6951, 5165, 5669, 3940, 8498, 6925, 6643, 5662, 2509, 1819, 1713,
-            8107, 2920, 6334, 1665, 4055, 201, 1374, 270, 7362, 2991, 9431, 9086, 9273, 8484, 3354, 9842, 3662, 1265,
-            4986, 336,
-            2686, 7425, 7709, 3886, 2283, 4340, 821, 8519, 8403, 4102, 1398, 4697, 8037, 1413, 6916, 4660, 7236, 6291,
-            3125, 2499, 6990, 7629,
-            1002, 8287, 5953
-        };
+        std::vector<vector_idx_t> oldVectorIds;
         for (auto microCentroidId: microCentroidIds) {
-            if (microCentroidId == 6541) {
+            if (microCentroidId == nextMiniCentroidId) {
+                std::unordered_set<vector_idx_t> nearL1Ids;
+                calcScoreForMiniCluster(microCentroidId, &nearL1Ids);
+                oldVectorIds = miniClusterVectorIds[microCentroidId];
                 // Print out of someIds how many part of microCentroidIds
                 size_t count = 0;
-                for (auto id: someIds) {
+                for (auto id: nearL1Ids) {
                     if (std::find(microCentroidIds.begin(), microCentroidIds.end(), id) != microCentroidIds.end()) {
                         count++;
                     }
                 }
-                printf("Fount id 6541 in megaCentroidId %llu with %lu/%lu of someIds\n",
-                       megaClusterId, count, someIds.size());
+                printf("Fount id %lu in megaCentroidId %llu with %lu/%lu of someIds\n",
+                       nextMiniCentroidId, megaClusterId, count, nearL1Ids.size());
                 // Now print all microCentroidIds
-                printf("microCentroidIds: ");
-                for (auto id: microCentroidIds) {
-                    printf("%llu,", id);
-                }
-                printf("\n");
+                // printf("microCentroidIds: ");
+                // for (auto id: microCentroidIds) {
+                //     printf("%llu,", id);
+                // }
+                // printf("\n");
                 break;
             }
         }
@@ -623,6 +611,31 @@ namespace orangedb {
                                newMiniCentroids,
                                newMiniClusters,
                                newMiniClusterVectorIds);
+
+        if (oldVectorIds.empty()) {
+            return;
+        }
+        // Find the new mini centroid that contains oldVectorIds
+        auto max_match_count = 0;
+        auto max_match_id = -1;
+        for (auto miniId: megaMiniCentroidIds[megaClusterId]) {
+            auto vectorIds = miniClusterVectorIds[miniId];
+            size_t matchCount = 0;
+            for (auto oldId: oldVectorIds) {
+                if (std::find(vectorIds.begin(), vectorIds.end(), oldId) != vectorIds.end()) {
+                    matchCount++;
+                }
+            }
+            if (matchCount > max_match_count) {
+                max_match_count = matchCount;
+                max_match_id = miniId;
+            }
+        }
+        if (max_match_id != -1) {
+            printf("After reclustering, old mini centroid %llu has max match count %d in new mini centroid %d\n",
+                   nextMiniCentroidId, max_match_count, max_match_id);
+            nextMiniCentroidId = max_match_id;
+        }
     }
 
     void ReclusteringIndex::reclusterInternalMegaCentroidQuant(vector_idx_t megaClusterId) {
@@ -1862,44 +1875,98 @@ namespace orangedb {
 
         // Print the shilloute score for each mini centroid
         // auto num_of_negative_silhouette = 0;
-        double most_negative_silhouette = 0.0;
-        auto most_neg_id = -1;
+//         double most_negative_silhouette = 0.0;
+//         auto most_neg_id = -1;
+//
+// #pragma omp parallel for schedule(dynamic)
+//         for (std::size_t i = 0; i < miniAssign.size(); ++i) {
+//             auto miniId = miniAssign[i];
+//             auto score = calcScoreForMiniCluster(miniId);
+//
+//             if (score < most_negative_silhouette) {
+// #pragma omp critical
+//                 {
+//                     if (score < most_negative_silhouette) {
+//                         most_negative_silhouette = score;
+//                         most_neg_id = miniId;
+//                     }
+//                 }
+//             }
+//         }
 
-#pragma omp parallel for schedule(dynamic)
-        for (std::size_t i = 0; i < miniAssign.size(); ++i) {
-            auto miniId = miniAssign[i];
-            auto score = calcScoreForMiniCluster(miniId);
+        // printf("Most negative silhouette mini centroid id: %d with score: %f\n", most_neg_id, most_negative_silhouette);
+        //
+        // // Now we want to print the L1s and L2s cz of which it's negative silhouette
+        // if (most_neg_id != -1) {
+        //     auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
+        //     std::unordered_set<vector_idx_t> closerL1s;
+        //     calcScoreForMiniCluster(most_neg_id, &closerL1s);
+        //     std::unordered_map<vector_idx_t, std::unordered_set<vector_idx_t>> closerL2s;
+        //     auto mega_most_neg_id = -1;
+        //     // Find which mega centroid it belongs to
+        //     for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+        //         auto &miniIds = megaMiniCentroidIds[megaId];
+        //         if (std::find(miniIds.begin(), miniIds.end(), most_neg_id) != miniIds.end()) {
+        //             mega_most_neg_id = megaId;
+        //             break;
+        //         }
+        //     }
+        //     double most_neg_dist = 0.0;
+        //     dc->setQuery(miniCentroids.data() + most_neg_id * dim);
+        //     dc->computeDistance(mega_most_neg_id, &most_neg_dist);
+        //
+        //     for (const auto &l1 : closerL1s) {
+        //         for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+        //             auto &miniIds = megaMiniCentroidIds[megaId];
+        //             if (std::find(miniIds.begin(), miniIds.end(), l1) != miniIds.end()) {
+        //                 closerL2s[megaId].insert(l1);
+        //                 break;
+        //             }
+        //         }
+        //     }
+        //     printf("Mega centroid id for mini centroid %d is [%d, %f]\n", most_neg_id, mega_most_neg_id, most_neg_dist);
+        //     printf("L1 centroids closer than own mini centroid:\n");
+        //     for (const auto &l2s : closerL2s) {
+        //         double l2_dist = 0.0;
+        //         dc->computeDistance(l2s.first, &l2_dist);
+        //         printf("Mega centroid [%llu, %f]: ", l2s.first, l2_dist);
+        //         for (const auto &l1 : l2s.second) {
+        //             printf("%llu ", l1);
+        //         }
+        //         printf("\n");
+        //         printf("count of L1s: %zu\n", l2s.second.size());
+        //         printf("\n");
+        //     }
+        //     printf("Total count of L1s: %zu\n", closerL1s.size());
+        // }
 
-            if (score < most_negative_silhouette) {
-#pragma omp critical
-                {
-                    if (score < most_negative_silhouette) {
-                        most_negative_silhouette = score;
-                        most_neg_id = miniId;
-                    }
-                }
-            }
-        }
+        // printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
 
-        printf("Most negative silhouette mini centroid id: %d with score: %f\n", most_neg_id, most_negative_silhouette);
+        // Now find the closest vectors
+        findKClosestVectors(query, k, miniAssign, results, stats);
+    }
 
+    void ReclusteringIndex::printStatsForTrackId() {
+        auto score = calcScoreForMiniCluster(nextMiniCentroidId);
+        printf("Most negative silhouette mini centroid id: %llu with score: %f\n", nextMiniCentroidId, score);
+        auto numMegaCentroids = megaCentroids.size() / dim;
         // Now we want to print the L1s and L2s cz of which it's negative silhouette
-        if (most_neg_id != -1) {
+        if (nextMiniCentroidId != -1) {
             auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
             std::unordered_set<vector_idx_t> closerL1s;
-            calcScoreForMiniCluster(most_neg_id, &closerL1s);
+            calcScoreForMiniCluster(nextMiniCentroidId, &closerL1s);
             std::unordered_map<vector_idx_t, std::unordered_set<vector_idx_t>> closerL2s;
             auto mega_most_neg_id = -1;
             // Find which mega centroid it belongs to
             for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
                 auto &miniIds = megaMiniCentroidIds[megaId];
-                if (std::find(miniIds.begin(), miniIds.end(), most_neg_id) != miniIds.end()) {
+                if (std::find(miniIds.begin(), miniIds.end(), nextMiniCentroidId) != miniIds.end()) {
                     mega_most_neg_id = megaId;
                     break;
                 }
             }
             double most_neg_dist = 0.0;
-            dc->setQuery(miniCentroids.data() + most_neg_id * dim);
+            dc->setQuery(miniCentroids.data() + nextMiniCentroidId * dim);
             dc->computeDistance(mega_most_neg_id, &most_neg_dist);
 
             for (const auto &l1 : closerL1s) {
@@ -1911,7 +1978,7 @@ namespace orangedb {
                     }
                 }
             }
-            printf("Mega centroid id for mini centroid %d is [%d, %f]\n", most_neg_id, mega_most_neg_id, most_neg_dist);
+            printf("Mega centroid id for mini centroid %llu is [%d, %f]\n", nextMiniCentroidId, mega_most_neg_id, most_neg_dist);
             printf("L1 centroids closer than own mini centroid:\n");
             for (const auto &l2s : closerL2s) {
                 double l2_dist = 0.0;
@@ -1926,11 +1993,6 @@ namespace orangedb {
             }
             printf("Total count of L1s: %zu\n", closerL1s.size());
         }
-
-        // printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
-
-        // Now find the closest vectors
-        findKClosestVectors(query, k, miniAssign, results, stats);
     }
 
     // Simplest Idea: Based on sillouhette score, we can find the bad clusters and search them separately.
@@ -2260,6 +2322,7 @@ namespace orangedb {
         printf("Max size of clusters: %zu\n", maxSize);
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
+        printStatsForTrackId();
 
 //         auto numMiniCentroids = miniCentroids.size() / dim;
 //         auto totalWithBadScore = 0;
