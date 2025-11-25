@@ -814,7 +814,7 @@ namespace orangedb {
         //     printf("Fixing boundary mini centroid %d with score %f\n", worstMiniCentroid, worstScore);
         //     fixBoundaryMiniCentroid(worstMiniCentroid);
         // }
-        fixBoundaryMiniCentroids(7707);
+        fixBoundaryMiniCentroid(7707);
     }
 
     void ReclusteringIndex::fixBoundaryMiniCentroid(int miniCentroidId) {
