@@ -2631,6 +2631,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     int nFiles = stoi(input.getCmdOption("-nFiles"));
     int hardClusterSizeLimit = stoi(input.getCmdOption("-hardClusterSizeLimit"));
     float kmeansSamplingRatio = stof(input.getCmdOption("-kmeansSamplingRatio"));
+    int numFixBoundaries = stoi(input.getCmdOption("-numFixBoundaries"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -2765,7 +2766,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     for (int iter = 0; iter < iterations; iter++) {
         printf("Started Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
-        index.fixBoundaryMiniCentroids(10);
+        index.fixBoundaryMiniCentroids(numFixBoundaries);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
