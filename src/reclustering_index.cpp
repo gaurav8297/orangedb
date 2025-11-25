@@ -802,7 +802,7 @@ namespace orangedb {
             auto worstMiniCentroid = -1;
             double worstScore = std::numeric_limits<double>::max();
             for (int j = 0; j < miniClusteringScore.size(); j++) {
-                if (miniClusteringScore[j] < worstScore && miniClusteringScore[j] < -0.009) {
+                if (miniClusteringScore[j] < worstScore && miniClusteringScore[j] < -0.02) {
                     worstScore = miniClusteringScore[j];
                     worstMiniCentroid = j;
                 }
