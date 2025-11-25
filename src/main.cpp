@@ -2761,9 +2761,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
     }
 
-    // index.storeScoreForMegaClusters();
-    // index.fixBoundaryMiniCentroids(numFixBoundaries);
-    // index.printStats();
+    index.storeScoreForMegaClusters();
+    index.fixBoundaryMiniCentroids(numFixBoundaries);
+    index.printStats();
     index.storeScoreForMegaClusters();
     index.printStats();
 
