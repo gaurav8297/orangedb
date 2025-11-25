@@ -1784,7 +1784,6 @@ namespace orangedb {
         double avgMiniScore = 0.0;
 #pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
         for (auto miniCentroidId : miniCentroidIds) {
-            printf("Calculating shilloute score");
             double s = calcScoreForMiniCluster(miniCentroidId);
             miniClusteringScore[miniCentroidId] = s;
             avgMiniScore += s;
