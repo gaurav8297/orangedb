@@ -2798,16 +2798,17 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
-        if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast(nMegaRecluster);
-        } else {
-            if (reclusterOnScore) {
-                index.reclusterBasedOnScore(numMegaReclusterCentroids);
-            } else {
-                index.reclusterFull(numMegaReclusterCentroids);
-            }
-        }
+        // if (numMegaReclusterCentroids == 1) {
+        //     index.reclusterFast(nMegaRecluster);
+        // } else {
+        //     if (reclusterOnScore) {
+        //         index.reclusterBasedOnScore(numMegaReclusterCentroids);
+        //     } else {
+        //         index.reclusterFull(numMegaReclusterCentroids);
+        //     }
+        // }
         // index.quantizeVectors();
+        index.storeScoreForMegaClusters();
         index.fixBoundaryMiniCentroidsV2();
         index.storeScoreForMegaClusters();
         for (auto nMegaProbe : nMegaProbes) {
