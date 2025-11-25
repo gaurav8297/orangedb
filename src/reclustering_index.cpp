@@ -894,7 +894,7 @@ namespace orangedb {
             printf("Calculating score for mini centroid %lu\n", i);
             miniClusteringScore[i] = calcScoreForMiniCluster(i);
         }
-#pragma omp parallel for
+// #pragma omp parallel for
         for (auto miniId : closestMiniCentroids) {
             if (miniId < newMiniCentroidSize) {
                 printf("Calculating score for mini centroid %llu\n", miniId);
