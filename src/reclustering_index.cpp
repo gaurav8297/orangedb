@@ -878,6 +878,10 @@ namespace orangedb {
         clusterData(tempData.data(), tempVectorIds.data(), totalVecs, config.miniCentroidSize,
                     newMiniCentroids, newMiniClusters, newMiniClusterVectorIds);
 
+        if (newMiniCentroids.size() / dim != newMiniClusters.size()) {
+            printf("Error: newMiniCentroids size %lu / dim %d != newMiniClusters size %lu\n",
+                   newMiniCentroids.size(), dim, newMiniClusters.size());
+        }
         assert(newMiniCentroids.size() / dim == newMiniClusters.size());
         assert(newMiniClusters.size() / dim == newMiniClusterVectorIds.size());
 

@@ -2765,7 +2765,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     for (int iter = 0; iter < iterations; iter++) {
         printf("Started Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
-        index.fixBoundaryMiniCentroids(200);
+        index.fixBoundaryMiniCentroids(20);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
