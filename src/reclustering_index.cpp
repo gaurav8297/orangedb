@@ -2132,70 +2132,70 @@ namespace orangedb {
 
         // Print the shilloute score for each mini centroid
         // auto num_of_negative_silhouette = 0;
-        double most_negative_silhouette = 0.0;
-        auto most_neg_id = -1;
+//         double most_negative_silhouette = 0.0;
+//         auto most_neg_id = -1;
+//
+// #pragma omp parallel for schedule(dynamic)
+//         for (std::size_t i = 0; i < miniAssign.size(); ++i) {
+//             auto miniId = miniAssign[i];
+//             auto score = calcScoreForMiniCluster(miniId);
+//
+//             if (score < most_negative_silhouette) {
+// #pragma omp critical
+//                 {
+//                     if (score < most_negative_silhouette) {
+//                         most_negative_silhouette = score;
+//                         most_neg_id = miniId;
+//                     }
+//                 }
+//             }
+//         }
 
-#pragma omp parallel for schedule(dynamic)
-        for (std::size_t i = 0; i < miniAssign.size(); ++i) {
-            auto miniId = miniAssign[i];
-            auto score = calcScoreForMiniCluster(miniId);
-
-            if (score < most_negative_silhouette) {
-#pragma omp critical
-                {
-                    if (score < most_negative_silhouette) {
-                        most_negative_silhouette = score;
-                        most_neg_id = miniId;
-                    }
-                }
-            }
-        }
-
-        printf("Most negative silhouette mini centroid id: %d with score: %f\n", most_neg_id, most_negative_silhouette);
-
-        // Now we want to print the L1s and L2s cz of which it's negative silhouette
-        if (most_neg_id != -1) {
-            auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
-            std::unordered_set<vector_idx_t> closerL1s;
-            calcScoreForMiniCluster(most_neg_id, &closerL1s);
-            std::unordered_map<vector_idx_t, std::unordered_set<vector_idx_t>> closerL2s;
-            auto mega_most_neg_id = -1;
-            // Find which mega centroid it belongs to
-            for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
-                auto &miniIds = megaMiniCentroidIds[megaId];
-                if (std::find(miniIds.begin(), miniIds.end(), most_neg_id) != miniIds.end()) {
-                    mega_most_neg_id = megaId;
-                    break;
-                }
-            }
-            double most_neg_dist = 0.0;
-            dc->setQuery(miniCentroids.data() + most_neg_id * dim);
-            dc->computeDistance(mega_most_neg_id, &most_neg_dist);
-
-            for (const auto &l1 : closerL1s) {
-                for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
-                    auto &miniIds = megaMiniCentroidIds[megaId];
-                    if (std::find(miniIds.begin(), miniIds.end(), l1) != miniIds.end()) {
-                        closerL2s[megaId].insert(l1);
-                        break;
-                    }
-                }
-            }
-            printf("Mega centroid id for mini centroid %d is [%d, %f]\n", most_neg_id, mega_most_neg_id, most_neg_dist);
-            printf("L1 centroids closer than own mini centroid:\n");
-            for (const auto &l2s : closerL2s) {
-                double l2_dist = 0.0;
-                dc->computeDistance(l2s.first, &l2_dist);
-                printf("Mega centroid [%llu, %f]: ", l2s.first, l2_dist);
-                for (const auto &l1 : l2s.second) {
-                    printf("%llu ", l1);
-                }
-                printf("\n");
-                printf("count of L1s: %zu\n", l2s.second.size());
-                printf("\n");
-            }
-            printf("Total count of L1s: %zu\n", closerL1s.size());
-        }
+        // printf("Most negative silhouette mini centroid id: %d with score: %f\n", most_neg_id, most_negative_silhouette);
+        //
+        // // Now we want to print the L1s and L2s cz of which it's negative silhouette
+        // if (most_neg_id != -1) {
+        //     auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
+        //     std::unordered_set<vector_idx_t> closerL1s;
+        //     calcScoreForMiniCluster(most_neg_id, &closerL1s);
+        //     std::unordered_map<vector_idx_t, std::unordered_set<vector_idx_t>> closerL2s;
+        //     auto mega_most_neg_id = -1;
+        //     // Find which mega centroid it belongs to
+        //     for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+        //         auto &miniIds = megaMiniCentroidIds[megaId];
+        //         if (std::find(miniIds.begin(), miniIds.end(), most_neg_id) != miniIds.end()) {
+        //             mega_most_neg_id = megaId;
+        //             break;
+        //         }
+        //     }
+        //     double most_neg_dist = 0.0;
+        //     dc->setQuery(miniCentroids.data() + most_neg_id * dim);
+        //     dc->computeDistance(mega_most_neg_id, &most_neg_dist);
+        //
+        //     for (const auto &l1 : closerL1s) {
+        //         for (int megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+        //             auto &miniIds = megaMiniCentroidIds[megaId];
+        //             if (std::find(miniIds.begin(), miniIds.end(), l1) != miniIds.end()) {
+        //                 closerL2s[megaId].insert(l1);
+        //                 break;
+        //             }
+        //         }
+        //     }
+        //     printf("Mega centroid id for mini centroid %d is [%d, %f]\n", most_neg_id, mega_most_neg_id, most_neg_dist);
+        //     printf("L1 centroids closer than own mini centroid:\n");
+        //     for (const auto &l2s : closerL2s) {
+        //         double l2_dist = 0.0;
+        //         dc->computeDistance(l2s.first, &l2_dist);
+        //         printf("Mega centroid [%llu, %f]: ", l2s.first, l2_dist);
+        //         for (const auto &l1 : l2s.second) {
+        //             printf("%llu ", l1);
+        //         }
+        //         printf("\n");
+        //         printf("count of L1s: %zu\n", l2s.second.size());
+        //         printf("\n");
+        //     }
+        //     printf("Total count of L1s: %zu\n", closerL1s.size());
+        // }
 
         // printf("Number of negative silhouette mini centroids in search: %d out of %d\n", num_of_negative_silhouette, (int)miniAssign.size());
 
