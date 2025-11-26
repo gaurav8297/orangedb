@@ -2761,12 +2761,12 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
     }
 
-    index.storeScoreForMegaClusters();
-    index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
-    index.printStats();
-    index.storeScoreForMegaClusters();
-    index.printStats();
-    index.flush_to_disk(storagePath);
+    // index.storeScoreForMegaClusters();
+    // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
+    // index.printStats();
+    // index.storeScoreForMegaClusters();
+    // index.printStats();
+    // index.flush_to_disk(storagePath);
 
     for (auto nMegaProbe : nMegaProbes) {
         for (auto nMiniProbe : nMiniProbes) {
