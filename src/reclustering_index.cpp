@@ -2152,7 +2152,7 @@ namespace orangedb {
 //         }
 
         // printf("Most negative silhouette mini centroid id: %d with score: %f\n", most_neg_id, most_negative_silhouette);
-        //
+
         // // Now we want to print the L1s and L2s cz of which it's negative silhouette
         // if (most_neg_id != -1) {
         //     auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
