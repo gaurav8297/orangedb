@@ -2413,25 +2413,23 @@ void benchmark_faiss_clustering(InputParser &input) {
     std::vector<faiss::idx_t> indices(numCentroids);
     for (size_t i = 0; i < queryNumVectors; i++) {
         index->search(1, queryVecs + (i * baseDimension), k, distances, labels);
-        if (i == 4) {
-            indexFlat->search(1, queryVecs + (i * baseDimension), numCentroids, centroidDists.data(), indices.data());
-            // Sort the centroidDists
-            std::sort(centroidDists.begin(), centroidDists.end());
-            auto closest = centroidDists[0];
-            auto furthest = centroidDists[0];
-            int m = 0;
-            for (int c = 0; c < numCentroids; c++) {
-                if (centroidDists[c] > 2 * closest) {
-                    // printf("Closest centroid index for query %zu: %lld\n", i, indices[c]);
-                    break;
-                }
-                furthest = centroidDists[c];
-                m++;
+        indexFlat->search(1, queryVecs + (i * baseDimension), numCentroids, centroidDists.data(), indices.data());
+        // Sort the centroidDists
+        std::sort(centroidDists.begin(), centroidDists.end());
+        auto closest = centroidDists[0];
+        auto furthest = centroidDists[0];
+        int m = 0;
+        for (int c = 0; c < numCentroids; c++) {
+            if (centroidDists[c] > 2 * closest) {
+                // printf("Closest centroid index for query %zu: %lld\n", i, indices[c]);
+                break;
             }
-            printf(
-                "Closest centroid distance %zu: %f and Number of centroids within 2x closest distance: %d with furthest distance %f\n",
-                i, closest, m, furthest);
+            furthest = centroidDists[c];
+            m++;
         }
+        printf(
+            "Closest centroid distance %zu: %f and Number of centroids within 2x closest distance: %d with furthest distance %f\n",
+            i, closest, m, furthest);
         auto gt = gtVecs + i * k;
         auto localRecall = 0;
         for (int j = 0; j < k; j++) {
