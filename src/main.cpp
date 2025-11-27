@@ -2369,11 +2369,12 @@ void benchmark_faiss_clustering(InputParser &input) {
     } else {
         index = dynamic_cast<faiss::IndexIVFFlat *>(faiss::read_index(storagePath.c_str()));
     }
-
+    omp_set_num_threads(nThreads);
+    auto indexFlat = static_cast<faiss::IndexFlat *>(index->quantizer);
+    std::vector<int64_t> assignment(totalBaseNumVectors);
     if (!isParquet) {
         omp_set_num_threads(nThreads);
-        std::vector<int64_t> assignment(totalBaseNumVectors);
-        quantizer.assign(totalBaseNumVectors, baseVecs, assignment.data());
+        indexFlat->assign(totalBaseNumVectors, baseVecs, assignment.data());
 
         std::vector<int> histogram(numCentroids, 0);
         for (size_t i = 0; i < totalBaseNumVectors; ++i) {
@@ -2400,9 +2401,9 @@ void benchmark_faiss_clustering(InputParser &input) {
         printf("  Standard deviation: %.2f\n", std_dev);
     }
 
+
     // omp_set_num_threads(1);
     index->nprobe = nProbes;
-    auto indexFlat = static_cast<faiss::IndexFlat *>(index->quantizer);
     // float* centroids = reinterpret_cast<float *>(indexFlat->codes.data());
     auto recall = 0.0;
     auto labels = new faiss::idx_t[k];
@@ -2412,6 +2413,97 @@ void benchmark_faiss_clustering(InputParser &input) {
     printf("queryNumVectors: %zu\n", queryNumVectors);
     std::vector<float> centroidDists(numCentroids);
     std::vector<faiss::idx_t> indices(numCentroids);
+
+    // Calculate silhouette score for each centroid using OMP
+    if (!isParquet) {
+        printf("Calculating silhouette scores for %zu centroids...\n", numCentroids);
+        std::vector<double> silhouetteScores(numCentroids, 0.0);
+
+        // Get centroids from the flat index
+        float* centroids = indexFlat->get_xb();
+
+        auto silhouetteStart = std::chrono::high_resolution_clock::now();
+
+        #pragma omp parallel for schedule(dynamic)
+        for (size_t centroidId = 0; centroidId < numCentroids; centroidId++) {
+            // Collect points belonging to this centroid
+            std::vector<size_t> clusterPoints;
+            for (size_t i = 0; i < totalBaseNumVectors; i++) {
+                if (assignment[i] == static_cast<int64_t>(centroidId)) {
+                    clusterPoints.push_back(i);
+                }
+            }
+
+            if (clusterPoints.empty()) {
+                silhouetteScores[centroidId] = 0.0;
+                continue;
+            }
+
+            double totalSilhouette = 0.0;
+            const float* curCentroid = centroids + centroidId * baseDimension;
+
+            // Calculate silhouette for each point in this cluster
+            for (size_t pointIdx : clusterPoints) {
+                const float* curPoint = baseVecs + pointIdx * baseDimension;
+
+                // 1) a = distance to own centroid
+                double a = 0.0;
+                if (useIP) {
+                    a = -faiss::fvec_inner_product(curPoint, curCentroid, baseDimension);
+                } else {
+                    a = faiss::fvec_L2sqr(curPoint, curCentroid, baseDimension);
+                }
+
+                // 2) b = min distance to any other centroid
+                double b = std::numeric_limits<double>::infinity();
+                for (size_t otherCentroidId = 0; otherCentroidId < numCentroids; otherCentroidId++) {
+                    if (otherCentroidId == centroidId) continue;
+
+                    const float* otherCentroid = centroids + otherCentroidId * baseDimension;
+                    double dist;
+                    if (useIP) {
+                        dist = -faiss::fvec_inner_product(curPoint, otherCentroid, baseDimension);
+                    } else {
+                        dist = faiss::fvec_L2sqr(curPoint, otherCentroid, baseDimension);
+                    }
+                    b = std::min(b, dist);
+                }
+
+                // 3) silhouette for this point
+                double m = std::max(a, b);
+                if (m < 0) {
+                    m = std::max(-a, -b);
+                }
+                double s = (m != 0.0) ? (b - a) / m : 0.0;
+
+                totalSilhouette += s;
+            }
+
+            silhouetteScores[centroidId] = totalSilhouette / clusterPoints.size();
+        }
+
+        auto silhouetteEnd = std::chrono::high_resolution_clock::now();
+        auto silhouetteDuration = std::chrono::duration_cast<std::chrono::milliseconds>(silhouetteEnd - silhouetteStart);
+
+        // Print statistics
+        double avgSilhouette = 0.0;
+        double minSilhouette = std::numeric_limits<double>::max();
+        double maxSilhouette = std::numeric_limits<double>::lowest();
+
+        for (size_t i = 0; i < numCentroids; i++) {
+            avgSilhouette += silhouetteScores[i];
+            minSilhouette = std::min(minSilhouette, silhouetteScores[i]);
+            maxSilhouette = std::max(maxSilhouette, silhouetteScores[i]);
+        }
+        avgSilhouette /= numCentroids;
+
+        printf("Silhouette score statistics:\n");
+        printf("  Average: %.4f\n", avgSilhouette);
+        printf("  Min: %.4f\n", minSilhouette);
+        printf("  Max: %.4f\n", maxSilhouette);
+        printf("  Calculation time: %lld ms\n", silhouetteDuration.count());
+    }
+
     for (size_t i = 0; i < queryNumVectors; i++) {
         index->search(1, queryVecs + (i * baseDimension), k, distances, labels);
         indexFlat->search(1, queryVecs + (i * baseDimension), numCentroids, centroidDists.data(), indices.data());
