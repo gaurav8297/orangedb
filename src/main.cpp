@@ -2369,13 +2369,12 @@ void benchmark_faiss_clustering(InputParser &input) {
     } else {
         index = dynamic_cast<faiss::IndexIVFFlat *>(faiss::read_index(storagePath.c_str()));
     }
+    printf("Calculating min / max / avg cluster sizes from assignments\n");
     omp_set_num_threads(nThreads);
     auto indexFlat = static_cast<faiss::IndexFlat *>(index->quantizer);
     std::vector<int64_t> assignment(totalBaseNumVectors);
     if (!isParquet) {
-        omp_set_num_threads(nThreads);
         indexFlat->assign(totalBaseNumVectors, baseVecs, assignment.data());
-
         std::vector<int> histogram(numCentroids, 0);
         for (size_t i = 0; i < totalBaseNumVectors; ++i) {
             if (assignment[i] >= 0 && assignment[i] < numCentroids) {
@@ -2400,7 +2399,6 @@ void benchmark_faiss_clustering(InputParser &input) {
         printf("  Average cluster size: %.2f\n", avg_cluster_size);
         printf("  Standard deviation: %.2f\n", std_dev);
     }
-
 
     // omp_set_num_threads(1);
     index->nprobe = nProbes;
