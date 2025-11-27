@@ -2429,8 +2429,8 @@ void benchmark_faiss_clustering(InputParser &input) {
             m++;
         }
         printf(
-            "Closest centroid distance %zu: %f and Number of centroids within 2x closest distance: %d with furthest distance %f\n",
-            i, closest, m, furthest);
+            "Closest centroid distance %zu: %f and Number of centroids within %fx closest distance: %d with furthest distance %f\n",
+            i, closest, factor, m, furthest);
         auto gt = gtVecs + i * k;
         auto localRecall = 0;
         for (int j = 0; j < k; j++) {
