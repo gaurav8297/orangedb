@@ -2216,6 +2216,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     const int isParquet = stoi(input.getCmdOption("-isParquet"));
     int nFiles = isParquet ? stoi(input.getCmdOption("-nFiles")) : 0;
     const int useIP = stoi(input.getCmdOption("-useIP"));
+    const float factor = stof(input.getCmdOption("-factor"));
 
     size_t baseDimension, totalBaseNumVectors;
     std::vector<std::string> filePaths;
@@ -2399,7 +2400,7 @@ void benchmark_faiss_clustering(InputParser &input) {
         printf("  Standard deviation: %.2f\n", std_dev);
     }
 
-    omp_set_num_threads(1);
+    // omp_set_num_threads(1);
     index->nprobe = nProbes;
     auto indexFlat = static_cast<faiss::IndexFlat *>(index->quantizer);
     // float* centroids = reinterpret_cast<float *>(indexFlat->codes.data());
@@ -2420,7 +2421,7 @@ void benchmark_faiss_clustering(InputParser &input) {
         auto furthest = centroidDists[0];
         int m = 0;
         for (int c = 0; c < numCentroids; c++) {
-            if (centroidDists[c] > 2 * closest) {
+            if (centroidDists[c] > factor * closest) {
                 // printf("Closest centroid index for query %zu: %lld\n", i, indices[c]);
                 break;
             }
