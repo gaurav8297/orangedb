@@ -3219,6 +3219,7 @@ void benchmark_faiss_flat(InputParser &input) {
     const int numQueries = stoi(input.getCmdOption("-numQueries"));
     const int isParquet = stoi(input.getCmdOption("-isParquet"));
     int nFiles = stoi(input.getCmdOption("-nFiles"));
+    const bool useIP = stoi(input.getCmdOption("-useIP"));
 
     size_t baseDimension, totalBaseNumVectors;
     std::vector<std::string> filePaths;
@@ -3232,16 +3233,16 @@ void benchmark_faiss_flat(InputParser &input) {
         }
     }
 
+    auto metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+
     // Load query vectors
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
     queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
 
     // Create Flat IP index for exact search
-    faiss::IndexFlatL2 index(queryDimension);
+    faiss::IndexFlat index(queryDimension, metric);
     omp_set_num_threads(nThreads);
-
-    printf("Generating ground truth using Flat IP index with %zu vectors\n", totalBaseNumVectors);
     float *allVecs;
     // Load base vectors into index
     if (isParquet) {
@@ -3266,7 +3267,7 @@ void benchmark_faiss_flat(InputParser &input) {
                                                                     totalBaseNumVectors * baseDimension * sizeof(float),
                                                                     nullptr);
     }
-
+    printf("Generating ground truth using Flat IP index with %zu vectors\n", totalBaseNumVectors);
     // Generate ground truth
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     auto *labels = new faiss::idx_t[k];
