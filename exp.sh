@@ -322,3 +322,5 @@ strace -f -e trace=clone ./build/release/bin/orangedb_main -run checkOmpThreads 
 
 ./build/release/bin/orangedb_main -run benchmarkFaissClustering -baseVectorPath /home/centos/bigann_base.bvecs -queryVectorPath /home/centos/bigann_query.bvecs -groundTruthPath /home/centos/sift_gt_10M.bin -isParquet 0 -k 100 -numVectors 100000000 -nFiles 10 -nIter 10 -nThreads 64 -clusterSize 1000 -numThreads 64 -numQueries 10 -sampleSize 2000000 -nProbes 100 -readFromDisk 0 -storagePath /home/centos/vector_dataset/msmarco/faiss_ivf_flat_index.bin
 
+./build/release/bin/orangedb_main -run benchmarkFaissFlat -baseVectorPath /home/centos/msmarco_dataset/corpus -queryVectorPath /home/centos/msmarco_dataset/msmarco_queries.fvecs -groundTruthPath /home/centos/msmarco_dataset/gt.bin -isParquet 1 -k 100 -numVectors 10000000000 -numThreads 64 -numQueries 10 -nFiles 12121 -useIP 1 > a.out
+

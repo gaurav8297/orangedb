@@ -2505,13 +2505,21 @@ void benchmark_faiss_clustering(InputParser &input) {
     for (size_t i = 0; i < queryNumVectors; i++) {
         index->search(1, queryVecs + (i * baseDimension), k, distances, labels);
         indexFlat->search(1, queryVecs + (i * baseDimension), numCentroids, centroidDists.data(), indices.data());
+
+        if (useIP) {
+            for (size_t c = 0; c < numCentroids; c++) {
+                centroidDists[c] = -centroidDists[c];
+            }
+        }
+
         // Sort the centroidDists
         std::sort(centroidDists.begin(), centroidDists.end());
         auto closest = centroidDists[0];
+        auto closest_factor = closest + std::abs(closest) * (factor - 1);
         auto furthest = centroidDists[0];
         int m = 0;
         for (int c = 0; c < numCentroids; c++) {
-            if (centroidDists[c] > factor * closest) {
+            if (centroidDists[c] > closest_factor) {
                 // printf("Closest centroid index for query %zu: %lld\n", i, indices[c]);
                 break;
             }
