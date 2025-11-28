@@ -1313,7 +1313,8 @@ namespace orangedb {
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack
-        auto index = faiss::IndexFlatL2(dim);
+        auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
+        auto index = faiss::IndexFlat(dim, metric_type);
 
         // Initialize the centroids
         clustering.train(n, data, index);
@@ -1397,7 +1398,8 @@ namespace orangedb {
         cl.verbose = true;
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack
-        auto index = faiss::IndexFlatL2(dim);
+        auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
+        auto index = faiss::IndexFlat(dim, metric_type);
 
         // Initialize the centroids
         clustering.train(n, data, index);
