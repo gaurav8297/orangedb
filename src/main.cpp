@@ -2798,7 +2798,7 @@ void benchmark_fast_reclustering(InputParser &input) {
             auto numFiles = std::min(nFiles, (int)filePaths.size());
             numInserts = std::min(numInserts, (int)numFiles);
             auto chunkSize = numFiles / numInserts;
-            printf("Reading parquet files: %zu\n", numFiles);
+            printf("Reading parquet files: %d\n", numFiles);
             auto totalVectors = 0;
             for (int i = 0; i < numInserts; i++) {
                 auto start = i * chunkSize;
