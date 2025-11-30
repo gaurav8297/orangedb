@@ -1379,7 +1379,7 @@ namespace orangedb {
 
         // Validate data
         for (int i = 0; i < n; i++) {
-            auto local_data = data + i * dim;
+            auto local_data = data + static_cast<size_t>(i) * dim;
             for (int d = 0; d < dim; d++) {
                 if (local_data[d] > 10000 || local_data[d] < -10000) {
                     printf("ERROR: Invalid data at vector %d, dim %d: %f\n", i, d, local_data[d]);
