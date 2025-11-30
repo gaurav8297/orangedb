@@ -529,7 +529,7 @@ namespace orangedb {
         // Now recluster miniCentroids within the mega centroids
         for (auto megaCentroidId: megaClusterIdsToRecluster) {
             reclusterInternalMegaCentroid(megaCentroidId);
-            if (megaCentroidId == 80) {
+            if (megaCentroidId == 70) {
                 flush_to_disk("/vast/faiss_ivf_flat_msmarco_index_debug.bin");
             }
         }
