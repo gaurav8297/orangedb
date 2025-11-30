@@ -1355,9 +1355,9 @@ namespace orangedb {
         clusterVectorIds.resize(numClusters);
         for (int i = 0; i < numClusters; i++) {
             std::vector<float> cluster(hist[i] * dim);
-            clusters[i] = cluster;
+            clusters[i] = std::move(cluster);
             std::vector<vector_idx_t> vectorId(hist[i]);
-            clusterVectorIds[i] = vectorId;
+            clusterVectorIds[i] = std::move(vectorId);
             hist[i] = 0;
         }
 
@@ -1365,6 +1365,8 @@ namespace orangedb {
             auto assignId = assign[i];
             auto idx = hist[assignId];
             auto &cluster = clusters[assignId];
+            printf("idx = %d, i = %d\n", idx, i);
+            printf("cluster size = %lu\n", cluster.size() / dim);
             memcpy(cluster.data() + idx * dim, data + i * dim, dim * sizeof(float));
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
