@@ -484,7 +484,7 @@ namespace orangedb {
                 auto cluster = miniClusters[microCentroidId];
                 auto vectorId = miniClusterVectorIds[microCentroidId];
                 size_t numVectors = cluster.size() / dim;
-                memcpy(tempData.data() + idx * dim, cluster.data(), cluster.size() * sizeof(float));
+                memcpy(tempData.data() + static_cast<size_t>(idx) * dim, cluster.data(), cluster.size() * sizeof(float));
                 memcpy(tempVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
                 idx += numVectors;
             }
@@ -587,10 +587,14 @@ namespace orangedb {
             auto& cluster = miniClusters[microCentroidId];
             auto& vectorId = miniClusterVectorIds[microCentroidId];
             size_t numVectors = cluster.size() / dim;
-            memcpy(tempData.data() + idx * dim, cluster.data(), cluster.size() * sizeof(float));
+            assert(cluster.size() % dim == 0 && "cluster size must be multiple of dim");
+            assert(vectorId.size() == numVectors && "vectorId size must match number of vectors in cluster");
+            assert(idx + numVectors <= totalVecs && "tempData/tempVectorIds overflow");
+            memcpy(tempData.data() + static_cast<size_t>(idx) * dim, cluster.data(), cluster.size() * sizeof(float));
             memcpy(tempVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
             idx += numVectors;
         }
+        assert(idx == totalVecs && "totalVecs calculation mismatch");
 
         // Run mini reclustering
         std::vector<float> newMiniCentroids;
@@ -1085,7 +1089,7 @@ namespace orangedb {
                 auto cluster = miniClusters[microCentroidId];
                 auto vectorId = miniClusterVectorIds[microCentroidId];
                 size_t numVectors = cluster.size() / dim;
-                memcpy(tempData.data() + idx * dim, cluster.data(), cluster.size() * sizeof(float));
+                memcpy(tempData.data() + static_cast<size_t>(idx) * dim, cluster.data(), cluster.size() * sizeof(float));
                 memcpy(tempVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
                 idx += numVectors;
             }
@@ -1398,7 +1402,9 @@ namespace orangedb {
                        idx, maxClusterSize, i, assignId);
                 continue;  // Skip this vector
             }
-            memcpy(cluster.data() + idx * dim, data + i * dim, dim * sizeof(float));
+            memcpy(cluster.data() + static_cast<size_t>(idx) * dim,
+                   data + static_cast<size_t>(i) * dim,
+                   dim * sizeof(float));
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
         }
@@ -1668,7 +1674,9 @@ namespace orangedb {
         for (int i = 0; i < miniCentroidsSize; i++) {
             auto oldCentroidId = oldMiniClusterIds[i];
             // Copy the centroid
-            memcpy(miniCentroids.data() + oldCentroidId * dim, newMiniCentroids.data() + i * dim, dim * sizeof(float));
+            memcpy(miniCentroids.data() + static_cast<size_t>(oldCentroidId) * dim,
+                   newMiniCentroids.data() + static_cast<size_t>(i) * dim,
+                   dim * sizeof(float));
             // Move the cluster
             auto currCluster = newMiniClusters[i];
             auto currVectorId = newMiniClusterVectorIds[i];
@@ -1681,7 +1689,8 @@ namespace orangedb {
             // Append the new mini centroids
             auto currentSize = miniCentroids.size() / dim;
             miniCentroids.resize((currentSize + newMiniCentroidsSize - miniCentroidsSize) * dim);
-            memcpy(miniCentroids.data() + currentSize * dim, newMiniCentroids.data() + miniCentroidsSize * dim,
+            memcpy(miniCentroids.data() + static_cast<size_t>(currentSize) * dim,
+                   newMiniCentroids.data() + static_cast<size_t>(miniCentroidsSize) * dim,
                    (newMiniCentroidsSize - miniCentroidsSize) * dim * sizeof(float));
 
             // Append the new clusters
@@ -1710,7 +1719,9 @@ namespace orangedb {
                     // No need to delete from megaMiniCentroidIds since it'll be taken care when we append mega centroids.
                     continue;
                 }
-                memcpy(miniCentroids.data() + currCentroidId * dim, miniCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
+                memcpy(miniCentroids.data() + static_cast<size_t>(currCentroidId) * dim,
+                       miniCentroids.data() + static_cast<size_t>(lastCentroidId) * dim,
+                       dim * sizeof(float));
                 miniClusters[currCentroidId] = std::move(miniClusters[lastCentroidId]);
                 miniClusterVectorIds[currCentroidId] = std::move(miniClusterVectorIds[lastCentroidId]);
                 mappedMiniClusterIds[lastCentroidId] = currCentroidId;
@@ -2093,7 +2104,9 @@ namespace orangedb {
         auto centroidSize = std::min(oldMegaCentroidSize, numNewMegaCentroids);
         for (int i = 0; i < centroidSize; i++) {
             auto currMegaId = oldMegaCentroidIds[i];
-            memcpy(megaCentroids.data() + currMegaId * dim, newMegaCentroids.data() + i * dim, dim * sizeof(float));
+            memcpy(megaCentroids.data() + static_cast<size_t>(currMegaId) * dim,
+                   newMegaCentroids.data() + static_cast<size_t>(i) * dim,
+                   dim * sizeof(float));
 
             // Move the miniCentroidIds
             megaMiniCentroidIds[currMegaId] = std::move(newMiniClusterIds[i]);
@@ -2104,7 +2117,8 @@ namespace orangedb {
             // Append the new mega centroids
             auto currentSize = megaCentroids.size() / dim;
             megaCentroids.resize((currentSize + numNewMegaCentroids - oldMegaCentroidSize) * dim);
-            memcpy(megaCentroids.data() + currentSize * dim, newMegaCentroids.data() + oldMegaCentroidSize * dim,
+            memcpy(megaCentroids.data() + static_cast<size_t>(currentSize) * dim,
+                   newMegaCentroids.data() + static_cast<size_t>(oldMegaCentroidSize) * dim,
                    (numNewMegaCentroids - oldMegaCentroidSize) * dim * sizeof(float));
 
             // Move the miniCentroidIds
@@ -2130,7 +2144,9 @@ namespace orangedb {
                     continue;
                 }
 
-                memcpy(megaCentroids.data() + currMegaId * dim, megaCentroids.data() + (lastCentroidId * dim), dim * sizeof(float));
+                memcpy(megaCentroids.data() + static_cast<size_t>(currMegaId) * dim,
+                       megaCentroids.data() + static_cast<size_t>(lastCentroidId) * dim,
+                       dim * sizeof(float));
                 megaMiniCentroidIds[currMegaId] = std::move(megaMiniCentroidIds[lastCentroidId]);
                 megaClusteringScore[currMegaId] = megaClusteringScore[lastCentroidId];
                 lastCentroidId--;
@@ -2817,10 +2833,17 @@ namespace orangedb {
         size_t miniCentroidSize = miniCentroids.size();
         out.write(reinterpret_cast<const char *>(&miniCentroidSize), sizeof(miniCentroidSize));
         if (miniCentroidSize > 0) {
+            // Verify invariants before writing
+            assert(miniCentroidSize % dim == 0 && "miniCentroids size must be multiple of dim");
+            size_t expectedClusterCount = miniCentroidSize / dim;
+            assert(miniClusters.size() == expectedClusterCount && "miniClusters size must match centroid count");
+            assert(miniClusterVectorIds.size() == expectedClusterCount && "miniClusterVectorIds size must match cluster count");
+
             out.write(reinterpret_cast<const char *>(miniCentroids.data()), miniCentroidSize * sizeof(float));
             // Write the miniClusters
             for (const auto &cluster: miniClusters) {
                 size_t clusterSize = cluster.size();
+                assert(clusterSize % dim == 0 && "cluster size must be multiple of dim");
                 out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
                 out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
             }
@@ -2860,11 +2883,18 @@ namespace orangedb {
         size_t newMiniCentroidSize = newMiniCentroids.size();
         out.write(reinterpret_cast<const char *>(&newMiniCentroidSize), sizeof(newMiniCentroidSize));
         if (newMiniCentroidSize > 0) {
+            // Verify invariants before writing
+            assert(newMiniCentroidSize % dim == 0 && "newMiniCentroids size must be multiple of dim");
+            size_t expectedNewClusterCount = newMiniCentroidSize / dim;
+            assert(newMiniClusters.size() == expectedNewClusterCount && "newMiniClusters size must match centroid count");
+            assert(newMiniClusterVectorIds.size() == expectedNewClusterCount && "newMiniClusterVectorIds size must match cluster count");
+
             out.write(reinterpret_cast<const char *>(newMiniCentroids.data()), newMiniCentroidSize * sizeof(float));
 
             // Write newMiniClusters
             for (const auto &cluster: newMiniClusters) {
                 size_t clusterSize = cluster.size();
+                assert(clusterSize % dim == 0 && "new cluster size must be multiple of dim");
                 out.write(reinterpret_cast<const char *>(&clusterSize), sizeof(clusterSize));
                 out.write(reinterpret_cast<const char *>(cluster.data()), clusterSize * sizeof(float));
             }
@@ -2944,6 +2974,7 @@ namespace orangedb {
         size_t miniCentroidsCount;
         in.read(reinterpret_cast<char *>(&miniCentroidsCount), sizeof(miniCentroidsCount));
         if (miniCentroidsCount > 0) {
+            assert(miniCentroidsCount % dim == 0 && "miniCentroids count must be multiple of dim");
             miniCentroids.resize(miniCentroidsCount);
             in.read(reinterpret_cast<char *>(miniCentroids.data()), miniCentroidsCount * sizeof(float));
 
@@ -2953,6 +2984,7 @@ namespace orangedb {
             for (size_t i = 0; i < miniClustersCount; i++) {
                 size_t clusterSize;
                 in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+                assert(clusterSize % dim == 0 && "cluster size must be multiple of dim");
                 miniClusters[i].resize(clusterSize);
                 in.read(reinterpret_cast<char *>(miniClusters[i].data()), clusterSize * sizeof(float));
             }
@@ -2965,6 +2997,10 @@ namespace orangedb {
                 miniClusterVectorIds[i].resize(vectorIdSize);
                 in.read(reinterpret_cast<char *>(miniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
             }
+
+            // Verify loaded data consistency
+            assert(miniClusters.size() == miniClustersCount && "miniClusters size mismatch after load");
+            assert(miniClusterVectorIds.size() == miniClustersCount && "miniClusterVectorIds size mismatch after load");
         }
 
         // Read quantized mini centroids
@@ -2999,6 +3035,7 @@ namespace orangedb {
         size_t newMiniCentroidsCount;
         in.read(reinterpret_cast<char *>(&newMiniCentroidsCount), sizeof(newMiniCentroidsCount));
         if (newMiniCentroidsCount > 0) {
+            assert(newMiniCentroidsCount % dim == 0 && "newMiniCentroids count must be multiple of dim");
             newMiniCentroids.resize(newMiniCentroidsCount);
             in.read(reinterpret_cast<char *>(newMiniCentroids.data()), newMiniCentroidsCount * sizeof(float));
 
@@ -3008,6 +3045,7 @@ namespace orangedb {
             for (size_t i = 0; i < newMiniClustersCount; i++) {
                 size_t clusterSize;
                 in.read(reinterpret_cast<char *>(&clusterSize), sizeof(clusterSize));
+                assert(clusterSize % dim == 0 && "new cluster size must be multiple of dim");
                 newMiniClusters[i].resize(clusterSize);
                 in.read(reinterpret_cast<char *>(newMiniClusters[i].data()), clusterSize * sizeof(float));
             }
@@ -3020,6 +3058,10 @@ namespace orangedb {
                 newMiniClusterVectorIds[i].resize(vectorIdSize);
                 in.read(reinterpret_cast<char *>(newMiniClusterVectorIds[i].data()), vectorIdSize * sizeof(vector_idx_t));
             }
+
+            // Verify loaded data consistency
+            assert(newMiniClusters.size() == newMiniClustersCount && "newMiniClusters size mismatch after load");
+            assert(newMiniClusterVectorIds.size() == newMiniClustersCount && "newMiniClusterVectorIds size mismatch after load");
         }
 
         // Read quantizer
