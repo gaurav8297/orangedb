@@ -1361,12 +1361,19 @@ namespace orangedb {
             hist[i] = 0;
         }
 
+        auto total_size = 0;
+        for (int i = 0; i < numClusters; i++) {
+            total_size += clusters[i].size() / dim;
+        }
+        assert(total_size == n);
         for (int i = 0; i < n; i++) {
             auto assignId = assign[i];
             auto idx = hist[assignId];
             auto &cluster = clusters[assignId];
-            printf("idx = %d, i = %d\n", idx, i);
-            printf("cluster size = %lu\n", cluster.size() / dim);
+            if (idx >= cluster.size()) {
+                printf("idx = %d, i = %d\n", idx, i);
+                printf("cluster size = %lu\n", cluster.size() / dim);
+            }
             memcpy(cluster.data() + idx * dim, data + i * dim, dim * sizeof(float));
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
