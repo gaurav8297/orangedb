@@ -1338,7 +1338,12 @@ namespace orangedb {
         // Get the hist
         std::vector<int> hist(numClusters, 0);
         for (int i = 0; i < n; i++) {
-            hist[assign[i]]++;
+            if (assign[i] >= 0 && assign[i] < numClusters) {
+                hist[assign[i]]++;
+            } else {
+                printf("WARNING: Invalid assignment at i=%d: assign[i]=%ld (numClusters=%d)\n",
+                       i, assign[i], numClusters);
+            }
         }
 
         // Validate that no histo is greating than 4500
@@ -1368,12 +1373,17 @@ namespace orangedb {
         assert(total_size == n);
         for (int i = 0; i < n; i++) {
             auto assignId = assign[i];
+            if (assignId < 0 || assignId >= numClusters) {
+                printf("ERROR: Invalid assignId = %ld for vector i = %d (numClusters = %d)\n", assignId, i, numClusters);
+                continue;  // Skip this vector
+            }
             auto idx = hist[assignId];
             auto &cluster = clusters[assignId];
             auto maxClusterSize = cluster.size() / dim;
             if (idx >= maxClusterSize) {
-                printf("idx = %d, i = %d\n", idx, i);
-                printf("cluster size = %lu\n", cluster.size() / dim);
+                printf("ERROR: idx = %d >= maxClusterSize = %lu for i = %d, assignId = %ld\n",
+                       idx, maxClusterSize, i, assignId);
+                continue;  // Skip this vector
             }
             memcpy(cluster.data() + idx * dim, data + i * dim, dim * sizeof(float));
             clusterVectorIds[assignId][idx] = vectorIds[i];
@@ -1432,7 +1442,12 @@ namespace orangedb {
         // Get the hist
         std::vector<int> hist(numClusters, 0);
         for (int i = 0; i < n; i++) {
-            hist[assign[i]]++;
+            if (assign[i] >= 0 && assign[i] < numClusters) {
+                hist[assign[i]]++;
+            } else {
+                printf("WARNING: Invalid assignment at i=%d: assign[i]=%ld (numClusters=%d)\n",
+                       i, assign[i], numClusters);
+            }
         }
 
         // Validate that no histo is greating than 4500
@@ -1454,7 +1469,16 @@ namespace orangedb {
 
         for (int i = 0; i < n; i++) {
             auto assignId = assign[i];
+            if (assignId < 0 || assignId >= numClusters) {
+                printf("ERROR: Invalid assignId = %ld for vector i = %d (numClusters = %d)\n", assignId, i, numClusters);
+                continue;  // Skip this vector
+            }
             auto idx = hist[assignId];
+            if (idx >= clusterVectorIds[assignId].size()) {
+                printf("ERROR: idx = %d >= clusterVectorIds size = %lu for i = %d, assignId = %ld\n",
+                       idx, clusterVectorIds[assignId].size(), i, assignId);
+                continue;  // Skip this vector
+            }
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
         }
