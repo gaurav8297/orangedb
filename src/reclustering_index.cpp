@@ -1290,6 +1290,7 @@ namespace orangedb {
                                                  std::vector<float> &centroids,
                                                  std::vector<std::vector<float> > &clusters,
                                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        printf("Clustering %d vectors with avgClusterSize %d\n", n, avgClusterSize);
         // Create the clustering object
         auto numClusters = getNumCentroids(n, avgClusterSize);
         // printf("Performing mini-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
@@ -1371,6 +1372,18 @@ namespace orangedb {
             total_size += clusters[i].size() / dim;
         }
         assert(total_size == n);
+
+        // Validate data
+        for (int i = 0; i < n; i++) {
+            auto local_data = data + i * dim;
+            for (int d = 0; d < dim; d++) {
+                if (local_data[d] > 10000 || local_data[d] < -10000) {
+                    printf("ERROR: Invalid data at vector %d, dim %d: %f\n", i, d, local_data[d]);
+                    break;
+                }
+            }
+        }
+
         for (int i = 0; i < n; i++) {
             auto assignId = assign[i];
             if (assignId < 0 || assignId >= numClusters) {
