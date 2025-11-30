@@ -570,7 +570,7 @@ namespace orangedb {
                 printf("Error: microCentroidId %llu >= miniClusterSize %lu\n", microCentroidId, miniClusterSize);
             }
             assert(microCentroidId < miniClusterSize);
-            auto cluster = miniClusters[microCentroidId];
+            auto& cluster = miniClusters[microCentroidId];
             totalVecs += (cluster.size() / dim);
         }
         printf("Running reclusterInternalMegaCentroid on %llu with %lu vectors\n", megaClusterId, totalVecs);
@@ -584,8 +584,8 @@ namespace orangedb {
         std::vector<vector_idx_t> tempVectorIds(totalVecs);
         size_t idx = 0;
         for (auto microCentroidId: microCentroidIds) {
-            auto cluster = miniClusters[microCentroidId];
-            auto vectorId = miniClusterVectorIds[microCentroidId];
+            auto& cluster = miniClusters[microCentroidId];
+            auto& vectorId = miniClusterVectorIds[microCentroidId];
             size_t numVectors = cluster.size() / dim;
             memcpy(tempData.data() + idx * dim, cluster.data(), cluster.size() * sizeof(float));
             memcpy(tempVectorIds.data() + idx, vectorId.data(), numVectors * sizeof(vector_idx_t));
@@ -1370,7 +1370,8 @@ namespace orangedb {
             auto assignId = assign[i];
             auto idx = hist[assignId];
             auto &cluster = clusters[assignId];
-            if (idx >= cluster.size()) {
+            auto maxClusterSize = cluster.size() / dim;
+            if (idx >= maxClusterSize) {
                 printf("idx = %d, i = %d\n", idx, i);
                 printf("cluster size = %lu\n", cluster.size() / dim);
             }
