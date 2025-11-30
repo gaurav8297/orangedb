@@ -1622,6 +1622,11 @@ namespace orangedb {
         auto newMiniCentroidsSize = newMiniCentroids.size() / dim;
         // assert(oldMiniClusterIds.size() <= newMiniCentroidsSize);
         auto miniCentroidsSize = std::min(newMiniCentroidsSize, oldMiniClusterIds.size());
+        if (miniCentroidsSize < oldMiniClusterIds.size()) {
+            printf("Warning: oldMiniClusterIds.size() %lu is greater than newMiniCentroidsSize %lu\n",
+                   oldMiniClusterIds.size(), newMiniCentroidsSize);
+        }
+        assert(newMiniCentroidsSize == newMiniClusters.size());
         for (int i = 0; i < miniCentroidsSize; i++) {
             auto oldCentroidId = oldMiniClusterIds[i];
             // Copy the centroid
