@@ -2862,10 +2862,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.reclusterAllMegaCentroids(nMegaRecluster);
     // index.flush_to_disk(storagePath);
 
-    index.storeScoreForMegaClusters();
-    index.printStats();
-    index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
-    index.printStats();
+    // index.storeScoreForMegaClusters();
+    // index.printStats();
+    // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
+    // index.printStats();
     // index.storeScoreForMegaClusters();
     // index.printStats();
     // index.flush_to_disk(storagePath);
