@@ -303,7 +303,8 @@ namespace orangedb {
         ARROW_ASSIGN_OR_RAISE(reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
         std::shared_ptr<arrow::Schema> schema;
         ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
-        auto column_name = schema->field(1)->name();
+        std::string column_name = "vector";
+        // printf("%s\n", column_name.c_str());
         int col_index = schema->GetFieldIndex(column_name);
         if (col_index == -1) {
             return arrow::Status::Invalid("Column '" + column_name + "' not found");
