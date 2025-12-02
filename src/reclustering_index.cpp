@@ -1292,11 +1292,18 @@ namespace orangedb {
                                                  std::vector<std::vector<float> > &clusters,
                                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
         printf("Clustering %d vectors with avgClusterSize %d\n", n, avgClusterSize);
+        if (n == 0) {
+            return;
+        }
         // Create the clustering object
         auto numClusters = getNumCentroids(n, avgClusterSize);
         // printf("Performing mini-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
         if (numClusters <= 1) {
             calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
+            // Copy all data to the single cluster
+            clusters.resize(1);
+            clusters[0].resize(n * dim);
+            memcpy(clusters[0].data(), data, n * dim * sizeof(float));
             return;
         }
 
@@ -1324,7 +1331,6 @@ namespace orangedb {
         // Initialize the centroids
         clustering.train(n, data, index);
 
-
         // Assign the centroids
         std::vector<int64_t> assign(n);
         std::vector<float> distances(n);
@@ -1340,18 +1346,14 @@ namespace orangedb {
         // Get the hist
         std::vector<int> hist(numClusters, 0);
         for (int i = 0; i < n; i++) {
-            if (assign[i] >= 0 && assign[i] < numClusters) {
-                hist[assign[i]]++;
-            } else {
-                printf("WARNING: Invalid assignment at i=%d: assign[i]=%ld (numClusters=%d)\n",
-                       i, assign[i], numClusters);
-            }
+            assert(assign[i] >= 0 && assign[i] < numClusters);
+            hist[assign[i]]++;
         }
 
         // Validate that no histo is greating than 4500
         for (int i = 0; i < numClusters; i++) {
             if (config.hardClusterSizeLimit > 0 && hist[i] >= config.hardClusterSizeLimit) {
-                printf("Warning: Cluster %d has size %d greater than 2500\n", i, hist[i]);
+                printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
             }
         }
 
@@ -1374,31 +1376,11 @@ namespace orangedb {
         }
         assert(total_size == n);
 
-        // Validate data
-        for (int i = 0; i < n; i++) {
-            auto local_data = data + static_cast<size_t>(i) * dim;
-            for (int d = 0; d < dim; d++) {
-                if (local_data[d] > 10000 || local_data[d] < -10000) {
-                    printf("ERROR: Invalid data at vector %d, dim %d: %f\n", i, d, local_data[d]);
-                    break;
-                }
-            }
-        }
-
         for (int i = 0; i < n; i++) {
             auto assignId = assign[i];
-            if (assignId < 0 || assignId >= numClusters) {
-                printf("ERROR: Invalid assignId = %ld for vector i = %d (numClusters = %d)\n", assignId, i, numClusters);
-                continue;  // Skip this vector
-            }
             auto idx = hist[assignId];
             auto &cluster = clusters[assignId];
             auto maxClusterSize = cluster.size() / dim;
-            if (idx >= maxClusterSize) {
-                printf("ERROR: idx = %d >= maxClusterSize = %lu for i = %d, assignId = %ld\n",
-                       idx, maxClusterSize, i, assignId);
-                continue;  // Skip this vector
-            }
             memcpy(cluster.data() + static_cast<size_t>(idx) * dim,
                    data + static_cast<size_t>(i) * dim,
                    dim * sizeof(float));
