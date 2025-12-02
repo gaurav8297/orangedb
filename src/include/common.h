@@ -293,7 +293,7 @@ namespace orangedb {
         std::shared_ptr<parquet::FileMetaData> meta = pq_reader->metadata();
         *n_out = meta->num_rows();
         const auto row_group_meta = meta->RowGroup(0);
-        *d_out = row_group_meta->ColumnChunk(1)->num_values() / row_group_meta->num_rows();
+        *d_out = row_group_meta->ColumnChunk(2)->num_values() / row_group_meta->num_rows();
         return arrow::Status::OK();
     }
 
