@@ -303,9 +303,10 @@ namespace orangedb {
         ARROW_ASSIGN_OR_RAISE(reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
         std::shared_ptr<arrow::Schema> schema;
         ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
-        int col_index = schema->GetFieldIndex("embedding");
+        auto column_name = schema->field(1)->name();
+        int col_index = schema->GetFieldIndex(column_name);
         if (col_index == -1) {
-            return arrow::Status::Invalid("Column 'embedding' not found");
+            return arrow::Status::Invalid("Column '" + column_name + "' not found");
         }
         std::shared_ptr<arrow::Table> table;
         ARROW_RETURN_NOT_OK(reader->ReadTable({col_index}, &table));
