@@ -2862,7 +2862,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.reclusterAllMegaCentroids(nMegaRecluster);
     // index.flush_to_disk(storagePath);
 
-    // index.storeScoreForMegaClusters();
+    index.storeMSEScoreForMegaClusters();
     // index.printStats();
     // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
     // index.printStats();
@@ -2890,7 +2890,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
     }
 
-    // index.printStats();
+    index.printStats();
     printf("Starting reclustering iterations\n");
     // index.flush_to_disk(storagePath);
     for (int iter = 0; iter < iterations; iter++) {
@@ -2927,6 +2927,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
+        index.storeMSEScoreForMegaClusters();
         index.printStats();
     }
 

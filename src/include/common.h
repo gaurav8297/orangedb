@@ -306,6 +306,7 @@ namespace orangedb {
         std::string column_name = "vector";
         // printf("%s\n", column_name.c_str());
         int col_index = schema->GetFieldIndex(column_name);
+        printf("Reading column '%s' at index %d\n", column_name.c_str(), col_index);
         if (col_index == -1) {
             return arrow::Status::Invalid("Column '" + column_name + "' not found");
         }

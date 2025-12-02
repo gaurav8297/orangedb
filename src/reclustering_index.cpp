@@ -1862,6 +1862,19 @@ namespace orangedb {
         }
     }
 
+    void ReclusteringIndex::storeMSEScoreForMegaClusters(int n) {
+        printf("ReclusteringIndex::storeScoreForMegaClusters\n");
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        megaClusteringScore.resize(numMegaCentroids);
+        auto numMiniClusters = miniCentroids.size() / dim;
+        miniClusteringScore.resize(numMiniClusters);
+        auto numToCalc = std::min(n, (int)numMegaCentroids);
+        printf("numToCalc: %d\n", numToCalc);
+        for (auto i = 0; i < numToCalc; i++) {
+            megaClusteringScore[i] = calcMSEScoreForMegaCluster(i);
+        }
+    }
+
     void ReclusteringIndex::quantizeVectors() {
         printf("ReclusteringIndex::quantizeVectors\n");
         if (miniCentroids.empty()) {
@@ -2070,6 +2083,33 @@ namespace orangedb {
         return (totalPoints > 0)
                    ? totalSilhouette / double(totalPoints)
                    : 0.0;
+    }
+
+    double ReclusteringIndex::calcMSEScoreForMegaCluster(int megaClusterId) {
+        auto miniCentroidIds = megaMiniCentroidIds[megaClusterId];
+        double avgMiniScore = 0.0;
+#pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
+        for (auto miniCentroidId : miniCentroidIds) {
+            double s = calcMSEScoreForMiniCluster(miniCentroidId);
+            // miniClusteringScore[miniCentroidId] = s;
+            avgMiniScore += s;
+        }
+        return avgMiniScore;
+    }
+
+    double ReclusteringIndex::calcMSEScoreForMiniCluster(int miniClusterId) {
+        auto centroid = miniCentroids.data() + miniClusterId * dim;
+        auto& curMiniCluster = miniClusters[miniClusterId];
+        auto numPoints = curMiniCluster.size() / dim;
+        double totalMSE = 0.0;
+        auto dc = getDistanceComputer(curMiniCluster.data(), numPoints);
+        dc->setQuery(centroid);
+        for (int i = 0; i < numPoints; i++) {
+            double dist;
+            dc->computeDistance(i, &dist);
+            totalMSE += dist;
+        }
+        return (numPoints > 0) ? totalMSE : 0.0;
     }
 
     std::vector<vector_idx_t> ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,
