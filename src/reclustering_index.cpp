@@ -2145,7 +2145,7 @@ namespace orangedb {
             // miniClusteringScore[miniCentroidId] = s;
             avgMiniScore += s;
         }
-        return avgMiniScore;
+        return avgMiniScore / miniCentroidIds.size();
     }
 
     double ReclusteringIndex::calcMSEScoreForMiniCluster(int miniClusterId) {
@@ -2160,7 +2160,7 @@ namespace orangedb {
             dc->computeDistance(i, &dist);
             totalMSE += dist;
         }
-        return (numPoints > 0) ? totalMSE : 0.0;
+        return (numPoints > 0) ? totalMSE / numPoints : 0.0;
     }
 
     std::vector<vector_idx_t> ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,
