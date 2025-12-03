@@ -1904,6 +1904,7 @@ namespace orangedb {
             for (size_t j = 0; j < numOldMegaCentroids; j++) {
                 double dist;
                 dc->computeDistance(j, &dist);
+                printf("Distance between new mega centroid %d and old mega centroid %lu = %f\n", i, j, dist);
                 if (dist < minDistance) {
                     minDistance = dist;
                     oldCentroidId = j;
