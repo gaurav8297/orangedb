@@ -1896,6 +1896,10 @@ namespace orangedb {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numOldMegaCentroids = oldMegaCentroids.size() / dim;
         auto dc = getDistanceComputer(oldMegaCentroids.data(), numOldMegaCentroids);
+        for (int i = 0; i < 10; i++) {
+            printf("Old Mega Centroid %d: val = %f\n", i, oldMegaCentroids[i]);
+        }
+
         for (auto i = 0; i < numMegaCentroids; i++) {
             // Find closest old mega centroid
             dc->setQuery(megaCentroids.data() + static_cast<size_t>(i) * dim);
