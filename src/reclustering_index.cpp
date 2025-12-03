@@ -1603,7 +1603,8 @@ namespace orangedb {
         // TODO: Maybe do this using simd at some point
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < dim; j++) {
-                centroids[j] += quantizer->decode_one(data[i * dataDim + j], j);
+                // centroids[j] += quantizer->decode_one(data[i * dataDim + j], j);
+                centroids[j] += static_cast<float>(data[i * dataDim + j]);
             }
         }
         auto norm = 1.0f / n;
