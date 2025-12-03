@@ -1875,6 +1875,52 @@ namespace orangedb {
         }
     }
 
+    void ReclusteringIndex::saveOldScoreForMegaClusters() {
+        printf("ReclusteringIndex::saveOldScoreForMegaClusters\n");
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        oldMegaClusteringScore.resize(numMegaCentroids);
+        oldMegaCentroids.resize(megaCentroids.size());
+        for (auto i = 0; i < numMegaCentroids; i++) {
+            oldMegaClusteringScore[i] = megaClusteringScore[i];
+        }
+        memcpy(oldMegaCentroids.data(), megaCentroids.data(), megaCentroids.size() * sizeof(float));
+    }
+
+    void ReclusteringIndex::printChangeClusterStats() {
+        printf("ReclusteringIndex::printChangeClusterStats\n");
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto numOldMegaCentroids = oldMegaCentroids.size() / dim;
+        auto dc = getDistanceComputer(oldMegaCentroids.data(), numOldMegaCentroids);
+        for (auto i = 0; i < numMegaCentroids; i++) {
+            // Find closest old mega centroid
+            dc->setQuery(megaCentroids.data() + static_cast<size_t>(i) * dim);
+            double minDistance = std::numeric_limits<double>::max();
+            int oldCentroidId = -1;
+            for (size_t j = 0; j < numOldMegaCentroids; j++) {
+                double dist;
+                dc->computeDistance(j, &dist);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    oldCentroidId = j;
+                }
+            }
+            if (oldCentroidId != -1) {
+                // Print the old score, distance, new score, and change in score
+                double scoreChange = megaClusteringScore[i] - oldMegaClusteringScore[oldCentroidId];
+                printf("Mega Centroid %d: Old id = %d, Old Score = %f, Distance to Old = %f, New Score = %f, Change in Score = %f\n",
+                       i,
+                       oldCentroidId,
+                       oldMegaClusteringScore[oldCentroidId],
+                       minDistance,
+                       megaClusteringScore[i],
+                       scoreChange);
+            } else {
+                printf("Mega Centroid %d: No old centroid found!\n", i);
+            }
+        }
+    }
+
+
     void ReclusteringIndex::quantizeVectors() {
         printf("ReclusteringIndex::quantizeVectors\n");
         if (miniCentroids.empty()) {
@@ -2799,6 +2845,7 @@ namespace orangedb {
         // Print stats
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
         printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
+        printChangeClusterStats();
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {

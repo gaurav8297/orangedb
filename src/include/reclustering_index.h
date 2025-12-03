@@ -116,9 +116,13 @@ namespace orangedb {
 
         void storeMSEScoreForMegaClusters(int n = INT_MAX);
 
+        void saveOldScoreForMegaClusters();
+
         void computeAllSubCells(int avgSubCellSize);
 
         void quantizeVectors();
+
+        void printChangeClusterStats();
 
         void printStats();
 
@@ -304,7 +308,6 @@ namespace orangedb {
         std::vector<float> megaCentroids;
         std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
         std::vector<double> megaClusteringScore;
-        std::vector<double> oldMegaClusteringScore;
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
         std::vector<double> miniClusteringScore;
@@ -312,6 +315,10 @@ namespace orangedb {
 
         // Minicluster subcells
         std::vector<SubCells> miniClusterSubCells;
+
+        // old mini centroids
+        std::vector<float> oldMegaCentroids;
+        std::vector<double> oldMegaClusteringScore;
 
         // New Mini centroids (Buffering space)
         std::vector<float> newMiniCentroids;
