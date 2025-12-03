@@ -1314,7 +1314,7 @@ namespace orangedb {
         }
         cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
         cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
-        cl.seed = -1;
+        // cl.seed = -1;
         std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
         if (config.lambda > 0) {
             auto lambda = findAppropriateLambda(data, n, dim, numClusters);
@@ -1403,7 +1403,7 @@ namespace orangedb {
 
         faiss::ClusteringParameters cl;
         cl.niter = config.nIter;
-        cl.seed = -1;
+        // cl.seed = -1;
         if (config.distanceType == IP) {
             cl.spherical = true;
         }
