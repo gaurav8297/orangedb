@@ -2861,7 +2861,6 @@ void benchmark_fast_reclustering(InputParser &input) {
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     // index.reclusterAllMegaCentroids(nMegaRecluster);
     // index.flush_to_disk(storagePath);
-
     index.storeMSEScoreForMegaClusters();
     // index.printStats();
     // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
@@ -2927,6 +2926,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
+        index.saveOldScoreForMegaClusters();
         index.storeMSEScoreForMegaClusters();
         index.printStats();
     }

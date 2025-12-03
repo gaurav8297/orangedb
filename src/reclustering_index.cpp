@@ -1887,6 +1887,11 @@ namespace orangedb {
     }
 
     void ReclusteringIndex::printChangeClusterStats() {
+        if (oldMegaCentroids.empty() || oldMegaClusteringScore.empty()) {
+            printf("No old mega centroid or score to compare!\n");
+            return;
+        }
+
         printf("ReclusteringIndex::printChangeClusterStats\n");
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numOldMegaCentroids = oldMegaCentroids.size() / dim;
