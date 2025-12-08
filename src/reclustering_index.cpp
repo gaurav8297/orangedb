@@ -1897,9 +1897,6 @@ namespace orangedb {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numOldMegaCentroids = oldMegaCentroids.size() / dim;
         auto dc = getDistanceComputer(oldMegaCentroids.data(), numOldMegaCentroids);
-        for (int i = 0; i < 10; i++) {
-            printf("Old Mega Centroid %d: val = %f\n", i, oldMegaCentroids[i]);
-        }
 
         for (auto i = 0; i < numMegaCentroids; i++) {
             // Find closest old mega centroid
@@ -1909,7 +1906,6 @@ namespace orangedb {
             for (size_t j = 0; j < numOldMegaCentroids; j++) {
                 double dist;
                 dc->computeDistance(j, &dist);
-                printf("Distance between new mega centroid %d and old mega centroid %lu = %f\n", i, j, dist);
                 if (dist < minDistance) {
                     minDistance = dist;
                     oldCentroidId = j;
