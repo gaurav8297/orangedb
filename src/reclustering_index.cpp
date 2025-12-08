@@ -2727,6 +2727,20 @@ namespace orangedb {
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
         printf("Total number of vectors: %zu/%zu\n", avgSize, size);
 
+        // Print min, max and avg for mega clusters
+        auto megaMinSize = std::numeric_limits<size_t>::max();
+        size_t megaMaxSize = 0;
+        size_t megaAvgSize = 0;
+        for (const auto &miniIds : megaMiniCentroidIds) {
+            auto size = miniIds.size();
+            megaMinSize = std::min(megaMinSize, size);
+            megaMaxSize = std::max(megaMaxSize, size);
+            megaAvgSize += size;
+        }
+        printf("Min size of mega clusters: %zu\n", megaMinSize);
+        printf("Max size of mega clusters: %zu\n", megaMaxSize);
+        printf("Avg size of mega clusters: %zu\n", megaAvgSize / megaMiniCentroidIds.size());
+
         // Print total number of mini clusters with bad silhouette score
         auto totalBadScore = 0;
         for (int i = 0; i < miniClusteringScore.size(); i++) {
@@ -2830,19 +2844,24 @@ namespace orangedb {
         // }
 
         // Print avg score for mega clusters
-        double avgMegaScore = 0.0;
-        for (const auto &megaScore: megaClusteringScore) {
-            avgMegaScore += megaScore;
-        }
-        avgMegaScore /= megaClusteringScore.size();
-        printf("Avg mega cluster score: %f\n", avgMegaScore);
+
+        // Uncomment!
+        // double avgMegaScore = 0.0;
+        // for (const auto &megaScore: megaClusteringScore) {
+        //     avgMegaScore += megaScore;
+        // }
+        // avgMegaScore /= megaClusteringScore.size();
+        // printf("Avg mega cluster score: %f\n", avgMegaScore);
 
         // Print top 5 scores for mega clusters in increasing order
         // std::vector<std::pair<double, int>> scores;
-        for (int i = 0; i < megaClusteringScore.size(); i++) {
-            printf("Mega cluster %d score: %f\n", i, megaClusteringScore[i]);
-            // scores.push_back(std::make_pair(megaClusteringScore[i], i));
-        }
+
+        // Uncomment!
+        // for (int i = 0; i < megaClusteringScore.size(); i++) {
+        //     printf("Mega cluster %d score: %f\n", i, megaClusteringScore[i]);
+        //     // scores.push_back(std::make_pair(megaClusteringScore[i], i));
+        // }
+
         // std::sort(scores.begin(), scores.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
         // printf("Top 5 mega cluster scores:\n");
         // for (int i = 0; i < 5; i++) {
@@ -2852,7 +2871,7 @@ namespace orangedb {
         // Print stats
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
         printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
-        printChangeClusterStats();
+        // printChangeClusterStats();
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {
