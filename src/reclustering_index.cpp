@@ -1898,6 +1898,17 @@ namespace orangedb {
         auto numOldMegaCentroids = oldMegaCentroids.size() / dim;
         auto dc = getDistanceComputer(oldMegaCentroids.data(), numOldMegaCentroids);
 
+        // Statistics counters
+        int countRelativeChange_001 = 0;
+        int countRelativeChange_005 = 0;
+        int countRelativeChange_01 = 0;
+        int countRelativeScoreChange_001 = 0;
+        int countRelativeScoreChange_01 = 0;
+        int countRelativeScoreChange_1 = 0;
+        double totalRelativeChange = 0.0;
+        double totalRelativeScoreChange = 0.0;
+        int validCentroids = 0;
+
         for (auto i = 0; i < numMegaCentroids; i++) {
             // Find closest old mega centroid
             dc->setQuery(megaCentroids.data() + static_cast<size_t>(i) * dim);
@@ -1912,18 +1923,64 @@ namespace orangedb {
                 }
             }
             if (oldCentroidId != -1) {
-                // Print the old score, distance, new score, and change in score
+                // Calculate the norm of the old centroid for relative change
+                const float* oldCentroid = oldMegaCentroids.data() + static_cast<size_t>(oldCentroidId) * dim;
+                double oldNorm = 0.0;
+                for (size_t d = 0; d < dim; d++) {
+                    oldNorm += oldCentroid[d] * oldCentroid[d];
+                }
+                oldNorm = std::sqrt(oldNorm);
+
+                // Calculate relative change: ||new - old|| / ||old||
+                // minDistance is squared distance, so take sqrt
+                double relativeChange = (oldNorm > 0) ? (std::sqrt(minDistance) / oldNorm) : 0.0;
+
+                // Calculate relative score change: (new - old) / |old| (preserves sign)
                 double scoreChange = megaClusteringScore[i] - oldMegaClusteringScore[oldCentroidId];
-                printf("Mega Centroid %d: Old id = %d, Old Score = %f, Distance to Old = %f, New Score = %f, Change in Score = %f\n",
+                double relativeScoreChange = (std::abs(oldMegaClusteringScore[oldCentroidId]) > 1e-9) ?
+                    (scoreChange / std::abs(oldMegaClusteringScore[oldCentroidId])) : 0.0;
+
+                printf("Mega Centroid %d: Old id = %d, Old Score = %f, Distance to Old = %f, Relative Change = %f, New Score = %f, Score Change = %f, Relative Score Change = %f\n",
                        i,
                        oldCentroidId,
                        oldMegaClusteringScore[oldCentroidId],
                        minDistance,
+                       relativeChange,
                        megaClusteringScore[i],
-                       scoreChange);
+                       scoreChange,
+                       relativeScoreChange);
+
+                // Update statistics
+                validCentroids++;
+                totalRelativeChange += relativeChange;
+                totalRelativeScoreChange += relativeScoreChange;
+
+                if (relativeChange < 0.01) countRelativeChange_001++;
+                if (relativeChange < 0.05) countRelativeChange_005++;
+                if (relativeChange < 0.1) countRelativeChange_01++;
+
+                if (std::abs(relativeScoreChange) < 0.01) countRelativeScoreChange_001++;
+                if (std::abs(relativeScoreChange) < 0.1) countRelativeScoreChange_01++;
+                if (std::abs(relativeScoreChange) < 1.0) countRelativeScoreChange_1++;
             } else {
                 printf("Mega Centroid %d: No old centroid found!\n", i);
             }
+        }
+
+        // Print aggregated statistics
+        if (validCentroids > 0) {
+            printf("\n=== Aggregated Statistics ===\n");
+            printf("Total centroids: %d\n", validCentroids);
+            printf("Average relative change: %f\n", totalRelativeChange / validCentroids);
+            printf("Average relative score change: %f\n", totalRelativeScoreChange / validCentroids);
+            printf("\nRelative Change Distribution:\n");
+            printf("  < 0.01 (1%%):  %d (%.1f%%)\n", countRelativeChange_001, 100.0 * countRelativeChange_001 / validCentroids);
+            printf("  < 0.05 (5%%):  %d (%.1f%%)\n", countRelativeChange_005, 100.0 * countRelativeChange_005 / validCentroids);
+            printf("  < 0.1 (10%%):  %d (%.1f%%)\n", countRelativeChange_01, 100.0 * countRelativeChange_01 / validCentroids);
+            printf("\nRelative Score Change Distribution (absolute):\n");
+            printf("  < 0.01:  %d (%.1f%%)\n", countRelativeScoreChange_001, 100.0 * countRelativeScoreChange_001 / validCentroids);
+            printf("  < 0.1:   %d (%.1f%%)\n", countRelativeScoreChange_01, 100.0 * countRelativeScoreChange_01 / validCentroids);
+            printf("  < 1.0:   %d (%.1f%%)\n", countRelativeScoreChange_1, 100.0 * countRelativeScoreChange_1 / validCentroids);
         }
     }
 
