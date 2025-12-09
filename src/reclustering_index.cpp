@@ -1902,6 +1902,7 @@ namespace orangedb {
         int countRelativeChange_001 = 0;
         int countRelativeChange_005 = 0;
         int countRelativeChange_01 = 0;
+        int countRelativeChange_02 = 0;
         int countRelativeScoreChange_001 = 0;
         int countRelativeScoreChange_01 = 0;
         int countRelativeScoreChange_1 = 0;
@@ -1958,6 +1959,7 @@ namespace orangedb {
                 if (relativeChange < 0.01) countRelativeChange_001++;
                 if (relativeChange < 0.05) countRelativeChange_005++;
                 if (relativeChange < 0.1) countRelativeChange_01++;
+                if (relativeChange < 0.2) countRelativeChange_02++;
 
                 if (std::abs(relativeScoreChange) < 0.01) countRelativeScoreChange_001++;
                 if (std::abs(relativeScoreChange) < 0.1) countRelativeScoreChange_01++;
@@ -1977,6 +1979,7 @@ namespace orangedb {
             printf("  < 0.01 (1%%):  %d (%.1f%%)\n", countRelativeChange_001, 100.0 * countRelativeChange_001 / validCentroids);
             printf("  < 0.05 (5%%):  %d (%.1f%%)\n", countRelativeChange_005, 100.0 * countRelativeChange_005 / validCentroids);
             printf("  < 0.1 (10%%):  %d (%.1f%%)\n", countRelativeChange_01, 100.0 * countRelativeChange_01 / validCentroids);
+            printf("  < 0.2 (20%%):  %d (%.1f%%)\n", countRelativeChange_02, 100.0 * countRelativeChange_02 / validCentroids);
             printf("\nRelative Score Change Distribution (absolute):\n");
             printf("  < 0.01:  %d (%.1f%%)\n", countRelativeScoreChange_001, 100.0 * countRelativeScoreChange_001 / validCentroids);
             printf("  < 0.1:   %d (%.1f%%)\n", countRelativeScoreChange_01, 100.0 * countRelativeScoreChange_01 / validCentroids);
