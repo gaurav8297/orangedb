@@ -2844,23 +2844,21 @@ namespace orangedb {
         // }
 
         // Print avg score for mega clusters
-
-        // Uncomment!
-        // double avgMegaScore = 0.0;
-        // for (const auto &megaScore: megaClusteringScore) {
-        //     avgMegaScore += megaScore;
-        // }
-        // avgMegaScore /= megaClusteringScore.size();
-        // printf("Avg mega cluster score: %f\n", avgMegaScore);
+        double avgMegaScore = 0.0;
+        for (const auto &megaScore: megaClusteringScore) {
+            avgMegaScore += megaScore;
+        }
+        avgMegaScore /= megaClusteringScore.size();
+        printf("Avg mega cluster score: %f\n", avgMegaScore);
 
         // Print top 5 scores for mega clusters in increasing order
         // std::vector<std::pair<double, int>> scores;
 
         // Uncomment!
-        // for (int i = 0; i < megaClusteringScore.size(); i++) {
-        //     printf("Mega cluster %d score: %f\n", i, megaClusteringScore[i]);
-        //     // scores.push_back(std::make_pair(megaClusteringScore[i], i));
-        // }
+        for (int i = 0; i < megaClusteringScore.size(); i++) {
+            printf("Mega cluster %d score: %f\n", i, megaClusteringScore[i]);
+            // scores.push_back(std::make_pair(megaClusteringScore[i], i));
+        }
 
         // std::sort(scores.begin(), scores.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
         // printf("Top 5 mega cluster scores:\n");
@@ -2871,7 +2869,7 @@ namespace orangedb {
         // Print stats
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
         printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
-        // printChangeClusterStats();
+        printChangeClusterStats();
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {
