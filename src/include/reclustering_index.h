@@ -50,6 +50,10 @@ namespace orangedb {
         uint64_t hardClusterSizeLimit = 0;
         // Sampling percentage for kmeans clustering
         float kmeansSamplingRatio = 1.0;
+        // scoreChangeThreshold
+        float scoreChangeThreshold = 0.2;
+        // centroidChangeThreshold
+        float centroidChangeThreshold = 0.6;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -59,13 +63,16 @@ namespace orangedb {
                                          const int numNewMiniReclusterCentroids,
                                          const float quantizationTrainPercentage = 0.1,
                                          const uint64_t hardClusterSizeLimit = 0,
-                                         const float kmeansSamplingRatio = 1.0)
+                                         const float kmeansSamplingRatio = 1.0,
+                                         const float scoreChangeThreshold = 0.2,
+                                         const float centroidChangeThreshold = 0.6)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
               numNewMiniReclusterCentroids(numNewMiniReclusterCentroids),
               quantizationTrainPercentage(quantizationTrainPercentage), hardClusterSizeLimit(hardClusterSizeLimit),
-              kmeansSamplingRatio(kmeansSamplingRatio) {
+              kmeansSamplingRatio(kmeansSamplingRatio), scoreChangeThreshold(scoreChangeThreshold),
+              centroidChangeThreshold(centroidChangeThreshold) {
         }
     };
 
@@ -104,6 +111,8 @@ namespace orangedb {
 
         void reclusterBasedOnScore(int n);
 
+        void reclusterBasedOnMSEScore();
+
         void reclusterAllMegaCentroids(int n = INT_MAX);
 
         void reclusterAllMiniCentroidsQuant();
@@ -117,6 +126,8 @@ namespace orangedb {
         void storeMSEScoreForMegaClusters(int n = INT_MAX);
 
         void saveOldScoreForMegaClusters();
+
+        std::vector<vector_idx_t> getMegaCentroidsToRecluster() const;
 
         void computeAllSubCells(int avgSubCellSize);
 

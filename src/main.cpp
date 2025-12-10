@@ -2755,6 +2755,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     int hardClusterSizeLimit = stoi(input.getCmdOption("-hardClusterSizeLimit"));
     float kmeansSamplingRatio = stof(input.getCmdOption("-kmeansSamplingRatio"));
     int numFixBoundaries = stoi(input.getCmdOption("-numFixBoundaries"));
+    float scoreChangeThreshold = stof(input.getCmdOption("-scoreChangeThreshold"));
+    float centroidChangeThreshold = stof(input.getCmdOption("-centroidChangeThreshold"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -2763,7 +2765,8 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     DistanceType distanceType = useIP ? IP : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
-                                   0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio);
+                                   0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio,
+                                   scoreChangeThreshold, centroidChangeThreshold);
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -2822,9 +2825,10 @@ void benchmark_fast_reclustering(InputParser &input) {
             if (quantBuild) {
                 index.trainQuant(baseVecs, baseNumVectors);
             }
-            printf("Building index\n");
+            printf("Building index with realtime reclustering\n");
             auto chunkSize = baseNumVectors / numInserts;
             printf("Chunk size: %lu\n", chunkSize);
+            auto startReclusterPoint = (numInserts / 2) - 1;
             for (long i = 0; i < numInserts; i++) {
                 auto start = i * chunkSize;
                 auto end = (i + 1) * chunkSize;
@@ -2836,6 +2840,32 @@ void benchmark_fast_reclustering(InputParser &input) {
                     index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
                 } else {
                     index.naiveInsert(baseVecs + start * baseDimension, end - start);
+                }
+
+                // Recluster after 50 inserts, then every 2 inserts thereafter
+                bool should_recluster = false;
+                if (i == startReclusterPoint) {
+                    // After 50 inserts (0-indexed, so i == 49)
+                    printf("=== Completed %ld inserts - Running reclustering ===\n", i + 1);
+                    should_recluster = true;
+                } else if (i > startReclusterPoint && (i - startReclusterPoint) % 2 == 0) {
+                    // Every 2 inserts after the 50th (i.e., at 51, 53, 55, ...)
+                    printf("=== Completed %ld inserts - Running reclustering ===\n", i + 1);
+                    should_recluster = true;
+                }
+
+                if (should_recluster) {
+                    for (int iter = 0; iter < iterations; iter++) {
+                        printf("Reclustering Iteration: %d\n", iter);
+                        index.storeMSEScoreForMegaClusters();
+                        index.saveOldScoreForMegaClusters();
+                        index.reclusterAllMegaCentroids(nMegaRecluster);
+                        index.storeMSEScoreForMegaClusters();
+                        index.reclusterBasedOnMSEScore();
+                        index.printStats();
+                        printf("Reclustering Iteration %d completed\n", iter);
+                    }
+                    printf("=== Reclustering completed ===\n");
                 }
             }
         }
@@ -2890,53 +2920,53 @@ void benchmark_fast_reclustering(InputParser &input) {
     }
 
     index.printStats();
-    printf("Starting reclustering iterations\n");
+    // printf("Starting reclustering iterations\n");
     // index.flush_to_disk(storagePath);
-    for (int iter = 0; iter < iterations; iter++) {
-        printf("Started Iteration: %d\n", iter);
-        // index.reclusterAllMiniCentroidsQuant();
-        // index.fixBoundaryMiniCentroids(numFixBoundaries);
-        index.saveOldScoreForMegaClusters();
-        index.reclusterAllMegaCentroids(nMegaRecluster);
-        // index.printStats();
-        // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                                             // nMegaProbes, nMiniProbes);
-        if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast(nMegaRecluster);
-        } else {
-            if (reclusterOnScore) {
-                index.reclusterBasedOnScore(numMegaReclusterCentroids);
-            } else {
-                index.reclusterFull(numMegaReclusterCentroids);
-            }
-        }
-        // index.quantizeVectors();
-        // index.storeScoreForMegaClusters();
-        // index.fixBoundaryMiniCentroidsV2();
-        // index.storeScoreForMegaClusters();
-        for (auto nMegaProbe : nMegaProbes) {
-            for (auto nMiniProbe : nMiniProbes) {
-                auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                        nMiniProbe);
-                // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                //                                       nMegaProbe,
-                //                                       nMiniProbe, 5, false);
-                printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe,
-                       nMiniProbe, recall, 0.0f);
-            }
-        }
-        // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-        //                              nMegaProbes, nMiniProbes);
-        index.storeMSEScoreForMegaClusters();
-        index.printStats();
-    }
-
-    if (iterations > 0) {
-        // index.storeScoreForMegaClusters();
-        // index.printStats();
-        printf("Flushing to disk\n");
-        index.flush_to_disk(storagePath);
-    }
+    // for (int iter = 0; iter < iterations; iter++) {
+    //     printf("Started Iteration: %d\n", iter);
+    //     // index.reclusterAllMiniCentroidsQuant();
+    //     // index.fixBoundaryMiniCentroids(numFixBoundaries);
+    //     index.saveOldScoreForMegaClusters();
+    //     index.reclusterAllMegaCentroids(nMegaRecluster);
+    //     // index.printStats();
+    //     // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+    //                                          // nMegaProbes, nMiniProbes);
+    //     if (numMegaReclusterCentroids == 1) {
+    //         index.reclusterFast(nMegaRecluster);
+    //     } else {
+    //         if (reclusterOnScore) {
+    //             index.reclusterBasedOnScore(numMegaReclusterCentroids);
+    //         } else {
+    //             index.reclusterFull(numMegaReclusterCentroids);
+    //         }
+    //     }
+    //     // index.quantizeVectors();
+    //     // index.storeScoreForMegaClusters();
+    //     // index.fixBoundaryMiniCentroidsV2();
+    //     // index.storeScoreForMegaClusters();
+    //     for (auto nMegaProbe : nMegaProbes) {
+    //         for (auto nMiniProbe : nMiniProbes) {
+    //             auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
+    //                                     nMiniProbe);
+    //             // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+    //             //                                       nMegaProbe,
+    //             //                                       nMiniProbe, 5, false);
+    //             printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe,
+    //                    nMiniProbe, recall, 0.0f);
+    //         }
+    //     }
+    //     // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+    //     //                              nMegaProbes, nMiniProbes);
+    //     index.storeMSEScoreForMegaClusters();
+    //     index.printStats();
+    // }
+    //
+    // if (iterations > 0) {
+    //     // index.storeScoreForMegaClusters();
+    //     // index.printStats();
+    //     printf("Flushing to disk\n");
+    //     index.flush_to_disk(storagePath);
+    // }
 }
 
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,

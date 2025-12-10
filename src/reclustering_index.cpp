@@ -389,6 +389,13 @@ namespace orangedb {
         }
     }
 
+    void ReclusteringIndex::reclusterBasedOnMSEScore() {
+        // Get megacentroids that need reclustering based on MSE score and centroid change criteria
+        std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToRecluster();
+        printf("reclusterBasedOnMSEScore: Reclustering %zu megacentroids\n", megaClusterIds.size());
+        reclusterFastMegaCentroids(megaClusterIds);
+    }
+
     void ReclusteringIndex::mergeNewMiniCentroids() {
         printf("ReclusteringIndex::mergeNewMiniCentroids\n");
         if (newMiniCentroids.empty()) {
@@ -1885,6 +1892,85 @@ namespace orangedb {
             oldMegaClusteringScore[i] = megaClusteringScore[i];
         }
         memcpy(oldMegaCentroids.data(), megaCentroids.data(), megaCentroids.size() * sizeof(float));
+    }
+
+    std::vector<vector_idx_t> ReclusteringIndex::getMegaCentroidsToRecluster() const {
+        std::vector<vector_idx_t> megaCentroidsToRecluster;
+
+        if (oldMegaCentroids.empty() || oldMegaClusteringScore.empty()) {
+            printf("No old mega centroid or score to compare! Returning all megacentroids.\n");
+            // Return all mega centroids if no old data exists
+            auto numMegaCentroids = megaCentroids.size() / dim;
+            for (size_t i = 0; i < numMegaCentroids; i++) {
+                megaCentroidsToRecluster.push_back(i);
+            }
+            return megaCentroidsToRecluster;
+        }
+
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto numOldMegaCentroids = oldMegaCentroids.size() / dim;
+        auto dc = getDistanceComputer(oldMegaCentroids.data(), numOldMegaCentroids);
+
+        // Calculate centroid of all old centroids
+        std::vector<float> oldCentroidsMean(dim, 0.0f);
+        for (size_t i = 0; i < numOldMegaCentroids; i++) {
+            const float* centroid = oldMegaCentroids.data() + i * dim;
+            for (size_t d = 0; d < dim; d++) {
+                oldCentroidsMean[d] += centroid[d];
+            }
+        }
+        for (size_t d = 0; d < dim; d++) {
+            oldCentroidsMean[d] /= static_cast<float>(numOldMegaCentroids);
+        }
+
+        // Check each mega centroid against the criteria
+        for (auto i = 0; i < numMegaCentroids; i++) {
+            // Find closest old mega centroid
+            dc->setQuery(megaCentroids.data() + static_cast<size_t>(i) * dim);
+            double minDistance = std::numeric_limits<double>::max();
+            int oldCentroidId = -1;
+            for (size_t j = 0; j < numOldMegaCentroids; j++) {
+                double dist;
+                dc->computeDistance(j, &dist);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    oldCentroidId = j;
+                }
+            }
+
+            if (oldCentroidId != -1) {
+                const float* oldCentroid = oldMegaCentroids.data() + static_cast<size_t>(oldCentroidId) * dim;
+                // Calculate distance from old centroid to centroid of all old centroids
+                double oldDistFromCentroid = 0.0;
+                for (size_t d = 0; d < dim; d++) {
+                    double diff = oldCentroid[d] - oldCentroidsMean[d];
+                    oldDistFromCentroid += diff * diff;
+                }
+                oldDistFromCentroid = std::sqrt(oldDistFromCentroid);
+
+                // Calculate relative change (centroid-based)
+                double relativeChangeCentroid = (oldDistFromCentroid > 1e-9) ?
+                    (std::sqrt(minDistance) / oldDistFromCentroid) : 0.0;
+
+                // Calculate relative score change
+                double scoreChange = megaClusteringScore[i] - oldMegaClusteringScore[oldCentroidId];
+                double relativeScoreChange = (std::abs(oldMegaClusteringScore[oldCentroidId]) > 1e-9) ?
+                    (scoreChange / std::abs(oldMegaClusteringScore[oldCentroidId])) : 0.0;
+
+                // Check criteria
+                if (std::abs(relativeScoreChange) > config.scoreChangeThreshold || relativeChangeCentroid > config.
+                    centroidChangeThreshold) {
+                    megaCentroidsToRecluster.push_back(i);
+                }
+            } else {
+                megaCentroidsToRecluster.push_back(i);
+            }
+        }
+
+        printf("getMegaCentroidsToRecluster: %zu out of %zu megacentroids meet criteria\n",
+               megaCentroidsToRecluster.size(), numMegaCentroids);
+
+        return megaCentroidsToRecluster;
     }
 
     void ReclusteringIndex::printChangeClusterStats() {
