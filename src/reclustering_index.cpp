@@ -1910,29 +1910,15 @@ namespace orangedb {
             oldCentroidsMean[d] /= numOldMegaCentroids;
         }
 
-        // Statistics counters (origin-based)
-        int countRelativeChange_001 = 0;
-        int countRelativeChange_005 = 0;
-        int countRelativeChange_01 = 0;
-        int countRelativeChange_02 = 0;
-        int countRelativeChange_03 = 0;
-        int countRelativeChange_04 = 0;
-        int countRelativeChange_05 = 0;
+        // Define thresholds
+        const std::vector<double> changeThresholds = {0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 2.0, 5.0};
+        const std::vector<double> scoreThresholds = {0.01, 0.1, 0.15, 0.2, 0.25, 1.0};
 
-        // Statistics counters (centroid-based)
-        int countRelativeChangeCentroid_001 = 0;
-        int countRelativeChangeCentroid_005 = 0;
-        int countRelativeChangeCentroid_01 = 0;
-        int countRelativeChangeCentroid_02 = 0;
-        int countRelativeChangeCentroid_03 = 0;
-        int countRelativeChangeCentroid_04 = 0;
-        int countRelativeChangeCentroid_05 = 0;
+        // Statistics counters using vectors
+        std::vector<int> countRelativeChange(changeThresholds.size(), 0);
+        std::vector<int> countRelativeChangeCentroid(changeThresholds.size(), 0);
+        std::vector<int> countRelativeScoreChange(scoreThresholds.size(), 0);
 
-        int countRelativeScoreChange_001 = 0;
-        int countRelativeScoreChange_01 = 0;
-        int countRelativeScoreChange_015 = 0;
-        int countRelativeScoreChange_02 = 0;
-        int countRelativeScoreChange_1 = 0;
         double totalRelativeChange = 0.0;
         double totalRelativeChangeCentroid = 0.0;
         double totalRelativeScoreChange = 0.0;
@@ -1997,30 +1983,15 @@ namespace orangedb {
                 totalRelativeChangeCentroid += relativeChangeCentroid;
                 totalRelativeScoreChange += relativeScoreChange;
 
-                // Origin-based statistics
-                if (relativeChange < 0.01) countRelativeChange_001++;
-                if (relativeChange < 0.05) countRelativeChange_005++;
-                if (relativeChange < 0.1) countRelativeChange_01++;
-                if (relativeChange < 0.2) countRelativeChange_02++;
-                if (relativeChange < 0.3) countRelativeChange_03++;
-                if (relativeChange < 0.4) countRelativeChange_04++;
-                if (relativeChange < 0.5) countRelativeChange_05++;
+                // Count for each threshold using loops
+                for (size_t t = 0; t < changeThresholds.size(); t++) {
+                    if (relativeChange < changeThresholds[t]) countRelativeChange[t]++;
+                    if (relativeChangeCentroid < changeThresholds[t]) countRelativeChangeCentroid[t]++;
+                }
 
-                // Centroid-based statistics
-                if (relativeChangeCentroid < 0.01) countRelativeChangeCentroid_001++;
-                if (relativeChangeCentroid < 0.05) countRelativeChangeCentroid_005++;
-                if (relativeChangeCentroid < 0.1) countRelativeChangeCentroid_01++;
-                if (relativeChangeCentroid < 0.2) countRelativeChangeCentroid_02++;
-                if (relativeChangeCentroid < 0.3) countRelativeChangeCentroid_03++;
-                if (relativeChangeCentroid < 0.4) countRelativeChangeCentroid_04++;
-                if (relativeChangeCentroid < 0.5) countRelativeChangeCentroid_05++;
-
-                // Score change statistics
-                if (std::abs(relativeScoreChange) < 0.01) countRelativeScoreChange_001++;
-                if (std::abs(relativeScoreChange) < 0.1) countRelativeScoreChange_01++;
-                if (std::abs(relativeScoreChange) < 0.15) countRelativeScoreChange_015++;
-                if (std::abs(relativeScoreChange) < 0.2) countRelativeScoreChange_02++;
-                if (std::abs(relativeScoreChange) < 1.0) countRelativeScoreChange_1++;
+                for (size_t t = 0; t < scoreThresholds.size(); t++) {
+                    if (std::abs(relativeScoreChange) < scoreThresholds[t]) countRelativeScoreChange[t]++;
+                }
             } else {
                 printf("Mega Centroid %d: No old centroid found!\n", i);
             }
@@ -2035,29 +2006,30 @@ namespace orangedb {
             printf("Average relative score change: %.6f\n", totalRelativeScoreChange / validCentroids);
 
             printf("\n=== Origin-Based Relative Change Distribution ===\n");
-            printf("  < 0.01 (1%%):\t%d (%.1f%%)\n", countRelativeChange_001, 100.0 * countRelativeChange_001 / validCentroids);
-            printf("  < 0.05 (5%%):\t%d (%.1f%%)\n", countRelativeChange_005, 100.0 * countRelativeChange_005 / validCentroids);
-            printf("  < 0.1 (10%%):\t%d (%.1f%%)\n", countRelativeChange_01, 100.0 * countRelativeChange_01 / validCentroids);
-            printf("  < 0.2 (20%%):\t%d (%.1f%%)\n", countRelativeChange_02, 100.0 * countRelativeChange_02 / validCentroids);
-            printf("  < 0.3 (30%%):\t%d (%.1f%%)\n", countRelativeChange_03, 100.0 * countRelativeChange_03 / validCentroids);
-            printf("  < 0.4 (40%%):\t%d (%.1f%%)\n", countRelativeChange_04, 100.0 * countRelativeChange_04 / validCentroids);
-            printf("  < 0.5 (50%%):\t%d (%.1f%%)\n", countRelativeChange_05, 100.0 * countRelativeChange_05 / validCentroids);
+            for (size_t t = 0; t < changeThresholds.size(); t++) {
+                printf("  < %.2f (%.0f%%):\t%d (%.1f%%)\n",
+                       changeThresholds[t],
+                       changeThresholds[t] * 100,
+                       countRelativeChange[t],
+                       100.0 * countRelativeChange[t] / validCentroids);
+            }
 
             printf("\n=== Centroid-Based Relative Change Distribution ===\n");
-            printf("  < 0.01 (1%%):\t%d (%.1f%%)\n", countRelativeChangeCentroid_001, 100.0 * countRelativeChangeCentroid_001 / validCentroids);
-            printf("  < 0.05 (5%%):\t%d (%.1f%%)\n", countRelativeChangeCentroid_005, 100.0 * countRelativeChangeCentroid_005 / validCentroids);
-            printf("  < 0.1 (10%%):\t%d (%.1f%%)\n", countRelativeChangeCentroid_01, 100.0 * countRelativeChangeCentroid_01 / validCentroids);
-            printf("  < 0.2 (20%%):\t%d (%.1f%%)\n", countRelativeChangeCentroid_02, 100.0 * countRelativeChangeCentroid_02 / validCentroids);
-            printf("  < 0.3 (30%%):\t%d (%.1f%%)\n", countRelativeChangeCentroid_03, 100.0 * countRelativeChangeCentroid_03 / validCentroids);
-            printf("  < 0.4 (40%%):\t%d (%.1f%%)\n", countRelativeChangeCentroid_04, 100.0 * countRelativeChangeCentroid_04 / validCentroids);
-            printf("  < 0.5 (50%%):\t%d (%.1f%%)\n", countRelativeChangeCentroid_05, 100.0 * countRelativeChangeCentroid_05 / validCentroids);
+            for (size_t t = 0; t < changeThresholds.size(); t++) {
+                printf("  < %.2f (%.0f%%):\t%d (%.1f%%)\n",
+                       changeThresholds[t],
+                       changeThresholds[t] * 100,
+                       countRelativeChangeCentroid[t],
+                       100.0 * countRelativeChangeCentroid[t] / validCentroids);
+            }
 
             printf("\n=== Relative Score Change Distribution (absolute) ===\n");
-            printf("  < 0.01:\t%d (%.1f%%)\n", countRelativeScoreChange_001, 100.0 * countRelativeScoreChange_001 / validCentroids);
-            printf("  < 0.1:\t%d (%.1f%%)\n", countRelativeScoreChange_01, 100.0 * countRelativeScoreChange_01 / validCentroids);
-            printf("  < 0.15:\t%d (%.1f%%)\n", countRelativeScoreChange_015, 100.0 * countRelativeScoreChange_015 / validCentroids);
-            printf("  < 0.2:\t%d (%.1f%%)\n", countRelativeScoreChange_02, 100.0 * countRelativeScoreChange_02 / validCentroids);
-            printf("  < 1.0:\t%d (%.1f%%)\n", countRelativeScoreChange_1, 100.0 * countRelativeScoreChange_1 / validCentroids);
+            for (size_t t = 0; t < scoreThresholds.size(); t++) {
+                printf("  < %.2f:\t%d (%.1f%%)\n",
+                       scoreThresholds[t],
+                       countRelativeScoreChange[t],
+                       100.0 * countRelativeScoreChange[t] / validCentroids);
+            }
         }
     }
 
