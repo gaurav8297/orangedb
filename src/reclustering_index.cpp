@@ -1903,6 +1903,9 @@ namespace orangedb {
         int countRelativeChange_005 = 0;
         int countRelativeChange_01 = 0;
         int countRelativeChange_02 = 0;
+        int countRelativeChange_03 = 0;
+        int countRelativeChange_04 = 0;
+        int countRelativeChange_05 = 0;
         int countRelativeScoreChange_001 = 0;
         int countRelativeScoreChange_01 = 0;
         int countRelativeScoreChange_1 = 0;
@@ -1960,6 +1963,9 @@ namespace orangedb {
                 if (relativeChange < 0.05) countRelativeChange_005++;
                 if (relativeChange < 0.1) countRelativeChange_01++;
                 if (relativeChange < 0.2) countRelativeChange_02++;
+                if (relativeChange < 0.3) countRelativeChange_03++;
+                if (relativeChange < 0.4) countRelativeChange_04++;
+                if (relativeChange < 0.5) countRelativeChange_05++;
 
                 if (std::abs(relativeScoreChange) < 0.01) countRelativeScoreChange_001++;
                 if (std::abs(relativeScoreChange) < 0.1) countRelativeScoreChange_01++;
@@ -1980,6 +1986,9 @@ namespace orangedb {
             printf("  < 0.05 (5%%):  %d (%.1f%%)\n", countRelativeChange_005, 100.0 * countRelativeChange_005 / validCentroids);
             printf("  < 0.1 (10%%):  %d (%.1f%%)\n", countRelativeChange_01, 100.0 * countRelativeChange_01 / validCentroids);
             printf("  < 0.2 (20%%):  %d (%.1f%%)\n", countRelativeChange_02, 100.0 * countRelativeChange_02 / validCentroids);
+            printf("  < 0.3 (30%%):  %d (%.1f%%)\n", countRelativeChange_03, 100.0 * countRelativeChange_03 / validCentroids);
+            printf("  < 0.4 (40%%):  %d (%.1f%%)\n", countRelativeChange_04, 100.0 * countRelativeChange_04 / validCentroids);
+            printf("  < 0.5 (50%%):  %d (%.1f%%)\n", countRelativeChange_05, 100.0 * countRelativeChange_05 / validCentroids);
             printf("\nRelative Score Change Distribution (absolute):\n");
             printf("  < 0.01:  %d (%.1f%%)\n", countRelativeScoreChange_001, 100.0 * countRelativeScoreChange_001 / validCentroids);
             printf("  < 0.1:   %d (%.1f%%)\n", countRelativeScoreChange_01, 100.0 * countRelativeScoreChange_01 / validCentroids);
