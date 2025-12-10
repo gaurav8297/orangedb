@@ -1908,6 +1908,8 @@ namespace orangedb {
         int countRelativeChange_05 = 0;
         int countRelativeScoreChange_001 = 0;
         int countRelativeScoreChange_01 = 0;
+        int countRelativeScoreChange_015 = 0;
+        int countRelativeScoreChange_02 = 0;
         int countRelativeScoreChange_1 = 0;
         double totalRelativeChange = 0.0;
         double totalRelativeScoreChange = 0.0;
@@ -1969,6 +1971,8 @@ namespace orangedb {
 
                 if (std::abs(relativeScoreChange) < 0.01) countRelativeScoreChange_001++;
                 if (std::abs(relativeScoreChange) < 0.1) countRelativeScoreChange_01++;
+                if (std::abs(relativeScoreChange) < 0.15) countRelativeScoreChange_015++;
+                if (std::abs(relativeScoreChange) < 0.2) countRelativeScoreChange_02++;
                 if (std::abs(relativeScoreChange) < 1.0) countRelativeScoreChange_1++;
             } else {
                 printf("Mega Centroid %d: No old centroid found!\n", i);
@@ -1992,6 +1996,8 @@ namespace orangedb {
             printf("\nRelative Score Change Distribution (absolute):\n");
             printf("  < 0.01:  %d (%.1f%%)\n", countRelativeScoreChange_001, 100.0 * countRelativeScoreChange_001 / validCentroids);
             printf("  < 0.1:   %d (%.1f%%)\n", countRelativeScoreChange_01, 100.0 * countRelativeScoreChange_01 / validCentroids);
+            printf("  < 0.15:  %d (%.1f%%)\n", countRelativeScoreChange_015, 100.0 * countRelativeScoreChange_015 / validCentroids);
+            printf("  < 0.2:   %d (%.1f%%)\n", countRelativeScoreChange_02, 100.0 * countRelativeScoreChange_02 / validCentroids);
             printf("  < 1.0:   %d (%.1f%%)\n", countRelativeScoreChange_1, 100.0 * countRelativeScoreChange_1 / validCentroids);
         }
     }
