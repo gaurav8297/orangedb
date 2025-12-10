@@ -1923,6 +1923,7 @@ namespace orangedb {
         double totalRelativeChangeCentroid = 0.0;
         double totalRelativeScoreChange = 0.0;
         int validCentroids = 0;
+        int shouldReclusterCount = 0;
 
         for (auto i = 0; i < numMegaCentroids; i++) {
             // Find closest old mega centroid
@@ -1992,6 +1993,11 @@ namespace orangedb {
                 for (size_t t = 0; t < scoreThresholds.size(); t++) {
                     if (std::abs(relativeScoreChange) < scoreThresholds[t]) countRelativeScoreChange[t]++;
                 }
+
+                if (std::abs(relativeScoreChange) < 0.2 && relativeChangeCentroid < 0.6) {
+                    shouldReclusterCount++;
+                }
+
             } else {
                 printf("Mega Centroid %d: No old centroid found!\n", i);
             }
@@ -2030,6 +2036,10 @@ namespace orangedb {
                        countRelativeScoreChange[t],
                        100.0 * countRelativeScoreChange[t] / validCentroids);
             }
+
+            printf("\nNumber of mega centroids that should NOT be reclustered (RelScoreChange < 0.2 and RelChange(centroid) < 0.6): %d (%.1f%%)\n",
+                   shouldReclusterCount,
+                   100.0 * shouldReclusterCount / validCentroids);
         }
     }
 
