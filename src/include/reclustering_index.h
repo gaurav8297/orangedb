@@ -125,6 +125,10 @@ namespace orangedb {
 
         void storeMSEScoreForMegaClusters(int n = INT_MAX);
 
+        double calculateOverlapScore(int megaCentroidId);
+
+        void printOverlapScores();
+
         void saveOldScoreForMegaClusters();
 
         std::vector<vector_idx_t> getMegaCentroidsToRecluster() const;
@@ -339,6 +343,8 @@ namespace orangedb {
         // Quantized data
         std::unique_ptr<SQ8Bit> quantizer;
         // std::vector<float> quantizedMegaCentroids;
+
+        // Old data
         std::vector<uint8_t> quantizedMiniCentroids;
         std::vector<std::vector<uint8_t>> quantizedMiniClusters;
 

@@ -2963,6 +2963,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
+        index.storeMSEScoreForMegaClusters();
         index.printStats();
     }
 

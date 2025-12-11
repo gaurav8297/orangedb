@@ -1883,6 +1883,51 @@ namespace orangedb {
         }
     }
 
+    double ReclusteringIndex::calculateOverlapScore(int megaCentroidId) {
+        auto &miniIds = megaMiniCentroidIds[megaCentroidId];
+        auto numMiniClusters = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
+        // For each mini cluster, find the closest mini cluster in this mega cluster
+        double avgOverlapRatio = 0;
+        for (const auto miniId: miniIds) {
+            auto minDistance = std::numeric_limits<double>::max();
+            size_t closestMiniId = -1;
+            dc->setQuery(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
+            for (const auto j : miniIds) {
+                if (j == miniId) {
+                    continue;
+                }
+                double dist;
+                dc->computeDistance(j, &dist);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    closestMiniId = j;
+                }
+            }
+
+            auto radiusSum = std::sqrt(miniClusteringScore[closestMiniId]) + std::sqrt(miniClusteringScore[miniId]);
+            auto overlapRatio = (radiusSum > 1e-9) ? (std::sqrt(minDistance) / radiusSum) : 0.0;
+            avgOverlapRatio += overlapRatio;
+        }
+        avgOverlapRatio /= static_cast<double>(miniIds.size());
+        return avgOverlapRatio;
+    }
+
+    void ReclusteringIndex::printOverlapScores() {
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto badOverlapRatio = 0;
+        for (auto i = 0; i < numMegaCentroids; i++) {
+            auto overlapScore = calculateOverlapScore(i);
+            printf("Mega Centroid %d: Overlap Score = %f\n", i, overlapScore);
+            if (overlapScore < 1.5) {
+                badOverlapRatio++;
+            }
+        }
+        printf("Total Mega Centroids: %lu, Bad Overlap Ratio (<1.5): %d (%f%%)\n",
+               numMegaCentroids, badOverlapRatio,
+               (static_cast<float>(badOverlapRatio) / static_cast<float>(numMegaCentroids)) * 100.0f);
+    }
+
     void ReclusteringIndex::saveOldScoreForMegaClusters() {
         printf("ReclusteringIndex::saveOldScoreForMegaClusters\n");
         auto numMegaCentroids = megaCentroids.size() / dim;
@@ -2346,7 +2391,7 @@ namespace orangedb {
 #pragma omp parallel for reduction(+: avgMiniScore) schedule(dynamic)
         for (auto miniCentroidId : miniCentroidIds) {
             double s = calcMSEScoreForMiniCluster(miniCentroidId);
-            // miniClusteringScore[miniCentroidId] = s;
+            miniClusteringScore[miniCentroidId] = s;
             avgMiniScore += s;
         }
         return avgMiniScore / miniCentroidIds.size();
@@ -3072,6 +3117,7 @@ namespace orangedb {
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
         printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
         printChangeClusterStats();
+        printOverlapScores();
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {
