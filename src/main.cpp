@@ -2930,13 +2930,15 @@ void benchmark_fast_reclustering(InputParser &input) {
         printf("Started Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
         // index.fixBoundaryMiniCentroids(numFixBoundaries);
+        index.storeMSEScoreForMegaClusters();
         index.saveOldScoreForMegaClusters();
         index.reclusterAllMegaCentroids(nMegaRecluster);
+        index.storeMSEScoreForMegaClusters();
         // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast(nMegaRecluster);
+            index.reclusterBasedOnMSEScore();
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
@@ -2961,7 +2963,6 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
-        index.storeMSEScoreForMegaClusters();
         index.printStats();
     }
 
