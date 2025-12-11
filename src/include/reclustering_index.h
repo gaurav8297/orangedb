@@ -127,6 +127,8 @@ namespace orangedb {
 
         double calculateOverlapScore(int megaCentroidId);
 
+        double calculateRealOverlapScore(int miniCentroidId, int closestMiniCentroidId);
+
         void printOverlapScores();
 
         void saveOldScoreForMegaClusters();

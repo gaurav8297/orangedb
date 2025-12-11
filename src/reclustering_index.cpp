@@ -1907,13 +1907,33 @@ namespace orangedb {
 
             auto radiusSum = std::sqrt(miniClusteringScore[closestMiniId]) + std::sqrt(miniClusteringScore[miniId]);
             auto overlapRatio = (radiusSum > 1e-9) ? (std::sqrt(minDistance) / radiusSum) : 0.0;
+            auto realOverlapScore = calculateRealOverlapScore(miniId, closestMiniId);
             printf(
-                "  Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f\n",
-                miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio);
+                "Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f, Real Overlap Score = %f\n",
+                miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio, realOverlapScore);
             avgOverlapRatio += overlapRatio;
         }
         avgOverlapRatio /= static_cast<double>(miniIds.size());
         return avgOverlapRatio;
+    }
+
+    double ReclusteringIndex::calculateRealOverlapScore(int miniCentroidId, int closestMiniCentroidId) {
+        auto numMiniClusters = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
+        double avgScore = 0.0;
+        auto &miniClusterVectors = miniClusters[miniCentroidId];
+        auto miniClusterSize = miniClusterVectors.size() / dim;
+        for (int i = 0; i < miniClusterSize; i++) {
+            dc->setQuery(miniClusterVectors.data() + static_cast<size_t>(i) * dim);
+            double ownDist = 0.0;
+            dc->computeDistance(miniCentroidId, &ownDist);
+
+            double dist;
+            dc->computeDistance(closestMiniCentroidId, &dist);
+            avgScore += (dist - ownDist) / std::max(dist, ownDist);
+        }
+        avgScore /= static_cast<double>(miniClusterSize);
+        return avgScore;
     }
 
     void ReclusteringIndex::printOverlapScores() {
