@@ -1907,6 +1907,9 @@ namespace orangedb {
 
             auto radiusSum = std::sqrt(miniClusteringScore[closestMiniId]) + std::sqrt(miniClusteringScore[miniId]);
             auto overlapRatio = (radiusSum > 1e-9) ? (std::sqrt(minDistance) / radiusSum) : 0.0;
+            printf(
+                "  Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f\n",
+                miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio);
             avgOverlapRatio += overlapRatio;
         }
         avgOverlapRatio /= static_cast<double>(miniIds.size());
