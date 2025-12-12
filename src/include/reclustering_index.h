@@ -105,6 +105,8 @@ namespace orangedb {
 
         void reclusterFast(int n = INT_MAX);
 
+        void getMegaClusterIds(std::vector<vector_idx_t> &megaClusterIds);
+
         void reclusterFastQuant();
 
         void reclusterFull(int n);
@@ -158,6 +160,8 @@ namespace orangedb {
             int nMegaProbes, int nMiniProbes, ReclusteringIndexStats &stats);
 
         void checkDuplicateMiniClusters();
+
+        void reclusterInternalMegaCentroid(vector_idx_t megaClusterId);
 
     private:
         void fixBoundaryMiniCentroid(int miniCentroidId, std::unordered_set<vector_idx_t> *alreadyFixed = nullptr);

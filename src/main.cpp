@@ -2550,7 +2550,8 @@ void benchmark_faiss_clustering(InputParser &input) {
 }
 
 double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
-                  vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes) {
+                  vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes, std::vector<double> &queryRecalls) {
+    queryRecalls.resize(queryNumVectors);
     // search
     double recall = 0;
     ReclusteringIndexStats stats;
@@ -2576,6 +2577,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
         if (localRecall < 75.0) {
             num_recall_below_75++;
         }
+        queryRecalls.push_back(localRecall);
         printf("Query %d: Recall: %f%%\n", i, localRecall);
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
@@ -2689,10 +2691,11 @@ void benchmark_reclustering_index(InputParser &input) {
     index.storeScoreForMegaClusters();
     index.printStats();
 
-    auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
+    std::vector<double> queryRecalls;
+    auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes, queryRecalls);
     printf("Recall: %f\n", recall);
     index.reclusterAllMegaCentroids();
-    recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes);
+    recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes, nMiniProbes, queryRecalls);
     printf("Recall: %f\n", recall);
 
     index.storeScoreForMegaClusters();
@@ -2900,15 +2903,17 @@ void benchmark_fast_reclustering(InputParser &input) {
     index.printStats();
     // index.flush_to_disk(storagePath);
 
+    std::vector<std::vector<double>> prevRecallValues;
     for (auto nMegaProbe : nMegaProbes) {
         for (auto nMiniProbe : nMiniProbes) {
+            std::vector<double> recallValues;
             auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                    nMiniProbe);
+                                    nMiniProbe, recallValues);
             // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
             //                                       nMegaProbe,
             //                                       nMiniProbe, 5, false);
             printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe, nMiniProbe, recall, 0.0f);
-
+            prevRecallValues.push_back(std::move(recallValues));
             // for (auto nMiniProbeForBadCluster: nMiniProbesForBadCluster) {
             //     recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
             //                                           nMegaProbe,
@@ -2938,7 +2943,25 @@ void benchmark_fast_reclustering(InputParser &input) {
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast();
+            std::vector<vector_idx_t> megaClusterIds;
+            index.getMegaClusterIds(megaClusterIds);
+            for (auto megaClusterId : megaClusterIds) {
+                index.reclusterInternalMegaCentroid(megaClusterId);
+                for (auto nMegaProbe : nMegaProbes) {
+                    for (auto nMiniProbe : nMiniProbes) {
+                        std::vector<double> queryRecalls;
+                        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
+                                                nMiniProbe, queryRecalls);
+                        auto& prevRecall = prevRecallValues[nMegaProbe * nMiniProbes.size() + nMiniProbe];
+                        for (size_t i = 0; i < queryRecalls.size(); i++) {
+                            if (queryRecalls[i] < prevRecall[i] - 5) {
+                                printf("Warning: Recall decreased for nMegaProbes: %d, nMiniProbes: %d, Query %zu, Previous Recall: %f, Current Recall: %f\n",
+                                       nMegaProbe, nMiniProbe, i, prevRecall[i], queryRecalls[i]);
+                            }
+                        }
+                    }
+                }
+            }
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
@@ -2949,13 +2972,16 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.quantizeVectors();
         // index.fixBoundaryMiniCentroidsV2();
         // index.storeScoreForMegaClusters();
+        prevRecallValues.clear();
         for (auto nMegaProbe : nMegaProbes) {
             for (auto nMiniProbe : nMiniProbes) {
+                std::vector<double> queryRecalls;
                 auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                        nMiniProbe);
+                                        nMiniProbe, queryRecalls);
                 // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                 //                                       nMegaProbe,
                 //                                       nMiniProbe, 5, false);
+                prevRecallValues.push_back(std::move(queryRecalls));
                 printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe,
                        nMiniProbe, recall, 0.0f);
             }

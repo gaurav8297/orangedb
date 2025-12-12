@@ -335,6 +335,16 @@ namespace orangedb {
         reclusterFastMegaCentroids(megaClusterIds);
     }
 
+    void ReclusteringIndex::getMegaClusterIds(std::vector<vector_idx_t> &megaClusterIds) {
+        auto megaClusterSize = megaCentroids.size() / dim;
+        megaClusterIds.resize(megaClusterSize);
+        // List all mega centroids
+        for (size_t i = 0; i < megaClusterIds.size(); i++) {
+            megaClusterIds[i] = i;
+        }
+    }
+
+
     void ReclusteringIndex::reclusterFastQuant() {
         // List all mega centroids
         std::vector<vector_idx_t> megaClusterIds(megaCentroids.size() / dim);
