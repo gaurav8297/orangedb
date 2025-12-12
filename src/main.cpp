@@ -2892,12 +2892,12 @@ void benchmark_fast_reclustering(InputParser &input) {
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     // index.reclusterAllMegaCentroids(nMegaRecluster);
     // index.flush_to_disk(storagePath);
-    index.storeMSEScoreForMegaClusters();
+    // index.storeMSEScoreForMegaClusters();
     // index.printStats();
     // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
     // index.printStats();
-    // index.storeScoreForMegaClusters();
-    // index.printStats();
+    index.storeScoreForMegaClusters();
+    index.printStats();
     // index.flush_to_disk(storagePath);
 
     for (auto nMegaProbe : nMegaProbes) {
@@ -2930,15 +2930,15 @@ void benchmark_fast_reclustering(InputParser &input) {
         printf("Started Iteration: %d\n", iter);
         // index.reclusterAllMiniCentroidsQuant();
         // index.fixBoundaryMiniCentroids(numFixBoundaries);
-        index.storeMSEScoreForMegaClusters();
-        index.saveOldScoreForMegaClusters();
+        // index.storeMSEScoreForMegaClusters();
+        // index.saveOldScoreForMegaClusters();
         index.reclusterAllMegaCentroids(nMegaRecluster);
-        index.storeMSEScoreForMegaClusters();
+        // index.storeMSEScoreForMegaClusters();
         // index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterBasedOnMSEScore();
+            index.reclusterFast();
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
@@ -2947,7 +2947,6 @@ void benchmark_fast_reclustering(InputParser &input) {
             }
         }
         // index.quantizeVectors();
-        // index.storeScoreForMegaClusters();
         // index.fixBoundaryMiniCentroidsV2();
         // index.storeScoreForMegaClusters();
         for (auto nMegaProbe : nMegaProbes) {
@@ -2963,7 +2962,8 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
-        index.storeMSEScoreForMegaClusters();
+        // index.storeMSEScoreForMegaClusters();
+        index.storeScoreForMegaClusters();
         index.printStats();
     }
 
