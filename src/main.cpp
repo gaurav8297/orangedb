@@ -2899,7 +2899,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.printStats();
     // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
     // index.printStats();
-    index.storeScoreForMegaClusters();
+    // index.storeScoreForMegaClusters();
     index.printStats();
     // index.flush_to_disk(storagePath);
 
@@ -2993,7 +2993,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
         // index.storeMSEScoreForMegaClusters();
-        index.storeScoreForMegaClusters();
+        // index.storeScoreForMegaClusters();
         index.printStats();
     }
 
