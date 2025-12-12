@@ -180,8 +180,6 @@ namespace orangedb {
 
         void reclusterFastMegaCentroids(std::vector<vector_idx_t> megaClusterIds);
 
-        void reclusterInternalMegaCentroid(vector_idx_t megaClusterId);
-
         void reclusterInternalMegaCentroidQuant(vector_idx_t megaClusterId);
 
         void mergeNewMiniCentroidsBatch(float *megaCentroid, std::vector<vector_idx_t> newMiniCentroidBatch);
