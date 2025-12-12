@@ -2900,7 +2900,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
     // index.printStats();
     // index.storeScoreForMegaClusters();
-    index.printStats();
+    // index.printStats();
     // index.flush_to_disk(storagePath);
 
     std::vector<std::vector<double>> prevRecallValues;
@@ -2925,7 +2925,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
     }
 
-    index.printStats();
+    // index.printStats();
     if (useMSEToRecluster) {
         return;
     }
@@ -2994,7 +2994,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         //                              nMegaProbes, nMiniProbes);
         // index.storeMSEScoreForMegaClusters();
         // index.storeScoreForMegaClusters();
-        index.printStats();
+        // index.printStats();
     }
 
     if (iterations > 0) {
