@@ -2577,7 +2577,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
         if (localRecall < 75.0) {
             num_recall_below_75++;
         }
-        queryRecalls.push_back(localRecall);
+        queryRecalls[i] = localRecall;
         printf("Query %d: Recall: %f%%\n", i, localRecall);
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
@@ -2947,16 +2947,20 @@ void benchmark_fast_reclustering(InputParser &input) {
             index.getMegaClusterIds(megaClusterIds);
             for (auto megaClusterId : megaClusterIds) {
                 index.reclusterInternalMegaCentroid(megaClusterId);
-                for (auto nMegaProbe : nMegaProbes) {
-                    for (auto nMiniProbe : nMiniProbes) {
+                for (int i = 0; i < nMegaProbes.size(); i++) {
+                    auto nMegaProbe = nMegaProbes[i];
+                    for (int j = 0; j < nMiniProbes.size(); j++) {
+                        auto nMiniProbe = nMiniProbes[j];
                         std::vector<double> queryRecalls;
-                        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                                nMiniProbe, queryRecalls);
-                        auto& prevRecall = prevRecallValues[nMegaProbe * nMiniProbes.size() + nMiniProbe];
-                        for (size_t i = 0; i < queryRecalls.size(); i++) {
-                            if (queryRecalls[i] < prevRecall[i] - 5) {
-                                printf("Warning: Recall decreased for nMegaProbes: %d, nMiniProbes: %d, Query %zu, Previous Recall: %f, Current Recall: %f\n",
-                                       nMegaProbe, nMiniProbe, i, prevRecall[i], queryRecalls[i]);
+                        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                                 nMegaProbe,
+                                                 nMiniProbe, queryRecalls);
+                        auto &prevRecall = prevRecallValues[i * nMiniProbes.size() + j];
+                        for (size_t m = 0; m < queryRecalls.size(); m++) {
+                            if (queryRecalls[m] < prevRecall[m] - 5) {
+                                printf(
+                                    "Warning: Recall decreased for nMegaProbes: %d, nMiniProbes: %d, Query %zu, Previous Recall: %f, Current Recall: %f\n",
+                                    nMegaProbe, nMiniProbe, m, prevRecall[m], queryRecalls[m]);
                             }
                         }
                     }
