@@ -3717,7 +3717,7 @@ namespace orangedb {
 
                 if (prevMegaCentroid.size() == currMegaCentroid.size() && prevMegaCentroid.size() > 0) {
                     double megaDistChange;
-                    dc->computeSymDistance(prevMegaCentroid.data(), currMiniCentroid.data(), &megaDistChange);
+                    dc->computeSymDistance(prevMegaCentroid.data(), currMegaCentroid.data(), &megaDistChange);
                     printf("  Mega centroid distance change: %.6f\n", megaDistChange);
                 }
 
