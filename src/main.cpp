@@ -2930,7 +2930,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         return;
     }
     printf("Starting reclustering iterations\n");
-    auto track_query_id = 7;
+    auto track_query_id = 0;
     // index.flush_to_disk(storagePath);
     for (int iter = 0; iter < iterations; iter++) {
         printf("Started Iteration: %d\n", iter);
