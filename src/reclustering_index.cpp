@@ -3454,7 +3454,7 @@ namespace orangedb {
         const vector_idx_t *vectorIds,
         int n,
         std::unordered_map<vector_idx_t, std::tuple<vector_idx_t, vector_idx_t, vector_idx_t, std::vector<float>,
-            std::vector<float> > > &results) const {
+            std::vector<float>>> &results) const {
 
         results.clear();
 

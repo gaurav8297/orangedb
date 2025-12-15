@@ -173,7 +173,7 @@ namespace orangedb {
 
         // Get cluster assignments, vector data, and centroid vectors for given vector IDs
         // Returns: map from vector_idx_t to (miniClusterId, megaClusterId, vector_data, miniCentroid, megaCentroid)
-        void ReclusteringIndex::getVectorClusterAssignments(
+        void getVectorClusterAssignments(
             const float *query,
             const vector_idx_t *vectorIds,
             int n,
