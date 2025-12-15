@@ -163,6 +163,32 @@ namespace orangedb {
 
         void reclusterInternalMegaCentroid(vector_idx_t megaClusterId);
 
+        // Input query vector and ground truth vectorIds, find the corresponding mini and mega centroids and print
+        // the distance between the two centroids before and after reclustering and how the rank of the clusters changed.
+        void analyzeQueryClusterChanges(
+            const float *query,
+            const vector_idx_t *groundTruthVectorIds,
+            int nGroundTruth,
+            bool onlyStoreChanges = true);
+
+        // Get cluster assignments, vector data, and centroid vectors for given vector IDs
+        // Returns: map from vector_idx_t to (miniClusterId, megaClusterId, vector_data, miniCentroid, megaCentroid)
+        void ReclusteringIndex::getVectorClusterAssignments(
+            const float *query,
+            const vector_idx_t *vectorIds,
+            int n,
+            std::unordered_map<vector_idx_t, std::tuple<vector_idx_t, vector_idx_t, vector_idx_t, std::vector<float>,
+                std::vector<float> > > &results) const;
+
+        // Find the rank of mega and mini clusters based on distance to query
+        // Returns: tuple of (megaRank, miniRankInMega, miniRankOverall) where 0 = closest, 1 = second closest, etc.
+        // megaRank: rank among all mega clusters
+        // miniRankInMega: rank within the specific mega cluster
+        // miniRankOverall: rank among all mini clusters globally
+        // Returns (-1, -1, -1) if clusters are not found
+        std::tuple<vector_idx_t, vector_idx_t, vector_idx_t> getClusterRanks(
+            const float *query, vector_idx_t megaId, vector_idx_t miniId) const;
+
     private:
         void fixBoundaryMiniCentroid(int miniCentroidId, std::unordered_set<vector_idx_t> *alreadyFixed = nullptr);
 
@@ -351,6 +377,8 @@ namespace orangedb {
         // Old data
         std::vector<uint8_t> quantizedMiniCentroids;
         std::vector<std::vector<uint8_t>> quantizedMiniClusters;
+        std::unordered_map<vector_idx_t, std::tuple<vector_idx_t, vector_idx_t, vector_idx_t, std::vector<float>,
+            std::vector<float>>> prevQueryState;
 
         // Stats
         ReclusteringIndexStats stats;

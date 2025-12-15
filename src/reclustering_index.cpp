@@ -3448,4 +3448,278 @@ namespace orangedb {
         in.read(reinterpret_cast<char *>(&stats.totalDataWrittenByUser), sizeof(stats.totalDataWrittenByUser));
         in.close();
     }
+
+    void ReclusteringIndex::getVectorClusterAssignments(
+        const float *query,
+        const vector_idx_t *vectorIds,
+        int n,
+        std::unordered_map<vector_idx_t, std::tuple<vector_idx_t, vector_idx_t, vector_idx_t, std::vector<float>,
+            std::vector<float> > > &results) const {
+
+        results.clear();
+
+        // Convert input vector IDs to a set for O(1) lookup
+        std::unordered_set<vector_idx_t> requestedVectors(vectorIds, vectorIds + n);
+
+        // Iterate through mega clusters
+        for (size_t megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+            // Extract mega centroid
+            std::vector<float> megaCentroid(dim);
+            if (megaId < megaCentroids.size() / dim) {
+                std::copy(megaCentroids.begin() + megaId * dim,
+                         megaCentroids.begin() + (megaId + 1) * dim,
+                         megaCentroid.begin());
+            }
+
+            // Iterate through mini clusters in this mega cluster
+            const auto& miniIds = megaMiniCentroidIds[megaId];
+            for (auto miniId : miniIds) {
+                if (miniId >= miniClusterVectorIds.size()) {
+                    continue;
+                }
+
+                const auto& clusterVectorIds = miniClusterVectorIds[miniId];
+                const auto& clusterVectors = miniClusters[miniId];
+
+                // Extract mini centroid
+                std::vector<float> miniCentroid(dim);
+                if (miniId < miniCentroids.size() / dim) {
+                    std::copy(miniCentroids.begin() + miniId * dim,
+                             miniCentroids.begin() + (miniId + 1) * dim,
+                             miniCentroid.begin());
+                }
+
+                // Search for requested vectors in this mini cluster
+                for (size_t i = 0; i < clusterVectorIds.size(); i++) {
+                    vector_idx_t vectorId = clusterVectorIds[i];
+
+                    // Check if this vector was requested
+                    if (requestedVectors.find(vectorId) != requestedVectors.end()) {
+                        auto [megaRank, miniInMegaRank, miniRank] = getClusterRanks(query, megaId, miniId);  // Optionally get ranks if needed
+                        // Store the result: (miniClusterId, megaClusterId, vector_data, miniCentroid, megaCentroid)
+                        results[vectorId] = std::make_tuple(megaRank, miniInMegaRank, miniRank, miniCentroid, megaCentroid);
+
+                        // Remove from requested set for efficiency
+                        requestedVectors.erase(vectorId);
+
+                        // Early exit if we found all requested vectors
+                        if (requestedVectors.empty()) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        // For any vectors not found, store with invalid cluster IDs and empty data
+        for (auto vectorId : requestedVectors) {
+            results[vectorId] = std::make_tuple(INVALID_VECTOR_ID, INVALID_VECTOR_ID, INVALID_VECTOR_ID, std::vector<float>(),
+                                                std::vector<float>());
+        }
+    }
+
+    std::tuple<vector_idx_t, vector_idx_t, vector_idx_t> ReclusteringIndex::getClusterRanks(
+        const float *query, vector_idx_t megaId, vector_idx_t miniId) const {
+        int megaRank = -1;
+        int miniRankInMega = -1;
+        int miniRankOverall = -1;
+
+        // Validate megaId
+        size_t numMegaClusters = megaCentroids.size() / dim;
+        if (megaId >= numMegaClusters) {
+            return std::make_tuple(-1, -1, -1);
+        }
+
+        // Calculate distances from query to all mega centroids and find rank
+        auto megaDc = getDistanceComputer(megaCentroids.data(), numMegaClusters);
+        megaDc->setQuery(query);
+
+        std::vector<std::pair<double, vector_idx_t>> megaDistances;
+        megaDistances.reserve(numMegaClusters);
+
+        for (size_t i = 0; i < numMegaClusters; i++) {
+            double dist;
+            megaDc->computeDistance(i, &dist);
+            megaDistances.emplace_back(dist, i);
+        }
+
+        // Sort by distance
+        std::sort(megaDistances.begin(), megaDistances.end());
+
+        // Find rank of the given megaId
+        for (size_t rank = 0; rank < megaDistances.size(); rank++) {
+            if (megaDistances[rank].second == megaId) {
+                megaRank = rank;
+                break;
+            }
+        }
+
+        // Calculate overall mini cluster rank and rank within mega cluster
+        size_t numMiniClusters = miniCentroids.size() / dim;
+        auto miniDc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
+        miniDc->setQuery(query);
+
+        // Calculate distances to all mini clusters for overall rank
+        std::vector<std::pair<double, vector_idx_t>> allMiniDistances;
+        allMiniDistances.reserve(numMiniClusters);
+
+        for (size_t i = 0; i < numMiniClusters; i++) {
+            double dist;
+            miniDc->computeDistance(i, &dist);
+            allMiniDistances.emplace_back(dist, i);
+        }
+
+        // Sort by distance
+        std::sort(allMiniDistances.begin(), allMiniDistances.end());
+
+        // Find overall rank of the given miniId
+        for (size_t rank = 0; rank < allMiniDistances.size(); rank++) {
+            if (allMiniDistances[rank].second == miniId) {
+                miniRankOverall = rank;
+                break;
+            }
+        }
+
+        // Now find the rank of miniId within the mega cluster
+        if (megaId < megaMiniCentroidIds.size()) {
+            const auto& miniIds = megaMiniCentroidIds[megaId];
+
+            // Check if miniId is in this mega cluster
+            if (std::find(miniIds.begin(), miniIds.end(), miniId) == miniIds.end()) {
+                return std::make_tuple(megaRank, -1, miniRankOverall);
+            }
+
+            // Find rank within the mega cluster
+            std::vector<std::pair<double, vector_idx_t>> miniDistancesInMega;
+            miniDistancesInMega.reserve(miniIds.size());
+
+            for (auto mId : miniIds) {
+                if (mId < numMiniClusters) {
+                    // Find the distance from allMiniDistances
+                    for (const auto& [dist, id] : allMiniDistances) {
+                        if (id == mId) {
+                            miniDistancesInMega.emplace_back(dist, mId);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Sort by distance
+            std::sort(miniDistancesInMega.begin(), miniDistancesInMega.end());
+
+            // Find rank of the given miniId within mega cluster
+            for (size_t rank = 0; rank < miniDistancesInMega.size(); rank++) {
+                if (miniDistancesInMega[rank].second == miniId) {
+                    miniRankInMega = rank;
+                    break;
+                }
+            }
+        }
+
+        return std::make_tuple(megaRank, miniRankInMega, miniRankOverall);
+    }
+
+    void ReclusteringIndex::analyzeQueryClusterChanges(
+        const float *query,
+        const vector_idx_t *groundTruthVectorIds,
+        int nGroundTruth,
+        bool onlyStoreChanges) {
+        // Get current cluster assignments for ground truth vectors
+        std::unordered_map<vector_idx_t, std::tuple<vector_idx_t, vector_idx_t, vector_idx_t, std::vector<float>, std::vector<float>>> currentAssignments;
+        getVectorClusterAssignments(query, groundTruthVectorIds, nGroundTruth, currentAssignments);
+
+        if (onlyStoreChanges) {
+            prevQueryState = std::move(currentAssignments);
+            return;
+        }
+
+        printf("\n=== Analyzing Query Cluster Changes ===\n");
+        printf("Ground truth vectors: %d\n", nGroundTruth);
+
+        // If prevQueryState is empty, this is the first call - store current state
+        if (prevQueryState.empty()) {
+            printf("First analysis - storing initial state\n");
+            prevQueryState = std::move(currentAssignments);
+            printf("=== End Analysis ===\n\n");
+            return;
+        }
+
+        // Compare previous and current states
+        printf("\n=== Comparing Before and After Reclustering ===\n\n");
+
+        int clusterChanges = 0;
+        int megaChanges = 0;
+        int miniChanges = 0;
+
+        // Analyze each ground truth vector
+        for (int i = 0; i < std::min(nGroundTruth, 100); i++) {
+            vector_idx_t vectorId = groundTruthVectorIds[i];
+
+            auto currentIt = currentAssignments.find(vectorId);
+            auto prevIt = prevQueryState.find(vectorId);
+
+            if (currentIt == currentAssignments.end() || prevIt == prevQueryState.end()) {
+                continue;
+            }
+
+            auto [currMegaRank, currMiniInMegaRank, currMiniRank, currMiniCentroid, currMegaCentroid] = currentIt->second;
+            auto [prevMegaRank, prevMiniInMegaRank, prevMiniRank, prevMiniCentroid, prevMegaCentroid] = prevIt->second;
+
+            bool megaRankChanged = (currMegaRank != prevMegaRank);
+            bool miniRankChanged = (currMiniRank != prevMiniRank);
+
+            if (megaRankChanged || miniRankChanged) {
+                clusterChanges++;
+                if (megaRankChanged) megaChanges++;
+                if (miniRankChanged) miniChanges++;
+
+                printf("Vector %lu (GT rank %d):\n", vectorId, i);
+
+                if (megaRankChanged) {
+                    printf("  Mega rank: %lu -> %lu (delta: %+ld)\n",
+                           prevMegaRank, currMegaRank, (long)(currMegaRank - prevMegaRank));
+                } else {
+                    printf("  Mega rank: %lu (unchanged)\n", currMegaRank);
+                }
+
+                if (miniRankChanged) {
+                    printf("  Mini rank (in mega): %lu -> %lu (delta: %+ld)\n",
+                           prevMiniInMegaRank, currMiniInMegaRank, (long)(currMiniInMegaRank - prevMiniInMegaRank));
+                    printf("  Mini rank (overall): %lu -> %lu (delta: %+ld)\n",
+                           prevMiniRank, currMiniRank, (long)(currMiniRank - prevMiniRank));
+                } else {
+                    printf("  Mini rank (overall): %lu (unchanged)\n", currMiniRank);
+                }
+
+                // Calculate centroid distance change using distance computer
+                if (prevMiniCentroid.size() == currMiniCentroid.size() && prevMiniCentroid.size() > 0) {
+                    auto miniDc = getDistanceComputer(nullptr, 0);
+                    double miniDistChange;
+                    miniDc->computeSymDistance(prevMiniCentroid.data(), currMiniCentroid.data(), &miniDistChange);
+                    printf("  Mini centroid distance change: %.6f\n", miniDistChange);
+                }
+
+                if (prevMegaCentroid.size() == currMegaCentroid.size() && prevMegaCentroid.size() > 0) {
+                    auto megaDc = getDistanceComputer(nullptr, 0);
+                    double megaDistChange;
+                    megaDc->computeSymDistance(prevMegaCentroid.data(), currMiniCentroid.data(), &megaDistChange);
+                    printf("  Mega centroid distance change: %.6f\n", megaDistChange);
+                }
+                printf("\n");
+            }
+        }
+
+        // Print summary
+        printf("=== Summary ===\n");
+        printf("Vectors with rank changes: %d / %d (%.1f%%)\n",
+               clusterChanges, nGroundTruth, 100.0 * clusterChanges / nGroundTruth);
+        printf("Mega rank changes: %d\n", megaChanges);
+        printf("Mini rank changes: %d\n", miniChanges);
+
+        // Update prevQueryState with current assignments
+        prevQueryState = std::move(currentAssignments);
+
+        printf("\n=== End Analysis ===\n\n");
+    }
 }

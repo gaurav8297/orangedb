@@ -2947,6 +2947,8 @@ void benchmark_fast_reclustering(InputParser &input) {
             index.getMegaClusterIds(megaClusterIds);
             for (auto megaClusterId : megaClusterIds) {
                 index.reclusterInternalMegaCentroid(megaClusterId);
+
+                bool q0HugeChangeInRecall = false;
                 for (int i = 0; i < nMegaProbes.size(); i++) {
                     auto nMegaProbe = nMegaProbes[i];
                     for (int j = 0; j < nMiniProbes.size(); j++) {
@@ -2958,12 +2960,21 @@ void benchmark_fast_reclustering(InputParser &input) {
                         auto &prevRecall = prevRecallValues[i * nMiniProbes.size() + j];
                         for (size_t m = 0; m < queryRecalls.size(); m++) {
                             if (queryRecalls[m] < prevRecall[m] - 5) {
+                                if (m == 0) {
+                                    q0HugeChangeInRecall = true;
+                                }
                                 printf(
                                     "Warning: Recall decreased for nMegaProbes: %d, nMiniProbes: %d, Query %zu, Previous Recall: %f, Current Recall: %f\n",
                                     nMegaProbe, nMiniProbe, m, prevRecall[m], queryRecalls[m]);
                             }
                         }
                     }
+                }
+
+                if (q0HugeChangeInRecall) {
+                    index.analyzeQueryClusterChanges(queryVecs, gtVecs, k, false);
+                } else {
+                    index.analyzeQueryClusterChanges(queryVecs, gtVecs, k, true);
                 }
             }
         } else {
