@@ -3620,6 +3620,21 @@ namespace orangedb {
         return std::make_tuple(megaRank, miniRankInMega, miniRankOverall);
     }
 
+    const float* ReclusteringIndex::getVectorData(vector_idx_t vectorId) const {
+        for (size_t miniId = 0; miniId < miniClusterVectorIds.size(); miniId++) {
+            const auto& clusterVectorIds = miniClusterVectorIds[miniId];
+            const auto& clusterVectors = miniClusters[miniId];
+
+            for (size_t i = 0; i < clusterVectorIds.size(); i++) {
+                if (clusterVectorIds[i] == vectorId) {
+                    // Return pointer to the vector data
+                    return const_cast<float *>(clusterVectors.data() + i * dim);
+                }
+            }
+        }
+    }
+
+
     void ReclusteringIndex::analyzeQueryClusterChanges(
         const float *query,
         const vector_idx_t *groundTruthVectorIds,
@@ -3691,20 +3706,61 @@ namespace orangedb {
                 } else {
                     printf("  Mini rank (overall): %lu (unchanged)\n", currMiniRank);
                 }
+                auto dc = getDistanceComputer(nullptr, 0);
 
                 // Calculate centroid distance change using distance computer
                 if (prevMiniCentroid.size() == currMiniCentroid.size() && prevMiniCentroid.size() > 0) {
-                    auto miniDc = getDistanceComputer(nullptr, 0);
                     double miniDistChange;
-                    miniDc->computeSymDistance(prevMiniCentroid.data(), currMiniCentroid.data(), &miniDistChange);
+                    dc->computeSymDistance(prevMiniCentroid.data(), currMiniCentroid.data(), &miniDistChange);
                     printf("  Mini centroid distance change: %.6f\n", miniDistChange);
                 }
 
                 if (prevMegaCentroid.size() == currMegaCentroid.size() && prevMegaCentroid.size() > 0) {
-                    auto megaDc = getDistanceComputer(nullptr, 0);
                     double megaDistChange;
-                    megaDc->computeSymDistance(prevMegaCentroid.data(), currMiniCentroid.data(), &megaDistChange);
+                    dc->computeSymDistance(prevMegaCentroid.data(), currMiniCentroid.data(), &megaDistChange);
                     printf("  Mega centroid distance change: %.6f\n", megaDistChange);
+                }
+
+                // Calculate distance from query to previous and current mini centroids
+                if (prevMiniCentroid.size() > 0) {
+                    double dist;
+                    dc->computeSymDistance(query, prevMiniCentroid.data(), &dist);
+                    printf("  Distance from query to previous mini centroid: %.6f\n", dist);
+                }
+
+                if (currMiniCentroid.size() > 0) {
+                    double dist;
+                    dc->computeSymDistance(query, currMiniCentroid.data(), &dist);
+                    printf("  Distance from query to current mini centroid: %.6f\n", dist);
+                }
+
+                // Same for mega centroids
+                if (prevMegaCentroid.size() > 0) {
+                    double dist;
+                    dc->computeSymDistance(query, prevMegaCentroid.data(), &dist);
+                    printf("  Distance from query to previous mega centroid: %.6f\n", dist);
+                }
+
+                if (currMegaCentroid.size() > 0) {
+                    double dist;
+                    dc->computeSymDistance(query, currMegaCentroid.data(), &dist);
+                    printf("  Distance from query to current mega centroid: %.6f\n", dist);
+                }
+
+                // Calculate against vector
+                const float* vectorData = getVectorData(vectorId);
+                if (vectorData != nullptr) {
+                    double distToPrevMini, distToCurrMini;
+                    dc->computeSymDistance(vectorData, prevMiniCentroid.data(), &distToPrevMini);
+                    dc->computeSymDistance(vectorData, currMiniCentroid.data(), &distToCurrMini);
+                    printf("  Distance from vector to previous mini centroid: %.6f\n", distToPrevMini);
+                    printf("  Distance from vector to current mini centroid: %.6f\n", distToCurrMini);
+
+                    double distToPrevMega, distToCurrMega;
+                    dc->computeSymDistance(vectorData, prevMegaCentroid.data(), &distToPrevMega);
+                    dc->computeSymDistance(vectorData, currMegaCentroid.data(), &distToCurrMega);
+                    printf("  Distance from vector to previous mega centroid: %.6f\n", distToPrevMega);
+                    printf("  Distance from vector to current mega centroid: %.6f\n", distToCurrMega);
                 }
                 printf("\n");
             }

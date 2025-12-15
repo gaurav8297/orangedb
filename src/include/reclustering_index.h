@@ -163,6 +163,8 @@ namespace orangedb {
 
         void reclusterInternalMegaCentroid(vector_idx_t megaClusterId);
 
+        const float* getVectorData(vector_idx_t vectorId) const;
+
         // Input query vector and ground truth vectorIds, find the corresponding mini and mega centroids and print
         // the distance between the two centroids before and after reclustering and how the rank of the clusters changed.
         void analyzeQueryClusterChanges(
