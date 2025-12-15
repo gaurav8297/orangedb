@@ -2930,6 +2930,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         return;
     }
     printf("Starting reclustering iterations\n");
+    auto track_query_id = 7;
     // index.flush_to_disk(storagePath);
     for (int iter = 0; iter < iterations; iter++) {
         printf("Started Iteration: %d\n", iter);
@@ -2937,7 +2938,8 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.fixBoundaryMiniCentroids(numFixBoundaries);
         // index.storeMSEScoreForMegaClusters();
         // index.saveOldScoreForMegaClusters();
-        index.analyzeQueryClusterChanges(queryVecs, gtVecs, k, true);
+        index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension, gtVecs + k * track_query_id, k,
+                                         true);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         // index.storeMSEScoreForMegaClusters();
         // index.printStats();
@@ -2949,7 +2951,7 @@ void benchmark_fast_reclustering(InputParser &input) {
             for (auto megaClusterId : megaClusterIds) {
                 index.reclusterInternalMegaCentroid(megaClusterId);
 
-                bool q0HugeChangeInRecall = false;
+                bool bigChangeInRecall = false;
                 for (int i = 0; i < nMegaProbes.size(); i++) {
                     auto nMegaProbe = nMegaProbes[i];
                     for (int j = 0; j < nMiniProbes.size(); j++) {
@@ -2961,8 +2963,8 @@ void benchmark_fast_reclustering(InputParser &input) {
                         auto &prevRecall = prevRecallValues[i * nMiniProbes.size() + j];
                         for (size_t m = 0; m < queryRecalls.size(); m++) {
                             if (queryRecalls[m] < prevRecall[m] - 5) {
-                                if (m == 0) {
-                                    q0HugeChangeInRecall = true;
+                                if (m == track_query_id) {
+                                    bigChangeInRecall = true;
                                 }
                                 printf(
                                     "Warning: Recall decreased for nMegaProbes: %d, nMiniProbes: %d, Query %zu, Previous Recall: %f, Current Recall: %f\n",
@@ -2972,8 +2974,10 @@ void benchmark_fast_reclustering(InputParser &input) {
                     }
                 }
 
-                if (q0HugeChangeInRecall) {
-                    index.analyzeQueryClusterChanges(queryVecs, gtVecs, k, false);
+                if (bigChangeInRecall) {
+                    index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension,
+                                                     gtVecs + k * track_query_id, k,
+                                                     false);
                 }
             }
         } else {
