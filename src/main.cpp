@@ -2937,6 +2937,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.fixBoundaryMiniCentroids(numFixBoundaries);
         // index.storeMSEScoreForMegaClusters();
         // index.saveOldScoreForMegaClusters();
+        index.analyzeQueryClusterChanges(queryVecs, gtVecs, k, true);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         // index.storeMSEScoreForMegaClusters();
         // index.printStats();
@@ -2973,8 +2974,6 @@ void benchmark_fast_reclustering(InputParser &input) {
 
                 if (q0HugeChangeInRecall) {
                     index.analyzeQueryClusterChanges(queryVecs, gtVecs, k, false);
-                } else {
-                    index.analyzeQueryClusterChanges(queryVecs, gtVecs, k, true);
                 }
             }
         } else {

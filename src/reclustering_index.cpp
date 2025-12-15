@@ -3718,7 +3718,7 @@ namespace orangedb {
         printf("Mini rank changes: %d\n", miniChanges);
 
         // Update prevQueryState with current assignments
-        prevQueryState = std::move(currentAssignments);
+        // prevQueryState = std::move(currentAssignments);
 
         printf("\n=== End Analysis ===\n\n");
     }
