@@ -3799,10 +3799,12 @@ namespace orangedb {
                         }
                     }
 
+                    std::vector<vector_idx_t> allMegaIds;
+                    getMegaClusterIds(allMegaIds);
                     // Top k closest mini centroids from query
                     printf("\n  Top %d closest mini centroids from query:\n", kClosest);
                     std::vector<vector_idx_t> miniIdsFromQuery;
-                    findKClosestMiniCentroids(query, kClosest * 2, megaIdsFromQuery, miniIdsFromQuery, tempStats);
+                    findKClosestMiniCentroids(query, kClosest * 2, megaIdsFromQuery, allMegaIds, tempStats);
 
                     // Get distances for these mini centroids
                     auto miniDc = getDistanceComputer(miniCentroids.data(), miniCentroids.size() / dim);
@@ -3827,7 +3829,7 @@ namespace orangedb {
                     // Top k closest mini centroids from vector
                     printf("\n  Top %d closest mini centroids from vector:\n", kClosest);
                     std::vector<vector_idx_t> miniIdsFromVector;
-                    findKClosestMiniCentroids(vectorData, kClosest * 2, megaIdsFromVector, miniIdsFromVector,
+                    findKClosestMiniCentroids(vectorData, kClosest * 2, allMegaIds, miniIdsFromVector,
                                               tempStats);
 
                     // Get distances for these mini centroids from vector
