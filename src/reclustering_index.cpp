@@ -3666,6 +3666,9 @@ namespace orangedb {
         int clusterChanges = 0;
         int megaChanges = 0;
         int miniChanges = 0;
+        int kClosest = 5; // Number of closest centroids to show
+
+        ReclusteringIndexStats tempStats;
 
         // Analyze each ground truth vector
         for (int i = 0; i < std::min(nGroundTruth, 100); i++) {
@@ -3748,7 +3751,7 @@ namespace orangedb {
                 }
 
                 // Calculate against vector
-                const float* vectorData = getVectorData(vectorId);
+                const float *vectorData = getVectorData(vectorId);
                 if (vectorData != nullptr) {
                     double distToPrevMini, distToCurrMini;
                     dc->computeSymDistance(vectorData, prevMiniCentroid.data(), &distToPrevMini);
@@ -3761,6 +3764,76 @@ namespace orangedb {
                     dc->computeSymDistance(vectorData, currMegaCentroid.data(), &distToCurrMega);
                     printf("  Distance from vector to previous mega centroid: %.6f\n", distToPrevMega);
                     printf("  Distance from vector to current mega centroid: %.6f\n", distToCurrMega);
+
+                    printf("\n  --- Detailed Distance Analysis ---\n");
+
+                    // Top k closest mega centroids from query
+                    printf("  Top %d closest mega centroids from query:\n", kClosest);
+                    std::vector<vector_idx_t> megaIdsFromQuery;
+                    std::vector<float> megaDistsFromQuery;
+                    findKClosestMegaCentroids(query, kClosest, megaIdsFromQuery, megaDistsFromQuery);
+
+                    for (int j = 0; j < std::min(kClosest, (int) megaIdsFromQuery.size()); j++) {
+                        printf("    Rank %d: Mega %lu, distance: %.6f%s\n",
+                               j, megaIdsFromQuery[j], megaDistsFromQuery[j],
+                               (j == currMegaRank) ? " <- vector's mega" : "");
+                    }
+
+                    // Top k closest mega centroids from vector
+                    printf("\n  Top %d closest mega centroids from vector:\n", kClosest);
+                    std::vector<vector_idx_t> megaIdsFromVector;
+                    std::vector<float> megaDistsFromVector;
+                    findKClosestMegaCentroids(vectorData, kClosest, megaIdsFromVector, megaDistsFromVector);
+
+                    for (int j = 0; j < std::min(kClosest, (int) megaIdsFromVector.size()); j++) {
+                        printf("    Rank %d: Mega %lu, distance: %.6f%s\n",
+                               j, megaIdsFromVector[j], megaDistsFromVector[j],
+                               (j == currMegaRank) ? " <- vector's mega" : "");
+                    }
+
+                    // Top k closest mini centroids from query
+                    printf("\n  Top %d closest mini centroids from query:\n", kClosest);
+                    std::vector<vector_idx_t> miniIdsFromQuery;
+                    findKClosestMiniCentroids(query, kClosest * 2, megaIdsFromQuery, miniIdsFromQuery, tempStats);
+
+                    // Get distances for these mini centroids
+                    auto miniDc = getDistanceComputer(miniCentroids.data(), miniCentroids.size() / dim);
+                    miniDc->setQuery(query);
+                    std::vector<std::pair<double, vector_idx_t> > miniDistsFromQuery;
+                    for (auto miniId: miniIdsFromQuery) {
+                        double dist;
+                        miniDc->computeDistance(miniId, &dist);
+                        miniDistsFromQuery.emplace_back(dist, miniId);
+                    }
+                    std::sort(miniDistsFromQuery.begin(), miniDistsFromQuery.end());
+
+                    for (int j = 0; j < std::min(kClosest, (int) miniDistsFromQuery.size()); j++) {
+                        printf("    Rank %d: Mini %lu, distance: %.6f%s\n",
+                               j, miniDistsFromQuery[j].second, miniDistsFromQuery[j].first,
+                               (miniDistsFromQuery[j].second == (size_t) currMiniRank) ? " <- vector's mini" : "");
+                    }
+
+                    // Top k closest mini centroids from vector
+                    printf("\n  Top %d closest mini centroids from vector:\n", kClosest);
+                    std::vector<vector_idx_t> miniIdsFromVector;
+                    findKClosestMiniCentroids(vectorData, kClosest * 2, megaIdsFromVector, miniIdsFromVector,
+                                              tempStats);
+
+                    // Get distances for these mini centroids from vector
+                    miniDc->setQuery(vectorData);
+                    std::vector<std::pair<double, vector_idx_t> > miniDistsFromVector;
+                    for (auto miniId: miniIdsFromVector) {
+                        double dist;
+                        miniDc->computeDistance(miniId, &dist);
+                        miniDistsFromVector.emplace_back(dist, miniId);
+                    }
+                    std::sort(miniDistsFromVector.begin(), miniDistsFromVector.end());
+
+                    for (int j = 0; j < std::min(kClosest, (int) miniDistsFromVector.size()); j++) {
+                        printf("    Rank %d: Mini %lu, distance: %.6f%s\n",
+                               j, miniDistsFromVector[j].second, miniDistsFromVector[j].first,
+                               (miniDistsFromVector[j].second == (size_t) currMiniRank) ? " <- vector's mini" : "");
+                    }
                 }
                 printf("\n");
             }
