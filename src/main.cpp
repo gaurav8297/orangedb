@@ -2938,8 +2938,8 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.fixBoundaryMiniCentroids(numFixBoundaries);
         // index.storeMSEScoreForMegaClusters();
         // index.saveOldScoreForMegaClusters();
-        index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension, gtVecs + k * track_query_id, k,
-                                         true);
+        // index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension, gtVecs + k * track_query_id, k,
+                                         // true);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         // index.storeMSEScoreForMegaClusters();
         // index.printStats();
@@ -2974,11 +2974,11 @@ void benchmark_fast_reclustering(InputParser &input) {
                     }
                 }
 
-                if (bigChangeInRecall) {
-                    index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension,
-                                                     gtVecs + k * track_query_id, k,
-                                                     false);
-                }
+                // if (bigChangeInRecall) {
+                //     index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension,
+                //                                      gtVecs + k * track_query_id, k,
+                //                                      false);
+                // }
             }
         } else {
             if (reclusterOnScore) {
