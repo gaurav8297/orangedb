@@ -2901,7 +2901,7 @@ namespace orangedb {
         // Iterate through the specified mega centroids
         for (auto megaId : megaCentroids) {
             // Get all mini centroids belonging to this mega centroid
-            auto miniIds = megaMiniCentroidIds[megaId];
+            auto& miniIds = megaMiniCentroidIds[megaId];
             for (auto miniId : miniIds) {
                 double d;
                 stats.numDistanceCompForSearch++;
