@@ -3632,8 +3632,8 @@ namespace orangedb {
                 }
             }
         }
+        return nullptr; // Not found
     }
-
 
     void ReclusteringIndex::analyzeQueryClusterChanges(
         const float *query,
