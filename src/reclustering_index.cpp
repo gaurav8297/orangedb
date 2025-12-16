@@ -3821,7 +3821,7 @@ namespace orangedb {
                         auto [megaRank, miniRankInMega, miniRankOverall] = getClusterRanks(query, megaId, miniId);
                         printf("    Rank %d: Mini %lu (overall rank: %llu, mega: %lu), distance: %.6f%s\n",
                                j, miniId, miniRankOverall, megaId, miniDistsFromQuery[j].first,
-                               (miniId == (size_t) currMiniRank) ? " <- vector's mini" : "");
+                               (miniRankOverall == (size_t) currMiniRank) ? " <- vector's mini" : "");
                     }
 
                     // Top k closest mini centroids from vector
@@ -3846,7 +3846,7 @@ namespace orangedb {
                         auto [megaRank, miniRankInMega, miniRankOverall] = getClusterRanks(query, megaId, miniId);
                         printf("    Rank %d: Mini %lu (overall rank: %llu, mega: %lu), distance: %.6f%s\n",
                                j, miniId, miniRankOverall, megaId, miniDistsFromVector[j].first,
-                               (miniId == (size_t) currMiniRank) ? " <- vector's mini" : "");
+                               (miniRankOverall == (size_t) currMiniRank) ? " <- vector's mini" : "");
                     }
                 }
                 printf("\n");
