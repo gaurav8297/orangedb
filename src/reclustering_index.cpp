@@ -3791,6 +3791,14 @@ namespace orangedb {
                                (j == currMegaRank) ? " <- vector's mega" : "");
                     }
 
+                    // Build map from mini cluster ID to mega cluster ID
+                    std::unordered_map<vector_idx_t, vector_idx_t> miniToMegaMap;
+                    for (size_t megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+                        for (auto miniId : megaMiniCentroidIds[megaId]) {
+                            miniToMegaMap[miniId] = megaId;
+                        }
+                    }
+
                     // Top k closest mini centroids from query
                     printf("\n  Top %d closest mini centroids from query:\n", kClosest);
                     std::vector<vector_idx_t> miniIdsFromQuery;
@@ -3808,9 +3816,12 @@ namespace orangedb {
                     std::sort(miniDistsFromQuery.begin(), miniDistsFromQuery.end());
 
                     for (int j = 0; j < std::min(kClosest, (int) miniDistsFromQuery.size()); j++) {
-                        printf("    Rank %d: Mini %lu, distance: %.6f%s\n",
-                               j, miniDistsFromQuery[j].second, miniDistsFromQuery[j].first,
-                               (miniDistsFromQuery[j].second == (size_t) currMiniRank) ? " <- vector's mini" : "");
+                        vector_idx_t miniId = miniDistsFromQuery[j].second;
+                        vector_idx_t megaId = miniToMegaMap[miniId];
+                        auto [megaRank, miniRankInMega, miniRankOverall] = getClusterRanks(query, megaId, miniId);
+                        printf("    Rank %d: Mini %lu (overall rank: %llu, mega: %lu), distance: %.6f%s\n",
+                               j, miniId, miniRankOverall, megaId, miniDistsFromQuery[j].first,
+                               (miniId == (size_t) currMiniRank) ? " <- vector's mini" : "");
                     }
 
                     // Top k closest mini centroids from vector
@@ -3830,9 +3841,12 @@ namespace orangedb {
                     std::sort(miniDistsFromVector.begin(), miniDistsFromVector.end());
 
                     for (int j = 0; j < std::min(kClosest, (int) miniDistsFromVector.size()); j++) {
-                        printf("    Rank %d: Mini %lu, distance: %.6f%s\n",
-                               j, miniDistsFromVector[j].second, miniDistsFromVector[j].first,
-                               (miniDistsFromVector[j].second == (size_t) currMiniRank) ? " <- vector's mini" : "");
+                        vector_idx_t miniId = miniDistsFromVector[j].second;
+                        vector_idx_t megaId = miniToMegaMap[miniId];
+                        auto [megaRank, miniRankInMega, miniRankOverall] = getClusterRanks(query, megaId, miniId);
+                        printf("    Rank %d: Mini %lu (overall rank: %llu, mega: %lu), distance: %.6f%s\n",
+                               j, miniId, miniRankOverall, megaId, miniDistsFromVector[j].first,
+                               (miniId == (size_t) currMiniRank) ? " <- vector's mini" : "");
                     }
                 }
                 printf("\n");
