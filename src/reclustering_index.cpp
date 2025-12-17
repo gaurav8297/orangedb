@@ -3010,13 +3010,13 @@ namespace orangedb {
         // Print top 10 largest clusters and smallest clusters
         std::sort(clusterSizes.begin(), clusterSizes.end());
         printf("Top 10 smallest clusters sizes: ");
-        for (int i = 0; i < 10 && i < clusterSizes.size(); i++) {
+        for (int i = 0; i < 100 && i < clusterSizes.size(); i++) {
             printf("%zu ", clusterSizes[i]);
         }
         printf("\n");
 
         printf("Top 10 largest clusters sizes: ");
-        for (int i = 0; i < 10 && i < clusterSizes.size(); i++) {
+        for (int i = 0; i < 100 && i < clusterSizes.size(); i++) {
             printf("%zu ", clusterSizes[clusterSizes.size() - 1 - i]);
         }
         printf("\n");
