@@ -2996,17 +2996,31 @@ namespace orangedb {
         auto minSize = std::numeric_limits<size_t>::max();
         size_t maxSize = 0;
         size_t avgSize = 0;
+        std::vector<size_t> clusterSizes;
         for (const auto &cluster: miniClusters) {
             auto size = cluster.size() / dim;
             minSize = std::min(minSize, size);
             maxSize = std::max(maxSize, size);
             avgSize += size;
+            clusterSizes.push_back(size);
         }
         printf("Min size of clusters: %zu\n", minSize);
         printf("Max size of clusters: %zu\n", maxSize);
         printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
-        printf("Total number of vectors: %zu/%zu\n", avgSize, size);
+        // Print top 10 largest clusters and smallest clusters
+        std::sort(clusterSizes.begin(), clusterSizes.end());
+        printf("Top 10 smallest clusters sizes: ");
+        for (int i = 0; i < 10 && i < clusterSizes.size(); i++) {
+            printf("%zu ", clusterSizes[i]);
+        }
+        printf("\n");
 
+        printf("Top 10 largest clusters sizes: ");
+        for (int i = 0; i < 10 && i < clusterSizes.size(); i++) {
+            printf("%zu ", clusterSizes[clusterSizes.size() - 1 - i]);
+        }
+        printf("\n");
+        printf("Total number of vectors: %zu/%zu\n", avgSize, size);
         // Print min, max and avg for mega clusters
         auto megaMinSize = std::numeric_limits<size_t>::max();
         size_t megaMaxSize = 0;
