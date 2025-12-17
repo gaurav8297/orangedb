@@ -2925,7 +2925,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
     }
 
-    // index.printStats();
+    index.printStats();
     if (useMSEToRecluster) {
         return;
     }
