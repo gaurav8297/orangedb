@@ -3163,8 +3163,8 @@ namespace orangedb {
         // Print stats
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
         printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
-        printChangeClusterStats();
-        printOverlapScores();
+        // printChangeClusterStats();
+        // printOverlapScores();
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {
