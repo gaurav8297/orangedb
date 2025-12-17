@@ -3008,7 +3008,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         //                              nMegaProbes, nMiniProbes);
         // index.storeMSEScoreForMegaClusters();
         // index.storeScoreForMegaClusters();
-        // index.printStats();
+        index.printStats();
     }
 
     if (iterations > 0) {
