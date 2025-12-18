@@ -3663,6 +3663,54 @@ void test_final_bug_2(InputParser &input) {
     printf("Distance to vec2: %f\n", dist2);
 }
 
+void test_quantization_issue(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const int sampleSize = stoi(input.getCmdOption("-sampleSize"));
+    const int queryIndex = stoi(input.getCmdOption("-queryIndex"));
+
+    // Load base vectors
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
+    // Load query vectors
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    faiss::ScalarQuantizer sq(baseDimension, faiss::ScalarQuantizer::QT_8bit);
+    std::vector<uint8_t> codes(baseNumVectors * baseDimension);
+    sq.train(baseNumVectors, baseVecs);
+    sq.compute_codes(baseVecs, codes.data(), baseNumVectors);
+
+    // Randomly sample 10k points and compare distances
+    RandomGenerator rg(1234);
+    std::vector<vector_idx_t> sampleIndices(sampleSize);
+    rg.randomPerm(baseNumVectors, sampleIndices.data(), sampleSize);
+
+    // TODO: Compute distances using quantized vectors from query vector 3 onwards
+    std::vector<float> actualDistances(baseNumVectors);
+    std::vector<float> codesDistances(baseNumVectors);
+    auto queryVec = queryVecs + queryIndex * queryDimension;
+    auto dc = sq.get_distance_computer();
+    dc->set_query(queryVec);
+    double distance_diff = 0;
+    for (size_t i = 0; i < sampleSize; i++) {
+        actualDistances[i] = faiss::fvec_L2sqr(queryVec,
+                                               baseVecs + sampleIndices[i] * baseDimension,
+                                               baseDimension);
+        codesDistances[i] = dc->distance_to_code(codes.data() + sampleIndices[i] * sq.code_size);
+        distance_diff += std::abs(actualDistances[i] - codesDistances[i]);
+    }
+    printf("Average distance difference over %d samples: %f\n", sampleSize, distance_diff / sampleSize);
+    // Write the actualDistances and codesDistances to file for comparison
+    writeToFile("./actual_distances.bin",
+                reinterpret_cast<uint8_t *>(actualDistances.data()),
+                actualDistances.size() * sizeof(float));
+    writeToFile("./codes_distances.bin",
+                reinterpret_cast<uint8_t *>(codesDistances.data()),
+                codesDistances.size() * sizeof(float));
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     backward::SignalHandling sh;
@@ -3738,6 +3786,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "testBug") {
         test_final_bug_2(input);
+    }
+    else if (run == "testQuantizationIssue") {
+        test_quantization_issue(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
