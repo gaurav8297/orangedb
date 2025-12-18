@@ -3701,9 +3701,11 @@ void test_quantization_issue(InputParser &input) {
         actualDistances[i] = faiss::fvec_L2sqr(queryVec,
                                                baseVecs + sampleIndices[i] * baseDimension,
                                                baseDimension);
-        codesDistances[i] = dc->distance_to_code(codes.data() + sampleIndices[i] * sq.code_size);
+
         dc->set_query(queryVec);
+        codesDistances[i] = dc->distance_to_code(codes.data() + sampleIndices[i] * sq.code_size);
         distance_diff += std::abs(actualDistances[i] - codesDistances[i]);
+
         dc->set_query(baseVecs + sampleIndices[i] * baseDimension);
         itsOwnDistances[i] = dc->distance_to_code(codes.data() + sampleIndices[i] * sq.code_size);
         avg_its_own_diff += itsOwnDistances[i];
