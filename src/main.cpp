@@ -3697,6 +3697,7 @@ void test_quantization_issue(InputParser &input) {
     auto dc = sq.get_distance_computer();
     double distance_diff = 0;
     double avg_its_own_diff = 0;
+    double avg_distance_from_query = 0;
     for (size_t i = 0; i < sampleSize; i++) {
         actualDistances[i] = faiss::fvec_L2sqr(queryVec,
                                                baseVecs + sampleIndices[i] * baseDimension,
@@ -3709,9 +3710,12 @@ void test_quantization_issue(InputParser &input) {
         dc->set_query(baseVecs + sampleIndices[i] * baseDimension);
         itsOwnDistances[i] = dc->distance_to_code(codes.data() + sampleIndices[i] * sq.code_size);
         avg_its_own_diff += itsOwnDistances[i];
+        avg_distance_from_query += actualDistances[i];
     }
-    printf("Average distance difference from query over %d samples: %f\n", sampleSize, distance_diff / sampleSize);
-    printf("Average distance difference from it's vector over %d samples: %f\n", sampleSize, avg_its_own_diff / sampleSize);
+    printf("Average distance difference from query over %d (avg %f) samples: %f\n", sampleSize,
+           avg_distance_from_query / sampleSize, distance_diff / sampleSize);
+    printf("Average distance difference from it's vector over %d samples: %f\n", sampleSize,
+           avg_its_own_diff / sampleSize);
     // Write the actualDistances and codesDistances to file for comparison
     writeToFile("./actual_distances.bin",
                 reinterpret_cast<uint8_t *>(actualDistances.data()),
