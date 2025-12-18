@@ -3679,7 +3679,9 @@ void test_quantization_issue(InputParser &input) {
 
     faiss::ScalarQuantizer sq(baseDimension, faiss::ScalarQuantizer::QT_8bit);
     std::vector<uint8_t> codes(baseNumVectors * baseDimension);
+    printf("Training scalar quantizer on %zu vectors of dimension %zu\n", baseNumVectors, baseDimension);
     sq.train(baseNumVectors, baseVecs);
+    printf("Computing codes for base vectors\n");
     sq.compute_codes(baseVecs, codes.data(), baseNumVectors);
 
     // Randomly sample 10k points and compare distances
@@ -3690,18 +3692,24 @@ void test_quantization_issue(InputParser &input) {
     // TODO: Compute distances using quantized vectors from query vector 3 onwards
     std::vector<float> actualDistances(baseNumVectors);
     std::vector<float> codesDistances(baseNumVectors);
+    std::vector<float> itsOwnDistances(baseNumVectors);
     auto queryVec = queryVecs + queryIndex * queryDimension;
     auto dc = sq.get_distance_computer();
-    dc->set_query(queryVec);
     double distance_diff = 0;
+    double avg_its_own_diff = 0;
     for (size_t i = 0; i < sampleSize; i++) {
         actualDistances[i] = faiss::fvec_L2sqr(queryVec,
                                                baseVecs + sampleIndices[i] * baseDimension,
                                                baseDimension);
         codesDistances[i] = dc->distance_to_code(codes.data() + sampleIndices[i] * sq.code_size);
+        dc->set_query(queryVec);
         distance_diff += std::abs(actualDistances[i] - codesDistances[i]);
+        dc->set_query(baseVecs + sampleIndices[i] * baseDimension);
+        itsOwnDistances[i] = dc->distance_to_code(codes.data() + sampleIndices[i] * sq.code_size);
+        avg_its_own_diff += itsOwnDistances[i];
     }
-    printf("Average distance difference over %d samples: %f\n", sampleSize, distance_diff / sampleSize);
+    printf("Average distance difference from query over %d samples: %f\n", sampleSize, distance_diff / sampleSize);
+    printf("Average distance difference from it's vector over %d samples: %f\n", sampleSize, avg_its_own_diff / sampleSize);
     // Write the actualDistances and codesDistances to file for comparison
     writeToFile("./actual_distances.bin",
                 reinterpret_cast<uint8_t *>(actualDistances.data()),
