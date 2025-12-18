@@ -3666,6 +3666,7 @@ void test_final_bug_2(InputParser &input) {
 void test_quantization_issue(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const int numTrainVectors = stoi(input.getCmdOption("-numTrainVectors"));
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const int sampleSize = stoi(input.getCmdOption("-sampleSize"));
     const int queryIndex = stoi(input.getCmdOption("-queryIndex"));
@@ -3676,11 +3677,11 @@ void test_quantization_issue(InputParser &input) {
     // Load query vectors
     size_t queryDimension, queryNumVectors;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
-
+    baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
     faiss::ScalarQuantizer sq(baseDimension, faiss::ScalarQuantizer::QT_8bit);
-    std::vector<uint8_t> codes(baseNumVectors * baseDimension);
+    std::vector<uint8_t> codes(baseNumVectors * sq.code_size);
     printf("Training scalar quantizer on %zu vectors of dimension %zu\n", baseNumVectors, baseDimension);
-    sq.train(baseNumVectors, baseVecs);
+    sq.train(numTrainVectors, baseVecs);
     printf("Computing codes for base vectors\n");
     sq.compute_codes(baseVecs, codes.data(), baseNumVectors);
 
