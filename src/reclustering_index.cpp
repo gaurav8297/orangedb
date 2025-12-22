@@ -1899,6 +1899,8 @@ namespace orangedb {
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
         // For each mini cluster, find the closest mini cluster in this mega cluster
         double avgOverlapRatio = 0;
+        std::vector<double> approxOverlapScores(miniIds.size());
+        std::vector<double> realOverlapScores(miniIds.size());
         for (const auto miniId: miniIds) {
             auto minDistance = std::numeric_limits<double>::max();
             size_t closestMiniId = -1;
@@ -1918,10 +1920,22 @@ namespace orangedb {
             auto radiusSum = std::sqrt(miniClusteringScore[closestMiniId]) + std::sqrt(miniClusteringScore[miniId]);
             auto overlapRatio = (radiusSum > 1e-9) ? (std::sqrt(minDistance) / radiusSum) : 0.0;
             auto realOverlapScore = calculateRealOverlapScore(miniId, closestMiniId);
-            printf(
-                "Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f, Real Overlap Score = %f\n",
-                miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio, realOverlapScore);
+            // printf(
+            //     "Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f, Real Overlap Score = %f\n",
+            //     miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio, realOverlapScore);
             avgOverlapRatio += overlapRatio;
+            approxOverlapScores[miniId] = overlapRatio;
+            realOverlapScores[miniId] = realOverlapScore;
+        }
+        // Sort the real overlap scores and print the top 5 worst ones
+        std::vector<size_t> indices(miniIds.size());
+        std::iota(indices.begin(), indices.end(), 0);
+        std::sort(indices.begin(), indices.end(),
+                  [&realOverlapScores](size_t a, size_t b) { return realOverlapScores[a] < realOverlapScores[b]; });
+        for (int i = 0; i < std::min(10, static_cast<int>(miniIds.size())); i++) {
+            auto idx = indices[i];
+            printf("Worst Mini Centroid %llu: Approx Overlap Ratio = %f, Real Overlap Score = %f\n",
+                   miniIds[idx], approxOverlapScores[idx], realOverlapScores[idx]);
         }
         avgOverlapRatio /= static_cast<double>(miniIds.size());
         return avgOverlapRatio;
@@ -3163,8 +3177,8 @@ namespace orangedb {
         // Print stats
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
         printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
-        // printChangeClusterStats();
-        // printOverlapScores();
+        printChangeClusterStats();
+        printOverlapScores();
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {
