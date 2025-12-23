@@ -1970,7 +1970,7 @@ namespace orangedb {
                k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
                worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
 
-        return avgOverlapRatio;
+        return powerAvgRealOverlapScore;
     }
 
     double ReclusteringIndex::calculateRealOverlapScore(int miniCentroidId, int closestMiniCentroidId) {
@@ -1992,19 +1992,14 @@ namespace orangedb {
         return avgScore;
     }
 
-    void ReclusteringIndex::printOverlapScores() {
+    void ReclusteringIndex::computeOverlapScores() {
         auto numMegaCentroids = megaCentroids.size() / dim;
-        auto badOverlapRatio = 0;
+        overlapScores.resize(numMegaCentroids);
+#pragma omp parallel for
         for (auto i = 0; i < numMegaCentroids; i++) {
             auto overlapScore = calculateOverlapScore(i);
-            // printf("Mega Centroid %d: Overlap Score = %f\n", i, overlapScore);
-            if (overlapScore < 1.5) {
-                badOverlapRatio++;
-            }
+            overlapScores[i] = overlapScore;
         }
-        printf("Total Mega Centroids: %lu, Bad Overlap Ratio (<1.5): %d (%f%%)\n",
-               numMegaCentroids, badOverlapRatio,
-               (static_cast<float>(badOverlapRatio) / static_cast<float>(numMegaCentroids)) * 100.0f);
     }
 
     void ReclusteringIndex::saveOldScoreForMegaClusters() {
@@ -2134,6 +2129,7 @@ namespace orangedb {
         double totalRelativeScoreChange = 0.0;
         int validCentroids = 0;
         int shouldReclusterCount = 0;
+        int shouldReclusterCountWithOverlapScore = 0;
 
         for (auto i = 0; i < numMegaCentroids; i++) {
             // Find closest old mega centroid
@@ -2207,6 +2203,11 @@ namespace orangedb {
                 if (std::abs(relativeScoreChange) < config.scoreChangeThreshold && relativeChangeCentroid < config.
                     centroidChangeThreshold) {
                     shouldReclusterCount++;
+                    
+                    // Check overlap score if available
+                    if (i < overlapScores.size() && overlapScores[i] > config.overlappingScoreThreshold) {
+                        shouldReclusterCountWithOverlapScore++;
+                    }
                 }
 
             } else {
@@ -2248,9 +2249,45 @@ namespace orangedb {
                        100.0 * countRelativeScoreChange[t] / validCentroids);
             }
 
-            printf("\nNumber of mega centroids that should NOT be reclustered (RelScoreChange < 0.2 and RelChange(centroid) < 0.6): %d (%.1f%%)\n",
-                   shouldReclusterCount,
-                   100.0 * shouldReclusterCount / validCentroids);
+            // Print overlap score statistics if available
+            if (overlapScores.size() == numMegaCentroids) {
+                double overlapMin = std::numeric_limits<double>::max();
+                double overlapMax = std::numeric_limits<double>::lowest();
+                double overlapSum = 0.0;
+                int overlapValidCount = 0;
+                
+                for (size_t i = 0; i < overlapScores.size(); i++) {
+                    double score = overlapScores[i];
+                    overlapMin = std::min(overlapMin, score);
+                    overlapMax = std::max(overlapMax, score);
+                    overlapSum += score;
+                    overlapValidCount++;
+                }
+                
+                double overlapAvg = (overlapValidCount > 0) ? overlapSum / overlapValidCount : 0.0;
+                double overlapPowerAvg = computePowerAvgOnWorstElement(overlapScores);
+                printf("\n=== Overlap Score Statistics ===\n");
+                printf("Overlap scores available for %d centroids\n", overlapValidCount);
+                printf("Min: %.6f, Max: %.6f, Avg: %.6f, Power Avg (worst): %.6f\n",
+                       overlapMin, overlapMax, overlapAvg, overlapPowerAvg);
+                printf("Threshold: %.6f\n", config.overlappingScoreThreshold);
+            } else {
+                printf("\n=== Overlap Score Statistics ===\n");
+                printf("Overlap scores not available (expected %lu, got %zu)\n", numMegaCentroids, overlapScores.size());
+            }
+
+            printf("\nNumber of mega centroids that should NOT be reclustered (RelScoreChange < %.6f and RelChange(centroid) < %.6f): %d (%.1f%%)\n",
+                config.scoreChangeThreshold,
+                config.centroidChangeThreshold,
+                shouldReclusterCount,
+                100.0 * shouldReclusterCount / validCentroids);
+            
+            if (overlapScores.size() == numMegaCentroids) {
+                printf("Number of mega centroids that should NOT be reclustered (with overlap score > %.6f): %d (%.1f%%)\n",
+                       config.overlappingScoreThreshold,
+                       shouldReclusterCountWithOverlapScore,
+                       100.0 * shouldReclusterCountWithOverlapScore / validCentroids);
+            }
         }
     }
 
@@ -3211,7 +3248,6 @@ namespace orangedb {
         printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
         printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
         printChangeClusterStats();
-        printOverlapScores();
     }
 
     void ReclusteringIndex::flush_to_disk(const std::string &file_path) const {

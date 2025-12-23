@@ -61,6 +61,8 @@ namespace orangedb {
         float powerAvgCoefficient = 4.0;
         // Work elements for averaging!
         int workElementsForAveraging = 10;
+        // Overlapping score threshold
+        float overlappingScoreThreshold = 0.1;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -72,14 +74,15 @@ namespace orangedb {
                                          const uint64_t hardClusterSizeLimit = 0,
                                          const float kmeansSamplingRatio = 1.0,
                                          const float scoreChangeThreshold = 0.2,
-                                         const float centroidChangeThreshold = 0.6)
+                                         const float centroidChangeThreshold = 0.6,
+                                         const float overlappingScoreThreshold = 0.1)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
               numNewMiniReclusterCentroids(numNewMiniReclusterCentroids),
               quantizationTrainPercentage(quantizationTrainPercentage), hardClusterSizeLimit(hardClusterSizeLimit),
               kmeansSamplingRatio(kmeansSamplingRatio), scoreChangeThreshold(scoreChangeThreshold),
-              centroidChangeThreshold(centroidChangeThreshold) {
+              centroidChangeThreshold(centroidChangeThreshold), overlappingScoreThreshold(overlappingScoreThreshold) {
         }
     };
 
@@ -138,7 +141,7 @@ namespace orangedb {
 
         double calculateRealOverlapScore(int miniCentroidId, int closestMiniCentroidId);
 
-        void printOverlapScores();
+        void computeOverlapScores();
 
         void saveOldScoreForMegaClusters();
 
@@ -426,6 +429,7 @@ namespace orangedb {
         std::vector<float> megaCentroids;
         std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
         std::vector<double> megaClusteringScore;
+        std::vector<double> overlapScores;
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
         std::vector<double> miniClusteringScore;

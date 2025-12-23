@@ -2943,6 +2943,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                                          // true);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         index.storeMSEScoreForMegaClusters();
+        index.computeOverlapScores();
         index.printStats();
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
@@ -3007,10 +3008,13 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
-        index.storeMSEScoreForMegaClusters();
+        // index.storeMSEScoreForMegaClusters();
         // index.storeScoreForMegaClusters();
-        index.printStats();
+        // index.printStats();
     }
+    index.storeMSEScoreForMegaClusters();
+    index.computeOverlapScores();
+    index.printStats();
 
     if (iterations > 0) {
         // index.storeScoreForMegaClusters();
