@@ -1927,11 +1927,13 @@ namespace orangedb {
             approxOverlapScores[miniId] = overlapRatio;
             realOverlapScores[miniId] = realOverlapScore;
         }
+
+        printf("Mega Centroid Size: %lu\n", miniIds.size());
         // Sort the real overlap scores and print the top 5 worst ones
-        std::vector<size_t> indices(miniIds.size());
+        std::vector<uint32_t> indices(miniIds.size());
         std::iota(indices.begin(), indices.end(), 0);
         std::sort(indices.begin(), indices.end(),
-                  [&realOverlapScores](size_t a, size_t b) { return realOverlapScores[a] < realOverlapScores[b]; });
+                  [&realOverlapScores](uint32_t a, uint32_t b) { return realOverlapScores[a] < realOverlapScores[b]; });
         for (int i = 0; i < std::min(10, static_cast<int>(miniIds.size())); i++) {
             auto idx = indices[i];
             printf("Worst Mini Centroid %llu: Approx Overlap Ratio = %f, Real Overlap Score = %f\n",
