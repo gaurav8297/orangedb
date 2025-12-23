@@ -1901,7 +1901,8 @@ namespace orangedb {
         double avgOverlapRatio = 0;
         std::vector<double> approxOverlapScores(miniIds.size());
         std::vector<double> realOverlapScores(miniIds.size());
-        for (const auto miniId: miniIds) {
+        for (size_t idx = 0; idx < miniIds.size(); idx++) {
+            auto miniId = miniIds[idx];
             auto minDistance = std::numeric_limits<double>::max();
             size_t closestMiniId = -1;
             dc->setQuery(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
@@ -1924,8 +1925,8 @@ namespace orangedb {
             //     "Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f, Real Overlap Score = %f\n",
             //     miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio, realOverlapScore);
             avgOverlapRatio += overlapRatio;
-            approxOverlapScores[miniId] = overlapRatio;
-            realOverlapScores[miniId] = realOverlapScore;
+            approxOverlapScores[idx] = overlapRatio;
+            realOverlapScores[idx] = realOverlapScore;
         }
 
         printf("Mega Centroid Size: %lu\n", miniIds.size());
