@@ -1898,12 +1898,11 @@ namespace orangedb {
         auto numMiniClusters = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
         // For each mini cluster, find the closest mini cluster in this mega cluster
-        double avgOverlapRatio = 0;
         std::vector<double> approxOverlapScores(miniIds.size());
         std::vector<double> realOverlapScores(miniIds.size());
         for (size_t idx = 0; idx < miniIds.size(); idx++) {
             auto miniId = miniIds[idx];
-            auto minDistance = std::numeric_limits<double>::max();
+            auto minOverlapRatio = std::numeric_limits<double>::max();
             size_t closestMiniId = -1;
             dc->setQuery(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
             for (const auto j : miniIds) {
@@ -1912,35 +1911,65 @@ namespace orangedb {
                 }
                 double dist;
                 dc->computeDistance(j, &dist);
-                if (dist < minDistance) {
-                    minDistance = dist;
+                auto radiusSum = std::sqrt(miniClusteringScore[j]) + std::sqrt(miniClusteringScore[miniId]);
+                auto overlapRatio = (radiusSum > 1e-9) ? (std::sqrt(dist) / radiusSum) : 0.0;
+                if (overlapRatio < minOverlapRatio) {
+                    minOverlapRatio = overlapRatio;
                     closestMiniId = j;
                 }
             }
-
-            auto radiusSum = std::sqrt(miniClusteringScore[closestMiniId]) + std::sqrt(miniClusteringScore[miniId]);
-            auto overlapRatio = (radiusSum > 1e-9) ? (std::sqrt(minDistance) / radiusSum) : 0.0;
             auto realOverlapScore = calculateRealOverlapScore(miniId, closestMiniId);
             // printf(
             //     "Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f, Real Overlap Score = %f\n",
             //     miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio, realOverlapScore);
-            avgOverlapRatio += overlapRatio;
-            approxOverlapScores[idx] = overlapRatio;
+            approxOverlapScores[idx] = minOverlapRatio;
             realOverlapScores[idx] = realOverlapScore;
         }
 
-        printf("Mega Centroid Size: %lu\n", miniIds.size());
-        // Sort the real overlap scores and print the top 5 worst ones
+        auto avgOverlapRatio = computeAvg(approxOverlapScores);
+        auto avgRealOverlapScore = computeAvg(realOverlapScores);
+        auto powerAvgOverlapRatio = computePowerAvgOnWorstElement(approxOverlapScores);
+        auto powerAvgRealOverlapScore = computePowerAvgOnWorstElement(realOverlapScores);
+
+        // Calculate aggregated statistics for worst elements
+        int k = std::min(config.workElementsForAveraging, static_cast<int>(miniIds.size()));
         std::vector<uint32_t> indices(miniIds.size());
         std::iota(indices.begin(), indices.end(), 0);
         std::sort(indices.begin(), indices.end(),
                   [&realOverlapScores](uint32_t a, uint32_t b) { return realOverlapScores[a] < realOverlapScores[b]; });
-        for (int i = 0; i < std::min(10, static_cast<int>(miniIds.size())); i++) {
+        
+        // Aggregate statistics for worst k elements
+        double worstApproxMin = std::numeric_limits<double>::max();
+        double worstApproxMax = std::numeric_limits<double>::lowest();
+        double worstRealMin = std::numeric_limits<double>::max();
+        double worstRealMax = std::numeric_limits<double>::lowest();
+        double worstApproxSum = 0.0;
+        double worstRealSum = 0.0;
+        
+        for (int i = 0; i < k; i++) {
             auto idx = indices[i];
-            printf("Worst Mini Centroid %llu: Approx Overlap Ratio = %f, Real Overlap Score = %f\n",
-                   miniIds[idx], approxOverlapScores[idx], realOverlapScores[idx]);
+            double approxScore = approxOverlapScores[idx];
+            double realScore = realOverlapScores[idx];
+            
+            worstApproxMin = std::min(worstApproxMin, approxScore);
+            worstApproxMax = std::max(worstApproxMax, approxScore);
+            worstRealMin = std::min(worstRealMin, realScore);
+            worstRealMax = std::max(worstRealMax, realScore);
+            worstApproxSum += approxScore;
+            worstRealSum += realScore;
         }
-        avgOverlapRatio /= static_cast<double>(miniIds.size());
+        
+        double worstApproxAvg = (k > 0) ? worstApproxSum / k : 0.0;
+        double worstRealAvg = (k > 0) ? worstRealSum / k : 0.0;
+
+        // Print aggregated statistics
+        printf("Mega Centroid %d [%zu mini clusters]:\n", megaCentroidId, miniIds.size());
+        printf("  Overall Stats - Approx Overlap: avg=%.4f, power_avg=%.4f | Real Overlap: avg=%.4f, power_avg=%.4f\n",
+               avgOverlapRatio, powerAvgOverlapRatio, avgRealOverlapScore, powerAvgRealOverlapScore);
+        printf("  Worst %d Elements - Approx Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f | Real Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f\n",
+               k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
+               worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
+
         return avgOverlapRatio;
     }
 
@@ -1968,7 +1997,7 @@ namespace orangedb {
         auto badOverlapRatio = 0;
         for (auto i = 0; i < numMegaCentroids; i++) {
             auto overlapScore = calculateOverlapScore(i);
-            printf("Mega Centroid %d: Overlap Score = %f\n", i, overlapScore);
+            // printf("Mega Centroid %d: Overlap Score = %f\n", i, overlapScore);
             if (overlapScore < 1.5) {
                 badOverlapRatio++;
             }
@@ -2175,7 +2204,8 @@ namespace orangedb {
                     if (std::abs(relativeScoreChange) < scoreThresholds[t]) countRelativeScoreChange[t]++;
                 }
 
-                if (std::abs(relativeScoreChange) < 0.2 && relativeChangeCentroid < 0.6) {
+                if (std::abs(relativeScoreChange) < config.scoreChangeThreshold && relativeChangeCentroid < config.
+                    centroidChangeThreshold) {
                     shouldReclusterCount++;
                 }
 

@@ -2,6 +2,9 @@
 
 #include <unistd.h>
 #include <vector>
+#include <algorithm>
+#include <numeric>
+#include <cmath>
 #include <clustering.h>
 #include <hnsw.h>
 #include <faiss/Clustering.h>
@@ -54,6 +57,10 @@ namespace orangedb {
         float scoreChangeThreshold = 0.2;
         // centroidChangeThreshold
         float centroidChangeThreshold = 0.6;
+        // Power avg coefficient
+        float powerAvgCoefficient = 4.0;
+        // Work elements for averaging!
+        int workElementsForAveraging = 10;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -310,6 +317,70 @@ namespace orangedb {
 
         double calcMSEScoreForMiniCluster(int miniClusterId);
 
+        inline double computeAvg(const std::vector<double> &values) const {
+            if (values.empty()) {
+                return 0.0;
+            }
+            double sum = 0.0;
+            for (double val : values) {
+                sum += val;
+            }
+            return sum / values.size();
+        }
+
+        inline double
+        computePowerAvgOnWorstElement(const std::vector<double> &values, bool biggerIsBetter = true) const {
+            if (values.empty()) {
+                return 0.0;
+            }
+            // Take the k worst elements
+            int k = std::min(int(values.size()), config.workElementsForAveraging);
+            std::vector<double> worstElements;
+            worstElements.reserve(k);
+            
+            // Create indices and sort to find worst elements
+            std::vector<size_t> indices(values.size());
+            std::iota(indices.begin(), indices.end(), 0);
+            
+            if (biggerIsBetter) {
+                // Worst = smallest values, so sort ascending
+                std::sort(indices.begin(), indices.end(),
+                    [&values](size_t a, size_t b) { return values[a] < values[b]; });
+            } else {
+                // Worst = largest values, so sort descending
+                std::sort(indices.begin(), indices.end(),
+                    [&values](size_t a, size_t b) { return values[a] > values[b]; });
+            }
+            
+            // Extract the k worst elements
+            for (int i = 0; i < k; i++) {
+                worstElements.push_back(values[indices[i]]);
+            }
+            
+            // Compute power average: (1/n * sum(x_i^p))^(1/p)
+            double p = biggerIsBetter ? 1.0 / config.powerAvgCoefficient : config.powerAvgCoefficient;
+            
+            double sum = 0.0;
+            for (double val : worstElements) {
+                // Handle negative values: take absolute value and preserve sign
+                double sign = (val >= 0.0) ? 1.0 : -1.0;
+                double absVal = std::abs(val);
+                if (absVal > 0.0) {
+                    sum += sign * std::pow(absVal, p);
+                }
+            }
+            
+            double avg = sum / worstElements.size();
+            if (avg == 0.0) {
+                return 0.0;
+            }
+            
+            // Handle negative average for odd powers
+            double sign = (avg >= 0.0) ? 1.0 : -1.0;
+            double absAvg = std::abs(avg);
+            return sign * std::pow(absAvg, 1.0 / p);
+        }
+
         inline int getNumCentroids(int numVectors, int avgClusterSize) const {
             double ret =  (double)numVectors / avgClusterSize;
             int val = (int)ret;
@@ -380,7 +451,7 @@ namespace orangedb {
         std::vector<uint8_t> quantizedMiniCentroids;
         std::vector<std::vector<uint8_t>> quantizedMiniClusters;
         std::unordered_map<vector_idx_t, std::tuple<vector_idx_t, vector_idx_t, vector_idx_t, std::vector<float>,
-            std::vector<float>>> prevQueryState;
+        std::vector<float>>> prevQueryState;
 
         // Stats
         ReclusteringIndexStats stats;
