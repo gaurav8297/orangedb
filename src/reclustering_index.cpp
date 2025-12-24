@@ -1970,7 +1970,7 @@ namespace orangedb {
                k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
                worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
 
-        return powerAvgRealOverlapScore;
+        return powerAvgOverlapRatio;
     }
 
     double ReclusteringIndex::calculateRealOverlapScore(int miniCentroidId, int closestMiniCentroidId) {
