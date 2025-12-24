@@ -2951,9 +2951,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(iter) + ".bin";
         const double* overlapScores;
         size_t numScores;
-        index.getOverlapScores(overlapScores, numScores);
+        index.getOverlapScores(&overlapScores, numScores);
         writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
-        index.getRealOverlapScores(overlapScores, numScores);
+        index.getRealOverlapScores(&overlapScores, numScores);
         writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
 
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,

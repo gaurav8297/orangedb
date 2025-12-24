@@ -143,13 +143,13 @@ namespace orangedb {
 
         void computeOverlapScores();
 
-        void getOverlapScores(const double *_overlapScores, size_t &n) const {
-            _overlapScores = overlapScores.data();
+        void getOverlapScores(const double **_overlapScores, size_t &n) const {
+            *_overlapScores = overlapScores.data();
             n = overlapScores.size();
         }
 
-        void getRealOverlapScores(const double *_overlapScores, size_t &n) const {
-            _overlapScores = avgRealOverlapScores.data();
+        void getRealOverlapScores(const double **_overlapScores, size_t &n) const {
+            *_overlapScores = avgRealOverlapScores.data();
             n = avgRealOverlapScores.size();
         }
 
