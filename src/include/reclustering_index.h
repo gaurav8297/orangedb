@@ -58,7 +58,7 @@ namespace orangedb {
         // centroidChangeThreshold
         float centroidChangeThreshold = 0.6;
         // Power avg coefficient
-        float powerAvgCoefficient = 4.0;
+        float powerAvgCoefficient = 2.0;
         // Work elements for averaging!
         int workElementsForAveraging = 10;
         // Overlapping score threshold
@@ -142,6 +142,16 @@ namespace orangedb {
         double calculateRealOverlapScore(int miniCentroidId, int closestMiniCentroidId);
 
         void computeOverlapScores();
+
+        void getOverlapScores(const double *_overlapScores, size_t &n) const {
+            _overlapScores = overlapScores.data();
+            n = overlapScores.size();
+        }
+
+        void getRealOverlapScores(const double *_overlapScores, size_t &n) const {
+            _overlapScores = avgRealOverlapScores.data();
+            n = avgRealOverlapScores.size();
+        }
 
         void saveOldScoreForMegaClusters();
 
@@ -430,6 +440,7 @@ namespace orangedb {
         std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
         std::vector<double> megaClusteringScore;
         std::vector<double> overlapScores;
+        std::vector<double> avgRealOverlapScores;
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
         std::vector<double> miniClusteringScore;

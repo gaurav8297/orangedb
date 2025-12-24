@@ -1969,7 +1969,7 @@ namespace orangedb {
         printf("  Worst %d Elements - Approx Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f | Real Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f\n",
                k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
                worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
-
+        avgRealOverlapScores[megaCentroidId] = powerAvgRealOverlapScore;
         return powerAvgOverlapRatio;
     }
 
@@ -1995,6 +1995,7 @@ namespace orangedb {
     void ReclusteringIndex::computeOverlapScores() {
         auto numMegaCentroids = megaCentroids.size() / dim;
         overlapScores.resize(numMegaCentroids);
+        avgRealOverlapScores.resize(numMegaCentroids);
 #pragma omp parallel for
         for (auto i = 0; i < numMegaCentroids; i++) {
             auto overlapScore = calculateOverlapScore(i);
