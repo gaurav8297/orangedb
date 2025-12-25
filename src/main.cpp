@@ -2938,19 +2938,16 @@ void benchmark_fast_reclustering(InputParser &input) {
     writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
 
     // Calculate and write recall after writing overlap scores
-    std::vector<double> recallValues;
-    for (auto nMegaProbe: nMegaProbes) {
-        for (auto nMiniProbe: nMiniProbes) {
-            std::vector<double> queryRecalls;
-            auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                     nMiniProbe, queryRecalls);
-            recallValues.push_back(recall);
-        }
+    // Write per-query recall for the first probe combination
+    std::vector<double> queryRecalls;
+    if (!nMegaProbes.empty() && !nMiniProbes.empty()) {
+        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes[0],
+                                 nMiniProbes[0], queryRecalls);
     }
-    // Write recall values to binary file
+    // Write per-query recall values to binary file
     auto recall_file_path = "recall_iter_" + std::to_string(0) + ".bin";
-    writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(recallValues.data()),
-                recallValues.size() * sizeof(double));
+    writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(queryRecalls.data()),
+                queryRecalls.size() * sizeof(double));
 
     if (useMSEToRecluster) {
         return;
@@ -2983,19 +2980,16 @@ void benchmark_fast_reclustering(InputParser &input) {
         writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
 
         // Calculate and write recall after writing overlap scores
-        std::vector<double> recallValues;
-        for (auto nMegaProbe: nMegaProbes) {
-            for (auto nMiniProbe: nMiniProbes) {
-                std::vector<double> queryRecalls;
-                auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                         nMiniProbe, queryRecalls);
-                recallValues.push_back(recall);
-            }
+        // Write per-query recall for the first probe combination
+        std::vector<double> queryRecalls;
+        if (!nMegaProbes.empty() && !nMiniProbes.empty()) {
+            auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes[0],
+                                     nMiniProbes[0], queryRecalls);
         }
-        // Write recall values to binary file
+        // Write per-query recall values to binary file
         auto recall_file_path = "recall_iter_" + std::to_string(iter + 1) + ".bin";
-        writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(recallValues.data()),
-                    recallValues.size() * sizeof(double));
+        writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(queryRecalls.data()),
+                    queryRecalls.size() * sizeof(double));
 
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
