@@ -1931,7 +1931,7 @@ namespace orangedb {
             // printf(
             //     "Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f, Real Overlap Score = %f\n",
             //     miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio, realOverlapScore);
-            approxOverlapScores[idx] = computePowerAvgOnWorstElement(topKOverlapRatios, true, 8);
+            approxOverlapScores[idx] = mergeOverlapScores(topKOverlapRatios);
             realOverlapScores[idx] = calculateRealOverlapScore(miniId, topKMiniIds) ;
         }
 

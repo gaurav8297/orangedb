@@ -341,6 +341,17 @@ namespace orangedb {
             return sum / values.size();
         }
 
+        inline double mergeOverlapScores(const std::vector<double> &scores) const {
+            if (scores.empty()) {
+                return 0.0;
+            }
+            double finalScore = 1.0;
+            for (double score : scores) {
+                finalScore *= (score * 10.0f);
+            }
+            return finalScore;
+        }
+
         inline double
         computePowerAvgOnWorstElement(const std::vector<double> &values, bool biggerIsBetter = true,
                                       float powerAvgCoefficient = -1) const {
