@@ -58,7 +58,7 @@ namespace orangedb {
         // centroidChangeThreshold
         float centroidChangeThreshold = 0.6;
         // Power avg coefficient
-        float powerAvgCoefficient = 2.0;
+        float powerAvgCoefficient = 4.0;
         // Work elements for averaging!
         int workElementsForAveraging = 10;
         // Overlapping score threshold
@@ -137,9 +137,9 @@ namespace orangedb {
 
         void storeMSEScoreForMegaClusters(int n = INT_MAX);
 
-        double calculateOverlapScore(int megaCentroidId);
+        void calculateOverlapScore(int megaCentroidId);
 
-        double calculateRealOverlapScore(int miniCentroidId, int closestMiniCentroidId);
+        double calculateRealOverlapScore(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
 
         void computeOverlapScores();
 
@@ -342,10 +342,16 @@ namespace orangedb {
         }
 
         inline double
-        computePowerAvgOnWorstElement(const std::vector<double> &values, bool biggerIsBetter = true) const {
+        computePowerAvgOnWorstElement(const std::vector<double> &values, bool biggerIsBetter = true,
+                                      float powerAvgCoefficient = -1) const {
             if (values.empty()) {
                 return 0.0;
             }
+            if (powerAvgCoefficient <= 0) {
+                // Use provided coefficient
+                powerAvgCoefficient = config.powerAvgCoefficient;
+            }
+
             // Take the k worst elements
             int k = std::min(int(values.size()), config.workElementsForAveraging);
             std::vector<double> worstElements;
@@ -371,7 +377,7 @@ namespace orangedb {
             }
             
             // Compute power average: (1/n * sum(x_i^p))^(1/p)
-            double p = biggerIsBetter ? 1.0 / config.powerAvgCoefficient : config.powerAvgCoefficient;
+            double p = biggerIsBetter ? -1 * powerAvgCoefficient : powerAvgCoefficient;
             
             double sum = 0.0;
             for (double val : worstElements) {

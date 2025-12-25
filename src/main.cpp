@@ -2896,6 +2896,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.reclusterAllMegaCentroids(nMegaRecluster);
     // index.flush_to_disk(storagePath);
     index.storeMSEScoreForMegaClusters();
+    index.computeOverlapScores();
     // index.printStats();
     // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
     // index.printStats();
@@ -2926,6 +2927,31 @@ void benchmark_fast_reclustering(InputParser &input) {
     }
 
     index.printStats();
+    // Write overlapping scores
+    auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(0) + ".bin";
+    auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(0) + ".bin";
+    const double* overlapScores;
+    size_t numScores;
+    index.getOverlapScores(&overlapScores, numScores);
+    writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+    index.getRealOverlapScores(&overlapScores, numScores);
+    writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+
+    // Calculate and write recall after writing overlap scores
+    std::vector<double> recallValues;
+    for (auto nMegaProbe: nMegaProbes) {
+        for (auto nMiniProbe: nMiniProbes) {
+            std::vector<double> queryRecalls;
+            auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
+                                     nMiniProbe, queryRecalls);
+            recallValues.push_back(recall);
+        }
+    }
+    // Write recall values to binary file
+    auto recall_file_path = "recall_iter_" + std::to_string(0) + ".bin";
+    writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(recallValues.data()),
+                recallValues.size() * sizeof(double));
+
     if (useMSEToRecluster) {
         return;
     }
@@ -2947,14 +2973,29 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.printStats();
 
         // Write overlapping scores
-        auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(iter) + ".bin";
-        auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(iter) + ".bin";
+        auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(iter + 1) + ".bin";
+        auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(iter + 1) + ".bin";
         const double* overlapScores;
         size_t numScores;
         index.getOverlapScores(&overlapScores, numScores);
         writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
         index.getRealOverlapScores(&overlapScores, numScores);
         writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+
+        // Calculate and write recall after writing overlap scores
+        std::vector<double> recallValues;
+        for (auto nMegaProbe: nMegaProbes) {
+            for (auto nMiniProbe: nMiniProbes) {
+                std::vector<double> queryRecalls;
+                auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
+                                         nMiniProbe, queryRecalls);
+                recallValues.push_back(recall);
+            }
+        }
+        // Write recall values to binary file
+        auto recall_file_path = "recall_iter_" + std::to_string(iter + 1) + ".bin";
+        writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(recallValues.data()),
+                    recallValues.size() * sizeof(double));
 
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
