@@ -1893,10 +1893,10 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::calculateOverlapScore(int megaCentroidId) {
+    void ReclusteringIndex::calculateOverlapScoreForL2(int megaCentroidId) {
         auto &miniIds = megaMiniCentroidIds[megaCentroidId];
         auto numMiniClusters = miniCentroids.size() / dim;
-        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters, L2);
         // For each mini cluster, find the closest mini cluster in this mega cluster
         std::vector<double> approxOverlapScores(miniIds.size());
         std::vector<double> realOverlapScores(miniIds.size());
@@ -1982,6 +1982,153 @@ namespace orangedb {
         overlapScores[megaCentroidId] = powerAvgOverlapRatio;
     }
 
+    void ReclusteringIndex::calculateOverlapScoreForAngular(int megaCentroidId) {
+        auto &miniIds = megaMiniCentroidIds[megaCentroidId];
+        auto numMiniClusters = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters, COSINE);
+
+        // For each mini cluster, find the closest mini cluster in this mega cluster
+        std::vector<double> approxOverlapScores(miniIds.size());
+        std::vector<double> realOverlapScores(miniIds.size());
+
+        for (size_t idx = 0; idx < miniIds.size(); idx++) {
+            auto miniId = miniIds[idx];
+            std::vector<std::pair<double, vector_idx_t>> overlapRatiosWithIds;
+            overlapRatiosWithIds.reserve(miniIds.size() - 1);
+            dc->setQuery(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
+
+            // Precompute angular radius for miniId
+            // miniClusteringScore stores average cosine distance (1 - cos_sim)
+            // Convert to angular distance: acos(cos_sim) = acos(1 - cosine_dist)
+            double angularRadiusMiniId = std::acos(std::clamp(1.0 - miniClusteringScore[miniId], -1.0, 1.0));
+
+            for (const auto j : miniIds) {
+                if (j == miniId) {
+                    continue;
+                }
+
+                double cosineDist;
+                dc->computeDistance(j, &cosineDist);
+
+                // Convert cosine distance to angular distance
+                // cosineDist = 1 - cos_sim, so cos_sim = 1 - cosineDist
+                // angular distance = acos(cos_sim) = acos(1 - cosineDist)
+                double angularDist = std::acos(std::clamp(1.0 - cosineDist, -1.0, 1.0));
+
+                // Convert cluster spread (avg cosine distance) to angular radius
+                double angularRadiusJ = std::acos(std::clamp(1.0 - miniClusteringScore[j], -1.0, 1.0));
+
+                // Sum of angular radii - this is geometrically correct on the hypersphere
+                double angularRadiusSum = angularRadiusJ + angularRadiusMiniId;
+
+                // Overlap ratio: distance between centroids / sum of radii
+                // < 1 means clusters overlap, > 1 means they don't
+                double overlapRatio = (angularRadiusSum > 1e-9) ? (angularDist / angularRadiusSum) : 0.0;
+
+                overlapRatiosWithIds.emplace_back(overlapRatio, j);
+            }
+
+            // Sort overlap ratios and take the 10 lowest (most overlapping)
+            std::sort(overlapRatiosWithIds.begin(), overlapRatiosWithIds.end(),
+                      [](const std::pair<double, size_t> &a, const std::pair<double, size_t> &b) {
+                          return a.first < b.first;
+                      });
+            int k = std::min(10, static_cast<int>(overlapRatiosWithIds.size()));
+            std::vector<double> topKOverlapRatios;
+            std::vector<vector_idx_t> topKMiniIds;
+            for (int i = 0; i < k; i++) {
+                topKOverlapRatios.push_back(overlapRatiosWithIds[i].first);
+                topKMiniIds.push_back(overlapRatiosWithIds[i].second);
+            }
+
+            approxOverlapScores[idx] = mergeOverlapScores(topKOverlapRatios);
+            realOverlapScores[idx] = calculateRealOverlapScoreForAngular(miniId, topKMiniIds);
+        }
+
+        auto avgOverlapRatio = computeAvg(approxOverlapScores);
+        auto avgRealOverlapScore = computeAvg(realOverlapScores);
+        auto powerAvgOverlapRatio = computePowerAvgOnWorstElement(approxOverlapScores);
+        auto powerAvgRealOverlapScore = computePowerAvgOnWorstElement(realOverlapScores);
+
+        // Calculate aggregated statistics for worst elements
+        int k = std::min(config.workElementsForAveraging, static_cast<int>(miniIds.size()));
+        std::vector<uint32_t> indices(miniIds.size());
+        std::iota(indices.begin(), indices.end(), 0);
+        std::sort(indices.begin(), indices.end(),
+                  [&realOverlapScores](uint32_t a, uint32_t b) { return realOverlapScores[a] < realOverlapScores[b]; });
+
+        // Aggregate statistics for worst k elements
+        double worstApproxMin = std::numeric_limits<double>::max();
+        double worstApproxMax = std::numeric_limits<double>::lowest();
+        double worstRealMin = std::numeric_limits<double>::max();
+        double worstRealMax = std::numeric_limits<double>::lowest();
+        double worstApproxSum = 0.0;
+        double worstRealSum = 0.0;
+
+        for (int i = 0; i < k; i++) {
+            auto idx = indices[i];
+            double approxScore = approxOverlapScores[idx];
+            double realScore = realOverlapScores[idx];
+
+            worstApproxMin = std::min(worstApproxMin, approxScore);
+            worstApproxMax = std::max(worstApproxMax, approxScore);
+            worstRealMin = std::min(worstRealMin, realScore);
+            worstRealMax = std::max(worstRealMax, realScore);
+            worstApproxSum += approxScore;
+            worstRealSum += realScore;
+        }
+
+        double worstApproxAvg = (k > 0) ? worstApproxSum / k : 0.0;
+        double worstRealAvg = (k > 0) ? worstRealSum / k : 0.0;
+
+        // Print aggregated statistics
+        printf("Mega Centroid %d [%zu mini clusters] (Angular):\n", megaCentroidId, miniIds.size());
+        printf("  Overall Stats - Approx Overlap: avg=%.4f, power_avg=%.4f | Real Overlap: avg=%.4f, power_avg=%.4f\n",
+               avgOverlapRatio, powerAvgOverlapRatio, avgRealOverlapScore, powerAvgRealOverlapScore);
+        printf("  Worst %d Elements - Approx Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f | Real Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f\n",
+               k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
+               worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
+
+        avgRealOverlapScores[megaCentroidId] = powerAvgRealOverlapScore;
+        overlapScores[megaCentroidId] = powerAvgOverlapRatio;
+    }
+
+    double ReclusteringIndex::calculateRealOverlapScoreForAngular(vector_idx_t miniCentroidId,
+                                                               std::vector<vector_idx_t> &closestMiniIds) {
+        auto numMiniClusters = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters, COSINE);
+        double avgScore = 0.0;
+        auto &miniClusterVectors = miniClusters[miniCentroidId];
+        auto miniClusterSize = miniClusterVectors.size() / dim;
+
+        for (int i = 0; i < miniClusterSize; i++) {
+            dc->setQuery(miniClusterVectors.data() + static_cast<size_t>(i) * dim);
+
+            // Distance to own centroid
+            double ownCosineDist = 0.0;
+            dc->computeDistance(miniCentroidId, &ownCosineDist);
+            double ownAngularDist = std::acos(std::clamp(1.0 - ownCosineDist, -1.0, 1.0));
+
+            // Find minimum distance to other centroids
+            double minAngularDist = std::numeric_limits<double>::max();
+            for (const auto &closestMiniCentroidId : closestMiniIds) {
+                double cosineDist;
+                dc->computeDistance(closestMiniCentroidId, &cosineDist);
+                double angularDist = std::acos(std::clamp(1.0 - cosineDist, -1.0, 1.0));
+                if (angularDist < minAngularDist) {
+                    minAngularDist = angularDist;
+                }
+            }
+
+            // Silhouette-like score using angular distances
+            // Positive = point is closer to own centroid, Negative = closer to other centroid
+            avgScore += (minAngularDist - ownAngularDist) / std::max(minAngularDist, ownAngularDist);
+        }
+
+        avgScore /= static_cast<double>(miniClusterSize);
+        return avgScore;
+    }
+
     double ReclusteringIndex::calculateRealOverlapScore(vector_idx_t miniCentroidId,
                                                         std::vector<vector_idx_t> &closestMiniIds) {
         auto numMiniClusters = miniCentroids.size() / dim;
@@ -2013,7 +2160,12 @@ namespace orangedb {
         avgRealOverlapScores.resize(numMegaCentroids);
 #pragma omp parallel for
         for (auto i = 0; i < numMegaCentroids; i++) {
-            calculateOverlapScore(i);
+            if (config.distanceType == COSINE || config.distanceType == IP) {
+                calculateOverlapScoreForAngular(i);
+            } else {
+                // L2 and IP (IP should ideally use normalized vectors)
+                calculateOverlapScoreForL2(i);
+            }
         }
     }
 

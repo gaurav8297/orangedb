@@ -16,6 +16,7 @@ namespace orangedb {
         L2,
         IP,
         COSINE,
+        INVALID,
     };
 
     template<typename T>

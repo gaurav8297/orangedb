@@ -74,7 +74,10 @@ def plot_overlap_scores(approx_files, real_files, output_dir='.'):
         for iter_num in sorted(approx_data.keys()):
             scores = approx_data[iter_num]
             cluster_ids = np.arange(len(scores))
-            plt.plot(cluster_ids, scores, label=f'Iteration {iter_num}', marker='o', markersize=2, linewidth=1)
+            label = f'Iteration {iter_num}'
+            if iter_num == 0:
+                label = "Initial clustering"
+            plt.plot(cluster_ids, scores, label=label, marker='o', markersize=2, linewidth=1)
         
         plt.xlabel('Mega Cluster ID', fontsize=12)
         plt.ylabel('Approximate Overlap Score', fontsize=12)
@@ -94,7 +97,10 @@ def plot_overlap_scores(approx_files, real_files, output_dir='.'):
         for iter_num in sorted(real_data.keys()):
             scores = real_data[iter_num]
             cluster_ids = np.arange(len(scores))
-            plt.plot(cluster_ids, scores, label=f'Iteration {iter_num}', marker='o', markersize=2, linewidth=1)
+            label = f'Iteration {iter_num}'
+            if iter_num == 0:
+                label = "Initial clustering"
+            plt.plot(cluster_ids, scores, label=label, marker='o', markersize=2, linewidth=1)
         
         plt.xlabel('Mega Cluster ID', fontsize=12)
         plt.ylabel('Real Overlap Score', fontsize=12)
@@ -177,7 +183,10 @@ def plot_recall_scores(recall_files, output_dir='.'):
             # Take only the first num_queries values
             valid_recalls = recalls[:num_queries]
             print(f"  Plotting iteration {iter_num}: {len(valid_recalls)} values, range [{np.min(valid_recalls):.2f}, {np.max(valid_recalls):.2f}]")
-            plt.plot(query_indices, valid_recalls, label=f'Iteration {iter_num}', 
+            label = f'Iteration {iter_num}'
+            if iter_num == 0:
+                label = "Initial clustering"
+            plt.plot(query_indices, valid_recalls, label=label,
                     marker='o', markersize=5, linewidth=2)
     
     plt.xlabel('Query Index', fontsize=12)

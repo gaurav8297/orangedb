@@ -137,9 +137,13 @@ namespace orangedb {
 
         void storeMSEScoreForMegaClusters(int n = INT_MAX);
 
-        void calculateOverlapScore(int megaCentroidId);
+        void calculateOverlapScoreForL2(int megaCentroidId);
+
+        void calculateOverlapScoreForAngular(int megaCentroidId);
 
         double calculateRealOverlapScore(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
+
+        double calculateRealOverlapScoreForAngular(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
 
         void computeOverlapScores();
 
@@ -435,8 +439,11 @@ namespace orangedb {
 
         void load_from_disk(const std::string &file_path);
 
-        std::unique_ptr<DelegateDC<float>> getDistanceComputer(const float *data, int n) const {
-            return createDistanceComputer(data, dim, n, config.distanceType);
+        std::unique_ptr<DelegateDC<float>> getDistanceComputer(const float *data, int n, DistanceType type = INVALID) const {
+            if (type == INVALID) {
+                type = config.distanceType;
+            }
+            return createDistanceComputer(data, dim, n, type);
         }
 
         std::unique_ptr<DelegateDC<uint8_t> > getQuantizedDistanceComputer(
