@@ -349,9 +349,14 @@ namespace orangedb {
             if (scores.empty()) {
                 return 0.0;
             }
-            double finalScore = 1.0;
+            // double finalScore = 1.0;
+            // for (double score : scores) {
+            //     finalScore *= (score * 10.0f);
+            // }
+            // return finalScore;
+            double finalScore = std::numeric_limits<double>::max();
             for (double score : scores) {
-                finalScore *= (score * 10.0f);
+                finalScore = std::min(finalScore, score);
             }
             return finalScore;
         }
