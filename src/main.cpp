@@ -2790,15 +2790,16 @@ void visualize_with_umap_2D(
     using namespace orangedb;
     
     std::unordered_map<vector_idx_t, int> vectorToCluster;  
-    const std::vector<float>* centroids = nullptr;
-    int numCentroids = 0;
+    const float* centroids = nullptr;
+    size_t numCentroids = 0;
     
     // Cluster Hirarchy 
     if (hirarchyLevel == C_L2) {
-        const auto& L1_ClusterVectorIds = index.getMiniClusterVectorIds();
-        const auto& L2_CentroidIds = index.getMegaMiniCentroidIds();
-        centroids = &index.getL2Centroids();
-        numCentroids = L2_CentroidIds.size();
+        std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
+        std::vector<std::vector<vector_idx_t>> L2_CentroidIds;
+        index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+        index.getMegaMiniCentroids(&L2_CentroidIds);
+        index.getMegaCentroids(&centroids,numCentroids);
         
         for (size_t L2_ClusterId = 0; L2_ClusterId < L2_CentroidIds.size(); ++L2_ClusterId) {
             for (auto L1_ClusterId : L2_CentroidIds[L2_ClusterId]) {
@@ -2811,9 +2812,9 @@ void visualize_with_umap_2D(
         }
     }
     else if (hirarchyLevel == C_L1) {
-        const auto& L1_ClusterVectorIds = index.getMiniClusterVectorIds();
-        centroids = &index.getL1Centroids();
-        numCentroids = L1_ClusterVectorIds.size();
+        std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
+        index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+        index.getMiniCentroids(&centroids,numCentroids);
         
         for (size_t L1_clusterId = 0; L1_clusterId < L1_ClusterVectorIds.size(); ++L1_clusterId) {
             for (auto vectorId : L1_ClusterVectorIds[L1_clusterId]) {
@@ -2834,7 +2835,7 @@ void visualize_with_umap_2D(
     std::memcpy(allVectors.data(), baseVecs, numVectors * baseDimension * sizeof(float));
     if (centroids && numCentroids > 0) {
         std::memcpy(allVectors.data() + numVectors * baseDimension, 
-                    centroids->data(), 
+                    centroids, 
                     numCentroids * baseDimension * sizeof(float));
     }
     std::vector<float> embedding(totalVectors * 2);
@@ -2897,14 +2898,15 @@ void visualize_with_umap_3D(
     using namespace orangedb;
     
     std::unordered_map<vector_idx_t, int> vectorToCluster;      
-    const std::vector<float>* centroids = nullptr;
-    int numCentroids = 0;
+    const float* centroids = nullptr;
+    size_t numCentroids = 0;
     
     if (hirarchyLevel == C_L2) {
-        const auto& L1_ClusterVectorIds = index.getMiniClusterVectorIds();
-        const auto& L2_CentroidIds = index.getMegaMiniCentroidIds();
-        centroids = &index.getL2Centroids();
-        numCentroids = L2_CentroidIds.size();
+        std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
+        std::vector<std::vector<vector_idx_t>> L2_CentroidIds;
+        index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+        index.getMegaMiniCentroids(&L2_CentroidIds);
+        index.getMegaCentroids(&centroids,numCentroids);
         
         for (size_t L2_ClusterId = 0; L2_ClusterId < L2_CentroidIds.size(); ++L2_ClusterId) {
             for (auto L1_ClusterId : L2_CentroidIds[L2_ClusterId]) {
@@ -2917,9 +2919,9 @@ void visualize_with_umap_3D(
         }
     }
     else if (hirarchyLevel == C_L1) {
-        const auto& L1_ClusterVectorIds = index.getMiniClusterVectorIds();
-        centroids = &index.getL1Centroids();
-        numCentroids = L1_ClusterVectorIds.size();
+        std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
+        index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+        index.getMiniCentroids(&centroids,numCentroids);
         
         for (size_t L1_clusterId = 0; L1_clusterId < L1_ClusterVectorIds.size(); ++L1_clusterId) {
             for (auto vectorId : L1_ClusterVectorIds[L1_clusterId]) {
@@ -2940,7 +2942,7 @@ void visualize_with_umap_3D(
     
     if (centroids && numCentroids > 0) {
         std::memcpy(allVectors.data() + numVectors * baseDimension, 
-                    centroids->data(), 
+                    centroids, 
                     numCentroids * baseDimension * sizeof(float));
     }
     std::vector<float> embedding(totalVectors * 3);

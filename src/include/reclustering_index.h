@@ -162,26 +162,20 @@ namespace orangedb {
             n = megaCentroids.size() / dim;
         }
 
+        void getMiniCentroids(const float **_centroids, size_t &n) const {
+            *_centroids = miniCentroids.data();
+            n = miniCentroids.size() / dim;
+        }
+
         void getMegaMiniCentroids(std::vector<std::vector<vector_idx_t>> *_megaMiniCentroidIds) const {
             // Copy the mega to mini centroid mapping
             *_megaMiniCentroidIds = megaMiniCentroidIds;
         }
  
-        const std::vector<std::vector<vector_idx_t>>& getMiniClusterVectorIds() const {
-            return miniClusterVectorIds;
-        }
-
-        const std::vector<std::vector<vector_idx_t>>& getMegaMiniCentroidIds() const {
-            return megaMiniCentroidIds;
+        void getMiniClusterVectorIds(std::vector<std::vector<vector_idx_t>> *_miniClusterVectorIds) const {
+            *_miniClusterVectorIds = miniClusterVectorIds;
         }
         
-        const std::vector<float>& getL2Centroids() const {
-            return megaCentroids;
-        }
-        const std::vector<float>& getL1Centroids() const {
-            return miniCentroids;
-        }
-
         int getDim() const {
             return dim;
         }      
