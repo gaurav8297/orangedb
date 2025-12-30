@@ -43,3 +43,6 @@ data/random_768*
 
 data/laion_small*
 cmake-build-default*
+
+*.csv
+*.bin
