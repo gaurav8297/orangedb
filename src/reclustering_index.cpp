@@ -2111,6 +2111,7 @@ namespace orangedb {
 
             // Find minimum distance to other centroids
             double minAngularDist = std::numeric_limits<double>::max();
+            double minCosineDist = std::numeric_limits<double>::max();
             for (const auto &closestMiniCentroidId : closestMiniIds) {
                 double cosineDist;
                 dc->computeDistance(closestMiniCentroidId, &cosineDist);
@@ -2118,11 +2119,15 @@ namespace orangedb {
                 if (angularDist < minAngularDist) {
                     minAngularDist = angularDist;
                 }
+                if (cosineDist < minCosineDist) {
+                    minCosineDist = cosineDist;
+                }
             }
 
             // Silhouette-like score using angular distances
             // Positive = point is closer to own centroid, Negative = closer to other centroid
-            avgScore += (minAngularDist - ownAngularDist) / std::max(minAngularDist, ownAngularDist);
+            // avgScore += (minAngularDist - ownAngularDist) / std::max(minAngularDist, ownAngularDist);
+            avgScore += (minCosineDist - ownCosineDist) / std::max(minCosineDist, ownCosineDist);
         }
 
         avgScore /= static_cast<double>(miniClusterSize);
@@ -2686,7 +2691,11 @@ namespace orangedb {
         auto& curMiniCluster = miniClusters[miniClusterId];
         auto numPoints = curMiniCluster.size() / dim;
         double totalMSE = 0.0;
-        auto dc = getDistanceComputer(curMiniCluster.data(), numPoints);
+        auto metric = config.distanceType;
+        if (config.distanceType == IP) {
+            metric = COSINE;
+        }
+        auto dc = getDistanceComputer(curMiniCluster.data(), numPoints, metric);
         dc->setQuery(centroid);
         for (int i = 0; i < numPoints; i++) {
             double dist;
