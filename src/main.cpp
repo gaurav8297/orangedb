@@ -29,6 +29,8 @@
 #include "faiss/IndexIVFFlat.h"
 #include "fastQ/scalar_test.h"
 #include "faiss/IndexPQ.h"
+#include "umappp/umappp.hpp"
+#include "knncolle/knncolle.hpp"
 
 #if 0
 #include <liburing.h>
@@ -46,6 +48,10 @@ using namespace orangedb;
 #endif
 #include <backward.hpp>
 
+enum CLUSTER_HIRARCHY {
+    C_L1,    // 0
+    C_L2, // 1
+};
 
 class InputParser {
 public:
@@ -2773,6 +2779,215 @@ void read_and_write_chunk(InputParser &input) {
     }
 }
 
+void visualize_with_umap_2D(
+    const orangedb::ReclusteringIndex& index,
+    float* baseVecs, 
+    int numVectors, 
+    size_t baseDimension,
+    const std::string& outputPath,
+    int hirarchyLevel
+) {
+    using namespace orangedb;
+    
+    std::unordered_map<vector_idx_t, int> vectorToCluster;  
+    const std::vector<float>* centroids = nullptr;
+    int numCentroids = 0;
+    
+    // Cluster Hirarchy 
+    if (hirarchyLevel == C_L2) {
+        const auto& L1_ClusterVectorIds = index.getMiniClusterVectorIds();
+        const auto& L2_CentroidIds = index.getMegaMiniCentroidIds();
+        centroids = &index.getL2Centroids();
+        numCentroids = L2_CentroidIds.size();
+        
+        for (size_t L2_ClusterId = 0; L2_ClusterId < L2_CentroidIds.size(); ++L2_ClusterId) {
+            for (auto L1_ClusterId : L2_CentroidIds[L2_ClusterId]) {
+                if (L1_ClusterId < L1_ClusterVectorIds.size()) {
+                    for (auto vectorId : L1_ClusterVectorIds[L1_ClusterId]) {
+                        vectorToCluster[vectorId] = (int)L2_ClusterId;
+                    }
+                }
+            }
+        }
+    }
+    else if (hirarchyLevel == C_L1) {
+        const auto& L1_ClusterVectorIds = index.getMiniClusterVectorIds();
+        centroids = &index.getL1Centroids();
+        numCentroids = L1_ClusterVectorIds.size();
+        
+        for (size_t L1_clusterId = 0; L1_clusterId < L1_ClusterVectorIds.size(); ++L1_clusterId) {
+            for (auto vectorId : L1_ClusterVectorIds[L1_clusterId]) {
+                vectorToCluster[vectorId] = (int)L1_clusterId;
+            }
+        }
+    }
+    else {
+        printf("Invalid hirarchy level: %d\n", hirarchyLevel);
+        return;
+    }
+    printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());
+    printf("Number of centroids: %d\n", numCentroids);
+    
+    int totalVectors = numVectors + numCentroids;
+    std::vector<float> allVectors(totalVectors * baseDimension);
+    
+    std::memcpy(allVectors.data(), baseVecs, numVectors * baseDimension * sizeof(float));
+    if (centroids && numCentroids > 0) {
+        std::memcpy(allVectors.data() + numVectors * baseDimension, 
+                    centroids->data(), 
+                    numCentroids * baseDimension * sizeof(float));
+    }
+    std::vector<float> embedding(totalVectors * 2);
+    
+    // K-NN
+    auto metric = std::make_shared<knncolle::EuclideanDistance<float, float>>();
+    knncolle::VptreeBuilder<int, float, float> builder(metric);
+    
+    // UMAP
+    umappp::Options opt;
+    opt.num_neighbors = 15; 
+    opt.min_dist = 0.1;
+    opt.num_epochs = 500;
+    printf("Running UMAP dimensionality reduction on %d vectors + %d centroids...\n", numVectors, numCentroids);
+    auto status = umappp::initialize(
+        (int)baseDimension, totalVectors, allVectors.data(), builder, 2, embedding.data(), opt
+    );
+    status.run(embedding.data());    
+    
+    // CSV
+    FILE* fp = fopen(outputPath.c_str(), "w");
+    if (!fp) {
+        fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
+        return;
+    }
+    
+    fprintf(fp, "UMAP_1,UMAP_2,Cluster_ID,Is_Centroid\n");
+    
+    // Write regular vectors
+    for (int i = 0; i < numVectors; ++i) {
+        int clusterId = -1; // Default if not found
+        auto it = vectorToCluster.find(i);
+        if (it != vectorToCluster.end()) {
+            clusterId = it->second;
+        }
+        fprintf(fp, "%.6f,%.6f,%d,%d\n", 
+                embedding[i*2], embedding[i*2+1], clusterId, 0);
+    }
+    
+    // Write centroids
+    for (int i = 0; i < numCentroids; ++i) {
+        int idx = numVectors + i;
+        fprintf(fp, "%.6f,%.6f,%d,%d\n", 
+                embedding[idx*2], embedding[idx*2+1], i, 1);
+    }
+    
+    fclose(fp);
+    printf("UMAP visualization with clusters written to %s\n", outputPath.c_str());
+    printf("Format: UMAP_1, UMAP_2, Cluster_ID, Is_Centroid (0=vector, 1=centroid)\n");
+}
+
+void visualize_with_umap_3D(
+    const orangedb::ReclusteringIndex& index,
+    float* baseVecs, 
+    int numVectors, 
+    size_t baseDimension,
+    const std::string& outputPath,
+    int hirarchyLevel
+) {
+    using namespace orangedb;
+    
+    std::unordered_map<vector_idx_t, int> vectorToCluster;      
+    const std::vector<float>* centroids = nullptr;
+    int numCentroids = 0;
+    
+    if (hirarchyLevel == C_L2) {
+        const auto& L1_ClusterVectorIds = index.getMiniClusterVectorIds();
+        const auto& L2_CentroidIds = index.getMegaMiniCentroidIds();
+        centroids = &index.getL2Centroids();
+        numCentroids = L2_CentroidIds.size();
+        
+        for (size_t L2_ClusterId = 0; L2_ClusterId < L2_CentroidIds.size(); ++L2_ClusterId) {
+            for (auto L1_ClusterId : L2_CentroidIds[L2_ClusterId]) {
+                if (L1_ClusterId < L1_ClusterVectorIds.size()) {
+                    for (auto vectorId : L1_ClusterVectorIds[L1_ClusterId]) {
+                        vectorToCluster[vectorId] = (int)L2_ClusterId;
+                    }
+                }
+            }
+        }
+    }
+    else if (hirarchyLevel == C_L1) {
+        const auto& L1_ClusterVectorIds = index.getMiniClusterVectorIds();
+        centroids = &index.getL1Centroids();
+        numCentroids = L1_ClusterVectorIds.size();
+        
+        for (size_t L1_clusterId = 0; L1_clusterId < L1_ClusterVectorIds.size(); ++L1_clusterId) {
+            for (auto vectorId : L1_ClusterVectorIds[L1_clusterId]) {
+                vectorToCluster[vectorId] = (int)L1_clusterId;
+            }
+        }
+    }
+    else {
+        printf("Invalid hirarchy level: %d\n", hirarchyLevel);
+        return;
+    }
+    printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());
+    printf("Number of centroids: %d\n", numCentroids);
+    
+    int totalVectors = numVectors + numCentroids;
+    std::vector<float> allVectors(totalVectors * baseDimension);
+    std::memcpy(allVectors.data(), baseVecs, numVectors * baseDimension * sizeof(float));
+    
+    if (centroids && numCentroids > 0) {
+        std::memcpy(allVectors.data() + numVectors * baseDimension, 
+                    centroids->data(), 
+                    numCentroids * baseDimension * sizeof(float));
+    }
+    std::vector<float> embedding(totalVectors * 3);
+    
+    // K-NN
+    auto metric = std::make_shared<knncolle::EuclideanDistance<float, float>>();
+    knncolle::VptreeBuilder<int, float, float> builder(metric);
+    
+    // UMAP
+    umappp::Options opt;
+    opt.num_neighbors = 15; 
+    opt.min_dist = 0.1;
+    opt.num_epochs = 500;
+        auto status = umappp::initialize(
+        (int)baseDimension, totalVectors, allVectors.data(), builder, 3, embedding.data(), opt
+    );
+    status.run(embedding.data());    
+    
+    // CSV
+    FILE* fp = fopen(outputPath.c_str(), "w");
+    if (!fp) {
+        fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
+        return;
+    }
+    
+    fprintf(fp, "UMAP_1,UMAP_2,UMAP_3,Cluster_ID,Is_Centroid\n");
+    
+    for (int i = 0; i < numVectors; ++i) {
+        int clusterId = -1; // Default if not found
+        auto it = vectorToCluster.find(i);
+        if (it != vectorToCluster.end()) {
+            clusterId = it->second;
+        }
+        fprintf(fp, "%.6f,%.6f,%.6f,%d,%d\n", 
+                embedding[i*3], embedding[i*3+1], embedding[i*3+2], clusterId, 0);
+    }
+    for (int i = 0; i < numCentroids; ++i) {
+        int idx = numVectors + i;
+        fprintf(fp, "%.6f,%.6f,%.6f,%d,%d\n", 
+                embedding[idx*3], embedding[idx*3+1], embedding[idx*3+2], i, 1);
+    }
+    
+    fclose(fp);
+    printf("UMAP visualization with clusters written to %s\n", outputPath.c_str());
+    printf("Format: UMAP_1, UMAP_2, UMAP_3, Cluster_ID, Is_Centroid (0=vector, 1=centroid)\n");
+}
+
 void benchmark_fast_reclustering(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
@@ -2825,12 +3040,14 @@ void benchmark_fast_reclustering(InputParser &input) {
     RandomGenerator rng(1234);
     ReclusteringIndex index(queryDimension, config, &rng);
 
+    size_t baseDimension = queryDimension;
+    size_t baseNumVectors = 0;
+    float *baseVecs = nullptr;
+
     if (readFromDisk) {
         index = ReclusteringIndex(storagePath, &rng);
     } else {
         // Read dataset
-        size_t baseDimension, baseNumVectors;
-        float *baseVecs;
         std::vector<std::string> filePaths;
         if (isParquet) {
             list_parquet_dir(baseVectorPath.c_str(), filePaths);
@@ -2997,6 +3214,16 @@ void benchmark_fast_reclustering(InputParser &input) {
                 queryRecalls.size() * sizeof(double));
 
     if (useMSEToRecluster) {
+        // Generate UMAP visualization with cluster assignments (before early return)
+        if (baseVecs != nullptr && baseNumVectors > 0) {
+            printf("\n=== Generating UMAP Visualization ===\n");
+            visualize_with_umap_2D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.csv", C_L2);
+            visualize_with_umap_3D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.csv", C_L2);
+            visualize_with_umap_2D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.csv", C_L1);
+            visualize_with_umap_3D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.csv", C_L1);
+        } else {
+            printf("Skipping UMAP visualization\n");
+        }
         return;
     }
     printf("Starting reclustering iterations\n");
@@ -3125,12 +3352,21 @@ void benchmark_fast_reclustering(InputParser &input) {
     index.storeMSEScoreForMegaClusters();
     index.computeOverlapScores();
     index.printStats();
-
     if (iterations > 0) {
         // index.storeScoreForMegaClusters();
         // index.printStats();
         printf("Flushing to disk\n");
         index.flush_to_disk(storagePath);
+    }
+    // Generate UMAP visualization with cluster assignments (before early return)
+    if (baseVecs != nullptr && baseNumVectors > 0) {
+        printf("\n=== Generating UMAP Visualization ===\n");
+        visualize_with_umap_2D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.csv", C_L2);
+        visualize_with_umap_3D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.csv", C_L2);
+        visualize_with_umap_2D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.csv", C_L1);
+        visualize_with_umap_3D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.csv", C_L1);
+    } else {
+        printf("Skipping UMAP visualization\n");
     }
 }
 
