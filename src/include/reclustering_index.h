@@ -157,6 +157,11 @@ namespace orangedb {
             n = avgRealOverlapScores.size();
         }
 
+        void getMegaCentroids(const float **_centroids, size_t &n) const {
+            *_centroids = megaCentroids.data();
+            n = megaCentroids.size() / dim;
+        }
+
         void saveOldScoreForMegaClusters();
 
         std::vector<vector_idx_t> getMegaCentroidsToRecluster() const;

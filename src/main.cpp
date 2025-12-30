@@ -2979,6 +2979,14 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.getRealOverlapScores(&overlapScores, numScores);
         writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
 
+        // Write centroids too
+        auto mega_centroids_file_path = "mega_centroids_iter_" + std::to_string(iter + 1) + ".bin";
+        const float* megaCentroids;
+        size_t numMegaCentroids;
+        index.getMegaCentroids(&megaCentroids, numMegaCentroids);
+        writeToFile(mega_centroids_file_path, reinterpret_cast<const uint8_t *>(megaCentroids),
+                    numMegaCentroids * queryDimension * sizeof(float));
+
         // Calculate and write recall after writing overlap scores
         // Write per-query recall for the first probe combination
         std::vector<double> queryRecalls;
