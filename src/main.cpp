@@ -762,6 +762,53 @@ void writeToFile(const std::string &path, const uint8_t *data, size_t size) {
     outputFile.close();
 }
 
+void writeNestedVectorToFile(const std::string &path, const std::vector<std::vector<vector_idx_t>> &data) {
+    std::ofstream outputFile(path, std::ios::binary);
+    
+    // Write number of outer vectors
+    uint64_t numOuter = data.size();
+    outputFile.write(reinterpret_cast<const char *>(&numOuter), sizeof(uint64_t));
+    
+    // Write each inner vector
+    for (const auto &inner : data) {
+        // Write size of inner vector
+        uint64_t innerSize = inner.size();
+        outputFile.write(reinterpret_cast<const char *>(&innerSize), sizeof(uint64_t));
+        
+        // Write inner vector data
+        if (innerSize > 0) {
+            outputFile.write(reinterpret_cast<const char *>(inner.data()), innerSize * sizeof(vector_idx_t));
+        }
+    }
+    
+    outputFile.close();
+}
+
+void loadNestedVectorFromFile(const std::string &path, std::vector<std::vector<vector_idx_t>> &data) {
+    std::ifstream inputFile(path, std::ios::binary);
+    
+    // Read number of outer vectors
+    uint64_t numOuter;
+    inputFile.read(reinterpret_cast<char *>(&numOuter), sizeof(uint64_t));
+    
+    data.resize(numOuter);
+    
+    // Read each inner vector
+    for (uint64_t i = 0; i < numOuter; i++) {
+        // Read size of inner vector
+        uint64_t innerSize;
+        inputFile.read(reinterpret_cast<char *>(&innerSize), sizeof(uint64_t));
+        
+        // Read inner vector data
+        data[i].resize(innerSize);
+        if (innerSize > 0) {
+            inputFile.read(reinterpret_cast<char *>(data[i].data()), innerSize * sizeof(vector_idx_t));
+        }
+    }
+    
+    inputFile.close();
+}
+
 void loadFromFile(const std::string &path, uint8_t *data, size_t size) {
     std::ifstream inputFile(path, std::ios::binary);
     inputFile.read(reinterpret_cast<char *>(data), size);
@@ -2964,6 +3011,11 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.saveOldScoreForMegaClusters();
         // index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension, gtVecs + k * track_query_id, k,
                                          // true);
+
+        std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
+        index.getMegaMiniCentroids(&megaMiniCentroidIds);
+        auto mega_mini_centroids_file_path = "mega_mini_centroids_iter_prev_" + std::to_string(iter + 1) + ".bin";
+        writeNestedVectorToFile(mega_mini_centroids_file_path, megaMiniCentroidIds);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         index.storeMSEScoreForMegaClusters();
         index.computeOverlapScores();
@@ -2986,6 +3038,10 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.getMegaCentroids(&megaCentroids, numMegaCentroids);
         writeToFile(mega_centroids_file_path, reinterpret_cast<const uint8_t *>(megaCentroids),
                     numMegaCentroids * queryDimension * sizeof(float));
+
+        index.getMegaMiniCentroids(&megaMiniCentroidIds);
+        mega_mini_centroids_file_path = "mega_mini_centroids_iter_" + std::to_string(iter + 1) + ".bin";
+        writeNestedVectorToFile(mega_mini_centroids_file_path, megaMiniCentroidIds);
 
         // Calculate and write recall after writing overlap scores
         // Write per-query recall for the first probe combination

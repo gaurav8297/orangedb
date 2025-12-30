@@ -26,6 +26,192 @@ def read_binary_doubles(filepath):
         doubles = struct.unpack(f'{num_doubles}d', data)
         return np.array(doubles)
 
+def read_binary_floats(filepath):
+    """Read binary file containing float values."""
+    try:
+        data = np.fromfile(filepath, dtype=np.float32)
+        return data
+    except Exception as e:
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        num_floats = len(data) // 4
+        floats = struct.unpack(f'{num_floats}f', data)
+        return np.array(floats)
+
+def cosine_distance(vec1, vec2):
+    """Compute cosine distance (1 - cosine similarity) between two vectors."""
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+    if norm1 == 0 or norm2 == 0:
+        return 1.0
+    cosine_sim = dot_product / (norm1 * norm2)
+    cosine_sim = np.clip(cosine_sim, -1.0, 1.0)
+    return 1.0 - cosine_sim
+
+def angular_distance(vec1, vec2):
+    """Compute angular distance (in radians) between two vectors."""
+    cosine_sim = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+    cosine_sim = np.clip(cosine_sim, -1.0, 1.0)
+    return np.arccos(cosine_sim)
+
+def match_centroids_angular_wrt_mean(prev_centroids, new_centroids, prev_mean_centroid, dim):
+    """Match centroids between iterations using angular distance relative to previous mean centroid.
+    The angular distance is measured between vectors from mean to each centroid.
+    Returns: mapping from new_centroid_idx to (prev_centroid_idx, angular_distance)"""
+    num_prev = len(prev_centroids) // dim
+    num_new = len(new_centroids) // dim
+    
+    matches = {}
+    used_prev = set()
+    
+    # For each new centroid, find closest unmatched previous centroid
+    # Distance is measured as angle between (prev_centroid - mean) and (new_centroid - mean)
+    for new_idx in range(num_new):
+        new_centroid = new_centroids[new_idx * dim:(new_idx + 1) * dim]
+        # Vector from mean to new centroid
+        new_vec = new_centroid - prev_mean_centroid
+        new_vec_norm = np.linalg.norm(new_vec)
+        if new_vec_norm < 1e-9:
+            continue
+        new_vec = new_vec / new_vec_norm
+        
+        min_dist = float('inf')
+        best_prev_idx = -1
+        
+        for prev_idx in range(num_prev):
+            if prev_idx in used_prev:
+                continue
+            prev_centroid = prev_centroids[prev_idx * dim:(prev_idx + 1) * dim]
+            # Vector from mean to previous centroid
+            prev_vec = prev_centroid - prev_mean_centroid
+            prev_vec_norm = np.linalg.norm(prev_vec)
+            if prev_vec_norm < 1e-9:
+                continue
+            prev_vec = prev_vec / prev_vec_norm
+            
+            # Angular distance between these vectors
+            dist = angular_distance(new_vec, prev_vec)
+            if dist < min_dist:
+                min_dist = dist
+                best_prev_idx = prev_idx
+        
+        if best_prev_idx != -1:
+            matches[new_idx] = (best_prev_idx, min_dist)
+            used_prev.add(best_prev_idx)
+    
+    return matches
+
+def calculate_mean_centroid(centroids, dim):
+    """Calculate the mean centroid from all centroids."""
+    num_centroids = len(centroids) // dim
+    mean_centroid = np.zeros(dim)
+    
+    for i in range(num_centroids):
+        centroid = centroids[i * dim:(i + 1) * dim]
+        mean_centroid += centroid
+    
+    mean_centroid /= num_centroids
+    
+    # Normalize for angular distance
+    norm = np.linalg.norm(mean_centroid)
+    if norm > 1e-9:
+        mean_centroid = mean_centroid / norm
+    
+    return mean_centroid
+
+def filter_centroids_by_change(centroid_files, dim, max_angular_change=0.1):
+    """Filter centroids based on angular change between matched centroids.
+    Matching is done using angular distance relative to previous iteration's mean centroid.
+    Returns: set of centroid indices that have minimal angular change after matching."""
+    if len(centroid_files) < 2:
+        # Need at least 2 iterations to compare
+        return None
+    
+    iterations = sorted(centroid_files.keys())
+    all_stable_centroids = set()
+    
+    # Compare consecutive iterations
+    for i in range(len(iterations) - 1):
+        prev_iter = iterations[i]
+        new_iter = iterations[i + 1]
+        
+        try:
+            prev_centroids = read_binary_floats(centroid_files[prev_iter])
+            new_centroids = read_binary_floats(centroid_files[new_iter])
+            
+            # Calculate mean centroid of previous iteration (not normalized for vector calculation)
+            num_prev = len(prev_centroids) // dim
+            prev_mean_centroid = np.zeros(dim)
+            for prev_idx in range(num_prev):
+                prev_centroid = prev_centroids[prev_idx * dim:(prev_idx + 1) * dim]
+                prev_mean_centroid += prev_centroid
+            prev_mean_centroid /= num_prev
+            
+            # Match centroids using angular distance relative to prev mean
+            matches = match_centroids_angular_wrt_mean(prev_centroids, new_centroids, prev_mean_centroid, dim)
+            
+            # Now calculate actual angular change between matched centroids
+            stable_in_transition = []
+            angular_changes = []
+            
+            for new_idx, (prev_idx, match_angle) in matches.items():
+                prev_centroid = prev_centroids[prev_idx * dim:(prev_idx + 1) * dim]
+                new_centroid = new_centroids[new_idx * dim:(new_idx + 1) * dim]
+                
+                # Normalize centroids for angular distance calculation
+                prev_norm = np.linalg.norm(prev_centroid)
+                new_norm = np.linalg.norm(new_centroid)
+                if prev_norm > 1e-9 and new_norm > 1e-9:
+                    prev_centroid_norm = prev_centroid / prev_norm
+                    new_centroid_norm = new_centroid / new_norm
+                    
+                    # Calculate angular distance between matched centroids
+                    angular_dist = angular_distance(prev_centroid_norm, new_centroid_norm)
+                    angular_changes.append(angular_dist)
+                    
+                    if angular_dist <= max_angular_change:
+                        all_stable_centroids.add(new_idx)
+                        stable_in_transition.append(new_idx)
+            
+            num_new_centroids = len(new_centroids) // dim
+            
+            # Print distribution statistics
+            if angular_changes:
+                angular_changes = np.array(angular_changes)
+                print(f"\n  Iteration {prev_iter} -> {new_iter}: Angular Change Distribution")
+                print(f"    Total matched centroids: {len(angular_changes)}")
+                print(f"    Min: {np.min(angular_changes):.6f}, Max: {np.max(angular_changes):.6f}")
+                print(f"    Mean: {np.mean(angular_changes):.6f}, Median: {np.median(angular_changes):.6f}")
+                print(f"    Std Dev: {np.std(angular_changes):.6f}")
+                
+                # Percentiles
+                percentiles = [10, 25, 50, 75, 90, 95, 99]
+                print(f"    Percentiles:")
+                for p in percentiles:
+                    val = np.percentile(angular_changes, p)
+                    print(f"      {p}th: {val:.6f}")
+                
+                # Histogram bins
+                bins = [0.0, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0, np.pi]
+                hist, bin_edges = np.histogram(angular_changes, bins=bins)
+                print(f"    Distribution:")
+                for i in range(len(hist)):
+                    count = hist[i]
+                    percentage = 100.0 * count / len(angular_changes) if len(angular_changes) > 0 else 0
+                    print(f"      [{bin_edges[i]:.4f}, {bin_edges[i+1]:.4f}): {count} ({percentage:.1f}%)")
+                
+                print(f"    Centroids with change <= {max_angular_change:.4f}: {len(stable_in_transition)}/{num_new_centroids} ({100.0*len(stable_in_transition)/num_new_centroids:.1f}%)")
+            else:
+                print(f"  Iteration {prev_iter} -> {new_iter}: No valid matches found")
+            
+        except Exception as e:
+            print(f"Error comparing centroids between iterations {prev_iter} and {new_iter}: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    return all_stable_centroids if all_stable_centroids else None
+
 def find_iteration_files(pattern_prefix):
     """Find all files matching the pattern and extract iteration numbers."""
     files = {}
@@ -36,8 +222,162 @@ def find_iteration_files(pattern_prefix):
             files[iter_num] = filepath
     return files
 
-def plot_overlap_scores(approx_files, real_files, output_dir='.'):
-    """Plot approximate and real overlap scores."""
+def plot_overlap_scores_by_closeness(approx_files, real_files, centroid_files, dim, output_dir='.'):
+    """Plot overlap scores ordered by centroid closeness for each iteration pair."""
+    if not centroid_files or len(centroid_files) < 2:
+        print("Need at least 2 iterations with centroid files for closeness-based plotting")
+        return
+    
+    iterations = sorted(set(approx_files.keys()) | set(real_files.keys()) | set(centroid_files.keys()))
+    
+    # Process each consecutive iteration pair
+    for i in range(len(iterations) - 1):
+        prev_iter = iterations[i]
+        new_iter = iterations[i + 1]
+        
+        if prev_iter not in centroid_files or new_iter not in centroid_files:
+            continue
+        
+        if (prev_iter not in approx_files and prev_iter not in real_files) or \
+           (new_iter not in approx_files and new_iter not in real_files):
+            continue
+        
+        try:
+            # Read centroids
+            prev_centroids = read_binary_floats(centroid_files[prev_iter])
+            new_centroids = read_binary_floats(centroid_files[new_iter])
+            
+            # Calculate mean centroid of previous iteration
+            num_prev = len(prev_centroids) // dim
+            prev_mean_centroid = np.zeros(dim)
+            for prev_idx in range(num_prev):
+                prev_centroid = prev_centroids[prev_idx * dim:(prev_idx + 1) * dim]
+                prev_mean_centroid += prev_centroid
+            prev_mean_centroid /= num_prev
+            
+            # Match centroids
+            matches = match_centroids_angular_wrt_mean(prev_centroids, new_centroids, prev_mean_centroid, dim)
+            
+            # Sort matches by angular distance (closest first)
+            sorted_matches = sorted(matches.items(), key=lambda x: x[1][1])  # Sort by angular distance
+            
+            # Read overlap scores
+            prev_approx_scores = None
+            prev_real_scores = None
+            new_approx_scores = None
+            new_real_scores = None
+            
+            if prev_iter in approx_files:
+                prev_approx_scores = read_binary_doubles(approx_files[prev_iter])
+            if prev_iter in real_files:
+                prev_real_scores = read_binary_doubles(real_files[prev_iter])
+            if new_iter in approx_files:
+                new_approx_scores = read_binary_doubles(approx_files[new_iter])
+            if new_iter in real_files:
+                new_real_scores = read_binary_doubles(real_files[new_iter])
+            
+            # Create plots ordered by closeness
+            match_indices = []
+            prev_approx_values = []
+            prev_real_values = []
+            new_approx_values = []
+            new_real_values = []
+            angular_distances = []
+            
+            for match_idx, (new_idx, (prev_idx, angular_dist)) in enumerate(sorted_matches):
+                match_indices.append(match_idx)
+                angular_distances.append(angular_dist)
+                
+                if prev_approx_scores is not None and prev_idx < len(prev_approx_scores):
+                    prev_approx_values.append(prev_approx_scores[int(prev_idx)])
+                else:
+                    prev_approx_values.append(np.nan)
+                
+                if prev_real_scores is not None and prev_idx < len(prev_real_scores):
+                    prev_real_values.append(prev_real_scores[int(prev_idx)])
+                else:
+                    prev_real_values.append(np.nan)
+                
+                if new_approx_scores is not None and new_idx < len(new_approx_scores):
+                    new_approx_values.append(new_approx_scores[int(new_idx)])
+                else:
+                    new_approx_values.append(np.nan)
+                
+                if new_real_scores is not None and new_idx < len(new_real_scores):
+                    new_real_values.append(new_real_scores[int(new_idx)])
+                else:
+                    new_real_values.append(np.nan)
+            
+            # Plot approximate overlap scores
+            if prev_approx_scores is not None or new_approx_scores is not None:
+                plt.figure(figsize=(14, 8))
+                
+                if prev_approx_scores is not None:
+                    plt.plot(match_indices, prev_approx_values, label=f'Iteration {prev_iter}', 
+                            marker='o', markersize=3, linewidth=1.5, alpha=0.7)
+                if new_approx_scores is not None:
+                    plt.plot(match_indices, new_approx_values, label=f'Iteration {new_iter}', 
+                            marker='s', markersize=3, linewidth=1.5, alpha=0.7)
+                
+                plt.xlabel('Match Index (Ordered by Angular Closeness)', fontsize=12)
+                plt.ylabel('Approximate Overlap Score', fontsize=12)
+                plt.title(f'Approximate Overlap Scores: Iteration {prev_iter} -> {new_iter}\n(Ordered by Centroid Closeness)', 
+                         fontsize=14, fontweight='bold')
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plt.tight_layout()
+                
+                output_path = os.path.join(output_dir, f'approx_overlap_iter_{prev_iter}_to_{new_iter}_by_closeness.png')
+                plt.savefig(output_path, dpi=300, bbox_inches='tight')
+                print(f"Saved approximate overlap scores plot (by closeness) to {output_path}")
+                plt.close()
+            
+            # Plot real overlap scores
+            if prev_real_scores is not None or new_real_scores is not None:
+                plt.figure(figsize=(14, 8))
+                
+                if prev_real_scores is not None:
+                    plt.plot(match_indices, prev_real_values, label=f'Iteration {prev_iter}', 
+                            marker='o', markersize=3, linewidth=1.5, alpha=0.7)
+                if new_real_scores is not None:
+                    plt.plot(match_indices, new_real_values, label=f'Iteration {new_iter}', 
+                            marker='s', markersize=3, linewidth=1.5, alpha=0.7)
+                
+                plt.xlabel('Match Index (Ordered by Angular Closeness)', fontsize=12)
+                plt.ylabel('Real Overlap Score', fontsize=12)
+                plt.title(f'Real Overlap Scores: Iteration {prev_iter} -> {new_iter}\n(Ordered by Centroid Closeness)', 
+                         fontsize=14, fontweight='bold')
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plt.tight_layout()
+                
+                output_path = os.path.join(output_dir, f'real_overlap_iter_{prev_iter}_to_{new_iter}_by_closeness.png')
+                plt.savefig(output_path, dpi=300, bbox_inches='tight')
+                print(f"Saved real overlap scores plot (by closeness) to {output_path}")
+                plt.close()
+            
+            # Also create a plot showing angular distances
+            plt.figure(figsize=(14, 6))
+            plt.plot(match_indices, angular_distances, marker='o', markersize=2, linewidth=1, alpha=0.7)
+            plt.xlabel('Match Index (Ordered by Angular Closeness)', fontsize=12)
+            plt.ylabel('Angular Distance (radians)', fontsize=12)
+            plt.title(f'Angular Distances: Iteration {prev_iter} -> {new_iter}\n(Ordered by Closeness)', 
+                     fontsize=14, fontweight='bold')
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            output_path = os.path.join(output_dir, f'angular_distances_iter_{prev_iter}_to_{new_iter}.png')
+            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            print(f"Saved angular distances plot to {output_path}")
+            plt.close()
+            
+        except Exception as e:
+            print(f"Error plotting closeness-based scores for iterations {prev_iter} -> {new_iter}: {e}")
+            import traceback
+            traceback.print_exc()
+
+def plot_overlap_scores(approx_files, real_files, output_dir='.', centroid_files=None, dim=None, max_angular_change=0.1):
+    """Plot approximate and real overlap scores, optionally filtered by centroid change."""
     
     # Read approximate overlap scores
     approx_data = {}
@@ -63,6 +403,16 @@ def plot_overlap_scores(approx_files, real_files, output_dir='.'):
         print("No overlap score files found!")
         return
     
+    # Filter by centroid change if centroid files are provided
+    valid_centroid_indices = None
+    if centroid_files and dim:
+        print(f"\nFiltering centroids by angular change (max={max_angular_change})...")
+        valid_centroid_indices = filter_centroids_by_change(centroid_files, dim, max_angular_change)
+        if valid_centroid_indices:
+            print(f"  Found {len(valid_centroid_indices)} centroids with minimal change")
+        else:
+            print("  No valid centroids found, plotting all centroids")
+    
     # Determine maximum cluster ID
     max_cluster_id = 0
     for scores in list(approx_data.values()) + list(real_data.values()):
@@ -74,14 +424,23 @@ def plot_overlap_scores(approx_files, real_files, output_dir='.'):
         for iter_num in sorted(approx_data.keys()):
             scores = approx_data[iter_num]
             cluster_ids = np.arange(len(scores))
+            
+            # Filter scores if valid_centroid_indices is provided
+            if valid_centroid_indices is not None:
+                filtered_ids = [cid for cid in cluster_ids if cid in valid_centroid_indices]
+                filtered_scores = [scores[int(cid)] for cid in filtered_ids]
+                cluster_ids = np.array(filtered_ids)
+                scores = np.array(filtered_scores)
+            
             label = f'Iteration {iter_num}'
             if iter_num == 0:
                 label = "Initial clustering"
             plt.plot(cluster_ids, scores, label=label, marker='o', markersize=2, linewidth=1)
         
+        title_suffix = " (Filtered: Minimal Centroid Change)" if valid_centroid_indices else ""
         plt.xlabel('Mega Cluster ID', fontsize=12)
         plt.ylabel('Approximate Overlap Score', fontsize=12)
-        plt.title('Approximate Overlap Scores by Iteration', fontsize=14, fontweight='bold')
+        plt.title(f'Approximate Overlap Scores by Iteration{title_suffix}', fontsize=14, fontweight='bold')
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
@@ -97,14 +456,23 @@ def plot_overlap_scores(approx_files, real_files, output_dir='.'):
         for iter_num in sorted(real_data.keys()):
             scores = real_data[iter_num]
             cluster_ids = np.arange(len(scores))
+            
+            # Filter scores if valid_centroid_indices is provided
+            if valid_centroid_indices is not None:
+                filtered_ids = [cid for cid in cluster_ids if cid in valid_centroid_indices]
+                filtered_scores = [scores[int(cid)] for cid in filtered_ids]
+                cluster_ids = np.array(filtered_ids)
+                scores = np.array(filtered_scores)
+            
             label = f'Iteration {iter_num}'
             if iter_num == 0:
                 label = "Initial clustering"
             plt.plot(cluster_ids, scores, label=label, marker='o', markersize=2, linewidth=1)
         
+        title_suffix = " (Filtered: Minimal Centroid Change)" if valid_centroid_indices else ""
         plt.xlabel('Mega Cluster ID', fontsize=12)
         plt.ylabel('Real Overlap Score', fontsize=12)
-        plt.title('Real Overlap Scores by Iteration', fontsize=14, fontweight='bold')
+        plt.title(f'Real Overlap Scores by Iteration{title_suffix}', fontsize=14, fontweight='bold')
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
@@ -233,6 +601,9 @@ def main():
     parser = argparse.ArgumentParser(description='Plot overlap scores from binary files')
     parser.add_argument('--output-dir', '-o', default='.', help='Output directory for plots (default: current directory)')
     parser.add_argument('--input-dir', '-i', default='data/scores', help='Input directory to search for files (default: data/scores)')
+    parser.add_argument('--dim', '-d', type=int, default=768, help='Dimension of vectors (required for centroid filtering)')
+    parser.add_argument('--max-angular-change', '-m', type=float, default=0.5, help='Maximum angular change (in radians) for filtering centroids (default: 0.1)')
+    parser.add_argument('--filter-centroids', '-f', action='store_true', help='Filter overlap scores to only show centroids with minimal change')
     args = parser.parse_args()
     
     # Change to input directory
@@ -246,10 +617,12 @@ def main():
     approx_files = find_iteration_files('approx_overlap_scores_iter_')
     real_files = find_iteration_files('real_overlap_scores_iter_')
     recall_files = find_iteration_files('recall_iter_')
+    centroid_files = find_iteration_files('mega_centroids_iter_')
     
     print(f"Found {len(approx_files)} approximate overlap score files")
     print(f"Found {len(real_files)} real overlap score files")
     print(f"Found {len(recall_files)} recall score files")
+    print(f"Found {len(centroid_files)} centroid files")
     
     if not approx_files and not real_files and not recall_files:
         print("No score files found in current directory!")
@@ -261,7 +634,26 @@ def main():
     
     # Plot (use absolute path for output)
     if approx_files or real_files:
-        plot_overlap_scores(approx_files, real_files, output_path)
+        # Plot closeness-based scores for each iteration pair
+        if centroid_files and args.dim:
+            print("\nCreating closeness-based plots for each iteration pair...")
+            plot_overlap_scores_by_closeness(approx_files, real_files, centroid_files, args.dim, output_path)
+        
+        # Plot regular overlap scores (by cluster ID)
+        centroid_files_for_filtering = None
+        if not args.filter_centroids:
+            if not args.dim:
+                print("Warning: --dim is required for centroid filtering. Skipping filter.")
+            elif not centroid_files:
+                print("Warning: No centroid files found. Skipping filter.")
+            else:
+                centroid_files_for_filtering = centroid_files
+                print(f"Using centroid filtering with max angular change = {args.max_angular_change}")
+        
+        plot_overlap_scores(approx_files, real_files, output_path, 
+                          centroid_files=centroid_files_for_filtering,
+                          dim=args.dim,
+                          max_angular_change=args.max_angular_change)
     
     if recall_files:
         plot_recall_scores(recall_files, output_path)

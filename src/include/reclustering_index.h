@@ -162,6 +162,11 @@ namespace orangedb {
             n = megaCentroids.size() / dim;
         }
 
+        void getMegaMiniCentroids(std::vector<std::vector<vector_idx_t>> *_megaMiniCentroidIds) const {
+            // Copy the mega to mini centroid mapping
+            *_megaMiniCentroidIds = megaMiniCentroidIds;
+        }
+
         void saveOldScoreForMegaClusters();
 
         std::vector<vector_idx_t> getMegaCentroidsToRecluster() const;
