@@ -1897,9 +1897,15 @@ namespace orangedb {
         auto &miniIds = megaMiniCentroidIds[megaCentroidId];
         auto numMiniClusters = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters, L2);
+        
         // For each mini cluster, find the closest mini cluster in this mega cluster
         std::vector<double> approxOverlapScores(miniIds.size());
-        std::vector<double> realOverlapScores(miniIds.size());
+        std::vector<double> realOverlapScores(miniIds.size(), 0.0);  // Initialize to 0, only compute for worst k
+        
+        // Store topKMiniIds for each mini cluster (needed for real overlap calculation)
+        std::vector<std::vector<vector_idx_t>> allTopKMiniIds(miniIds.size());
+        
+        // First pass: calculate all approx overlap scores
         for (size_t idx = 0; idx < miniIds.size(); idx++) {
             auto miniId = miniIds[idx];
             std::vector<std::pair<double, vector_idx_t>> overlapRatiosWithIds;
@@ -1928,24 +1934,43 @@ namespace orangedb {
                 topKOverlapRatios.push_back(overlapRatiosWithIds[i].first);
                 topKMiniIds.push_back(overlapRatiosWithIds[i].second);
             }
-            // printf(
-            //     "Mini Centroid %llu: Closest Mini Centroid %lu, Distance = %f, Radius Sum = %f, Overlap Ratio = %f, Real Overlap Score = %f\n",
-            //     miniId, closestMiniId, std::sqrt(minDistance), radiusSum, overlapRatio, realOverlapScore);
+            
             approxOverlapScores[idx] = mergeOverlapScores(topKOverlapRatios);
-            realOverlapScores[idx] = calculateRealOverlapScore(miniId, topKMiniIds) ;
+            allTopKMiniIds[idx] = std::move(topKMiniIds);
+        }
+        
+        // Find k worst mini IDs based on approx overlap scores (lowest approx scores are worst)
+        constexpr int kWorstForReal = 10;  // Only calculate real overlap for k worst mini clusters
+        int numWorst = std::min(kWorstForReal, static_cast<int>(miniIds.size()));
+        
+        std::vector<size_t> worstIndices(miniIds.size());
+        std::iota(worstIndices.begin(), worstIndices.end(), 0);
+        std::partial_sort(worstIndices.begin(), worstIndices.begin() + numWorst, worstIndices.end(),
+                          [&approxOverlapScores](size_t a, size_t b) { 
+                              return approxOverlapScores[a] < approxOverlapScores[b]; 
+                          });
+        
+        // Second pass: calculate real overlap scores only for the k worst mini clusters
+        for (int i = 0; i < numWorst; i++) {
+            size_t idx = worstIndices[i];
+            auto miniId = miniIds[idx];
+            realOverlapScores[idx] = calculateRealOverlapScore(miniId, allTopKMiniIds[idx]);
         }
 
         auto avgOverlapRatio = computeAvg(approxOverlapScores);
-        auto avgRealOverlapScore = computeAvg(realOverlapScores);
         auto powerAvgOverlapRatio = computePowerAvgOnWorstElement(approxOverlapScores);
-        auto powerAvgRealOverlapScore = computePowerAvgOnWorstElement(realOverlapScores);
+        
+        // Calculate real overlap stats only from the k worst elements that have real scores
+        std::vector<double> worstRealOverlapScores;
+        worstRealOverlapScores.reserve(numWorst);
+        for (int i = 0; i < numWorst; i++) {
+            worstRealOverlapScores.push_back(realOverlapScores[worstIndices[i]]);
+        }
+        auto avgRealOverlapScore = computeAvg(worstRealOverlapScores);
+        auto powerAvgRealOverlapScore = computePowerAvgOnWorstElement(worstRealOverlapScores);
 
-        // Calculate aggregated statistics for worst elements
-        int k = std::min(config.workElementsForAveraging, static_cast<int>(miniIds.size()));
-        std::vector<uint32_t> indices(miniIds.size());
-        std::iota(indices.begin(), indices.end(), 0);
-        std::sort(indices.begin(), indices.end(),
-                  [&realOverlapScores](uint32_t a, uint32_t b) { return realOverlapScores[a] < realOverlapScores[b]; });
+        // Calculate aggregated statistics for worst elements (based on approx scores)
+        int k = std::min(config.workElementsForAveraging, numWorst);
         
         // Aggregate statistics for worst k elements
         double worstApproxMin = std::numeric_limits<double>::max();
@@ -1956,7 +1981,7 @@ namespace orangedb {
         double worstRealSum = 0.0;
         
         for (int i = 0; i < k; i++) {
-            auto idx = indices[i];
+            auto idx = worstIndices[i];
             double approxScore = approxOverlapScores[idx];
             double realScore = realOverlapScores[idx];
             
@@ -1989,8 +2014,9 @@ namespace orangedb {
 
         // For each mini cluster, find the closest mini cluster in this mega cluster
         std::vector<double> approxOverlapScores(miniIds.size());
-        std::vector<double> realOverlapScores(miniIds.size());
+        std::vector<double> realOverlapScores(miniIds.size(), 0.0);  // Initialize to 0, only compute for worst k
 
+        // First pass: calculate all approx overlap scores
         for (size_t idx = 0; idx < miniIds.size(); idx++) {
             auto miniId = miniIds[idx];
             std::vector<std::pair<double, vector_idx_t>> overlapRatiosWithIds;
@@ -2042,20 +2068,40 @@ namespace orangedb {
             }
 
             approxOverlapScores[idx] = mergeOverlapScores(topKOverlapRatios);
-            realOverlapScores[idx] = calculateRealOverlapScoreForAngular(miniId, topKMiniIds);
+        }
+        
+        // Find k worst mini IDs based on approx overlap scores (lowest approx scores are worst)
+        constexpr int kWorstForReal = 10;  // Only calculate real overlap for k worst mini clusters
+        int numWorst = std::min(kWorstForReal, static_cast<int>(miniIds.size()));
+        
+        std::vector<size_t> worstIndices(miniIds.size());
+        std::iota(worstIndices.begin(), worstIndices.end(), 0);
+        std::partial_sort(worstIndices.begin(), worstIndices.begin() + numWorst, worstIndices.end(),
+                          [&approxOverlapScores](size_t a, size_t b) { 
+                              return approxOverlapScores[a] < approxOverlapScores[b]; 
+                          });
+        
+        // Second pass: calculate real overlap scores only for the k worst mini clusters
+        for (int i = 0; i < numWorst; i++) {
+            size_t idx = worstIndices[i];
+            auto miniId = miniIds[idx];
+            realOverlapScores[idx] = calculateRealOverlapScoreForAngular(miniId, miniIds);
         }
 
         auto avgOverlapRatio = computeAvg(approxOverlapScores);
-        auto avgRealOverlapScore = computeAvg(realOverlapScores);
         auto powerAvgOverlapRatio = computePowerAvgOnWorstElement(approxOverlapScores);
-        auto powerAvgRealOverlapScore = computePowerAvgOnWorstElement(realOverlapScores);
+        
+        // Calculate real overlap stats only from the k worst elements that have real scores
+        std::vector<double> worstRealOverlapScores;
+        worstRealOverlapScores.reserve(numWorst);
+        for (int i = 0; i < numWorst; i++) {
+            worstRealOverlapScores.push_back(realOverlapScores[worstIndices[i]]);
+        }
+        auto avgRealOverlapScore = computeAvg(worstRealOverlapScores);
+        auto powerAvgRealOverlapScore = computePowerAvgOnWorstElement(worstRealOverlapScores);
 
-        // Calculate aggregated statistics for worst elements
-        int k = std::min(config.workElementsForAveraging, static_cast<int>(miniIds.size()));
-        std::vector<uint32_t> indices(miniIds.size());
-        std::iota(indices.begin(), indices.end(), 0);
-        std::sort(indices.begin(), indices.end(),
-                  [&realOverlapScores](uint32_t a, uint32_t b) { return realOverlapScores[a] < realOverlapScores[b]; });
+        // Calculate aggregated statistics for worst elements (based on approx scores)
+        int k = std::min(config.workElementsForAveraging, numWorst);
 
         // Aggregate statistics for worst k elements
         double worstApproxMin = std::numeric_limits<double>::max();
@@ -2066,7 +2112,7 @@ namespace orangedb {
         double worstRealSum = 0.0;
 
         for (int i = 0; i < k; i++) {
-            auto idx = indices[i];
+            auto idx = worstIndices[i];
             double approxScore = approxOverlapScores[idx];
             double realScore = realOverlapScores[idx];
 
@@ -2113,6 +2159,9 @@ namespace orangedb {
             double minAngularDist = std::numeric_limits<double>::max();
             double minCosineDist = std::numeric_limits<double>::max();
             for (const auto &closestMiniCentroidId : closestMiniIds) {
+                if (closestMiniCentroidId == miniCentroidId) {
+                    continue;
+                }
                 double cosineDist;
                 dc->computeDistance(closestMiniCentroidId, &cosineDist);
                 double angularDist = std::acos(std::clamp(1.0 - cosineDist, -1.0, 1.0));

@@ -38,6 +38,34 @@ def read_binary_floats(filepath):
         floats = struct.unpack(f'{num_floats}f', data)
         return np.array(floats)
 
+def read_nested_vector(filepath):
+    """Read nested vector file (std::vector<std::vector<vector_idx_t>>).
+    Format: [uint64 numOuter] [uint64 innerSize, uint64[] data] * numOuter"""
+    data = []
+    with open(filepath, 'rb') as f:
+        # Read number of outer vectors
+        num_outer_bytes = f.read(8)
+        if not num_outer_bytes:
+            return data
+        num_outer = struct.unpack('Q', num_outer_bytes)[0]
+        
+        for _ in range(num_outer):
+            # Read size of inner vector
+            inner_size_bytes = f.read(8)
+            if not inner_size_bytes:
+                break
+            inner_size = struct.unpack('Q', inner_size_bytes)[0]
+            
+            # Read inner vector data
+            if inner_size > 0:
+                inner_bytes = f.read(inner_size * 8)  # 8 bytes per uint64
+                inner_data = struct.unpack(f'{inner_size}Q', inner_bytes)
+                data.append(set(inner_data))  # Use set for efficient intersection
+            else:
+                data.append(set())
+    
+    return data
+
 def cosine_distance(vec1, vec2):
     """Compute cosine distance (1 - cosine similarity) between two vectors."""
     dot_product = np.dot(vec1, vec2)
@@ -212,15 +240,192 @@ def filter_centroids_by_change(centroid_files, dim, max_angular_change=0.1):
     
     return all_stable_centroids if all_stable_centroids else None
 
-def find_iteration_files(pattern_prefix):
+def find_iteration_files(pattern_prefix, exclude_pattern=None, iter_regex=r'iter_(\d+)'):
     """Find all files matching the pattern and extract iteration numbers."""
     files = {}
     for filepath in Path('.').glob(f'{pattern_prefix}*.bin'):
-        match = re.search(r'iter_(\d+)', filepath.name)
+        # Skip files that match the exclude pattern
+        if exclude_pattern and exclude_pattern in filepath.name:
+            continue
+        match = re.search(iter_regex, filepath.name)
         if match:
             iter_num = int(match.group(1))
             files[iter_num] = filepath
     return files
+
+def match_centroids_by_preserved_ids(prev_mega_mini, new_mega_mini):
+    """Match centroids based on how much data/IDs are preserved from prev to new.
+    Uses Jaccard similarity (intersection / union) to match.
+    Returns: mapping from new_idx to (prev_idx, jaccard_similarity, intersection_size, prev_size, new_size)"""
+    num_prev = len(prev_mega_mini)
+    num_new = len(new_mega_mini)
+    
+    matches = {}
+    used_prev = set()
+    
+    # For each new centroid, find the best matching previous centroid
+    for new_idx in range(num_new):
+        new_ids = new_mega_mini[new_idx]
+        best_prev_idx = -1
+        best_jaccard = -1
+        best_intersection = 0
+        
+        for prev_idx in range(num_prev):
+            if prev_idx in used_prev:
+                continue
+            prev_ids = prev_mega_mini[prev_idx]
+            
+            # Calculate Jaccard similarity
+            intersection = len(prev_ids & new_ids)
+            union = len(prev_ids | new_ids)
+            jaccard = intersection / union if union > 0 else 0
+            
+            if jaccard > best_jaccard:
+                best_jaccard = jaccard
+                best_prev_idx = prev_idx
+                best_intersection = intersection
+        
+        if best_prev_idx != -1:
+            prev_size = len(prev_mega_mini[best_prev_idx])
+            new_size = len(new_ids)
+            matches[new_idx] = (best_prev_idx, best_jaccard, best_intersection, prev_size, new_size)
+            used_prev.add(best_prev_idx)
+    
+    return matches
+
+def analyze_preserved_ids(prev_files, new_files, output_dir='.'):
+    """Analyze and print distribution of preserved IDs between iterations."""
+    iterations = sorted(set(prev_files.keys()) & set(new_files.keys()))
+    
+    if not iterations:
+        print("No matching prev/new mega-mini centroid files found")
+        return
+    
+    for iter_num in iterations:
+        print(f"\n{'='*60}")
+        print(f"Iteration {iter_num}: Preserved IDs Analysis")
+        print(f"{'='*60}")
+        
+        try:
+            prev_mega_mini = read_nested_vector(prev_files[iter_num])
+            new_mega_mini = read_nested_vector(new_files[iter_num])
+            
+            print(f"  Previous: {len(prev_mega_mini)} mega centroids")
+            print(f"  New: {len(new_mega_mini)} mega centroids")
+            
+            # Match centroids
+            matches = match_centroids_by_preserved_ids(prev_mega_mini, new_mega_mini)
+            
+            # Collect statistics
+            jaccard_similarities = []
+            intersection_sizes = []
+            preservation_ratios = []  # intersection / prev_size
+            growth_ratios = []  # new_size / prev_size
+            
+            for new_idx, (prev_idx, jaccard, intersection, prev_size, new_size) in matches.items():
+                jaccard_similarities.append(jaccard)
+                intersection_sizes.append(intersection)
+                if prev_size > 0:
+                    preservation_ratios.append(intersection / prev_size)
+                    growth_ratios.append(new_size / prev_size)
+            
+            jaccard_similarities = np.array(jaccard_similarities)
+            intersection_sizes = np.array(intersection_sizes)
+            preservation_ratios = np.array(preservation_ratios)
+            growth_ratios = np.array(growth_ratios)
+            
+            # Print Jaccard similarity distribution
+            print(f"\n  Jaccard Similarity Distribution:")
+            print(f"    Min: {np.min(jaccard_similarities):.4f}, Max: {np.max(jaccard_similarities):.4f}")
+            print(f"    Mean: {np.mean(jaccard_similarities):.4f}, Median: {np.median(jaccard_similarities):.4f}")
+            print(f"    Std Dev: {np.std(jaccard_similarities):.4f}")
+            
+            # Percentiles
+            percentiles = [10, 25, 50, 75, 90, 95, 99]
+            print(f"    Percentiles:")
+            for p in percentiles:
+                val = np.percentile(jaccard_similarities, p)
+                print(f"      {p}th: {val:.4f}")
+            
+            # Histogram bins for Jaccard
+            bins = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+            hist, bin_edges = np.histogram(jaccard_similarities, bins=bins)
+            print(f"    Distribution:")
+            for i in range(len(hist)):
+                count = hist[i]
+                percentage = 100.0 * count / len(jaccard_similarities) if len(jaccard_similarities) > 0 else 0
+                print(f"      [{bin_edges[i]:.2f}, {bin_edges[i+1]:.2f}): {count} ({percentage:.1f}%)")
+            
+            # Print preservation ratio distribution
+            print(f"\n  Preservation Ratio (intersection/prev_size) Distribution:")
+            print(f"    Min: {np.min(preservation_ratios):.4f}, Max: {np.max(preservation_ratios):.4f}")
+            print(f"    Mean: {np.mean(preservation_ratios):.4f}, Median: {np.median(preservation_ratios):.4f}")
+            print(f"    Std Dev: {np.std(preservation_ratios):.4f}")
+            
+            hist, bin_edges = np.histogram(preservation_ratios, bins=bins)
+            print(f"    Distribution:")
+            for i in range(len(hist)):
+                count = hist[i]
+                percentage = 100.0 * count / len(preservation_ratios) if len(preservation_ratios) > 0 else 0
+                print(f"      [{bin_edges[i]:.2f}, {bin_edges[i+1]:.2f}): {count} ({percentage:.1f}%)")
+            
+            # Print intersection sizes
+            print(f"\n  Intersection Sizes Distribution:")
+            print(f"    Min: {np.min(intersection_sizes)}, Max: {np.max(intersection_sizes)}")
+            print(f"    Mean: {np.mean(intersection_sizes):.1f}, Median: {np.median(intersection_sizes):.1f}")
+            print(f"    Total IDs preserved: {np.sum(intersection_sizes)}")
+            
+            # Print growth ratios
+            print(f"\n  Size Change Ratio (new_size/prev_size) Distribution:")
+            print(f"    Min: {np.min(growth_ratios):.4f}, Max: {np.max(growth_ratios):.4f}")
+            print(f"    Mean: {np.mean(growth_ratios):.4f}, Median: {np.median(growth_ratios):.4f}")
+            
+            # Create plots
+            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+            
+            # Jaccard similarity histogram
+            axes[0, 0].hist(jaccard_similarities, bins=20, edgecolor='black', alpha=0.7)
+            axes[0, 0].set_xlabel('Jaccard Similarity')
+            axes[0, 0].set_ylabel('Count')
+            axes[0, 0].set_title(f'Jaccard Similarity Distribution (Iter {iter_num})')
+            axes[0, 0].axvline(np.mean(jaccard_similarities), color='red', linestyle='--', label=f'Mean: {np.mean(jaccard_similarities):.3f}')
+            axes[0, 0].legend()
+            
+            # Preservation ratio histogram
+            axes[0, 1].hist(preservation_ratios, bins=20, edgecolor='black', alpha=0.7)
+            axes[0, 1].set_xlabel('Preservation Ratio')
+            axes[0, 1].set_ylabel('Count')
+            axes[0, 1].set_title(f'Preservation Ratio Distribution (Iter {iter_num})')
+            axes[0, 1].axvline(np.mean(preservation_ratios), color='red', linestyle='--', label=f'Mean: {np.mean(preservation_ratios):.3f}')
+            axes[0, 1].legend()
+            
+            # Intersection sizes histogram
+            axes[1, 0].hist(intersection_sizes, bins=20, edgecolor='black', alpha=0.7)
+            axes[1, 0].set_xlabel('Intersection Size')
+            axes[1, 0].set_ylabel('Count')
+            axes[1, 0].set_title(f'Intersection Sizes Distribution (Iter {iter_num})')
+            axes[1, 0].axvline(np.mean(intersection_sizes), color='red', linestyle='--', label=f'Mean: {np.mean(intersection_sizes):.1f}')
+            axes[1, 0].legend()
+            
+            # Growth ratios histogram
+            axes[1, 1].hist(growth_ratios, bins=20, edgecolor='black', alpha=0.7)
+            axes[1, 1].set_xlabel('Size Change Ratio')
+            axes[1, 1].set_ylabel('Count')
+            axes[1, 1].set_title(f'Size Change Ratio Distribution (Iter {iter_num})')
+            axes[1, 1].axvline(np.mean(growth_ratios), color='red', linestyle='--', label=f'Mean: {np.mean(growth_ratios):.3f}')
+            axes[1, 1].axvline(1.0, color='green', linestyle=':', label='No change (1.0)')
+            axes[1, 1].legend()
+            
+            plt.tight_layout()
+            output_path = os.path.join(output_dir, f'preserved_ids_distribution_iter_{iter_num}.png')
+            plt.savefig(output_path, dpi=300, bbox_inches='tight')
+            print(f"\n  Saved distribution plot to {output_path}")
+            plt.close()
+            
+        except Exception as e:
+            print(f"Error analyzing preserved IDs for iteration {iter_num}: {e}")
+            import traceback
+            traceback.print_exc()
 
 def plot_overlap_scores_by_closeness(approx_files, real_files, centroid_files, dim, output_dir='.'):
     """Plot overlap scores ordered by centroid closeness for each iteration pair."""
@@ -618,11 +823,17 @@ def main():
     real_files = find_iteration_files('real_overlap_scores_iter_')
     recall_files = find_iteration_files('recall_iter_')
     centroid_files = find_iteration_files('mega_centroids_iter_')
+    # Use specific regex for prev files: iter_prev_(\d+)
+    mega_mini_prev_files = find_iteration_files('mega_mini_centroids_iter_prev_', iter_regex=r'iter_prev_(\d+)')
+    # Exclude prev files when looking for the new files
+    mega_mini_files = find_iteration_files('mega_mini_centroids_iter_', exclude_pattern='_prev_')
     
     print(f"Found {len(approx_files)} approximate overlap score files")
     print(f"Found {len(real_files)} real overlap score files")
     print(f"Found {len(recall_files)} recall score files")
     print(f"Found {len(centroid_files)} centroid files")
+    print(f"Found {len(mega_mini_prev_files)} mega-mini centroid prev files")
+    print(f"Found {len(mega_mini_files)} mega-mini centroid files")
     
     if not approx_files and not real_files and not recall_files:
         print("No score files found in current directory!")
@@ -657,6 +868,11 @@ def main():
     
     if recall_files:
         plot_recall_scores(recall_files, output_path)
+    
+    # Analyze preserved IDs if mega-mini centroid files are available
+    if mega_mini_prev_files and mega_mini_files:
+        print("\nAnalyzing preserved IDs between iterations...")
+        analyze_preserved_ids(mega_mini_prev_files, mega_mini_files, output_path)
     
     # Change back to original directory
     os.chdir(original_dir)
