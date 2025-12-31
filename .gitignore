@@ -45,6 +45,5 @@ data/laion_small*
 cmake-build-default*
 
 *.csv
-*.bin
 data/scores/*
 *.png

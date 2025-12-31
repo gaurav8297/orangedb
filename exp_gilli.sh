@@ -17,9 +17,9 @@
 
 
 # run dataset 2D projection
-./build/release/bin/orangedb_main -run run_umap_2D_without_clustering -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs -numVectors 10000 -outputPath /Users/gilli.hadayo/orangedb/umap_2D_without_clustering.csv
+./build/release/bin/orangedb_main -run run_umap_2D_without_clustering -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs -numVectors 10000 -outputPath /Users/gilli.hadayo/orangedb/umap_2D_without_clustering.bin
 # run dataset 3D projection
-./build/release/bin/orangedb_main -run run_umap_3D_without_clustering -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs -numVectors 10000 -outputPath /Users/gilli.hadayo/orangedb/umap_3D_without_clustering.csv
+./build/release/bin/orangedb_main -run run_umap_3D_without_clustering -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs -numVectors 10000 -outputPath /Users/gilli.hadayo/orangedb/umap_3D_without_clustering.bin
 
 
 # VM

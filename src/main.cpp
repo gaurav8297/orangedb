@@ -2810,21 +2810,27 @@ void run_umap_2D_without_clustering(InputParser &input) {
     );
     status.run(embedding.data());    
     
-    // CSV
-    FILE* fp = fopen(outputPath.c_str(), "w");
+    // Binary output
+    FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
     
-    fprintf(fp, "UMAP_1,UMAP_2,ROW_ID\n");
-        for (int i = 0; i < numVectors; ++i) {
-        fprintf(fp, "%.6f,%.6f,%d\n", 
-                embedding[i*2], embedding[i*2+1], i);
+    // header
+    fwrite(&numVectors, sizeof(int), 1, fp);
+    
+    // vectors
+    for (int i = 0; i < numVectors; ++i) {
+        float umap_1 = embedding[i*2];
+        float umap_2 = embedding[i*2+1];
+        fwrite(&umap_1, sizeof(float), 1, fp);
+        fwrite(&umap_2, sizeof(float), 1, fp);
+        fwrite(&i, sizeof(int), 1, fp);
     }    
     fclose(fp);
     printf("UMAP projection of the dataset (without clustering) is written to %s\n", outputPath.c_str());
-    printf("Format: UMAP_1, UMAP_2, row_id \n");
+    printf("Binary format: num_vectors (int), then for each vector: UMAP_1 (float), UMAP_2 (float), row_id (int)\n");
 }
 
 void run_umap_3D_without_clustering(InputParser &input) {
@@ -2852,21 +2858,29 @@ void run_umap_3D_without_clustering(InputParser &input) {
     );
     status.run(embedding.data());    
     
-    // CSV
-    FILE* fp = fopen(outputPath.c_str(), "w");
+    // Binary output
+    FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
     
-    fprintf(fp, "UMAP_1,UMAP_2,UMAP_3,ROW_ID\n");
-        for (int i = 0; i < numVectors; ++i) {
-        fprintf(fp, "%.6f,%.6f,%.6f,%d\n", 
-                embedding[i*3], embedding[i*3+1], embedding[i*3+2], i);
+    // header
+    fwrite(&numVectors, sizeof(int), 1, fp);
+    
+    // vectors
+    for (int i = 0; i < numVectors; ++i) {
+        float umap_1 = embedding[i*3];
+        float umap_2 = embedding[i*3+1];
+        float umap_3 = embedding[i*3+2];
+        fwrite(&umap_1, sizeof(float), 1, fp);
+        fwrite(&umap_2, sizeof(float), 1, fp);
+        fwrite(&umap_3, sizeof(float), 1, fp);
+        fwrite(&i, sizeof(int), 1, fp);
     }    
     fclose(fp);
     printf("UMAP projection of the dataset (without clustering) is written to %s\n", outputPath.c_str());
-    printf("Format: UMAP_1, UMAP_2, UMAP_3, row_id \n");
+    printf("Binary format: num_vectors (int), then for each vector: UMAP_1 (float), UMAP_2 (float), UMAP_3 (float), row_id (int)\n");
 }
 
 void run_umap_2D_with_cluster_data(
@@ -2945,36 +2959,48 @@ void run_umap_2D_with_cluster_data(
     );
     status.run(embedding.data());    
     
-    // CSV
-    FILE* fp = fopen(outputPath.c_str(), "w");
+    // Binary output
+    FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
     
-    fprintf(fp, "UMAP_1,UMAP_2,Cluster_ID,Is_Centroid\n");
+    // header
+    fwrite(&totalVectors, sizeof(int), 1, fp);
     
-    // Write regular vectors
+    // vectors
     for (int i = 0; i < numVectors; ++i) {
         int clusterId = -1; // Default if not found
         auto it = vectorToCluster.find(i);
         if (it != vectorToCluster.end()) {
             clusterId = it->second;
         }
-        fprintf(fp, "%.6f,%.6f,%d,%d\n", 
-                embedding[i*2], embedding[i*2+1], clusterId, 0);
+        float umap_1 = embedding[i*2];
+        float umap_2 = embedding[i*2+1];
+        int isCentroid = 0;
+        fwrite(&umap_1, sizeof(float), 1, fp);
+        fwrite(&umap_2, sizeof(float), 1, fp);
+        fwrite(&clusterId, sizeof(int), 1, fp);
+        fwrite(&isCentroid, sizeof(int), 1, fp);
     }
     
-    // Write centroids
+    // centroids
     for (int i = 0; i < numCentroids; ++i) {
         int idx = numVectors + i;
-        fprintf(fp, "%.6f,%.6f,%d,%d\n", 
-                embedding[idx*2], embedding[idx*2+1], i, 1);
+        float umap_1 = embedding[idx*2];
+        float umap_2 = embedding[idx*2+1];
+        int clusterId = i;
+        int isCentroid = 1;
+        fwrite(&umap_1, sizeof(float), 1, fp);
+        fwrite(&umap_2, sizeof(float), 1, fp);
+        fwrite(&clusterId, sizeof(int), 1, fp);
+        fwrite(&isCentroid, sizeof(int), 1, fp);
     }
     
     fclose(fp);
     printf("UMAP visualization with clusters written to %s\n", outputPath.c_str());
-    printf("Format: UMAP_1, UMAP_2, Cluster_ID, Is_Centroid (0=vector, 1=centroid)\n");
+    printf("Binary format: num_records (int), then for each record: UMAP_1 (float), UMAP_2 (float), Cluster_ID (int), Is_Centroid (int, 0=vector, 1=centroid)\n");
 }
 
 void save_clustering_data(
@@ -3022,20 +3048,28 @@ void save_clustering_data(
     }
     printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());       
 
-    // Save clustering data to CSV
-    FILE* fp = fopen(outputPath.c_str(), "w");
+    // Save clustering data to bin
+    FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
-    fprintf(fp, "ROW_ID,Cluster_ID\n");
+    
+    // header
+    int numRecords = (int)vectorToCluster.size();
+    fwrite(&numRecords, sizeof(int), 1, fp);
+    
+    // ROW_ID, Cluster_ID
     for (auto it = vectorToCluster.begin(); it != vectorToCluster.end(); ++it) {
-        fprintf(fp, "%d,%d\n", it->first, it->second);
+        int rowId = it->first;
+        int clusterId = it->second;
+        fwrite(&rowId, sizeof(int), 1, fp);
+        fwrite(&clusterId, sizeof(int), 1, fp);
     }
 
     fclose(fp);
     printf("Clustering data written to %s\n", outputPath.c_str());
-    printf("Format: ROW_ID, Cluster_ID\n");
+    printf("Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)\n");
 }
 
 void run_umap_3D_with_cluster_data(
@@ -3112,33 +3146,52 @@ void run_umap_3D_with_cluster_data(
     );
     status.run(embedding.data());    
     
-    // CSV
-    FILE* fp = fopen(outputPath.c_str(), "w");
+    // Binary output
+    FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
     
-    fprintf(fp, "UMAP_1,UMAP_2,UMAP_3,Cluster_ID,Is_Centroid\n");
+    // header
+    fwrite(&totalVectors, sizeof(int), 1, fp);
     
+    // vectors
     for (int i = 0; i < numVectors; ++i) {
         int clusterId = -1; // Default if not found
         auto it = vectorToCluster.find(i);
         if (it != vectorToCluster.end()) {
             clusterId = it->second;
         }
-        fprintf(fp, "%.6f,%.6f,%.6f,%d,%d\n", 
-                embedding[i*3], embedding[i*3+1], embedding[i*3+2], clusterId, 0);
+        float umap_1 = embedding[i*3];
+        float umap_2 = embedding[i*3+1];
+        float umap_3 = embedding[i*3+2];
+        int isCentroid = 0;
+        fwrite(&umap_1, sizeof(float), 1, fp);
+        fwrite(&umap_2, sizeof(float), 1, fp);
+        fwrite(&umap_3, sizeof(float), 1, fp);
+        fwrite(&clusterId, sizeof(int), 1, fp);
+        fwrite(&isCentroid, sizeof(int), 1, fp);
     }
+    
+    // centroids
     for (int i = 0; i < numCentroids; ++i) {
         int idx = numVectors + i;
-        fprintf(fp, "%.6f,%.6f,%.6f,%d,%d\n", 
-                embedding[idx*3], embedding[idx*3+1], embedding[idx*3+2], i, 1);
+        float umap_1 = embedding[idx*3];
+        float umap_2 = embedding[idx*3+1];
+        float umap_3 = embedding[idx*3+2];
+        int clusterId = i;
+        int isCentroid = 1;
+        fwrite(&umap_1, sizeof(float), 1, fp);
+        fwrite(&umap_2, sizeof(float), 1, fp);
+        fwrite(&umap_3, sizeof(float), 1, fp);
+        fwrite(&clusterId, sizeof(int), 1, fp);
+        fwrite(&isCentroid, sizeof(int), 1, fp);
     }
     
     fclose(fp);
     printf("UMAP visualization with clusters written to %s\n", outputPath.c_str());
-    printf("Format: UMAP_1, UMAP_2, UMAP_3, Cluster_ID, Is_Centroid (0=vector, 1=centroid)\n");
+    printf("Binary format: num_records (int), then for each record: UMAP_1 (float), UMAP_2 (float), UMAP_3 (float), Cluster_ID (int), Is_Centroid (int, 0=vector, 1=centroid)\n");
 }
 
 void benchmark_fast_reclustering(InputParser &input) {
@@ -3372,14 +3425,14 @@ void benchmark_fast_reclustering(InputParser &input) {
         if (baseVecs != nullptr && baseNumVectors > 0) {
             if(umap_mode==LIVE_UMAP) {
                 printf("\n=== Generating UMAP Visualization ===\n");
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.csv", C_L2);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.csv", C_L2);
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.csv", C_L1);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.csv", C_L1);
+                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.bin", C_L2);
+                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.bin", C_L1);
             } else if(umap_mode==OFFLINE_UMAP) {
                 printf("\n=== saving clustering data ===\n");
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.csv", C_L2);
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.csv", C_L1);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.bin", C_L1);
             } 
         } else {
             printf("Skipping UMAP visualization\n");
@@ -3522,14 +3575,14 @@ void benchmark_fast_reclustering(InputParser &input) {
     if (baseVecs != nullptr && baseNumVectors > 0) {
         if(umap_mode==LIVE_UMAP) {
         printf("\n=== Generating UMAP Visualization ===\n");
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.csv", C_L2);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.csv", C_L2);
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.csv", C_L1);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.csv", C_L1);
+                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.bin", C_L2);
+                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.bin", C_L1);
             } else if(umap_mode==OFFLINE_UMAP) {
                 printf("\n=== saving clustering data ===\n");
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.csv", C_L2);
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.csv", C_L1);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.bin", C_L1);
             }
     } else {
         printf("Skipping UMAP visualization\n");

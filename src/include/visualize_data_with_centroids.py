@@ -4,6 +4,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from mpl_toolkits.mplot3d import Axes3D
+from visualize_helpers import read_binary_umap
 
 interactive_mode = True
 
@@ -49,15 +50,15 @@ else:
     flag_L1 = True
     flag_L2 = False
 
-# Load
+# Load binary files
 if flag_2D and flag_L1:
-    df = pd.read_csv('umap_l1_clusters_2D.csv')
+    df = read_binary_umap('umap_l1_clusters_2D.bin', is_3d=False)
 elif flag_3D and flag_L1:
-    df = pd.read_csv('umap_l1_clusters_3D.csv')
+    df = read_binary_umap('umap_l1_clusters_3D.bin', is_3d=True)
 elif flag_2D and flag_L2:
-    df = pd.read_csv('umap_l2_clusters_2D.csv')
+    df = read_binary_umap('umap_l2_clusters_2D.bin', is_3d=False)
 elif flag_3D and flag_L2:
-    df = pd.read_csv('umap_l2_clusters_3D.csv')
+    df = read_binary_umap('umap_l2_clusters_3D.bin', is_3d=True)
 else:
     print("Error: Invalid input choise")
     exit(1)

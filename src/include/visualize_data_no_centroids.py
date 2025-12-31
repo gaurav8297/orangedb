@@ -4,6 +4,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from mpl_toolkits.mplot3d import Axes3D
+from visualize_helpers import read_binary_umap_no_clustering, read_binary_clustering
 
 interactive_mode = True
 
@@ -49,19 +50,19 @@ else:
     flag_L1 = True
     flag_L2 = False
 
-# Load
+# Load binary files
 if flag_2D:
-    df_umap = pd.read_csv('umap_2D_without_clustering.csv')
+    df_umap = read_binary_umap_no_clustering('umap_2D_without_clustering.bin', is_3d=False)
 elif flag_3D:
-    df_umap = pd.read_csv('umap_3D_without_clustering.csv')
+    df_umap = read_binary_umap_no_clustering('umap_3D_without_clustering.bin', is_3d=True)
 else:
     print("Error: Invalid input choise")
     exit(1)
 
 if flag_L1:
-    df_clustering = pd.read_csv('clustering_data_l1.csv')
-elif flag_3D:
-    df_clustering = pd.read_csv('clustering_data_l2.csv')
+    df_clustering = read_binary_clustering('clustering_data_l1.bin')
+elif flag_L2:
+    df_clustering = read_binary_clustering('clustering_data_l2.bin')
 else:
     print("Error: Invalid input choise")
     exit(1)
