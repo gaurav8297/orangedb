@@ -2779,7 +2779,91 @@ void read_and_write_chunk(InputParser &input) {
     }
 }
 
-void visualize_with_umap_2D(
+void run_umap_2D_without_clustering(InputParser &input) {
+    
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const std::string &outputPath = input.getCmdOption("-outputPath");
+    size_t baseDimension, baseNumVectors;
+    float* baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
+ 
+    using namespace orangedb;
+  
+    // K-NN
+    std::vector<float> embedding(numVectors * 2);   
+    auto metric = std::make_shared<knncolle::EuclideanDistance<float, float>>();
+    knncolle::VptreeBuilder<int, float, float> builder(metric);
+    
+    // UMAP
+    umappp::Options opt;
+    opt.num_neighbors = 15; 
+    opt.min_dist = 0.1;
+    opt.num_epochs = 500;
+    auto status = umappp::initialize(
+        (int)baseDimension, numVectors, baseVecs, builder, 2, embedding.data(), opt
+    );
+    status.run(embedding.data());    
+    
+    // CSV
+    FILE* fp = fopen(outputPath.c_str(), "w");
+    if (!fp) {
+        fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
+        return;
+    }
+    
+    fprintf(fp, "UMAP_1,UMAP_2,ROW_ID\n");
+        for (int i = 0; i < numVectors; ++i) {
+        fprintf(fp, "%.6f,%.6f,%d\n", 
+                embedding[i*2], embedding[i*2+1], i);
+    }    
+    fclose(fp);
+    printf("UMAP projection of the dataset (without clustering) is written to %s\n", outputPath.c_str());
+    printf("Format: UMAP_1, UMAP_2, row_id \n");
+}
+
+void run_umap_3D_without_clustering(InputParser &input) {
+    
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const std::string &outputPath = input.getCmdOption("-outputPath");
+    size_t baseDimension, baseNumVectors;
+    float* baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
+ 
+    using namespace orangedb;
+  
+    // K-NN
+    std::vector<float> embedding(numVectors * 3);   
+    auto metric = std::make_shared<knncolle::EuclideanDistance<float, float>>();
+    knncolle::VptreeBuilder<int, float, float> builder(metric);
+    
+    // UMAP
+    umappp::Options opt;
+    opt.num_neighbors = 15; 
+    opt.min_dist = 0.1;
+    opt.num_epochs = 500;
+    auto status = umappp::initialize(
+        (int)baseDimension, numVectors, baseVecs, builder, 3, embedding.data(), opt
+    );
+    status.run(embedding.data());    
+    
+    // CSV
+    FILE* fp = fopen(outputPath.c_str(), "w");
+    if (!fp) {
+        fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
+        return;
+    }
+    
+    fprintf(fp, "UMAP_1,UMAP_2,UMAP_3,ROW_ID\n");
+        for (int i = 0; i < numVectors; ++i) {
+        fprintf(fp, "%.6f,%.6f,%.6f,%d\n", 
+                embedding[i*3], embedding[i*3+1], embedding[i*3+2], i);
+    }    
+    fclose(fp);
+    printf("UMAP projection of the dataset (without clustering) is written to %s\n", outputPath.c_str());
+    printf("Format: UMAP_1, UMAP_2, UMAP_3, row_id \n");
+}
+
+void run_umap_2D_with_cluster_data(
     const orangedb::ReclusteringIndex& index,
     float* baseVecs, 
     int numVectors, 
@@ -2887,7 +2971,7 @@ void visualize_with_umap_2D(
     printf("Format: UMAP_1, UMAP_2, Cluster_ID, Is_Centroid (0=vector, 1=centroid)\n");
 }
 
-void visualize_with_umap_3D(
+void run_umap_3D_with_cluster_data(
     const orangedb::ReclusteringIndex& index,
     float* baseVecs, 
     int numVectors, 
@@ -3219,10 +3303,10 @@ void benchmark_fast_reclustering(InputParser &input) {
         // Generate UMAP visualization with cluster assignments (before early return)
         if (baseVecs != nullptr && baseNumVectors > 0) {
             printf("\n=== Generating UMAP Visualization ===\n");
-            visualize_with_umap_2D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.csv", C_L2);
-            visualize_with_umap_3D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.csv", C_L2);
-            visualize_with_umap_2D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.csv", C_L1);
-            visualize_with_umap_3D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.csv", C_L1);
+            run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.csv", C_L2);
+            run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.csv", C_L2);
+            run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.csv", C_L1);
+            run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.csv", C_L1);
         } else {
             printf("Skipping UMAP visualization\n");
         }
@@ -3363,10 +3447,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     // Generate UMAP visualization with cluster assignments (before early return)
     if (baseVecs != nullptr && baseNumVectors > 0) {
         printf("\n=== Generating UMAP Visualization ===\n");
-        visualize_with_umap_2D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.csv", C_L2);
-        visualize_with_umap_3D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.csv", C_L2);
-        visualize_with_umap_2D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.csv", C_L1);
-        visualize_with_umap_3D(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.csv", C_L1);
+        run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.csv", C_L2);
+        run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.csv", C_L2);
+        run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.csv", C_L1);
+        run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.csv", C_L1);
     } else {
         printf("Skipping UMAP visualization\n");
     }
@@ -4158,6 +4242,12 @@ int main(int argc, char **argv) {
     }
     else if (run == "testQuantizationIssue") {
         test_quantization_issue(input);
+    }
+    else if (run == "run_umap_2D_without_clustering") {
+        run_umap_2D_without_clustering(input);
+    }
+    else if (run == "run_umap_3D_without_clustering") {
+        run_umap_3D_without_clustering(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();

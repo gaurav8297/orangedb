@@ -28,48 +28,20 @@ else:
     flag_2D = False
     flag_3D = True
 
-# cluster hirarchy
-if interactive_mode:
-    print("\nChoose cluster hirarchy:")
-    print("  1 - L1")
-    print("  2 - L2")
-    viz_choice = input("\nYour choice (1 or 2): ").strip()
-    
-    if viz_choice == '1':
-        flag_L1 = True
-        flag_L2 = False
-    elif viz_choice == '2':
-        flag_L1 = False
-        flag_L2 = True
-    else:
-        print("Invalid choice. Defaulting to 3D.")
-        flag_L1 = True
-        flag_L2 = False
-else:
-    flag_L1 = True
-    flag_L2 = False
-
 # Load
-if flag_2D and flag_L1:
-    df = pd.read_csv('umap_l1_clusters_2D.csv')
-elif flag_3D and flag_L1:
-    df = pd.read_csv('umap_l1_clusters_3D.csv')
-elif flag_2D and flag_L2:
-    df = pd.read_csv('umap_l2_clusters_2D.csv')
-elif flag_3D and flag_L2:
-    df = pd.read_csv('umap_l2_clusters_3D.csv')
+if flag_2D:
+    df_umap = pd.read_csv('umap_2D_without_clustering.csv')
+elif flag_3D:
+    df_umap = pd.read_csv('umap_3D_without_clustering.csv')
 else:
     print("Error: Invalid input choise")
     exit(1)
 
-df_vectors = df[df['Is_Centroid'] == 0].copy()
-df_centroids = df[df['Is_Centroid'] == 1].copy()
-
 # print available clusters
-unique_clusters = sorted(df_vectors['Cluster_ID'].unique())
-cluster_counts = df_vectors['Cluster_ID'].value_counts().sort_index()
+unique_clusters = sorted(df_umap['ROW_ID'].unique())
+cluster_counts = df_umap['ROW_ID'].value_counts().sort_index()
 
-print(f"\nLoaded {len(df_vectors)} vectors and {len(df_centroids)} centroids")
+print(f"\nLoaded {len(df_umap)} vectors")
 
 # color palette
 n_clusters = len(unique_clusters)
@@ -118,39 +90,27 @@ else:
 print(f"\nVisualizing clusters: {cluster_filter if cluster_filter else 'ALL'}")
 print()
 
+# ------------------------------------------------------------
+
 if(flag_2D):
-    df_vectors_filtered = df_vectors.copy()
-    df_centroids_filtered = df_centroids.copy()
+    df_vectors_filtered = df_umap.copy()
     
     if cluster_filter is not None:
-        df_vectors_filtered = df_vectors_filtered[df_vectors_filtered['Cluster_ID'].isin(cluster_filter)]
-        df_centroids_filtered = df_centroids_filtered[df_centroids_filtered['Cluster_ID'].isin(cluster_filter)]
+        df_vectors_filtered = df_vectors_filtered[df_vectors_filtered['ROW_ID'].isin(cluster_filter)]
         title = f'UMAP Projection - Clusters {cluster_filter}'
     else:
         title = 'UMAP Projection of Custom Clustering'
 
     fig, ax = plt.subplots(figsize=(12, 8))
-    clusters_in_view = sorted(df_vectors_filtered['Cluster_ID'].unique())
+    clusters_in_view = sorted(df_vectors_filtered['ROW_ID'].unique())
     for cluster_id in clusters_in_view:
-        cluster_data = df_vectors_filtered[df_vectors_filtered['Cluster_ID'] == cluster_id]
+        cluster_data = df_vectors_filtered[df_vectors_filtered['ROW_ID'] == cluster_id]
         ax.scatter(cluster_data['UMAP_1'], 
                   cluster_data['UMAP_2'],
                   c=[cluster_color_map[cluster_id]], 
                   label=f'Cluster {cluster_id}',
                   s=10,
                   alpha=0.6)
-    for cluster_id in clusters_in_view:
-        centroid_data = df_centroids_filtered[df_centroids_filtered['Cluster_ID'] == cluster_id]
-        if len(centroid_data) > 0:
-            ax.scatter(centroid_data['UMAP_1'], 
-                      centroid_data['UMAP_2'],
-                      c=[cluster_color_map[cluster_id]], 
-                      marker='*',
-                      s=1000,
-                      edgecolors='black',
-                      linewidths=2,
-                      alpha=1.0,
-                      zorder=10)
     
     ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=9, markerscale=2)
     ax.set_xlabel('UMAP_1')
@@ -158,18 +118,16 @@ if(flag_2D):
     ax.set_title(title)
     
     plt.tight_layout()
-    print(f"Showing {len(df_vectors_filtered)} vectors and {len(df_centroids_filtered)} centroids from {len(clusters_in_view)} clusters")
+    print(f"Showing {len(df_vectors_filtered)} vectors from {len(clusters_in_view)} clusters")
     plt.show()
 
 # ------------------------------------------------------------
 
 if(flag_3D):
-    df_vectors_filtered = df_vectors.copy()
-    df_centroids_filtered = df_centroids.copy()
+    df_vectors_filtered = df_umap.copy()
     
     if cluster_filter is not None:
-        df_vectors_filtered = df_vectors_filtered[df_vectors_filtered['Cluster_ID'].isin(cluster_filter)]
-        df_centroids_filtered = df_centroids_filtered[df_centroids_filtered['Cluster_ID'].isin(cluster_filter)]
+        df_vectors_filtered = df_vectors_filtered[df_vectors_filtered['ROW_ID'].isin(cluster_filter)]
         title = f'3D UMAP Projection - Clusters {cluster_filter}'
     else:
         title = '3D UMAP Projection of Custom Clustering'
@@ -177,9 +135,9 @@ if(flag_3D):
     fig = plt.figure(figsize=(14, 10))
     ax = fig.add_subplot(111, projection='3d')
 
-    clusters_in_view = sorted(df_vectors_filtered['Cluster_ID'].unique())
+    clusters_in_view = sorted(df_vectors_filtered['ROW_ID'].unique())
     for cluster_id in clusters_in_view:
-        cluster_data = df_vectors_filtered[df_vectors_filtered['Cluster_ID'] == cluster_id]
+        cluster_data = df_vectors_filtered[df_vectors_filtered['ROW_ID'] == cluster_id]
         ax.scatter(cluster_data['UMAP_1'], 
                   cluster_data['UMAP_2'], 
                   cluster_data['UMAP_3'],
@@ -187,20 +145,6 @@ if(flag_3D):
                   label=f'Cluster {cluster_id}',
                   s=10, 
                   alpha=0.6)
-    
-    for cluster_id in clusters_in_view:
-        centroid_data = df_centroids_filtered[df_centroids_filtered['Cluster_ID'] == cluster_id]
-        if len(centroid_data) > 0:
-            ax.scatter(centroid_data['UMAP_1'], 
-                      centroid_data['UMAP_2'], 
-                      centroid_data['UMAP_3'],
-                      c=[cluster_color_map[cluster_id]], 
-                      marker='*',
-                      s=1000,
-                      edgecolors='black',
-                      linewidths=2,
-                      alpha=1.0,
-                      depthshade=False)
 
     ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1), fontsize=9, markerscale=2)
 
@@ -210,5 +154,5 @@ if(flag_3D):
     ax.set_title(title)
     
     plt.tight_layout()
-    print(f"Showing {len(df_vectors_filtered)} vectors and {len(df_centroids_filtered)} centroids from {len(clusters_in_view)} clusters")
+    print(f"Showing {len(df_vectors_filtered)} vectors from {len(clusters_in_view)} clusters")
     plt.show()
