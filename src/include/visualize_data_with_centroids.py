@@ -89,7 +89,7 @@ print("\n" + "="*60)
 print("Available Clusters:")
 print("="*60)
 for cluster_id in unique_clusters:
-    print(f"  Cluster {cluster_id}: {cluster_counts[cluster_id]} points")
+    print(f"  Cluster {cluster_id}: {cluster_counts[cluster_id]} vectors")
 print("="*60)
 
 # Select Clusters

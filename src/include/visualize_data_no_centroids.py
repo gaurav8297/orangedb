@@ -28,6 +28,27 @@ else:
     flag_2D = False
     flag_3D = True
 
+# cluster hirarchy
+if interactive_mode:
+    print("\nChoose cluster hirarchy:")
+    print("  1 - L1")
+    print("  2 - L2")
+    viz_choice = input("\nYour choice (1 or 2): ").strip()
+    
+    if viz_choice == '1':
+        flag_L1 = True
+        flag_L2 = False
+    elif viz_choice == '2':
+        flag_L1 = False
+        flag_L2 = True
+    else:
+        print("Invalid choice. Defaulting to 3D.")
+        flag_L1 = True
+        flag_L2 = False
+else:
+    flag_L1 = True
+    flag_L2 = False
+
 # Load
 if flag_2D:
     df_umap = pd.read_csv('umap_2D_without_clustering.csv')
@@ -37,9 +58,17 @@ else:
     print("Error: Invalid input choise")
     exit(1)
 
+if flag_L1:
+    df_clustering = pd.read_csv('clustering_data_l1.csv')
+elif flag_3D:
+    df_clustering = pd.read_csv('clustering_data_l2.csv')
+else:
+    print("Error: Invalid input choise")
+    exit(1)
+
 # print available clusters
-unique_clusters = sorted(df_umap['ROW_ID'].unique())
-cluster_counts = df_umap['ROW_ID'].value_counts().sort_index()
+unique_clusters = sorted(df_clustering['Cluster_ID'].unique())
+cluster_counts = df_clustering['Cluster_ID'].value_counts().sort_index()
 
 print(f"\nLoaded {len(df_umap)} vectors")
 
@@ -61,7 +90,7 @@ print("\n" + "="*60)
 print("Available Clusters:")
 print("="*60)
 for cluster_id in unique_clusters:
-    print(f"  Cluster {cluster_id}: {cluster_counts[cluster_id]} points")
+    print(f"  Cluster {cluster_id}: {cluster_counts[cluster_id]} vectors")
 print("="*60)
 
 # Select Clusters
@@ -93,18 +122,20 @@ print()
 # ------------------------------------------------------------
 
 if(flag_2D):
+    df_vectors_index_filtered = df_clustering.copy()
     df_vectors_filtered = df_umap.copy()
-    
+
     if cluster_filter is not None:
-        df_vectors_filtered = df_vectors_filtered[df_vectors_filtered['ROW_ID'].isin(cluster_filter)]
+        df_vectors_index_filtered = df_vectors_index_filtered[df_vectors_index_filtered['Cluster_ID'].isin(cluster_filter)]
         title = f'UMAP Projection - Clusters {cluster_filter}'
     else:
         title = 'UMAP Projection of Custom Clustering'
 
     fig, ax = plt.subplots(figsize=(12, 8))
-    clusters_in_view = sorted(df_vectors_filtered['ROW_ID'].unique())
+    clusters_in_view = sorted(df_vectors_index_filtered['Cluster_ID'].unique())
     for cluster_id in clusters_in_view:
-        cluster_data = df_vectors_filtered[df_vectors_filtered['ROW_ID'] == cluster_id]
+        vector_ids = df_vectors_index_filtered[df_vectors_index_filtered['Cluster_ID'] == cluster_id]['ROW_ID']     
+        cluster_data = df_vectors_filtered[df_vectors_filtered['ROW_ID'].isin(vector_ids)]
         ax.scatter(cluster_data['UMAP_1'], 
                   cluster_data['UMAP_2'],
                   c=[cluster_color_map[cluster_id]], 
@@ -118,16 +149,17 @@ if(flag_2D):
     ax.set_title(title)
     
     plt.tight_layout()
-    print(f"Showing {len(df_vectors_filtered)} vectors from {len(clusters_in_view)} clusters")
+    print(f"Showing {len(df_vectors_index_filtered)} vectors from {len(clusters_in_view)} clusters")
     plt.show()
 
 # ------------------------------------------------------------
 
 if(flag_3D):
+    df_vectors_index_filtered = df_clustering.copy()
     df_vectors_filtered = df_umap.copy()
     
     if cluster_filter is not None:
-        df_vectors_filtered = df_vectors_filtered[df_vectors_filtered['ROW_ID'].isin(cluster_filter)]
+        df_vectors_index_filtered = df_vectors_index_filtered[df_vectors_index_filtered['Cluster_ID'].isin(cluster_filter)]
         title = f'3D UMAP Projection - Clusters {cluster_filter}'
     else:
         title = '3D UMAP Projection of Custom Clustering'
@@ -135,9 +167,10 @@ if(flag_3D):
     fig = plt.figure(figsize=(14, 10))
     ax = fig.add_subplot(111, projection='3d')
 
-    clusters_in_view = sorted(df_vectors_filtered['ROW_ID'].unique())
+    clusters_in_view = sorted(df_vectors_index_filtered['Cluster_ID'].unique())
     for cluster_id in clusters_in_view:
-        cluster_data = df_vectors_filtered[df_vectors_filtered['ROW_ID'] == cluster_id]
+        vector_ids = df_vectors_index_filtered[df_vectors_index_filtered['Cluster_ID'] == cluster_id]['ROW_ID']     
+        cluster_data = df_vectors_filtered[df_vectors_filtered['ROW_ID'].isin(vector_ids)]
         ax.scatter(cluster_data['UMAP_1'], 
                   cluster_data['UMAP_2'], 
                   cluster_data['UMAP_3'],
@@ -154,5 +187,5 @@ if(flag_3D):
     ax.set_title(title)
     
     plt.tight_layout()
-    print(f"Showing {len(df_vectors_filtered)} vectors from {len(clusters_in_view)} clusters")
+    print(f"Showing {len(df_vectors_index_filtered)} vectors from {len(clusters_in_view)} clusters")
     plt.show()
