@@ -3048,7 +3048,8 @@ void run_umap_2D_with_cluster_data(
     }
     
     fclose(fp);
-    printf("UMAP 2D visualization with clusters written to %s\n", outputPath.c_str());
+    printf("UMAP visualization with clusters written to %s\n", outputPath.c_str());
+    printf("Binary format: num_records (int), then for each record: UMAP_1 (float), UMAP_2 (float), Cluster_ID (int), Is_Centroid (int, 0=vector, 1=centroid)\n");
 }
 
 void save_clustering_data(
@@ -3327,7 +3328,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     float scoreChangeThreshold = stof(input.getCmdOption("-scoreChangeThreshold"));
     float centroidChangeThreshold = stof(input.getCmdOption("-centroidChangeThreshold"));
     const bool useMSEToRecluster = stoi(input.getCmdOption("-useMSEToRecluster"));
-    const int umap_mode = stoi(input.getCmdOption("--umap_mode"));
+    const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
