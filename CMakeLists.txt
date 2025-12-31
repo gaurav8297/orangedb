@@ -71,25 +71,27 @@ message(STATUS "Parquet includes: ${PARQUET_INCLUDE}")
 if(APPLE)
     # macOS requires -Xpreprocessor -fopenmp instead of -fopenmp
     set(OPENMP_FLAG "-Xpreprocessor -fopenmp")
+    set(RDYNAMIC_FLAG "")  # macOS doesn't support -rdynamic
 else()
     set(OPENMP_FLAG "-fopenmp")
+    set(RDYNAMIC_FLAG "-rdynamic")  # Linux supports -rdynamic
 endif()
 
 #set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer -mavx2 -mfma -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw")
 # set(CMAKE_CXX_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -rdynamic -fno-omit-frame-pointer")
-set(CMAKE_CXX_FLAGS_DEBUG "${OPENMP_FLAG} -g -fsanitize=address -rdynamic -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_DEBUG "${OPENMP_FLAG} -g -fsanitize=address ${RDYNAMIC_FLAG} -fno-omit-frame-pointer")
 
 # for now remove -march=native
 # set(CMAKE_CXX_FLAGS_RELEASE "-fopenmp -O3 -g -rdynamic -fno-omit-frame-pointer")
-set(CMAKE_CXX_FLAGS_RELEASE "${OPENMP_FLAG} -O3 -g -rdynamic -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_RELEASE "${OPENMP_FLAG} -O3 -g ${RDYNAMIC_FLAG} -fno-omit-frame-pointer")
 
 #set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -fno-omit-frame-pointer -mavx2 -mfma -mavx512f -mavx512cd -mavx512vl -mavx512dq -mavx512bw")
 # set(CMAKE_C_FLAGS_DEBUG "-fopenmp -g -fsanitize=address -rdynamic -fno-omit-frame-pointer")
-set(CMAKE_C_FLAGS_DEBUG "${OPENMP_FLAG} -g -fsanitize=address -rdynamic -fno-omit-frame-pointer")
+set(CMAKE_C_FLAGS_DEBUG "${OPENMP_FLAG} -g -fsanitize=address ${RDYNAMIC_FLAG} -fno-omit-frame-pointer")
 
 # for now remove -march=native
 # set(CMAKE_C_FLAGS_RELEASE "-fopenmp -O3 -g -rdynamic -fno-omit-frame-pointer")
-set(CMAKE_C_FLAGS_RELEASE "${OPENMP_FLAG} -O3 -g -rdynamic -fno-omit-frame-pointer")
+set(CMAKE_C_FLAGS_RELEASE "${OPENMP_FLAG} -O3 -g ${RDYNAMIC_FLAG} -fno-omit-frame-pointer")
 #set(CMAKE_OSX_ARCHITECTURES "x86_64")
 
 # Add include path
