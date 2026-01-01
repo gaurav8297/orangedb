@@ -3121,16 +3121,15 @@ void save_clustering_data(
 }
 
 void run_umap_3D_with_cluster_data(
-    const orangedb::ReclusteringIndex& index,
-    float* baseVecs, 
-    int numVectors, 
-    size_t baseDimension,
+    const ReclusteringIndex& index,
     const std::string& outputPath,
     int hirarchyLevel,
-    int sampleSize = 100000  // Default sample size to reduce UMAP cost
+    int sampleSize = 100000,  // Default sample size to reduce UMAP cost
+    int numThreads = 32
 ) {
     using namespace orangedb;
     
+    int dim = index.getDim();
     std::unordered_map<vector_idx_t, int> vectorToCluster;      
     const float* centroids = nullptr;
     size_t numCentroids = 0;
@@ -3167,7 +3166,9 @@ void run_umap_3D_with_cluster_data(
         printf("Invalid hirarchy level: %d\n", hirarchyLevel);
         return;
     }
-    printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());
+    
+    int numVectors = (int)vectorToCluster.size();
+    printf("Total vectors assigned to clusters: %d\n", numVectors);
     printf("Number of centroids: %zu\n", numCentroids);
     
     // Subsample vectors to reduce UMAP computation cost
@@ -3180,7 +3181,7 @@ void run_umap_3D_with_cluster_data(
         }
         
         // Calculate samples per cluster (proportional to cluster size)
-        int totalAssigned = (int)vectorToCluster.size();
+        int totalAssigned = numVectors;
         RandomGenerator rng(42);  // Fixed seed for reproducibility
         
         for (auto& [clusterId, vecIds] : clusterToVectors) {
@@ -3206,21 +3207,20 @@ void run_umap_3D_with_cluster_data(
     
     int numSampledVectors = (int)sampledVectorIds.size();
     int totalVectors = numSampledVectors + (int)numCentroids;
-    std::vector<float> allVectors(totalVectors * baseDimension);
+    std::vector<float> allVectors(totalVectors * dim);
     
-    // Copy sampled vectors
+    // Copy sampled vectors from index
     for (int i = 0; i < numSampledVectors; ++i) {
         vector_idx_t origId = sampledVectorIds[i];
-        std::memcpy(allVectors.data() + i * baseDimension, 
-                    baseVecs + origId * baseDimension, 
-                    baseDimension * sizeof(float));
+        const float* vecData = index.getVectorData(origId);
+        std::memcpy(allVectors.data() + i * dim, vecData, dim * sizeof(float));
     }
     
     // Copy centroids
     if (centroids && numCentroids > 0) {
-        std::memcpy(allVectors.data() + numSampledVectors * baseDimension, 
+        std::memcpy(allVectors.data() + numSampledVectors * dim, 
                     centroids, 
-                    numCentroids * baseDimension * sizeof(float));
+                    numCentroids * dim * sizeof(float));
     }
     std::vector<float> embedding(totalVectors * 3);
     
@@ -3233,10 +3233,11 @@ void run_umap_3D_with_cluster_data(
     opt.num_neighbors = 15; 
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
+    opt.num_threads = numThreads;
     printf("Running UMAP 3D dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
     auto umap_start = std::chrono::high_resolution_clock::now();
     auto status = umappp::initialize(
-        (int)baseDimension, totalVectors, allVectors.data(), builder, 3, embedding.data(), opt
+        dim, totalVectors, allVectors.data(), builder, 3, embedding.data(), opt
     );
     status.run(embedding.data());
     auto umap_end = std::chrono::high_resolution_clock::now();
@@ -3523,9 +3524,9 @@ void benchmark_fast_reclustering(InputParser &input) {
             if(umap_mode==LIVE_UMAP) {
                 printf("\n=== Generating UMAP Visualization ===\n");
                 // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.bin", C_L2);
+                run_umap_3D_with_cluster_data(index, "umap_l2_clusters_3D.bin", C_L2, 100000, numThreads);
                 // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.bin", C_L1);
+                run_umap_3D_with_cluster_data(index, "umap_l1_clusters_3D.bin", C_L1, 100000, numThreads);
             } else if(umap_mode==OFFLINE_UMAP) {
                 printf("\n=== saving clustering data ===\n");
                 save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
@@ -3591,6 +3592,27 @@ void benchmark_fast_reclustering(InputParser &input) {
         auto recall_file_path = "recall_iter_" + std::to_string(iter + 1) + ".bin";
         writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(queryRecalls.data()),
                     queryRecalls.size() * sizeof(double));
+
+        // Generate UMAP visualization with cluster assignments (before early return)
+        if (baseVecs != nullptr && baseNumVectors > 0) {
+            if(umap_mode==LIVE_UMAP) {
+                printf("\n=== Generating UMAP Visualization ===\n");
+                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+                run_umap_3D_with_cluster_data(index,
+                                              "umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
+                                              100000, numThreads);
+                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+                run_umap_3D_with_cluster_data(index,
+                                              "umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
+                                              100000, numThreads);
+            } else if(umap_mode==OFFLINE_UMAP) {
+                printf("\n=== saving clustering data ===\n");
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.bin", C_L1);
+            }
+        } else {
+            printf("Skipping UMAP visualization\n");
+        }
 
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
@@ -3658,23 +3680,6 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.storeMSEScoreForMegaClusters();
         // index.storeScoreForMegaClusters();
         // index.printStats();
-
-        // Generate UMAP visualization with cluster assignments (before early return)
-        if (baseVecs != nullptr && baseNumVectors > 0) {
-            if(umap_mode==LIVE_UMAP) {
-                printf("\n=== Generating UMAP Visualization ===\n");
-                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2);
-                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1);
-            } else if(umap_mode==OFFLINE_UMAP) {
-                printf("\n=== saving clustering data ===\n");
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.bin", C_L1);
-            }
-        } else {
-            printf("Skipping UMAP visualization\n");
-        }
 
     }
     index.storeMSEScoreForMegaClusters();
