@@ -2889,7 +2889,8 @@ void run_umap_2D_with_cluster_data(
     int numVectors, 
     size_t baseDimension,
     const std::string& outputPath,
-    int hirarchyLevel
+    int hirarchyLevel,
+    int sampleSize = 100000  // Default sample size to reduce UMAP cost
 ) {
     using namespace orangedb;
     
@@ -2931,14 +2932,57 @@ void run_umap_2D_with_cluster_data(
         return;
     }
     printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());
-    printf("Number of centroids: %d\n", numCentroids);
+    printf("Number of centroids: %zu\n", numCentroids);
     
-    int totalVectors = numVectors + numCentroids;
+    // Subsample vectors to reduce UMAP computation cost
+    std::vector<vector_idx_t> sampledVectorIds;
+    if (sampleSize > 0 && sampleSize < numVectors) {
+        // Group vectors by cluster for stratified sampling
+        std::unordered_map<int, std::vector<vector_idx_t>> clusterToVectors;
+        for (const auto& [vecId, clusterId] : vectorToCluster) {
+            clusterToVectors[clusterId].push_back(vecId);
+        }
+        
+        // Calculate samples per cluster (proportional to cluster size)
+        int totalAssigned = (int)vectorToCluster.size();
+        RandomGenerator rng(42);  // Fixed seed for reproducibility
+        
+        for (auto& [clusterId, vecIds] : clusterToVectors) {
+            // Proportional sampling: each cluster gets samples proportional to its size
+            int clusterSampleSize = std::max(1, (int)(((double)vecIds.size() / totalAssigned) * sampleSize));
+            clusterSampleSize = std::min(clusterSampleSize, (int)vecIds.size());
+            
+            // Use randomPerm to get random indices
+            std::vector<uint64_t> perm(clusterSampleSize);
+            rng.randomPerm(vecIds.size(), perm.data(), clusterSampleSize);
+            for (int i = 0; i < clusterSampleSize; ++i) {
+                sampledVectorIds.push_back(vecIds[perm[i]]);
+            }
+        }
+        printf("Subsampled %zu vectors from %d total (requested sample size: %d)\n", 
+               sampledVectorIds.size(), numVectors, sampleSize);
+    } else {
+        // No subsampling, use all vectors
+        for (const auto& [vecId, clusterId] : vectorToCluster) {
+            sampledVectorIds.push_back(vecId);
+        }
+    }
+    
+    int numSampledVectors = (int)sampledVectorIds.size();
+    int totalVectors = numSampledVectors + (int)numCentroids;
     std::vector<float> allVectors(totalVectors * baseDimension);
     
-    std::memcpy(allVectors.data(), baseVecs, numVectors * baseDimension * sizeof(float));
+    // Copy sampled vectors
+    for (int i = 0; i < numSampledVectors; ++i) {
+        vector_idx_t origId = sampledVectorIds[i];
+        std::memcpy(allVectors.data() + i * baseDimension, 
+                    baseVecs + origId * baseDimension, 
+                    baseDimension * sizeof(float));
+    }
+    
+    // Copy centroids
     if (centroids && numCentroids > 0) {
-        std::memcpy(allVectors.data() + numVectors * baseDimension, 
+        std::memcpy(allVectors.data() + numSampledVectors * baseDimension, 
                     centroids, 
                     numCentroids * baseDimension * sizeof(float));
     }
@@ -2953,7 +2997,7 @@ void run_umap_2D_with_cluster_data(
     opt.num_neighbors = 15; 
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
-    printf("Running UMAP dimensionality reduction on %d vectors + %d centroids...\n", numVectors, numCentroids);
+    printf("Running UMAP dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
     auto status = umappp::initialize(
         (int)baseDimension, totalVectors, allVectors.data(), builder, 2, embedding.data(), opt
     );
@@ -2969,10 +3013,11 @@ void run_umap_2D_with_cluster_data(
     // header
     fwrite(&totalVectors, sizeof(int), 1, fp);
     
-    // vectors
-    for (int i = 0; i < numVectors; ++i) {
+    // sampled vectors
+    for (int i = 0; i < numSampledVectors; ++i) {
+        vector_idx_t origId = sampledVectorIds[i];
         int clusterId = -1; // Default if not found
-        auto it = vectorToCluster.find(i);
+        auto it = vectorToCluster.find(origId);
         if (it != vectorToCluster.end()) {
             clusterId = it->second;
         }
@@ -2986,11 +3031,11 @@ void run_umap_2D_with_cluster_data(
     }
     
     // centroids
-    for (int i = 0; i < numCentroids; ++i) {
-        int idx = numVectors + i;
+    for (size_t i = 0; i < numCentroids; ++i) {
+        int idx = numSampledVectors + i;
         float umap_1 = embedding[idx*2];
         float umap_2 = embedding[idx*2+1];
-        int clusterId = i;
+        int clusterId = (int)i;
         int isCentroid = 1;
         fwrite(&umap_1, sizeof(float), 1, fp);
         fwrite(&umap_2, sizeof(float), 1, fp);
@@ -3078,7 +3123,8 @@ void run_umap_3D_with_cluster_data(
     int numVectors, 
     size_t baseDimension,
     const std::string& outputPath,
-    int hirarchyLevel
+    int hirarchyLevel,
+    int sampleSize = 100000  // Default sample size to reduce UMAP cost
 ) {
     using namespace orangedb;
     
@@ -3119,14 +3165,57 @@ void run_umap_3D_with_cluster_data(
         return;
     }
     printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());
-    printf("Number of centroids: %d\n", numCentroids);
+    printf("Number of centroids: %zu\n", numCentroids);
     
-    int totalVectors = numVectors + numCentroids;
+    // Subsample vectors to reduce UMAP computation cost
+    std::vector<vector_idx_t> sampledVectorIds;
+    if (sampleSize > 0 && sampleSize < numVectors) {
+        // Group vectors by cluster for stratified sampling
+        std::unordered_map<int, std::vector<vector_idx_t>> clusterToVectors;
+        for (const auto& [vecId, clusterId] : vectorToCluster) {
+            clusterToVectors[clusterId].push_back(vecId);
+        }
+        
+        // Calculate samples per cluster (proportional to cluster size)
+        int totalAssigned = (int)vectorToCluster.size();
+        RandomGenerator rng(42);  // Fixed seed for reproducibility
+        
+        for (auto& [clusterId, vecIds] : clusterToVectors) {
+            // Proportional sampling: each cluster gets samples proportional to its size
+            int clusterSampleSize = std::max(1, (int)(((double)vecIds.size() / totalAssigned) * sampleSize));
+            clusterSampleSize = std::min(clusterSampleSize, (int)vecIds.size());
+            
+            // Use randomPerm to get random indices
+            std::vector<uint64_t> perm(clusterSampleSize);
+            rng.randomPerm(vecIds.size(), perm.data(), clusterSampleSize);
+            for (int i = 0; i < clusterSampleSize; ++i) {
+                sampledVectorIds.push_back(vecIds[perm[i]]);
+            }
+        }
+        printf("Subsampled %zu vectors from %d total (requested sample size: %d)\n", 
+               sampledVectorIds.size(), numVectors, sampleSize);
+    } else {
+        // No subsampling, use all vectors
+        for (const auto& [vecId, clusterId] : vectorToCluster) {
+            sampledVectorIds.push_back(vecId);
+        }
+    }
+    
+    int numSampledVectors = (int)sampledVectorIds.size();
+    int totalVectors = numSampledVectors + (int)numCentroids;
     std::vector<float> allVectors(totalVectors * baseDimension);
-    std::memcpy(allVectors.data(), baseVecs, numVectors * baseDimension * sizeof(float));
     
+    // Copy sampled vectors
+    for (int i = 0; i < numSampledVectors; ++i) {
+        vector_idx_t origId = sampledVectorIds[i];
+        std::memcpy(allVectors.data() + i * baseDimension, 
+                    baseVecs + origId * baseDimension, 
+                    baseDimension * sizeof(float));
+    }
+    
+    // Copy centroids
     if (centroids && numCentroids > 0) {
-        std::memcpy(allVectors.data() + numVectors * baseDimension, 
+        std::memcpy(allVectors.data() + numSampledVectors * baseDimension, 
                     centroids, 
                     numCentroids * baseDimension * sizeof(float));
     }
@@ -3141,7 +3230,8 @@ void run_umap_3D_with_cluster_data(
     opt.num_neighbors = 15; 
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
-        auto status = umappp::initialize(
+    printf("Running UMAP dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
+    auto status = umappp::initialize(
         (int)baseDimension, totalVectors, allVectors.data(), builder, 3, embedding.data(), opt
     );
     status.run(embedding.data());    
@@ -3156,10 +3246,11 @@ void run_umap_3D_with_cluster_data(
     // header
     fwrite(&totalVectors, sizeof(int), 1, fp);
     
-    // vectors
-    for (int i = 0; i < numVectors; ++i) {
+    // sampled vectors
+    for (int i = 0; i < numSampledVectors; ++i) {
+        vector_idx_t origId = sampledVectorIds[i];
         int clusterId = -1; // Default if not found
-        auto it = vectorToCluster.find(i);
+        auto it = vectorToCluster.find(origId);
         if (it != vectorToCluster.end()) {
             clusterId = it->second;
         }
@@ -3175,12 +3266,12 @@ void run_umap_3D_with_cluster_data(
     }
     
     // centroids
-    for (int i = 0; i < numCentroids; ++i) {
-        int idx = numVectors + i;
+    for (size_t i = 0; i < numCentroids; ++i) {
+        int idx = numSampledVectors + i;
         float umap_1 = embedding[idx*3];
         float umap_2 = embedding[idx*3+1];
         float umap_3 = embedding[idx*3+2];
-        int clusterId = i;
+        int clusterId = (int)i;
         int isCentroid = 1;
         fwrite(&umap_1, sizeof(float), 1, fp);
         fwrite(&umap_2, sizeof(float), 1, fp);
