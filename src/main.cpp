@@ -2997,11 +2997,15 @@ void run_umap_2D_with_cluster_data(
     opt.num_neighbors = 15; 
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
-    printf("Running UMAP dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
+    printf("Running UMAP 2D dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
+    auto umap_start = std::chrono::high_resolution_clock::now();
     auto status = umappp::initialize(
         (int)baseDimension, totalVectors, allVectors.data(), builder, 2, embedding.data(), opt
     );
-    status.run(embedding.data());    
+    status.run(embedding.data());
+    auto umap_end = std::chrono::high_resolution_clock::now();
+    auto umap_duration = std::chrono::duration_cast<std::chrono::milliseconds>(umap_end - umap_start).count();
+    printf("UMAP 2D took %ld ms (%.2f seconds)\n", umap_duration, umap_duration / 1000.0);
     
     // Binary output
     FILE* fp = fopen(outputPath.c_str(), "wb");
@@ -3044,8 +3048,7 @@ void run_umap_2D_with_cluster_data(
     }
     
     fclose(fp);
-    printf("UMAP visualization with clusters written to %s\n", outputPath.c_str());
-    printf("Binary format: num_records (int), then for each record: UMAP_1 (float), UMAP_2 (float), Cluster_ID (int), Is_Centroid (int, 0=vector, 1=centroid)\n");
+    printf("UMAP 2D visualization with clusters written to %s\n", outputPath.c_str());
 }
 
 void save_clustering_data(
@@ -3230,11 +3233,15 @@ void run_umap_3D_with_cluster_data(
     opt.num_neighbors = 15; 
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
-    printf("Running UMAP dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
+    printf("Running UMAP 3D dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
+    auto umap_start = std::chrono::high_resolution_clock::now();
     auto status = umappp::initialize(
         (int)baseDimension, totalVectors, allVectors.data(), builder, 3, embedding.data(), opt
     );
-    status.run(embedding.data());    
+    status.run(embedding.data());
+    auto umap_end = std::chrono::high_resolution_clock::now();
+    auto umap_duration = std::chrono::duration_cast<std::chrono::milliseconds>(umap_end - umap_start).count();
+    printf("UMAP 3D took %ld ms (%.2f seconds)\n", umap_duration, umap_duration / 1000.0);
     
     // Binary output
     FILE* fp = fopen(outputPath.c_str(), "wb");
@@ -3281,8 +3288,7 @@ void run_umap_3D_with_cluster_data(
     }
     
     fclose(fp);
-    printf("UMAP visualization with clusters written to %s\n", outputPath.c_str());
-    printf("Binary format: num_records (int), then for each record: UMAP_1 (float), UMAP_2 (float), UMAP_3 (float), Cluster_ID (int), Is_Centroid (int, 0=vector, 1=centroid)\n");
+    printf("UMAP 3D visualization with clusters written to %s\n", outputPath.c_str());
 }
 
 void benchmark_fast_reclustering(InputParser &input) {
@@ -3516,9 +3522,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         if (baseVecs != nullptr && baseNumVectors > 0) {
             if(umap_mode==LIVE_UMAP) {
                 printf("\n=== Generating UMAP Visualization ===\n");
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
                 run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.bin", C_L2);
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
                 run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.bin", C_L1);
             } else if(umap_mode==OFFLINE_UMAP) {
                 printf("\n=== saving clustering data ===\n");
@@ -3652,6 +3658,24 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.storeMSEScoreForMegaClusters();
         // index.storeScoreForMegaClusters();
         // index.printStats();
+
+        // Generate UMAP visualization with cluster assignments (before early return)
+        if (baseVecs != nullptr && baseNumVectors > 0) {
+            if(umap_mode==LIVE_UMAP) {
+                printf("\n=== Generating UMAP Visualization ===\n");
+                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2);
+                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1);
+            } else if(umap_mode==OFFLINE_UMAP) {
+                printf("\n=== saving clustering data ===\n");
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.bin", C_L1);
+            }
+        } else {
+            printf("Skipping UMAP visualization\n");
+        }
+
     }
     index.storeMSEScoreForMegaClusters();
     index.computeOverlapScores();
@@ -3661,22 +3685,6 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.printStats();
         printf("Flushing to disk\n");
         index.flush_to_disk(storagePath);
-    }
-    // Generate UMAP visualization with cluster assignments (before early return)
-    if (baseVecs != nullptr && baseNumVectors > 0) {
-        if(umap_mode==LIVE_UMAP) {
-        printf("\n=== Generating UMAP Visualization ===\n");
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_3D.bin", C_L2);
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
-                run_umap_3D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_3D.bin", C_L1);
-            } else if(umap_mode==OFFLINE_UMAP) {
-                printf("\n=== saving clustering data ===\n");
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.bin", C_L1);
-            }
-    } else {
-        printf("Skipping UMAP visualization\n");
     }
 }
 
