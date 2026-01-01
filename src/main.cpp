@@ -3524,9 +3524,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         if (baseVecs != nullptr && baseNumVectors > 0) {
             if(umap_mode==LIVE_UMAP) {
                 printf("\n=== Generating UMAP Visualization ===\n");
-                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
                 run_umap_3D_with_cluster_data(index, "umap_l2_clusters_3D.bin", C_L2, 100000, numThreads);
-                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
                 run_umap_3D_with_cluster_data(index, "umap_l1_clusters_3D.bin", C_L1, 100000, numThreads);
             } else if(umap_mode==OFFLINE_UMAP) {
                 printf("\n=== saving clustering data ===\n");
@@ -3597,11 +3597,13 @@ void benchmark_fast_reclustering(InputParser &input) {
         // Generate UMAP visualization with cluster assignments (before early return)
         if(umap_mode==LIVE_UMAP) {
             printf("\n=== Generating UMAP Visualization ===\n");
-            // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+            run_umap_2D_with_cluster_data(index, baseVecs, (int) baseNumVectors, baseDimension,
+                                          "umap_l2_clusters_2D_iter_" + std::to_string(iter + 1) + ".bin", C_L2);
             run_umap_3D_with_cluster_data(index,
                                           "umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
                                           100000, numThreads);
-            // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+            run_umap_2D_with_cluster_data(index, baseVecs, (int) baseNumVectors, baseDimension,
+                                          "umap_l1_clusters_2D_iter_" + std::to_string(iter + 1) + ".bin", C_L1);
             run_umap_3D_with_cluster_data(index,
                                           "umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
                                           100000, numThreads);

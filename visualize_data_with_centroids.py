@@ -54,11 +54,11 @@ else:
 if flag_2D and flag_L1:
     df = read_binary_umap('umap_l1_clusters_2D.bin', is_3d=False)
 elif flag_3D and flag_L1:
-    df = read_binary_umap('umap_l1_clusters_3D.bin', is_3d=True)
+    df = read_binary_umap('umap_l1_clusters_3D_iter_2.bin', is_3d=True)
 elif flag_2D and flag_L2:
     df = read_binary_umap('umap_l2_clusters_2D.bin', is_3d=False)
 elif flag_3D and flag_L2:
-    df = read_binary_umap('umap_l2_clusters_3D.bin', is_3d=True)
+    df = read_binary_umap('umap_l2_clusters_3D_iter_2.bin', is_3d=True)
 else:
     print("Error: Invalid input choise")
     exit(1)
