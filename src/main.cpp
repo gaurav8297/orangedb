@@ -8,6 +8,7 @@
 
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
+#include <cmath>       // isnan, isinf
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
 #include <fstream>
@@ -2894,6 +2895,20 @@ void run_umap_2D_with_cluster_data(
 ) {
     using namespace orangedb;
     
+    // Early validation
+    if (baseDimension == 0) {
+        printf("Error: baseDimension is 0, skipping UMAP 2D\n");
+        return;
+    }
+    if (baseVecs == nullptr) {
+        printf("Error: baseVecs is null, skipping UMAP 2D\n");
+        return;
+    }
+    if (numVectors <= 0) {
+        printf("Error: numVectors is %d, skipping UMAP 2D\n", numVectors);
+        return;
+    }
+    
     std::unordered_map<vector_idx_t, int> vectorToCluster;  
     const float* centroids = nullptr;
     size_t numCentroids = 0;
@@ -2966,10 +2981,18 @@ void run_umap_2D_with_cluster_data(
         for (const auto& [vecId, clusterId] : vectorToCluster) {
             sampledVectorIds.push_back(vecId);
         }
+        printf("Using all %zu vectors (no subsampling, sampleSize=%d, numVectors=%d)\n", 
+               sampledVectorIds.size(), sampleSize, numVectors);
     }
     
     int numSampledVectors = (int)sampledVectorIds.size();
     int totalVectors = numSampledVectors + (int)numCentroids;
+    
+    if (numSampledVectors == 0) {
+        printf("Warning: No vectors to process for UMAP 2D\n");
+        return;
+    }
+    
     std::vector<float> allVectors(totalVectors * baseDimension);
     
     // Copy sampled vectors
@@ -2986,6 +3009,18 @@ void run_umap_2D_with_cluster_data(
                     centroids, 
                     numCentroids * baseDimension * sizeof(float));
     }
+    
+    // Check for NaN/Inf values in the data
+    int nanCount = 0, infCount = 0;
+    for (size_t i = 0; i < allVectors.size(); ++i) {
+        if (std::isnan(allVectors[i])) nanCount++;
+        if (std::isinf(allVectors[i])) infCount++;
+    }
+    if (nanCount > 0 || infCount > 0) {
+        printf("Warning: Data contains %d NaN and %d Inf values, skipping UMAP 2D\n", nanCount, infCount);
+        return;
+    }
+    
     std::vector<float> embedding(totalVectors * 2);
     
     // K-NN
@@ -2997,7 +3032,15 @@ void run_umap_2D_with_cluster_data(
     opt.num_neighbors = 15; 
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
-    printf("Running UMAP 2D dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
+    
+    // Ensure we have enough vectors for UMAP (need at least num_neighbors + 1)
+    if (totalVectors <= opt.num_neighbors) {
+        printf("Skipping UMAP 2D: not enough vectors (%d) for num_neighbors (%d)\n", totalVectors, opt.num_neighbors);
+        return;
+    }
+    
+    printf("Running UMAP 2D dimensionality reduction on %d sampled vectors + %zu centroids (dim=%zu)...\n", 
+           numSampledVectors, numCentroids, baseDimension);
     auto umap_start = std::chrono::high_resolution_clock::now();
     auto status = umappp::initialize(
         (int)baseDimension, totalVectors, allVectors.data(), builder, 2, embedding.data(), opt
@@ -3131,6 +3174,11 @@ void run_umap_3D_with_cluster_data(
     using namespace orangedb;
     
     int dim = index.getDim();
+    if (dim <= 0) {
+        printf("Error: dimension is %d, skipping UMAP 3D\n", dim);
+        return;
+    }
+    
     std::unordered_map<vector_idx_t, int> vectorToCluster;      
     const float* centroids = nullptr;
     size_t numCentroids = 0;
@@ -3204,16 +3252,28 @@ void run_umap_3D_with_cluster_data(
         for (const auto& [vecId, clusterId] : vectorToCluster) {
             sampledVectorIds.push_back(vecId);
         }
+        printf("Using all %zu vectors (no subsampling, sampleSize=%d, numVectors=%d)\n", 
+               sampledVectorIds.size(), sampleSize, numVectors);
     }
     
     int numSampledVectors = (int)sampledVectorIds.size();
     int totalVectors = numSampledVectors + (int)numCentroids;
+    
+    if (numSampledVectors == 0) {
+        printf("Warning: No vectors to process for UMAP 3D\n");
+        return;
+    }
+    
     std::vector<float> allVectors(totalVectors * dim);
     
     // Copy sampled vectors from index
     for (int i = 0; i < numSampledVectors; ++i) {
         vector_idx_t origId = sampledVectorIds[i];
         const float* vecData = index.getVectorData(origId);
+        if (vecData == nullptr) {
+            printf("Error: getVectorData returned null for vectorId %d, skipping UMAP 3D\n", origId);
+            return;
+        }
         std::memcpy(allVectors.data() + i * dim, vecData, dim * sizeof(float));
     }
     
@@ -3235,6 +3295,13 @@ void run_umap_3D_with_cluster_data(
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
     opt.num_threads = numThreads;
+    
+    // Ensure we have enough vectors for UMAP (need at least num_neighbors + 1)
+    if (totalVectors <= opt.num_neighbors) {
+        printf("Skipping UMAP 3D: not enough vectors (%d) for num_neighbors (%d)\n", totalVectors, opt.num_neighbors);
+        return;
+    }
+    
     printf("Running UMAP 3D dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
     auto umap_start = std::chrono::high_resolution_clock::now();
     auto status = umappp::initialize(
@@ -3524,9 +3591,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         if (baseVecs != nullptr && baseNumVectors > 0) {
             if(umap_mode==LIVE_UMAP) {
                 printf("\n=== Generating UMAP Visualization ===\n");
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
                 run_umap_3D_with_cluster_data(index, "umap_l2_clusters_3D.bin", C_L2, 100000, numThreads);
-                run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+                // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
                 run_umap_3D_with_cluster_data(index, "umap_l1_clusters_3D.bin", C_L1, 100000, numThreads);
             } else if(umap_mode==OFFLINE_UMAP) {
                 printf("\n=== saving clustering data ===\n");
@@ -3597,13 +3664,13 @@ void benchmark_fast_reclustering(InputParser &input) {
         // Generate UMAP visualization with cluster assignments (before early return)
         if(umap_mode==LIVE_UMAP) {
             printf("\n=== Generating UMAP Visualization ===\n");
-            run_umap_2D_with_cluster_data(index, baseVecs, (int) baseNumVectors, baseDimension,
-                                          "umap_l2_clusters_2D_iter_" + std::to_string(iter + 1) + ".bin", C_L2);
+            // run_umap_2D_with_cluster_data(index, baseVecs, (int) baseNumVectors, baseDimension,
+                                          // "umap_l2_clusters_2D_iter_" + std::to_string(iter + 1) + ".bin", C_L2);
             run_umap_3D_with_cluster_data(index,
                                           "umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
                                           100000, numThreads);
-            run_umap_2D_with_cluster_data(index, baseVecs, (int) baseNumVectors, baseDimension,
-                                          "umap_l1_clusters_2D_iter_" + std::to_string(iter + 1) + ".bin", C_L1);
+            // run_umap_2D_with_cluster_data(index, baseVecs, (int) baseNumVectors, baseDimension,
+                                          // "umap_l1_clusters_2D_iter_" + std::to_string(iter + 1) + ".bin", C_L1);
             run_umap_3D_with_cluster_data(index,
                                           "umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
                                           100000, numThreads);
