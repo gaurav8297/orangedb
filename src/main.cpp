@@ -3547,19 +3547,8 @@ void benchmark_fast_reclustering(InputParser &input) {
             std::vector<double> recallValues;
             auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
                                     nMiniProbe, recallValues);
-            // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-            //                                       nMegaProbe,
-            //                                       nMiniProbe, 5, false);
             printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe, nMiniProbe, recall, 0.0f);
             prevRecallValues.push_back(std::move(recallValues));
-            // for (auto nMiniProbeForBadCluster: nMiniProbesForBadCluster) {
-            //     recall = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-            //                                           nMegaProbe,
-            //                                           nMiniProbe, nMiniProbeForBadCluster, true);
-            //     printf(
-            //         "searchEachBadCluster: true, nMegaProbes: %d, nMiniProbes: %d, nMiniProbesForBadCluster: %d, Recall: %f\n",
-            //         nMegaProbe, nMiniProbe, nMiniProbeForBadCluster, recall);
-            // }
         }
     }
 
@@ -4470,10 +4459,7 @@ void test_quantization_issue(InputParser &input) {
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     backward::SignalHandling sh;
-//    benchmarkPairWise();
     InputParser input(argc, argv);
-//    benchmark_quantization(input);
-//    calculate_dists(input);
     const std::string &run = input.getCmdOption("-run");
     if (run == "benchmark") {
         benchmark_hnsw_queries(input);
@@ -4552,14 +4538,5 @@ int main(int argc, char **argv) {
     else if (run == "run_umap_3D_without_clustering") {
         run_umap_3D_without_clustering(input);
     }
-//    testParallelPriorityQueue();
-//    benchmark_simd_distance();
-//    benchmark_n_simd(5087067004);
-//    benchmark_random_dist_comp();
-//    benchmark_scalar_quantizer();
-//    benchmark_quantizer();
-//    benchmark_explore_data();
-//    benchmarkClustering(argc, argv);
-//    benchmarkSimSimd();
     return 0;
 }
