@@ -2173,6 +2173,12 @@ namespace orangedb {
                 }
             }
 
+            auto score = (minCosineDist - ownCosineDist) / std::max(minCosineDist, ownCosineDist);
+            if (score >= 1) {
+                printf("Error in angular real overlap score calculation: minCosineDist=%.6f, ownCosineDist=%.6f, score=%.6f\n",
+                       minCosineDist, ownCosineDist, score);
+            }
+
             // Silhouette-like score using angular distances
             // Positive = point is closer to own centroid, Negative = closer to other centroid
             // avgScore += (minAngularDist - ownAngularDist) / std::max(minAngularDist, ownAngularDist);

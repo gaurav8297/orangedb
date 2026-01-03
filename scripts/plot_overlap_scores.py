@@ -482,7 +482,10 @@ def plot_overlap_scores_by_closeness(approx_files, real_files, centroid_files, d
                 new_approx_scores = read_binary_doubles(approx_files[new_iter])
             if new_iter in real_files:
                 new_real_scores = read_binary_doubles(real_files[new_iter])
-            
+
+            # Take exponential of scores
+            new_real_scores = [4*np.exp(-score) for score in new_real_scores] if new_real_scores is not None else None
+            prev_real_scores = [4*np.exp(-score) for score in prev_real_scores] if prev_real_scores is not None else None
             # Create plots ordered by closeness
             match_indices = []
             prev_approx_values = []
