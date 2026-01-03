@@ -2135,7 +2135,7 @@ namespace orangedb {
                k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
                worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
 
-        avgRealOverlapScores[megaCentroidId] = avgOverlapRatio;
+        avgRealOverlapScores[megaCentroidId] = avgRealOverlapScore;
         overlapScores[megaCentroidId] = powerAvgOverlapRatio;
     }
 
