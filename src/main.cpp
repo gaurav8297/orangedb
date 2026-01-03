@@ -3541,6 +3541,13 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.printStats();
     // index.flush_to_disk(storagePath);
 
+    auto mega_centroids_file_path = "mega_centroids_iter_" + std::to_string(0) + ".bin";
+    const float* megaCentroids;
+    size_t numMegaCentroids;
+    index.getMegaCentroids(&megaCentroids, numMegaCentroids);
+    writeToFile(mega_centroids_file_path, reinterpret_cast<const uint8_t *>(megaCentroids),
+                numMegaCentroids * queryDimension * sizeof(float));
+
     std::vector<std::vector<double>> prevRecallValues;
     for (auto nMegaProbe : nMegaProbes) {
         for (auto nMiniProbe : nMiniProbes) {
