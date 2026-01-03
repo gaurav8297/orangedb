@@ -2174,7 +2174,7 @@ namespace orangedb {
             }
 
             auto score = (minCosineDist - ownCosineDist) / std::max(minCosineDist, ownCosineDist);
-            if (score >= 1) {
+            if (score >= 0.6) {
                 printf("Error in angular real overlap score calculation: minCosineDist=%.6f, ownCosineDist=%.6f, score=%.6f\n",
                        minCosineDist, ownCosineDist, score);
             }
@@ -2186,6 +2186,10 @@ namespace orangedb {
         }
 
         avgScore /= static_cast<double>(miniClusterSize);
+        if (avgScore >= 0.6) {
+            printf("Error in angular real overlap score calculation for miniCentroidId %llu: avgScore=%.6f\n",
+                   miniCentroidId, avgScore);
+        }
         return avgScore;
     }
 
