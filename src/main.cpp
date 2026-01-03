@@ -3440,28 +3440,40 @@ void benchmark_fast_reclustering(InputParser &input) {
         assert(baseDimension == queryDimension);
         if (isParquet) {
             auto numFiles = std::min(nFiles, (int)filePaths.size());
-            numInserts = std::min(numInserts, (int)numFiles);
-            auto chunkSize = numFiles / numInserts;
-            printf("Reading parquet files: %d\n", numFiles);
-            auto totalVectors = 0;
-            for (int i = 0; i < numInserts; i++) {
-                auto start = i * chunkSize;
-                auto end = (i + 1) * chunkSize;
-                if (i == (numInserts - 1)) {
-                    end = numFiles;
+            // Calculate how many batch inserts per file
+            int insertsPerFile = std::max(1, numInserts / numFiles);
+            int totalBatches = numFiles * insertsPerFile;
+            printf("Reading %d parquet files with %d batch inserts per file (total %d batches)\n", 
+                   numFiles, insertsPerFile, totalBatches);
+            
+            size_t totalVectors = 0;
+            int batchCount = 0;
+            for (int fileIdx = 0; fileIdx < numFiles; fileIdx++) {
+                printf("Processing parquet file %d/%d: %s\n", fileIdx + 1, numFiles, filePaths[fileIdx].c_str());
+                
+                // Read single file
+                std::vector<std::string> paths = {filePaths[fileIdx]};
+                size_t fileNumVectors;
+                auto data = readParquetFiles(paths, &baseDimension, &fileNumVectors);
+                
+                // Split file data into insertsPerFile batches
+                size_t vectorsPerBatch = fileNumVectors / insertsPerFile;
+                for (int batchIdx = 0; batchIdx < insertsPerFile; batchIdx++) {
+                    size_t batchStart = batchIdx * vectorsPerBatch;
+                    size_t batchEnd = (batchIdx == insertsPerFile - 1) ? fileNumVectors : (batchIdx + 1) * vectorsPerBatch;
+                    size_t batchSize = batchEnd - batchStart;
+                    
+                    printf("  Batch %d/%d: inserting vectors [%zu, %zu) (%zu vectors)\n", 
+                           batchIdx + 1, insertsPerFile, batchStart, batchEnd, batchSize);
+                    
+                    // Insert batch (offset into data array)
+                    index.naiveInsert(data + batchStart * baseDimension, batchSize);
+                    totalVectors += batchSize;
+                    batchCount++;
                 }
-                std:vector<std::string> paths;
-                printf("Processing parquet files: %d, start: %d, end: %d\n", i, start, end);
-                for (int j = start; j < end; j++) {
-                    paths.push_back(filePaths[j]);
-                    printf("Working on parquet file: %s\n", filePaths[j].c_str());
-                }
-                auto data = readParquetFiles(paths, &baseDimension, &baseNumVectors);
-                index.naiveInsert(data, baseNumVectors);
-                totalVectors += baseNumVectors;
                 delete[] data;
             }
-            printf("Total vectors inserted: %d\n", totalVectors);
+            printf("Total vectors inserted: %zu in %d batches\n", totalVectors, batchCount);
         } else {
             if (quantBuild) {
                 index.trainQuant(baseVecs, baseNumVectors);

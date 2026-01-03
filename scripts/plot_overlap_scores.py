@@ -81,7 +81,7 @@ def angular_distance(vec1, vec2):
     """Compute angular distance (in radians) between two vectors."""
     cosine_sim = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
     cosine_sim = np.clip(cosine_sim, -1.0, 1.0)
-    return np.arccos(cosine_sim)
+    return 1-cosine_sim
 
 def match_centroids_angular_wrt_mean(prev_centroids, new_centroids, prev_mean_centroid, dim):
     """Match centroids between iterations using angular distance relative to previous mean centroid.
@@ -98,7 +98,8 @@ def match_centroids_angular_wrt_mean(prev_centroids, new_centroids, prev_mean_ce
     for new_idx in range(num_new):
         new_centroid = new_centroids[new_idx * dim:(new_idx + 1) * dim]
         # Vector from mean to new centroid
-        new_vec = new_centroid - prev_mean_centroid
+        # new_vec = new_centroid - prev_mean_centroid
+        new_vec = new_centroid
         new_vec_norm = np.linalg.norm(new_vec)
         if new_vec_norm < 1e-9:
             continue
@@ -112,7 +113,8 @@ def match_centroids_angular_wrt_mean(prev_centroids, new_centroids, prev_mean_ce
                 continue
             prev_centroid = prev_centroids[prev_idx * dim:(prev_idx + 1) * dim]
             # Vector from mean to previous centroid
-            prev_vec = prev_centroid - prev_mean_centroid
+            # prev_vec = prev_centroid - prev_mean_centroid
+            prev_vec = prev_centroid
             prev_vec_norm = np.linalg.norm(prev_vec)
             if prev_vec_norm < 1e-9:
                 continue
@@ -804,7 +806,7 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Plot overlap scores from binary files')
-    parser.add_argument('--output-dir', '-o', default='.', help='Output directory for plots (default: current directory)')
+    parser.add_argument('--output-dir', '-o', default='data/plots', help='Output directory for plots (default: current directory)')
     parser.add_argument('--input-dir', '-i', default='data/scores', help='Input directory to search for files (default: data/scores)')
     parser.add_argument('--dim', '-d', type=int, default=768, help='Dimension of vectors (required for centroid filtering)')
     parser.add_argument('--max-angular-change', '-m', type=float, default=0.5, help='Maximum angular change (in radians) for filtering centroids (default: 0.1)')
