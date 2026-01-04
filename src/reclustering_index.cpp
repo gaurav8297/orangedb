@@ -2153,7 +2153,7 @@ namespace orangedb {
             normB += static_cast<double>(b[i]) * static_cast<double>(b[i]);
         }
         if (normA == 0.0 || normB == 0.0) {
-            return 1.0; // Max cosine distance if one vector is zero
+            return {1.0, 0}; // Max cosine distance if one vector is zero
         }
         double cosSim = dot / (std::sqrt(normA) * std::sqrt(normB));
         printf("dot = %.6f, normA = %.6f, normB = %.6f, cosSim = %.6f\n", dot, normA, normB, cosSim);
@@ -2196,6 +2196,7 @@ namespace orangedb {
                                closestMiniCentroidId, newactualCosineDistance, newdot, actualCosineDistance, dot);
                     }
                 }
+
                 printf("Warning: ownCosineDist is 0.0, computed actualCosineDistance=%.6f\n", actualCosineDistance);
                 // print the vector
                 for (int d = 0; d < 10; d++) {
