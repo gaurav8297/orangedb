@@ -34,11 +34,13 @@ void IndexFlat::search(
     FAISS_THROW_IF_NOT(k > 0);
     BalancedClusteringDistModifier* dist_modifier =
             params ? params->dist_modifier : nullptr;
+    BalancedClusteringReassignModifier* reassign_modifier =
+            params ? params->reassign_modifier : nullptr;
 
     // we see the distances and labels as heaps
     if (metric_type == METRIC_INNER_PRODUCT) {
         float_minheap_array_t res = {size_t(n), size_t(k), labels, distances};
-        knn_inner_product(x, get_xb(), d, n, ntotal, &res, dist_modifier, sel);
+        knn_inner_product(x, get_xb(), d, n, ntotal, &res, dist_modifier, reassign_modifier, sel);
     } else if (metric_type == METRIC_L2) {
         float_maxheap_array_t res = {size_t(n), size_t(k), labels, distances};
         knn_L2sqr(x, get_xb(), d, n, ntotal, &res, nullptr, dist_modifier, sel);

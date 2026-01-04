@@ -188,7 +188,7 @@ namespace orangedb {
         updateTotalDataWrittenByUser(n);
     }
 
-    void ReclusteringIndex::naiveInsert(float *data, size_t n) {
+    void ReclusteringIndex::naiveInsert(float *data, size_t n, bool use_rebalancing) {
         std::vector<vector_idx_t> vectorIds(n);
         for (size_t i = 0; i < n; i++) {
             vectorIds[i] = i + size;
@@ -199,7 +199,7 @@ namespace orangedb {
         std::vector<std::vector<float> > newMiniClusters;
         std::vector<std::vector<vector_idx_t> > newMiniClusterVectorIds;
         clusterData(data, vectorIds.data(), n, config.miniCentroidSize, newMiniCentroids, newMiniClusters,
-                    newMiniClusterVectorIds);
+                    newMiniClusterVectorIds, use_rebalancing);
 
         // Assign mini cluster unique ids
         auto curMiniClusterSize = miniCentroids.size() / dim;
@@ -224,7 +224,7 @@ namespace orangedb {
         std::vector<float> newMegaCentroid;
         std::vector<std::vector<vector_idx_t> > miniClusterIds;
         clusterData(newMiniCentroids.data(), newMiniClusterIds.data(), newMiniClusterIds.size(),
-                    config.megaCentroidSize, newMegaCentroid, miniClusterIds);
+                    config.megaCentroidSize, newMegaCentroid, miniClusterIds, use_rebalancing);
 
         // Copy the new mega centroids
         auto curMegaClusterSize = megaCentroids.size() / dim;
@@ -1250,20 +1250,33 @@ namespace orangedb {
 
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
-                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds,
+                                        bool use_rebalancing) {
         // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
         // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds,
         //                     dc.get(), dim, [](const float x, int d) { return x; });
-        clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds);
+        if (use_rebalancing) {
+            clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds);
+        }else{
+            clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds);
+        }
     }
 
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids,
-                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters) {
+                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters,
+                                         bool use_rebalancing) {
         // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
         // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
         //                     dc.get(), dim, [](const float x, int d) { return x; });
-        clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds, nClusters);
+        if (use_rebalancing) {
+            // This overload doesn't have clusters parameter, so we can't use rebalancing
+            // Fall back to regular FAISS clustering
+            // GILLI: check
+            clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds, nClusters);
+        }else{
+            clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds, nClusters);
+        }
     }
 
     void ReclusteringIndex::clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -1302,6 +1315,156 @@ namespace orangedb {
             lambda = std::max(lambda, dist);
         }
         return (lambda / num_rows_per_cluster);
+    }
+
+    // Helper function: Find K nearest clusters to a given cluster
+    static std::vector<int64_t> findKNearestClusters(
+        const float* centroids, //array of centroids
+        int64_t numClusters, //total number of clusters
+        int dim, //dimension of the centroids
+        int64_t target_cluster_id, //the cluster to find nearest neighbors for
+        int k, //number of nearest neighbors to find
+        faiss::MetricType metric_type) {
+        
+        // Create an index with all centroids
+        //TODO_GILLI: ALTERNATIVE: use a loop to find the k nearest neighbors - memory efficient
+        faiss::IndexFlat index(dim, metric_type);
+        index.add(numClusters, centroids);
+        
+        // Search for k+1 nearest neighbors (including itself)
+        std::vector<float> distances(k + 1);
+        std::vector<int64_t> labels(k + 1);
+        const float* query_centroid = centroids + target_cluster_id * dim;
+        
+        index.search(1, query_centroid, k + 1, distances.data(), labels.data());
+        
+        // Return the k nearest neighbors (excluding itself)
+        std::vector<int64_t> neighbors;
+        neighbors.reserve(k);
+        for (int i = 0; i < k + 1; i++) {
+            if (labels[i] != target_cluster_id) {
+                neighbors.push_back(labels[i]);
+                if (neighbors.size() >= k) break;
+            }
+        }
+        
+        return neighbors;
+    }
+
+    // Helper function: Rebalance a region of clusters
+    static void rebalanceClusterRegion(
+        float* data, //array of data
+        int n, //total number of vectors
+        int64_t* assignments, //array of assignments
+        std::vector<int>& hist, //histogram of cluster sizes
+        float* centroids, //array of centroids
+        int64_t numClusters, //total number of clusters
+        int dim, //dimension of the centroids
+        const std::unordered_set<int64_t>& clusters_to_rebalance, //set of clusters to rebalance
+        faiss::MetricType metric_type,
+        uint64_t hardClusterSizeLimit) {
+        
+        
+        // Collect all vectors belonging to the clusters to rebalance
+        std::vector<int> vector_indices;
+        for (int i = 0; i < n; i++) {
+            if (clusters_to_rebalance.find(assignments[i]) != clusters_to_rebalance.end()) {
+                vector_indices.push_back(i);
+            }
+        }       
+        if (vector_indices.empty()) {
+            printf("No vectors to rebalance\n"); // shouldnt reach here - if rebalancing is triggered, there should be vectors to rebalance
+            return;
+        }
+        printf("Collected %zu vectors for rebalancing\n", vector_indices.size());
+        
+        // Extract the data for these vectors
+        int num_vecs = vector_indices.size();
+        std::vector<float> region_data(num_vecs * dim);
+        // Copy vectors to contiguous memory - required by FAISS
+        // std::copy may be better optimized by compiler than memcpy
+        for (int i = 0; i < num_vecs; i++) {
+            const float* src = data + vector_indices[i] * dim;
+            float* dst = region_data.data() + i * dim;
+            std::copy(src, src + dim, dst);
+        }
+        
+        // Setup cluster ID mapping
+        int num_region_clusters = clusters_to_rebalance.size(); // TODO_GILLI: why not k+1? can search return less than k+1?
+        std::vector<int64_t> cluster_id_mapping(num_region_clusters);
+        int idx = 0;
+        for (auto cluster_id : clusters_to_rebalance) {
+            cluster_id_mapping[idx] = cluster_id;
+            idx++;
+        }
+        
+        // Run k-means on the region with equal cluster sizes
+        faiss::ClusteringParameters cl;
+        cl.niter = 10;  // Fewer iterations for quick rebalancing
+        // Use the hard limit to ensure rebalancing respects cluster size constraints
+        cl.min_points_per_centroid = hardClusterSizeLimit * 0.5;  // Allow some flexibility for rebalancing
+        cl.max_points_per_centroid = hardClusterSizeLimit;
+        cl.verbose = false;
+        
+        faiss::Clustering clustering(dim, num_region_clusters, cl);
+        faiss::IndexFlat index(dim, metric_type);
+        
+        // Initialize clustering centroids directly from global centroids - avoid intermediate copy
+        clustering.centroids.resize(num_region_clusters * dim);
+        idx = 0;
+        for (auto cluster_id : clusters_to_rebalance) {
+            const float* src = centroids + cluster_id * dim;
+            float* dst = clustering.centroids.data() + idx * dim;
+            std::copy(src, src + dim, dst);
+            idx++;
+        }
+        
+        // Train
+        clustering.train(num_vecs, region_data.data(), index);
+        
+        // Reassign vectors in the region with hard limit enforcement
+        std::vector<int64_t> new_assignments(num_vecs);
+        std::vector<float> distances(num_vecs);
+        
+        // NO HARD LIMIT when rebalancing
+        //index.search(num_vecs,region_data.data(),1,distances.data(),new_assignments.data());
+
+        // Enforce hard limit after the rebalnce
+        std::vector<int> local_hist(num_region_clusters, 0);
+        
+        // Use SearchParameters with dist_modifier to enforce hard limit
+        faiss::SearchParameters params;
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
+        hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(num_region_clusters, hardClusterSizeLimit);
+        params.dist_modifier = hardLimitDistModifier.get();
+        
+        index.search(num_vecs, region_data.data(), 1, distances.data(), new_assignments.data(), &params);
+        
+        // Update the global assignments and histograms
+        // First, clear the old histogram counts for these clusters
+        for (auto cluster_id : clusters_to_rebalance) {
+            hist[cluster_id] = 0;
+        }
+        
+        // Update assignments and recalculate histogram
+        for (int i = 0; i < num_vecs; i++) {
+            int64_t global_cluster_id = cluster_id_mapping[new_assignments[i]];
+            assignments[vector_indices[i]] = global_cluster_id;
+            hist[global_cluster_id]++;
+        }
+        
+        // Update the centroids in the original array
+        for (int i = 0; i < num_region_clusters; i++) {
+            int64_t global_cluster_id = cluster_id_mapping[i];
+            const float* src = clustering.centroids.data() + i * dim;
+            float* dst = centroids + global_cluster_id * dim;
+            std::copy(src, src + dim, dst);
+        }
+        
+        printf("Rebalancing complete. New cluster sizes in region:\n");
+        for (auto cluster_id : clusters_to_rebalance) {
+            printf("  Cluster %lld: %d vectors\n", cluster_id, hist[cluster_id]);
+        }
     }
 
     void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -1352,7 +1515,9 @@ namespace orangedb {
         std::vector<int64_t> assign(n);
         std::vector<float> distances(n);
         std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
+        std::vector<int> hist(numClusters, 0);
         faiss::SearchParameters params;
+
         if (config.hardClusterSizeLimit > 0) {
             hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
             params.dist_modifier = hardLimitDistModifier.get();
@@ -1360,16 +1525,14 @@ namespace orangedb {
         }
         index.search(n, data, 1, distances.data(), assign.data(), &params);
 
-        // Get the hist
-        std::vector<int> hist(numClusters, 0);
         for (int i = 0; i < n; i++) {
-            assert(assign[i] >= 0 && assign[i] < numClusters);
+            assert(assign[i]>=0 && assign[i]<numClusters);
             hist[assign[i]]++;
         }
 
-        // Validate that no histo is greating than 4500
-        for (int i = 0; i < numClusters; i++) {
-            if (config.hardClusterSizeLimit > 0 && hist[i] >= config.hardClusterSizeLimit) {
+        // Validate that no histogram is greater than 4500
+        for (int i=0; i<numClusters; i++) {
+            if (config.hardClusterSizeLimit>0 && hist[i]>=config.hardClusterSizeLimit) {
                 printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
             }
         }
@@ -1406,6 +1569,146 @@ namespace orangedb {
         }
         stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
     }
+
+    void ReclusteringIndex::clusterDataWithRebalancing(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                                        std::vector<float> &centroids,
+                                                        std::vector<std::vector<float> > &clusters,
+                                                        std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
+        printf("Clustering %d vectors with avgClusterSize %d\n", n, avgClusterSize);
+        if (n == 0) {
+            return;
+        }
+        // Create the clustering object
+        auto numClusters = getNumCentroids(n, avgClusterSize);
+        // printf("Performing mini-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
+        if (numClusters <= 1) {
+            calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
+            // Copy all data to the single cluster
+            clusters.resize(1);
+            clusters[0].resize(n * dim);
+            memcpy(clusters[0].data(), data, n * dim * sizeof(float));
+            return;
+        }
+
+        auto updated_num_clusters = round(numClusters * 0.9); // 90% of the original number of clusters
+        faiss::ClusteringParameters cl;
+        cl.niter = config.nIter;
+        if (config.distanceType == IP) {
+        cl.spherical = true;
+        }
+        cl.min_points_per_centroid = getMinCentroidSize(n, updated_num_clusters);
+        cl.max_points_per_centroid = getMaxCentroidSize(n, updated_num_clusters);
+        // cl.seed = -1;
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
+        if (config.lambda > 0) {
+            auto lambda = findAppropriateLambda(data, n, dim, numClusters);
+            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, lambda);
+            cl.dist_modifier = distModifier.get();
+            printf("cl.lambda = %f\n", lambda);
+        }
+        cl.verbose = true;
+        faiss::Clustering clustering(dim, updated_num_clusters, cl); // cluster to only 90% of the original number of clusters
+        // TODO: This is a hack
+        auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
+        auto index = faiss::IndexFlat(dim, metric_type);
+
+        // Initialize the centroids
+        clustering.train(n, data, index);
+
+        // Assign the centroids with per-vector rebalancing
+        std::vector<int64_t> assign(n);
+        std::vector<float> distances(n);
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
+        std::vector<int> hist(numClusters, 0); // take into account additional clusters 
+
+        faiss::SearchParameters params;
+        for (int i = 0; i < n; i++) {
+            // Assign current vector to nearest centroid
+            index.search(1, data + i * dim, 1, &distances[i], &assign[i], &params);
+
+            int64_t assigned_cluster = assign[i];
+
+            // Check if trying to assign to an ALREADY FULL cluster
+            if (config.hardClusterSizeLimit > 0 && hist[assigned_cluster] >= config.hardClusterSizeLimit) {
+                printf("Vector %d trying to assign to ALREADY FULL cluster %lld (%d/%llu). Triggering rebalancing...\n", 
+                i, assigned_cluster, hist[assigned_cluster], config.hardClusterSizeLimit);
+
+                // Find 4 nearest neighbor clusters
+                auto neighbor_clusters = findKNearestClusters(
+                clustering.centroids.data(), numClusters, dim, assigned_cluster, 5, metric_type);
+
+                // Check if we need to add a new cluster - when all the neighbors are full
+                bool add_new_cluster = true;
+                for (auto neighbor_id : neighbor_clusters) {
+                    if (hist[neighbor_id] < config.hardClusterSizeLimit) {
+                        add_new_cluster = false;
+                        break;
+                    }
+                }
+                if (add_new_cluster && updated_num_clusters < numClusters) {
+                    updated_num_clusters++;
+                    neighbor_clusters.push_back(updated_num_clusters-1); // the new cluster is the last cluster
+                    clustering.centroids.resize(updated_num_clusters * dim); // does resize copy old centroids? GILLI
+                }
+                else if (add_new_cluster && updated_num_clusters >= numClusters) {
+                    printf("All clusters are full. Skipping rebalancing...\n");
+                    continue; //GILLI: should assign to the nearest cluster that has space 
+                }
+
+                // Create the set of clusters to rebalance (1 full cluster + k neighbors)
+                std::unordered_set<int64_t> clusters_to_rebalance;
+                clusters_to_rebalance.insert(assigned_cluster);
+                for (auto neighbor_id : neighbor_clusters) {
+                    clusters_to_rebalance.insert(neighbor_id);
+                }
+
+                // Perform immediate rebalancing for this cluster region
+                // Only rebalance vectors assigned so far (0 to i-1, not including current vector i)
+                rebalanceClusterRegion(
+                data, i, assign.data(), hist, 
+                clustering.centroids.data(), updated_num_clusters, dim,
+                clusters_to_rebalance, metric_type, config.hardClusterSizeLimit);
+
+                // Re-assign current vector to the updated centroids
+                index.search(1, data + i * dim, 1, &distances[i], &assign[i], &params);
+                assigned_cluster = assign[i];
+            }
+            // Now increment the histogram
+            hist[assigned_cluster]++;
+        }
+
+        // Copy the centroids
+        centroids.resize(numClusters * dim);
+        memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
+        clusters.resize(numClusters);
+        clusterVectorIds.resize(numClusters);
+        for (int i = 0; i < numClusters; i++) {
+            std::vector<float> cluster(hist[i] * dim);
+            clusters[i] = std::move(cluster);
+            std::vector<vector_idx_t> vectorId(hist[i]);
+            clusterVectorIds[i] = std::move(vectorId);
+            hist[i] = 0;
+        }
+
+        auto total_size = 0;
+        for (int i = 0; i < numClusters; i++) {
+            total_size += clusters[i].size() / dim;
+        }
+        assert(total_size == n);
+
+        for (int i = 0; i < n; i++) {
+            auto assignId = assign[i];
+            auto idx = hist[assignId];
+            auto &cluster = clusters[assignId];
+            auto maxClusterSize = cluster.size() / dim;
+            memcpy(cluster.data() + static_cast<size_t>(idx) * dim,
+                    data + static_cast<size_t>(i) * dim,
+                    dim * sizeof(float));
+            clusterVectorIds[assignId][idx] = vectorIds[i];
+            hist[assignId]++;
+        }
+        stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
+}
 
     void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                                  std::vector<float> &centroids,
@@ -1468,7 +1771,7 @@ namespace orangedb {
         // Validate that no histo is greating than 4500
         for (int i = 0; i < numClusters; i++) {
             if (config.hardClusterSizeLimit > 0 && hist[i] >= config.hardClusterSizeLimit) {
-                printf("Warning: Cluster %d has size %d greater than 2500\n", i, hist[i]);
+                printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
             }
         }
 

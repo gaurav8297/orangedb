@@ -58,6 +58,7 @@ struct IDSelector;
 struct RangeSearchResult;
 struct DistanceComputer;
 struct BalancedClusteringDistModifier;
+struct BalancedClusteringReassignModifier;
 
 enum NumericType {
     Float32,
@@ -91,6 +92,8 @@ struct SearchParameters {
     IDSelector* sel = nullptr;
     /// Used for balanced k-means clustering
     BalancedClusteringDistModifier* dist_modifier = nullptr;
+    /// Used for balanced k-means clustering with reassignment
+    BalancedClusteringReassignModifier* reassign_modifier = nullptr;
     /// make sure we can dynamic_cast this
     virtual ~SearchParameters() {}
 };

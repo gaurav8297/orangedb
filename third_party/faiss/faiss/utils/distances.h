@@ -20,6 +20,7 @@ namespace faiss {
 
 struct IDSelector;
 struct BalancedClusteringDistModifier;
+struct BalancedClusteringReassignModifier;
 
 /*********************************************************
  * Optimized distance/norm/inner prod computations
@@ -301,6 +302,7 @@ void knn_inner_product(
         size_t ny,
         float_minheap_array_t* res,
         BalancedClusteringDistModifier* dist_modifier = nullptr,
+        BalancedClusteringReassignModifier* reassign_modifier = nullptr,
         const IDSelector* sel = nullptr);
 
 /**  Return the k nearest neighbors of each of the nx vectors x among the ny
@@ -321,6 +323,7 @@ void knn_inner_product(
         float* distances,
         int64_t* indexes,
         BalancedClusteringDistModifier* dist_modifier = nullptr,
+        BalancedClusteringReassignModifier* reassign_modifier = nullptr,
         const IDSelector* sel = nullptr);
 
 /** Return the k nearest neighbors of each of the nx vectors x among the ny

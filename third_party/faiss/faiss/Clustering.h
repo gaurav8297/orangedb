@@ -34,6 +34,18 @@ struct BalancedClusteringDistModifier {
 };
 
 /**
+ * This struct is used for balanced k-means clustering. It is passed to the
+ * index.search() function to mark full clusters and trigger a local re-cluster or an additional cluster
+ * to equalize the number of points assigned to each cluster.
+ */
+struct BalancedClusteringReassignModifier {
+    virtual void assign_vector(idx_t cluster_id) = 0;
+    virtual bool is_cluster_full(idx_t cluster_id) const = 0;
+    virtual void reset() = 0;
+    virtual ~BalancedClusteringReassignModifier() {}
+};
+
+/**
  * This is the lambda-based balanced k-means clustering implementation of
  * BalancedClusteringDistModifier. It's based on this paper:
  * https://ieeexplore.ieee.org/document/8621917/
@@ -105,6 +117,37 @@ struct ClusterSizeCapDistModifier : BalancedClusteringDistModifier {
         for (int i = 0; i < cluster_sizes.size(); i++) {
             cluster_sizes[i] = 0;
             cluster_weights[i] = 0.0f;
+        }
+    }
+};
+
+struct ClusterSizeCapReassignModifier : BalancedClusteringReassignModifier {
+    std::array<std::atomic_int64_t, MAX_VECTOR_INDEX_NUM_CLUSTERS> cluster_sizes;
+    uint32_t _max_cluster_size;
+    int _num_clusters;
+
+    // constructor
+    explicit ClusterSizeCapReassignModifier(int num_clusters, uint32_t max_cluster_size) : _max_cluster_size(
+        max_cluster_size), _num_clusters(num_clusters) {
+        FAISS_ASSERT(num_clusters <= MAX_VECTOR_INDEX_NUM_CLUSTERS);
+        FAISS_ASSERT(max_cluster_size > 0);
+        reset();
+    }
+
+    // assign a vector to a cluster (update the cluster size)
+    void assign_vector(int64_t cluster_id) override {
+        ++cluster_sizes[cluster_id];
+    }
+
+    // check if a cluster is full   
+    bool is_cluster_full(int64_t cluster_id) const override {
+        return cluster_sizes[cluster_id].load(std::memory_order_relaxed) >= _max_cluster_size;
+    }
+
+    // reset the modifier - all clusters are not full
+    void reset() override {
+        for (auto & cluster_size : cluster_sizes) {
+            cluster_size = 0;
         }
     }
 };

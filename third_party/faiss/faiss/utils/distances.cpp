@@ -898,6 +898,7 @@ void knn_inner_product(
         float* vals,
         int64_t* ids,
         BalancedClusteringDistModifier* dist_modifier,
+        BalancedClusteringReassignModifier* reassign_modifier,
         const IDSelector* sel) {
     int64_t imin = 0;
     if (auto selr = dynamic_cast<const IDSelectorRange*>(sel)) {
@@ -934,9 +935,10 @@ void knn_inner_product(
         size_t ny,
         float_minheap_array_t* res,
         BalancedClusteringDistModifier* dist_modifier,
+        BalancedClusteringReassignModifier* reassign_modifier,
         const IDSelector* sel) {
     FAISS_THROW_IF_NOT(nx == res->nh);
-    knn_inner_product(x, y, d, nx, ny, res->k, res->val, res->ids, dist_modifier, sel);
+    knn_inner_product(x, y, d, nx, ny, res->k, res->val, res->ids, dist_modifier, reassign_modifier, sel);
 }
 
 void knn_L2sqr(

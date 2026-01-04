@@ -101,7 +101,7 @@ namespace orangedb {
 
         void simpleInsertWithoutClustering(float *data, size_t n);
 
-        void naiveInsert(float *data, size_t n);
+        void naiveInsert(float *data, size_t n, bool use_rebalancing = false);
 
         void trainQuant(float *data, size_t n);
 
@@ -269,10 +269,11 @@ namespace orangedb {
 
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                          std::vector<float>& centroids, std::vector<std::vector<float>>& clusters,
-                         std::vector<std::vector<vector_idx_t>> &clusterVectorIds);
+                         std::vector<std::vector<vector_idx_t>> &clusterVectorIds, bool use_rebalancing = false);
 
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
-                 std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds, int nClusters = -1);
+                 std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds, 
+                 int nClusters = -1, bool use_rebalancing = false);
 
         // Quantized clustering methods
         void clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -295,6 +296,10 @@ namespace orangedb {
         void clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                   std::vector<float> &centroids,
                                   std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters = -1);
+
+        void clusterDataWithRebalancing(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                    std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
+                                    std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
 
         // Generic clustering method
         template <typename T>

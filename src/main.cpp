@@ -3329,6 +3329,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     float centroidChangeThreshold = stof(input.getCmdOption("-centroidChangeThreshold"));
     const bool useMSEToRecluster = stoi(input.getCmdOption("-useMSEToRecluster"));
     const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
+    const bool use_rebase = stoi(input.getCmdOption("-use_rebase"));
+
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -3390,7 +3392,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                     printf("Working on parquet file: %s\n", filePaths[j].c_str());
                 }
                 auto data = readParquetFiles(paths, &baseDimension, &baseNumVectors);
-                index.naiveInsert(data, baseNumVectors);
+                index.naiveInsert(data, baseNumVectors, use_rebase);
                 totalVectors += baseNumVectors;
                 delete[] data;
             }
@@ -3413,7 +3415,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 if (quantBuild) {
                     index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
                 } else {
-                    index.naiveInsert(baseVecs + start * baseDimension, end - start);
+                    index.naiveInsert(baseVecs + start * baseDimension, end - start, use_rebase);
                 }
 
                 // Recluster after 50 inserts, then every 2 inserts thereafter
