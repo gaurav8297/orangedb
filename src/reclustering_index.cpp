@@ -2143,6 +2143,22 @@ namespace orangedb {
         overlapScores[megaCentroidId] = powerAvgOverlapRatio;
     }
 
+    static double computeCosineDistance(const float* a, const float* b, size_t dim) {
+        double dot = 0.0;
+        double normA = 0.0;
+        double normB = 0.0;
+        for (size_t i = 0; i < dim; i++) {
+            dot += static_cast<double>(a[i]) * static_cast<double>(b[i]);
+            normA += static_cast<double>(a[i]) * static_cast<double>(a[i]);
+            normB += static_cast<double>(b[i]) * static_cast<double>(b[i]);
+        }
+        if (normA == 0.0 || normB == 0.0) {
+            return 1.0; // Max cosine distance if one vector is zero
+        }
+        double cosSim = dot / (std::sqrt(normA) * std::sqrt(normB));
+        return 1.0 - cosSim; // Cosine distance
+    }
+
     double ReclusteringIndex::calculateRealOverlapScoreForAngular(vector_idx_t miniCentroidId,
                                                                std::vector<vector_idx_t> &closestMiniIds) {
         auto numMiniClusters = miniCentroids.size() / dim;
@@ -2158,6 +2174,12 @@ namespace orangedb {
             double ownCosineDist = 0.0;
             dc->computeDistance(miniCentroidId, &ownCosineDist);
             if (ownCosineDist == 0.0) {
+                // Calculate cosine distance manually to avoid numerical issues
+                auto actualCosineDistance = computeCosineDistance(
+                    miniClusterVectors.data() + static_cast<size_t>(i) * dim,
+                    miniCentroids.data() + static_cast<size_t>(miniCentroidId) * dim,
+                    dim);
+                printf("Warning: ownCosineDist is 0.0, computed actualCosineDistance=%.6f\n", actualCosineDistance);
                 // print the vector
                 for (int d = 0; d < 10; d++) {
                     printf("%.6f ", miniClusterVectors[static_cast<size_t>(i) * dim + d]);
