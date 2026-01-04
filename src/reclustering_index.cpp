@@ -2143,7 +2143,7 @@ namespace orangedb {
         overlapScores[megaCentroidId] = powerAvgOverlapRatio;
     }
 
-    static double computeCosineDistance(const float* a, const float* b, size_t dim) {
+    static std::pair<double, double> computeCosineDistance(const float* a, const float* b, size_t dim) {
         double dot = 0.0;
         double normA = 0.0;
         double normB = 0.0;
@@ -2157,7 +2157,7 @@ namespace orangedb {
         }
         double cosSim = dot / (std::sqrt(normA) * std::sqrt(normB));
         printf("dot = %.6f, normA = %.6f, normB = %.6f, cosSim = %.6f\n", dot, normA, normB, cosSim);
-        return 1.0 - cosSim; // Cosine distance
+        return {1.0 - cosSim, dot}; // Cosine distance
     }
 
     double ReclusteringIndex::calculateRealOverlapScoreForAngular(vector_idx_t miniCentroidId,
@@ -2176,10 +2176,26 @@ namespace orangedb {
             dc->computeDistance(miniCentroidId, &ownCosineDist);
             if (ownCosineDist == 0.0) {
                 // Calculate cosine distance manually to avoid numerical issues
-                auto actualCosineDistance = computeCosineDistance(
+                auto [actualCosineDistance, dot] = computeCosineDistance(
                     miniClusterVectors.data() + static_cast<size_t>(i) * dim,
                     miniCentroids.data() + static_cast<size_t>(miniCentroidId) * dim,
                     dim);
+
+                for (const auto &closestMiniCentroidId : closestMiniIds) {
+                    if (closestMiniCentroidId == miniCentroidId) {
+                        continue;
+                    }
+
+                    auto [newactualCosineDistance, newdot] = computeCosineDistance(
+                    miniClusterVectors.data() + static_cast<size_t>(i) * dim,
+                    miniCentroids.data() + static_cast<size_t>(closestMiniCentroidId) * dim,
+                    dim);
+
+                    if (newdot > dot) {
+                        printf("Error: ownCosineDist is 0.0, but found closer centroid %llu with actualCosineDistance=%.6f (dot=%.6f) vs own actualCosineDistance=%.6f (dot=%.6f)\n",
+                               closestMiniCentroidId, newactualCosineDistance, newdot, actualCosineDistance, dot);
+                    }
+                }
                 printf("Warning: ownCosineDist is 0.0, computed actualCosineDistance=%.6f\n", actualCosineDistance);
                 // print the vector
                 for (int d = 0; d < 10; d++) {
