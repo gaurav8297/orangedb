@@ -2075,7 +2075,7 @@ namespace orangedb {
         }
         
         // Find k worst mini IDs based on approx overlap scores (lowest approx scores are worst)
-        constexpr int kWorstForReal = 10;  // Only calculate real overlap for k worst mini clusters
+        constexpr int kWorstForReal = 1000;  // Only calculate real overlap for k worst mini clusters
         int numWorst = std::min(kWorstForReal, static_cast<int>(miniIds.size()));
         
         std::vector<size_t> worstIndices(miniIds.size());
