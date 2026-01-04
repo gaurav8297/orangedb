@@ -2156,6 +2156,7 @@ namespace orangedb {
             return 1.0; // Max cosine distance if one vector is zero
         }
         double cosSim = dot / (std::sqrt(normA) * std::sqrt(normB));
+        printf("dot = %.6f, normA = %.6f, normB = %.6f, cosSim = %.6f\n", dot, normA, normB, cosSim);
         return 1.0 - cosSim; // Cosine distance
     }
 
