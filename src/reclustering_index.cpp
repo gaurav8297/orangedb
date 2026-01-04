@@ -2007,6 +2007,25 @@ namespace orangedb {
         overlapScores[megaCentroidId] = powerAvgOverlapRatio;
     }
 
+    void ReclusteringIndex::calculateOverlapScoreForAngular2(int megaCentroidId) {
+        auto &miniIds = megaMiniCentroidIds[megaCentroidId];
+        std::vector<double> realOverlapScores(miniIds.size(), 0.0);  // Initialize to 0, only compute for worst k
+        for (size_t idx = 0; idx < miniIds.size(); idx++) {
+            auto miniId = miniIds[idx];
+            double realOverlapScore = calculateRealOverlapScoreForAngular(miniId, miniIds);
+            realOverlapScores[idx] = realOverlapScore;
+        }
+        auto worst_k_avg = computeAvgOnWorstElement(realOverlapScores);
+        double fullAvg = 0;
+        for (const auto &score : realOverlapScores) {
+            fullAvg += score;
+        }
+        fullAvg /= realOverlapScores.size();
+        avgRealOverlapScores[megaCentroidId] = worst_k_avg;
+        overlapScores[megaCentroidId] = fullAvg;
+    }
+
+
     void ReclusteringIndex::calculateOverlapScoreForAngular(int megaCentroidId) {
         auto &miniIds = megaMiniCentroidIds[megaCentroidId];
         auto numMiniClusters = miniCentroids.size() / dim;
@@ -2174,44 +2193,44 @@ namespace orangedb {
             // Distance to own centroid
             double ownCosineDist = 0.0;
             dc->computeDistance(miniCentroidId, &ownCosineDist);
-            if (ownCosineDist == 0.0) {
-                // Calculate cosine distance manually to avoid numerical issues
-                auto [actualCosineDistance, dot] = computeCosineDistance(
-                    miniClusterVectors.data() + static_cast<size_t>(i) * dim,
-                    miniCentroids.data() + static_cast<size_t>(miniCentroidId) * dim,
-                    dim);
-
-                for (const auto &closestMiniCentroidId : closestMiniIds) {
-                    if (closestMiniCentroidId == miniCentroidId) {
-                        continue;
-                    }
-
-                    auto [newactualCosineDistance, newdot] = computeCosineDistance(
-                    miniClusterVectors.data() + static_cast<size_t>(i) * dim,
-                    miniCentroids.data() + static_cast<size_t>(closestMiniCentroidId) * dim,
-                    dim);
-
-                    if (newdot > dot) {
-                        printf("Error: ownCosineDist is 0.0, but found closer centroid %llu with actualCosineDistance=%.6f (dot=%.6f) vs own actualCosineDistance=%.6f (dot=%.6f)\n",
-                               closestMiniCentroidId, newactualCosineDistance, newdot, actualCosineDistance, dot);
-                    }
-                }
-
-                printf("Warning: ownCosineDist is 0.0, computed actualCosineDistance=%.6f\n", actualCosineDistance);
-                // print the vector
-                for (int d = 0; d < 10; d++) {
-                    printf("%.6f ", miniClusterVectors[static_cast<size_t>(i) * dim + d]);
-                }
-                printf("\n");
-                // print the centroid using miniCentroids
-                for (int d = 0; d < 10; d++) {
-                    printf("%.6f ", miniCentroids[static_cast<size_t>(miniCentroidId) * dim + d]);
-                }
-            }
-            double ownAngularDist = std::acos(std::clamp(1.0 - ownCosineDist, -1.0, 1.0));
+            // if (ownCosineDist == 0.0) {
+            //     // Calculate cosine distance manually to avoid numerical issues
+            //     auto [actualCosineDistance, dot] = computeCosineDistance(
+            //         miniClusterVectors.data() + static_cast<size_t>(i) * dim,
+            //         miniCentroids.data() + static_cast<size_t>(miniCentroidId) * dim,
+            //         dim);
+            //
+            //     for (const auto &closestMiniCentroidId : closestMiniIds) {
+            //         if (closestMiniCentroidId == miniCentroidId) {
+            //             continue;
+            //         }
+            //
+            //         auto [newactualCosineDistance, newdot] = computeCosineDistance(
+            //         miniClusterVectors.data() + static_cast<size_t>(i) * dim,
+            //         miniCentroids.data() + static_cast<size_t>(closestMiniCentroidId) * dim,
+            //         dim);
+            //
+            //         if (newdot > dot) {
+            //             printf("Error: ownCosineDist is 0.0, but found closer centroid %llu with actualCosineDistance=%.6f (dot=%.6f) vs own actualCosineDistance=%.6f (dot=%.6f)\n",
+            //                    closestMiniCentroidId, newactualCosineDistance, newdot, actualCosineDistance, dot);
+            //         }
+            //     }
+            //
+            //     printf("Warning: ownCosineDist is 0.0, computed actualCosineDistance=%.6f\n", actualCosineDistance);
+            //     // print the vector
+            //     for (int d = 0; d < 10; d++) {
+            //         printf("%.6f ", miniClusterVectors[static_cast<size_t>(i) * dim + d]);
+            //     }
+            //     printf("\n");
+            //     // print the centroid using miniCentroids
+            //     for (int d = 0; d < 10; d++) {
+            //         printf("%.6f ", miniCentroids[static_cast<size_t>(miniCentroidId) * dim + d]);
+            //     }
+            // }
+            // double ownAngularDist = std::acos(std::clamp(1.0 - ownCosineDist, -1.0, 1.0));
 
             // Find minimum distance to other centroids
-            double minAngularDist = std::numeric_limits<double>::max();
+            // double minAngularDist = std::numeric_limits<double>::max();
             double minCosineDist = std::numeric_limits<double>::max();
             for (const auto &closestMiniCentroidId : closestMiniIds) {
                 if (closestMiniCentroidId == miniCentroidId) {
@@ -2219,20 +2238,20 @@ namespace orangedb {
                 }
                 double cosineDist;
                 dc->computeDistance(closestMiniCentroidId, &cosineDist);
-                double angularDist = std::acos(std::clamp(1.0 - cosineDist, -1.0, 1.0));
-                if (angularDist < minAngularDist) {
-                    minAngularDist = angularDist;
-                }
+                // double angularDist = std::acos(std::clamp(1.0 - cosineDist, -1.0, 1.0));
+                // if (angularDist < minAngularDist) {
+                //     minAngularDist = angularDist;
+                // }
                 if (cosineDist < minCosineDist) {
                     minCosineDist = cosineDist;
                 }
             }
 
             auto score = (minCosineDist - ownCosineDist) / std::max(minCosineDist, ownCosineDist);
-            if (score >= 0.6) {
-                printf("Error in angular real overlap score calculation: minCosineDist=%.6f, ownCosineDist=%.6f, score=%.6f\n",
-                       minCosineDist, ownCosineDist, score);
-            }
+            // if (score >= 0.6) {
+            //     printf("Error in angular real overlap score calculation: minCosineDist=%.6f, ownCosineDist=%.6f, score=%.6f\n",
+            //            minCosineDist, ownCosineDist, score);
+            // }
 
             // Silhouette-like score using angular distances
             // Positive = point is closer to own centroid, Negative = closer to other centroid
@@ -2241,10 +2260,10 @@ namespace orangedb {
         }
 
         avgScore /= static_cast<double>(miniClusterSize);
-        if (avgScore >= 0.6) {
-            printf("Error in angular real overlap score calculation for miniCentroidId %llu: avgScore=%.6f\n",
-                   miniCentroidId, avgScore);
-        }
+        // if (avgScore >= 0.6) {
+        //     printf("Error in angular real overlap score calculation for miniCentroidId %llu: avgScore=%.6f\n",
+        //            miniCentroidId, avgScore);
+        // }
         return avgScore;
     }
 
@@ -2280,7 +2299,7 @@ namespace orangedb {
 #pragma omp parallel for
         for (auto i = 0; i < numMegaCentroids; i++) {
             if (config.distanceType == COSINE || config.distanceType == IP) {
-                calculateOverlapScoreForAngular(i);
+                calculateOverlapScoreForAngular2(i);
             } else {
                 // L2 and IP (IP should ideally use normalized vectors)
                 calculateOverlapScoreForL2(i);

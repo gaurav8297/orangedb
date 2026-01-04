@@ -141,6 +141,8 @@ namespace orangedb {
 
         void calculateOverlapScoreForAngular(int megaCentroidId);
 
+        void calculateOverlapScoreForAngular2(int megaCentroidId);
+
         double calculateRealOverlapScore(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
 
         double calculateRealOverlapScoreForAngular(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
@@ -382,6 +384,42 @@ namespace orangedb {
                 finalScore = std::min(finalScore, score);
             }
             return finalScore;
+        }
+
+        inline double computeAvgOnWorstElement(const std::vector<double> &values, bool biggerIsBetter = true) const {
+            if (values.empty()) {
+                return 0.0;
+            }
+            // Take the k worst elements
+            int k = std::min(int(values.size()), config.workElementsForAveraging);
+            std::vector<double> worstElements;
+            worstElements.reserve(k);
+
+            // Create indices and sort to find worst elements
+            std::vector<size_t> indices(values.size());
+            std::iota(indices.begin(), indices.end(), 0);
+
+            if (biggerIsBetter) {
+                // Worst = smallest values, so sort ascending
+                std::sort(indices.begin(), indices.end(),
+                    [&values](size_t a, size_t b) { return values[a] < values[b]; });
+            } else {
+                // Worst = largest values, so sort descending
+                std::sort(indices.begin(), indices.end(),
+                    [&values](size_t a, size_t b) { return values[a] > values[b]; });
+            }
+
+            // Extract the k worst elements
+            for (int i = 0; i < k; i++) {
+                worstElements.push_back(values[indices[i]]);
+            }
+
+            // Compute average
+            double sum = 0.0;
+            for (double val : worstElements) {
+                sum += val;
+            }
+            return sum / worstElements.size();
         }
 
         inline double
