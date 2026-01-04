@@ -2036,6 +2036,10 @@ namespace orangedb {
                 double cosineDist;
                 dc->computeDistance(j, &cosineDist);
 
+                if (cosineDist > 1.0) {
+                    printf("Warning: cosineDist = %.6f > 1.0 for miniId %llu and j %llu\n", cosineDist, miniId, j);
+                }
+
                 // Convert cosine distance to angular distance
                 // cosineDist = 1 - cos_sim, so cos_sim = 1 - cosineDist
                 // angular distance = acos(cos_sim) = acos(1 - cosineDist)
@@ -2153,6 +2157,17 @@ namespace orangedb {
             // Distance to own centroid
             double ownCosineDist = 0.0;
             dc->computeDistance(miniCentroidId, &ownCosineDist);
+            if (ownCosineDist == 0.0) {
+                // print the vector
+                for (int d = 0; d < 10; d++) {
+                    printf("%.6f ", miniClusterVectors[static_cast<size_t>(i) * dim + d]);
+                }
+                printf("\n");
+                // print the centroid using miniCentroids
+                for (int d = 0; d < 10; d++) {
+                    printf("%.6f ", miniCentroids[static_cast<size_t>(miniCentroidId) * dim + d]);
+                }
+            }
             double ownAngularDist = std::acos(std::clamp(1.0 - ownCosineDist, -1.0, 1.0));
 
             // Find minimum distance to other centroids
