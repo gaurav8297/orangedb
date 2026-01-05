@@ -1356,7 +1356,7 @@ namespace orangedb {
         float* data, //array of data
         int n, //total number of vectors
         int64_t* assignments, //array of assignments
-        std::vector<int>& hist, //histogram of cluster sizes
+        std::vector<int64_t>& hist, //histogram of cluster sizes
         float* centroids, //array of centroids
         int64_t numClusters, //total number of clusters
         int dim, //dimension of the centroids
@@ -1430,11 +1430,11 @@ namespace orangedb {
         //index.search(num_vecs,region_data.data(),1,distances.data(),new_assignments.data());
 
         // Enforce hard limit after the rebalnce
-        std::vector<int> local_hist(num_region_clusters, 0);
+        std::vector<int64_t> local_hist(num_region_clusters, 0);
         
         // Use SearchParameters with dist_modifier to enforce hard limit
         faiss::SearchParameters params;
-        std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
+        std::unique_ptr<faiss::ClusterSizeCapDistModifier> hardLimitDistModifier;
         hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(num_region_clusters, hardClusterSizeLimit);
         params.dist_modifier = hardLimitDistModifier.get();
         
@@ -1619,12 +1619,16 @@ namespace orangedb {
         std::vector<int64_t> assign(n);
         std::vector<float> distances(n);
         std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
-        std::vector<int> hist(numClusters, 0); // take into account additional clusters 
+        std::vector<int64_t> hist(numClusters, 0); // take into account additional clusters 
+        faiss::SearchParameters params_general;
+        
+        faiss::SearchParameters params_next_nearest;
+        std::unique_ptr<faiss::ClusterSizeCapDistModifier> hardLimitDistModifier_next_nearest;
+        hardLimitDistModifier_next_nearest = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
 
-        faiss::SearchParameters params;
         for (int i = 0; i < n; i++) {
             // Assign current vector to nearest centroid
-            index.search(1, data + i * dim, 1, &distances[i], &assign[i], &params);
+            index.search(1, data + i * dim, 1, &distances[i], &assign[i], &params_general);
 
             int64_t assigned_cluster = assign[i];
 
@@ -1649,10 +1653,24 @@ namespace orangedb {
                     updated_num_clusters++;
                     neighbor_clusters.push_back(updated_num_clusters-1); // the new cluster is the last cluster
                     clustering.centroids.resize(updated_num_clusters * dim); // does resize copy old centroids? GILLI
+
+                    // Update the index with the new cluster
+                    index.reset();
+                    index.add(updated_num_clusters, clustering.centroids.data());
                 }
                 else if (add_new_cluster && updated_num_clusters >= numClusters) {
-                    printf("All clusters are full. Skipping rebalancing...\n");
-                    continue; //GILLI: should assign to the nearest cluster that has space 
+                    printf("All clusters are full. no rebalancing\n");
+                    // set the dist modifier for the next nearest search
+                    hardLimitDistModifier_next_nearest->reset();
+                    hardLimitDistModifier_next_nearest->populate_weights(hist.data(), updated_num_clusters); 
+                    params_next_nearest.dist_modifier = hardLimitDistModifier_next_nearest.get();
+
+                    // assign to the nearest cluster that has space 
+                    index.search(1, data + i * dim, 1, &distances[i], &assign[i], &params_next_nearest);
+                    assigned_cluster = assign[i];
+                    hist[assigned_cluster]++;
+
+                    continue;
                 }
 
                 // Create the set of clusters to rebalance (1 full cluster + k neighbors)
@@ -1669,8 +1687,12 @@ namespace orangedb {
                 clustering.centroids.data(), updated_num_clusters, dim,
                 clusters_to_rebalance, metric_type, config.hardClusterSizeLimit);
 
+                // Update the index with the rebalanced centroids
+                index.reset();
+                index.add(updated_num_clusters, clustering.centroids.data());
+
                 // Re-assign current vector to the updated centroids
-                index.search(1, data + i * dim, 1, &distances[i], &assign[i], &params);
+                index.search(1, data + i * dim, 1, &distances[i], &assign[i], &params_general);
                 assigned_cluster = assign[i];
             }
             // Now increment the histogram

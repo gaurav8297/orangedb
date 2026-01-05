@@ -109,6 +109,8 @@ struct ClusterSizeCapDistModifier : BalancedClusteringDistModifier {
             this->cluster_sizes[i] = cluster_sizes[i];
             if (cluster_sizes[i] >= _max_cluster_size) {
                 cluster_weights[i].store(std::numeric_limits<float>::infinity());
+            } else {
+                cluster_weights[i].store(0.0f);
             }
         }
     }
