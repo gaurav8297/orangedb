@@ -3360,6 +3360,47 @@ void run_umap_3D_with_cluster_data(
     printf("UMAP 3D visualization with clusters written to %s\n", outputPath.c_str());
 }
 
+void write_debug_data(ReclusteringIndex* index, int iter,  std::vector<double> queryRecalls, const std::string& baseDir = "scores/") {
+    auto dim = index->getDim();
+    // Write mega and mini centroids
+    auto mega_centroids_file_path = baseDir + "mega_centroids_iter_" + std::to_string(iter) + ".bin";
+    const float* megaCentroids;
+    size_t numMegaCentroids;
+    index->getMegaCentroids(&megaCentroids, numMegaCentroids);
+    writeToFile(mega_centroids_file_path, reinterpret_cast<const uint8_t *>(megaCentroids),
+                numMegaCentroids * dim * sizeof(float));
+
+    auto mini_centroids_file_path = baseDir + "mini_centroids_iter_" + std::to_string(iter) + ".bin";
+    const float* miniCentroids;
+    size_t numMiniCentroids;
+    index->getMiniCentroids(&miniCentroids, numMiniCentroids);
+    writeToFile(mini_centroids_file_path, reinterpret_cast<const uint8_t *>(miniCentroids),
+                numMiniCentroids * dim * sizeof(float));
+
+    // Write mega-mini centroid ids
+    std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
+    index->getMegaMiniCentroids(&megaMiniCentroidIds);
+    auto mega_mini_centroids_file_path = baseDir + "mega_mini_centroids_iter_" + std::to_string(iter) + ".bin";
+    writeNestedVectorToFile(mega_mini_centroids_file_path, megaMiniCentroidIds);
+
+    // Write overlapping scores
+    auto approx_overlapping_file_path = baseDir + "approx_overlap_scores_iter_" + std::to_string(iter) + ".bin";
+    auto real_overlapping_file_path = baseDir + "real_overlap_scores_iter_" + std::to_string(iter) + ".bin";
+    const double* overlapScores;
+    size_t numScores;
+    index->getApproxOverlapScores(&overlapScores, numScores);
+    writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+    index->getRealOverlapScores(&overlapScores, numScores);
+    writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+
+    if (!queryRecalls.empty()) {
+        // Write recall
+        auto recall_file_path = baseDir + "recall_iter_" + std::to_string(iter) + ".bin";
+        writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(queryRecalls.data()),
+                    queryRecalls.size() * sizeof(double));
+    }
+}
+
 void benchmark_fast_reclustering(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
@@ -3546,19 +3587,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.flush_to_disk(storagePath);
     index.storeMSEScoreForMegaClusters();
     index.computeOverlapScores();
-    // index.printStats();
-    // index.fixBoundaryMiniCentroidsV2(numFixBoundaries);
-    // index.printStats();
-    // index.storeScoreForMegaClusters();
-    // index.printStats();
-    // index.flush_to_disk(storagePath);
-
-    auto mega_centroids_file_path = "mega_centroids_iter_" + std::to_string(0) + ".bin";
-    const float* megaCentroids;
-    size_t numMegaCentroids;
-    index.getMegaCentroids(&megaCentroids, numMegaCentroids);
-    writeToFile(mega_centroids_file_path, reinterpret_cast<const uint8_t *>(megaCentroids),
-                numMegaCentroids * queryDimension * sizeof(float));
+    index.printStats();
 
     std::vector<std::vector<double>> prevRecallValues;
     for (auto nMegaProbe : nMegaProbes) {
@@ -3571,17 +3600,6 @@ void benchmark_fast_reclustering(InputParser &input) {
         }
     }
 
-    index.printStats();
-    // Write overlapping scores
-    auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(0) + ".bin";
-    auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(0) + ".bin";
-    const double* overlapScores;
-    size_t numScores;
-    index.getOverlapScores(&overlapScores, numScores);
-    writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
-    index.getRealOverlapScores(&overlapScores, numScores);
-    writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
-
     // Calculate and write recall after writing overlap scores
     // Write per-query recall for the first probe combination
     std::vector<double> queryRecalls;
@@ -3589,10 +3607,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes[0],
                                  nMiniProbes[0], queryRecalls);
     }
-    // Write per-query recall values to binary file
-    auto recall_file_path = "recall_iter_" + std::to_string(0) + ".bin";
-    writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(queryRecalls.data()),
-                queryRecalls.size() * sizeof(double));
+    write_debug_data(&index, 0, queryRecalls);
 
     if (useMSEToRecluster) {
         // Generate UMAP visualization with cluster assignments (before early return)
@@ -3614,7 +3629,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         return;
     }
     printf("Starting reclustering iterations\n");
-    auto track_query_id = 0;
+    // auto track_query_id = 0;
     // index.flush_to_disk(storagePath);
     // index.storeMSEScoreForMegaClusters();
     for (int iter = 0; iter < iterations; iter++) {
@@ -3625,37 +3640,10 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.saveOldScoreForMegaClusters();
         // index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension, gtVecs + k * track_query_id, k,
                                          // true);
-
-        std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
-        index.getMegaMiniCentroids(&megaMiniCentroidIds);
-        auto mega_mini_centroids_file_path = "mega_mini_centroids_iter_prev_" + std::to_string(iter + 1) + ".bin";
-        writeNestedVectorToFile(mega_mini_centroids_file_path, megaMiniCentroidIds);
         index.reclusterAllMegaCentroids(nMegaRecluster);
         index.storeMSEScoreForMegaClusters();
         index.computeOverlapScores();
         index.printStats();
-
-        // Write overlapping scores
-        auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(iter + 1) + ".bin";
-        auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(iter + 1) + ".bin";
-        const double* overlapScores;
-        size_t numScores;
-        index.getOverlapScores(&overlapScores, numScores);
-        writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
-        index.getRealOverlapScores(&overlapScores, numScores);
-        writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
-
-        // Write centroids too
-        auto mega_centroids_file_path = "mega_centroids_iter_" + std::to_string(iter + 1) + ".bin";
-        const float* megaCentroids;
-        size_t numMegaCentroids;
-        index.getMegaCentroids(&megaCentroids, numMegaCentroids);
-        writeToFile(mega_centroids_file_path, reinterpret_cast<const uint8_t *>(megaCentroids),
-                    numMegaCentroids * queryDimension * sizeof(float));
-
-        index.getMegaMiniCentroids(&megaMiniCentroidIds);
-        mega_mini_centroids_file_path = "mega_mini_centroids_iter_" + std::to_string(iter + 1) + ".bin";
-        writeNestedVectorToFile(mega_mini_centroids_file_path, megaMiniCentroidIds);
 
         // Calculate and write recall after writing overlap scores
         // Write per-query recall for the first probe combination
@@ -3664,10 +3652,7 @@ void benchmark_fast_reclustering(InputParser &input) {
             auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes[0],
                                      nMiniProbes[0], queryRecalls);
         }
-        // Write per-query recall values to binary file
-        auto recall_file_path = "recall_iter_" + std::to_string(iter + 1) + ".bin";
-        writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(queryRecalls.data()),
-                    queryRecalls.size() * sizeof(double));
+        write_debug_data(&index, iter + 1, queryRecalls);
 
         // Generate UMAP visualization with cluster assignments (before early return)
         if(umap_mode==LIVE_UMAP) {
@@ -3757,7 +3742,7 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     }
     index.storeMSEScoreForMegaClusters();
-    index.computeOverlapScores();
+    // index.computeOverlapScores();
     index.printStats();
     if (iterations > 0) {
         // index.storeScoreForMegaClusters();

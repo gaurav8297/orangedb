@@ -2003,26 +2003,27 @@ namespace orangedb {
         printf("  Worst %d Elements - Approx Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f | Real Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f\n",
                k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
                worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
-        avgRealOverlapScores[megaCentroidId] = powerAvgRealOverlapScore;
-        overlapScores[megaCentroidId] = powerAvgOverlapRatio;
+        // avgRealOverlapScores[megaCentroidId] = powerAvgRealOverlapScore;
+        // overlapScores[megaCentroidId] = powerAvgOverlapRatio;
     }
 
     void ReclusteringIndex::calculateOverlapScoreForAngular2(int megaCentroidId) {
         auto &miniIds = megaMiniCentroidIds[megaCentroidId];
-        std::vector<double> realOverlapScores(miniIds.size(), 0.0);  // Initialize to 0, only compute for worst k
         for (size_t idx = 0; idx < miniIds.size(); idx++) {
             auto miniId = miniIds[idx];
             double realOverlapScore = calculateRealOverlapScoreForAngular(miniId, miniIds);
-            realOverlapScores[idx] = realOverlapScore;
+            double approxOverlapScore = calculateApproxOverlapScoreForAngular(miniId, miniIds);
+            realOverlapScores[miniId] = realOverlapScore;
+            approxOverlapScores[miniId] = approxOverlapScore;
         }
-        auto worst_k_avg = computeAvgOnWorstElement(realOverlapScores);
-        double fullAvg = 0;
-        for (const auto &score : realOverlapScores) {
-            fullAvg += score;
-        }
-        fullAvg /= realOverlapScores.size();
-        avgRealOverlapScores[megaCentroidId] = worst_k_avg;
-        overlapScores[megaCentroidId] = fullAvg;
+        // auto worst_k_avg = computeAvgOnWorstElement(realOverlapScores);
+        // double fullAvg = 0;
+        // for (const auto &score : realOverlapScores) {
+        //     fullAvg += score;
+        // }
+        // fullAvg /= realOverlapScores.size();
+        // avgRealOverlapScores[megaCentroidId] = worst_k_avg;
+        // overlapScores[megaCentroidId] = fullAvg;
     }
 
 
@@ -2158,8 +2159,8 @@ namespace orangedb {
                k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
                worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
 
-        avgRealOverlapScores[megaCentroidId] = avgRealOverlapScore;
-        overlapScores[megaCentroidId] = powerAvgOverlapRatio;
+        // avgRealOverlapScores[megaCentroidId] = avgRealOverlapScore;
+        // overlapScores[megaCentroidId] = powerAvgOverlapRatio;
     }
 
     static std::pair<double, double> computeCosineDistance(const float* a, const float* b, size_t dim) {
@@ -2267,6 +2268,57 @@ namespace orangedb {
         return avgScore;
     }
 
+    double ReclusteringIndex::calculateApproxOverlapScoreForAngular(vector_idx_t miniCentroidId,
+                                                                    std::vector<vector_idx_t> &closestMiniIds) {
+        auto numMiniClusters = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters, COSINE);
+        dc->setQuery(miniCentroids.data() + static_cast<size_t>(miniCentroidId) * dim);
+
+        // Precompute angular radius for miniId
+        // miniClusteringScore stores average cosine distance (1 - cos_sim)
+        // Convert to angular distance: acos(cos_sim) = acos(1 - cosine_dist)
+        double angularRadiusMiniId = std::acos(std::clamp(1.0 - miniClusteringScore[miniCentroidId], -1.0, 1.0));
+        double minOverlapRatio = std::numeric_limits<double>::max();
+
+        for (const auto j : closestMiniIds) {
+            if (j == miniCentroidId) {
+                continue;
+            }
+
+            double cosineDist;
+            dc->computeDistance(j, &cosineDist);
+
+            // Convert cosine distance to angular distance
+            // cosineDist = 1 - cos_sim, so cos_sim = 1 - cosineDist
+            // angular distance = acos(cos_sim) = acos(1 - cosineDist)
+            double angularDist = std::acos(std::clamp(1.0 - cosineDist, -1.0, 1.0));
+
+            // Convert cluster spread (avg cosine distance) to angular radius
+            double angularRadiusJ = std::acos(std::clamp(1.0 - miniClusteringScore[j], -1.0, 1.0));
+
+            // Sum of angular radii - this is geometrically correct on the hypersphere
+            double angularRadiusSum = angularRadiusJ + angularRadiusMiniId;
+
+            double overlapRatio;
+            if (angularRadiusJ == 0 or angularRadiusMiniId == 0) {
+                printf("Warning: angularRadiusJ=%.6f or angularRadiusMiniId=%.6f is zero for miniCentroidId %llu and j %llu\n",
+                       angularRadiusJ, angularRadiusMiniId, miniCentroidId, j);
+                // No spread means no overlap
+                overlapRatio = 1.0;
+            } else {
+                // Overlap ratio: distance between centroids / sum of radii
+                // < 1 means clusters overlap, > 1 means they don't
+                overlapRatio = (angularRadiusSum > 1e-9) ? (angularDist / angularRadiusSum) : 1.0;
+            }
+
+            if (overlapRatio < minOverlapRatio) {
+                minOverlapRatio = overlapRatio;
+            }
+        }
+
+        return minOverlapRatio;
+    }
+
     double ReclusteringIndex::calculateRealOverlapScore(vector_idx_t miniCentroidId,
                                                         std::vector<vector_idx_t> &closestMiniIds) {
         auto numMiniClusters = miniCentroids.size() / dim;
@@ -2294,8 +2346,9 @@ namespace orangedb {
 
     void ReclusteringIndex::computeOverlapScores() {
         auto numMegaCentroids = megaCentroids.size() / dim;
-        overlapScores.resize(numMegaCentroids);
-        avgRealOverlapScores.resize(numMegaCentroids);
+        auto numMiniCentroids = miniCentroids.size() / dim;
+        approxOverlapScores.resize(numMiniCentroids);
+        realOverlapScores.resize(numMiniCentroids);
 #pragma omp parallel for
         for (auto i = 0; i < numMegaCentroids; i++) {
             if (config.distanceType == COSINE || config.distanceType == IP) {
@@ -2510,9 +2563,9 @@ namespace orangedb {
                     shouldReclusterCount++;
                     
                     // Check overlap score if available
-                    if (i < overlapScores.size() && overlapScores[i] > config.overlappingScoreThreshold) {
-                        shouldReclusterCountWithOverlapScore++;
-                    }
+                    // if (i < overlapScores.size() && overlapScores[i] > config.overlappingScoreThreshold) {
+                    //     shouldReclusterCountWithOverlapScore++;
+                    // }
                 }
 
             } else {
@@ -2555,44 +2608,44 @@ namespace orangedb {
             }
 
             // Print overlap score statistics if available
-            if (overlapScores.size() == numMegaCentroids) {
-                double overlapMin = std::numeric_limits<double>::max();
-                double overlapMax = std::numeric_limits<double>::lowest();
-                double overlapSum = 0.0;
-                int overlapValidCount = 0;
-                
-                for (size_t i = 0; i < overlapScores.size(); i++) {
-                    double score = overlapScores[i];
-                    overlapMin = std::min(overlapMin, score);
-                    overlapMax = std::max(overlapMax, score);
-                    overlapSum += score;
-                    overlapValidCount++;
-                }
-                
-                double overlapAvg = (overlapValidCount > 0) ? overlapSum / overlapValidCount : 0.0;
-                double overlapPowerAvg = computePowerAvgOnWorstElement(overlapScores);
-                printf("\n=== Overlap Score Statistics ===\n");
-                printf("Overlap scores available for %d centroids\n", overlapValidCount);
-                printf("Min: %.6f, Max: %.6f, Avg: %.6f, Power Avg (worst): %.6f\n",
-                       overlapMin, overlapMax, overlapAvg, overlapPowerAvg);
-                printf("Threshold: %.6f\n", config.overlappingScoreThreshold);
-            } else {
-                printf("\n=== Overlap Score Statistics ===\n");
-                printf("Overlap scores not available (expected %lu, got %zu)\n", numMegaCentroids, overlapScores.size());
-            }
+            // if (overlapScores.size() == numMegaCentroids) {
+            //     double overlapMin = std::numeric_limits<double>::max();
+            //     double overlapMax = std::numeric_limits<double>::lowest();
+            //     double overlapSum = 0.0;
+            //     int overlapValidCount = 0;
+            //
+            //     for (size_t i = 0; i < overlapScores.size(); i++) {
+            //         double score = overlapScores[i];
+            //         overlapMin = std::min(overlapMin, score);
+            //         overlapMax = std::max(overlapMax, score);
+            //         overlapSum += score;
+            //         overlapValidCount++;
+            //     }
+            //
+            //     double overlapAvg = (overlapValidCount > 0) ? overlapSum / overlapValidCount : 0.0;
+            //     double overlapPowerAvg = computePowerAvgOnWorstElement(overlapScores);
+            //     printf("\n=== Overlap Score Statistics ===\n");
+            //     printf("Overlap scores available for %d centroids\n", overlapValidCount);
+            //     printf("Min: %.6f, Max: %.6f, Avg: %.6f, Power Avg (worst): %.6f\n",
+            //            overlapMin, overlapMax, overlapAvg, overlapPowerAvg);
+            //     printf("Threshold: %.6f\n", config.overlappingScoreThreshold);
+            // } else {
+            //     printf("\n=== Overlap Score Statistics ===\n");
+            //     printf("Overlap scores not available (expected %lu, got %zu)\n", numMegaCentroids, overlapScores.size());
+            // }
 
-            printf("\nNumber of mega centroids that should NOT be reclustered (RelScoreChange < %.6f and RelChange(centroid) < %.6f): %d (%.1f%%)\n",
-                config.scoreChangeThreshold,
-                config.centroidChangeThreshold,
-                shouldReclusterCount,
-                100.0 * shouldReclusterCount / validCentroids);
-            
-            if (overlapScores.size() == numMegaCentroids) {
-                printf("Number of mega centroids that should NOT be reclustered (with overlap score > %.6f): %d (%.1f%%)\n",
-                       config.overlappingScoreThreshold,
-                       shouldReclusterCountWithOverlapScore,
-                       100.0 * shouldReclusterCountWithOverlapScore / validCentroids);
-            }
+            // printf("\nNumber of mega centroids that should NOT be reclustered (RelScoreChange < %.6f and RelChange(centroid) < %.6f): %d (%.1f%%)\n",
+            //     config.scoreChangeThreshold,
+            //     config.centroidChangeThreshold,
+            //     shouldReclusterCount,
+            //     100.0 * shouldReclusterCount / validCentroids);
+            //
+            // if (overlapScores.size() == numMegaCentroids) {
+            //     printf("Number of mega centroids that should NOT be reclustered (with overlap score > %.6f): %d (%.1f%%)\n",
+            //            config.overlappingScoreThreshold,
+            //            shouldReclusterCountWithOverlapScore,
+            //            100.0 * shouldReclusterCountWithOverlapScore / validCentroids);
+            // }
         }
     }
 

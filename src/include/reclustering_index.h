@@ -143,20 +143,22 @@ namespace orangedb {
 
         void calculateOverlapScoreForAngular2(int megaCentroidId);
 
+        double calculateApproxOverlapScoreForAngular(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
+
         double calculateRealOverlapScore(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
 
         double calculateRealOverlapScoreForAngular(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
 
         void computeOverlapScores();
 
-        void getOverlapScores(const double **_overlapScores, size_t &n) const {
-            *_overlapScores = overlapScores.data();
-            n = overlapScores.size();
+        void getApproxOverlapScores(const double **_overlapScores, size_t &n) const {
+            *_overlapScores = approxOverlapScores.data();
+            n = approxOverlapScores.size();
         }
 
         void getRealOverlapScores(const double **_overlapScores, size_t &n) const {
-            *_overlapScores = avgRealOverlapScores.data();
-            n = avgRealOverlapScores.size();
+            *_overlapScores = realOverlapScores.data();
+            n = realOverlapScores.size();
         }
 
         void getMegaCentroids(const float **_centroids, size_t &n) const {
@@ -529,8 +531,8 @@ namespace orangedb {
         std::vector<float> megaCentroids;
         std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
         std::vector<double> megaClusteringScore;
-        std::vector<double> overlapScores;
-        std::vector<double> avgRealOverlapScores;
+        std::vector<double> approxOverlapScores;
+        std::vector<double> realOverlapScores;
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
         std::vector<double> miniClusteringScore;
