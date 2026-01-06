@@ -3516,6 +3516,23 @@ void benchmark_fast_reclustering(InputParser &input) {
                     batchCount++;
                 }
                 delete[] data;
+
+                if (fileIdx == numFiles - 2) {
+                    // One file before last, adjust insertsPerFile to match total numInserts. Run reclustering
+                    index.storeMSEScoreForMegaClusters();
+                    index.computeOverlapScores();
+                    // Run 6 iteration of reclustering
+                    for (int iter = 0; iter < iterations; iter++) {
+                        printf("Reclustering Iteration: %d\n", iter);
+                        index.updateOverlapHistory();
+                        index.reclusterAllMegaCentroids(nMegaRecluster);
+                        index.storeMSEScoreForMegaClusters();
+                        index.computeOverlapScores();
+                        index.reclusterBasedOnOverlapHistory();
+                        index.printStats();
+                        printf("Reclustering Iteration %d completed\n", iter);
+                    }
+                }
             }
             printf("Total vectors inserted: %zu in %d batches\n", totalVectors, batchCount);
         } else {
@@ -3559,7 +3576,6 @@ void benchmark_fast_reclustering(InputParser &input) {
                         index.reclusterAllMegaCentroids(nMegaRecluster);
                         index.storeMSEScoreForMegaClusters();
                         index.reclusterBasedOnMSEScore();
-                        index.printStats();
                         printf("Reclustering Iteration %d completed\n", iter);
                     }
                     printf("=== Reclustering completed ===\n");
