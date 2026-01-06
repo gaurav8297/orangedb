@@ -3462,6 +3462,7 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     if (readFromDisk) {
         index = ReclusteringIndex(storagePath, &rng);
+        index.config.overlapScoreChangeThreshold = overlapScoreChangeThreshold;
     } else {
         // Read dataset
         std::vector<std::string> filePaths;

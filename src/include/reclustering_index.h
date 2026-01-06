@@ -554,6 +554,9 @@ namespace orangedb {
 
         void printStatsForTrackId();
 
+    public:
+        ReclusteringIndexConfig config;
+
     private:
         struct OverlapHistory {
             double prev1 = -10.0;
@@ -562,7 +565,6 @@ namespace orangedb {
         };
 
         int dim;
-        ReclusteringIndexConfig config;
         size_t size;
         RandomGenerator *rg;
 
