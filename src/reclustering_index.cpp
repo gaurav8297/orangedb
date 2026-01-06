@@ -1,15 +1,20 @@
 #include "include/reclustering_index.h"
 
 #include "faiss/IndexFlat.h"
+#include "faiss/IndexLSH.h"
+#include "faiss/index_io.h"
+#include "faiss/impl/io.h"
 
 namespace orangedb {
     ReclusteringIndex::ReclusteringIndex(int dim, ReclusteringIndexConfig config, RandomGenerator *rg)
         : dim(dim), config(config), size(0), rg(rg) {
         quantizer = std::make_unique<SQ8Bit>(dim);
+        ensureOverlapLshIndex();
     }
 
     ReclusteringIndex::ReclusteringIndex(const std::string &file_path, RandomGenerator *rg) : rg(rg) {
         load_from_disk(file_path);
+        ensureOverlapLshIndex();
     }
 
     void ReclusteringIndex::insert(float *data, size_t n) {
@@ -403,6 +408,12 @@ namespace orangedb {
         // Get megacentroids that need reclustering based on MSE score and centroid change criteria
         std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToRecluster();
         printf("reclusterBasedOnMSEScore: Reclustering %zu megacentroids\n", megaClusterIds.size());
+        reclusterFastMegaCentroids(megaClusterIds);
+    }
+
+    void ReclusteringIndex::reclusterBasedOnOverlapHistory() {
+        std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToReclusterByOverlapHistory();
+        printf("reclusterBasedOnOverlapHistory: Reclustering %zu megacentroids\n", megaClusterIds.size());
         reclusterFastMegaCentroids(megaClusterIds);
     }
 
@@ -2332,6 +2343,9 @@ namespace orangedb {
             dc->computeDistance(miniCentroidId, &ownDist);
             double minDistance = std::numeric_limits<double>::max();
             for (const auto &closestMiniCentroidId : closestMiniIds) {
+                if (closestMiniCentroidId == miniCentroidId) {
+                    continue;
+                }
                 double dist;
                 dc->computeDistance(closestMiniCentroidId, &dist);
                 if (dist < minDistance) {
@@ -2344,6 +2358,111 @@ namespace orangedb {
         return avgScore;
     }
 
+    void ReclusteringIndex::ensureOverlapLshIndex() {
+        assert(config.overlapLshBits <= 32 && "overlapLshBits must be <= 32");
+        if (overlapLshIndex) {
+            return;
+        }
+        int bits = std::max(1, config.overlapLshBits);
+        overlapLshIndex = std::make_unique<faiss::IndexLSH>(dim, bits);
+    }
+
+    uint32_t ReclusteringIndex::getOverlapLshBucket(const float *vec) {
+        ensureOverlapLshIndex();
+        assert(config.overlapLshBits <= 32 && "overlapLshBits must be <= 32");
+        int bits = std::max(1, std::min(config.overlapLshBits, 32));
+        uint32_t bucket = 0;
+        size_t codeSize = overlapLshIndex->code_size;
+        std::vector<uint8_t> code(codeSize);
+        overlapLshIndex->sa_encode(1, vec, code.data());
+
+        for (int bit = 0; bit < bits; bit++) {
+            uint8_t byte = code[static_cast<size_t>(bit / 8)];
+            if ((byte >> (bit & 7)) & 0x1u) {
+                bucket |= (1u << bit);
+            }
+        }
+        return bucket;
+    }
+
+    std::vector<vector_idx_t> ReclusteringIndex::getWorstMiniCentroidsByRealOverlap(
+        const std::vector<vector_idx_t> &miniIds, int k) const {
+        std::vector<vector_idx_t> worstMiniIds;
+        if (miniIds.empty() || k <= 0) {
+            return worstMiniIds;
+        }
+        int count = std::min(k, static_cast<int>(miniIds.size()));
+        std::vector<size_t> indices(miniIds.size());
+        std::iota(indices.begin(), indices.end(), 0);
+        std::partial_sort(indices.begin(), indices.begin() + count, indices.end(),
+                          [this, &miniIds](size_t a, size_t b) {
+                              return realOverlapScores[miniIds[a]] < realOverlapScores[miniIds[b]];
+                          });
+        worstMiniIds.reserve(count);
+        for (int i = 0; i < count; i++) {
+            worstMiniIds.push_back(miniIds[indices[i]]);
+        }
+        return worstMiniIds;
+    }
+
+    void ReclusteringIndex::calculateOverlapScoreForL2All(int megaCentroidId) {
+        auto &miniIds = megaMiniCentroidIds[megaCentroidId];
+        if (miniIds.size() == 1) {
+            realOverlapScores[miniIds[0]] = 1.0;
+            return;
+        }
+        for (auto miniId : miniIds) {
+            realOverlapScores[miniId] = calculateRealOverlapScore(miniId, miniIds);
+        }
+    }
+
+    void ReclusteringIndex::updateOverlapHistory() {
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        std::unordered_map<uint32_t, std::vector<double>> bucketToScores;
+        for (size_t i = 0; i < numMegaCentroids; i++) {
+            auto &miniIds = megaMiniCentroidIds[i];
+            auto worstMiniIds = getWorstMiniCentroidsByRealOverlap(
+                miniIds, config.overlapWorstMiniCount);
+            for (auto miniId : worstMiniIds) {
+                uint32_t bucket = getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
+                bucketToScores[bucket].push_back(realOverlapScores[miniId]);
+            }
+        }
+
+        std::unordered_map<uint32_t, double> bucketAvgScores;
+        bucketAvgScores.reserve(bucketToScores.size());
+        for (auto &entry : bucketToScores) {
+            auto &scores = entry.second;
+            int count = std::min(config.overlapWorstAvgCount, static_cast<int>(scores.size()));
+            if (count <= 0) {
+                continue;
+            }
+            std::partial_sort(scores.begin(), scores.begin() + count, scores.end());
+            double sum = 0.0;
+            for (int i = 0; i < count; i++) {
+                sum += scores[i];
+            }
+            bucketAvgScores.emplace(entry.first, sum / static_cast<double>(count));
+        }
+
+        updateGlobalBucketHistory(bucketAvgScores);
+    }
+
+    void ReclusteringIndex::updateGlobalBucketHistory(
+        const std::unordered_map<uint32_t, double> &bucketScores) {
+        for (const auto &entry : bucketScores) {
+            auto &history = globalBucketOverlapHistory[entry.first];
+            if (history.count == 0) {
+                history.prev1 = entry.second;
+                history.count = 1;
+            } else {
+                history.prev2 = history.prev1;
+                history.prev1 = entry.second;
+                history.count = std::min(2, history.count + 1);
+            }
+        }
+    }
+
     void ReclusteringIndex::computeOverlapScores() {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
@@ -2354,8 +2473,7 @@ namespace orangedb {
             if (config.distanceType == COSINE || config.distanceType == IP) {
                 calculateOverlapScoreForAngular2(i);
             } else {
-                // L2 and IP (IP should ideally use normalized vectors)
-                calculateOverlapScoreForL2(i);
+                calculateOverlapScoreForL2All(i);
             }
         }
     }
@@ -2447,6 +2565,80 @@ namespace orangedb {
         printf("getMegaCentroidsToRecluster: %zu out of %zu megacentroids meet criteria\n",
                megaCentroidsToRecluster.size(), numMegaCentroids);
 
+        return megaCentroidsToRecluster;
+    }
+
+    std::vector<vector_idx_t> ReclusteringIndex::getMegaCentroidsToReclusterByOverlapHistory() {
+        std::vector<vector_idx_t> megaCentroidsToRecluster;
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        if (globalBucketOverlapHistory.empty()) {
+            for (size_t i = 0; i < numMegaCentroids; i++) {
+                megaCentroidsToRecluster.push_back(i);
+            }
+            return megaCentroidsToRecluster;
+        }
+
+        for (size_t i = 0; i < numMegaCentroids; i++) {
+            const auto &miniIds = megaMiniCentroidIds[i];
+            auto worstMiniIds = getWorstMiniCentroidsByRealOverlap(
+                miniIds, config.overlapWorstMiniCount);
+            if (worstMiniIds.empty()) {
+                printf("OverlapHistory: mega %zu has no worst mini ids, recluster=false\n", i);
+                continue;
+            }
+            const auto &bucketHistory = globalBucketOverlapHistory;
+            bool shouldRecluster = false;
+            int triggerCount = 0;
+            for (auto miniId : worstMiniIds) {
+                uint32_t bucket = getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
+                auto currOverlapScore = realOverlapScores[miniId];
+                // Always recluster if current overlap score is negative
+                if (currOverlapScore < 0.0) {
+                    printf("OverlapHistory: mega %zu mini %llu bucket %u has negative overlap score %.6f, recluster=true\n",
+                           i, miniId, bucket, currOverlapScore);
+                    shouldRecluster = true;
+                    triggerCount++;
+                    continue;
+                }
+                auto historyIt = bucketHistory.find(bucket);
+                if (historyIt == bucketHistory.end()) {
+                    printf("OverlapHistory: mega %zu mini %llu bucket %u has no history, recluster=true\n",
+                           i, miniId, bucket);
+                    shouldRecluster = true;
+                    triggerCount++;
+                    continue;
+                }
+                const auto &history = historyIt->second;
+                if (history.count < 2) {
+                    shouldRecluster = true;
+                    triggerCount++;
+                    continue;
+                }
+                double prevAvg = history.prev2;
+                double prevTransformed = std::exp(-prevAvg);
+                double currentTransformed = std::exp(-currOverlapScore);
+                double delta = (std::abs(prevTransformed) > 1e-9)
+                    ? (currentTransformed - prevTransformed) / std::abs(prevTransformed)
+                    : currentTransformed - prevTransformed;
+                if (std::abs(delta) >= config.overlapScoreChangeThreshold) {
+                    printf("OverlapHistory: mega %zu mini %llu bucket %u delta %.6f exceeds threshold %.6f, recluster=true\n",
+                           i, miniId, bucket, delta, config.overlapScoreChangeThreshold);
+                    shouldRecluster = true;
+                    triggerCount++;
+                }
+            }
+            if (shouldRecluster) {
+                megaCentroidsToRecluster.push_back(i);
+                printf("OverlapHistory: mega %zu recluster=true (worst=%zu, triggers=%d)\n",
+                       i, worstMiniIds.size(), triggerCount);
+            } else {
+                printf("OverlapHistory: mega %zu recluster=false (worst=%zu)\n",
+                       i, worstMiniIds.size());
+            }
+        }
+
+        printf("getMegaCentroidsToReclusterByOverlapHistory: %zu out of %zu megacentroids meet criteria\n",
+               megaCentroidsToRecluster.size(), numMegaCentroids);
         return megaCentroidsToRecluster;
     }
 
@@ -3639,6 +3831,15 @@ namespace orangedb {
                   sizeof(config.quantizationTrainPercentage));
         out.write(reinterpret_cast<const char *>(&config.hardClusterSizeLimit), sizeof(config.hardClusterSizeLimit));
         out.write(reinterpret_cast<const char *>(&config.kmeansSamplingRatio), sizeof(config.kmeansSamplingRatio));
+        out.write(reinterpret_cast<const char *>(&config.scoreChangeThreshold), sizeof(config.scoreChangeThreshold));
+        out.write(reinterpret_cast<const char *>(&config.centroidChangeThreshold), sizeof(config.centroidChangeThreshold));
+        out.write(reinterpret_cast<const char *>(&config.powerAvgCoefficient), sizeof(config.powerAvgCoefficient));
+        out.write(reinterpret_cast<const char *>(&config.workElementsForAveraging), sizeof(config.workElementsForAveraging));
+        out.write(reinterpret_cast<const char *>(&config.overlappingScoreThreshold), sizeof(config.overlappingScoreThreshold));
+        out.write(reinterpret_cast<const char *>(&config.overlapLshBits), sizeof(config.overlapLshBits));
+        out.write(reinterpret_cast<const char *>(&config.overlapWorstMiniCount), sizeof(config.overlapWorstMiniCount));
+        out.write(reinterpret_cast<const char *>(&config.overlapWorstAvgCount), sizeof(config.overlapWorstAvgCount));
+        out.write(reinterpret_cast<const char *>(&config.overlapScoreChangeThreshold), sizeof(config.overlapScoreChangeThreshold));
 
         // Write mega centroids
         size_t megaCentroidSize = megaCentroids.size();
@@ -3740,6 +3941,26 @@ namespace orangedb {
         // Write quantizer
         quantizer->flush_to_disk(out);
 
+        // Write overlap LSH index
+        assert(overlapLshIndex && "overlapLshIndex must be initialized");
+        faiss::VectorIOWriter lshWriter;
+        faiss::write_index(overlapLshIndex.get(), &lshWriter);
+        size_t lshBytes = lshWriter.data.size();
+        out.write(reinterpret_cast<const char *>(&lshBytes), sizeof(lshBytes));
+        if (lshBytes > 0) {
+            out.write(reinterpret_cast<const char *>(lshWriter.data.data()), lshBytes);
+        }
+
+        // Write overlap history
+        size_t overlapHistorySize = globalBucketOverlapHistory.size();
+        out.write(reinterpret_cast<const char *>(&overlapHistorySize), sizeof(overlapHistorySize));
+        for (const auto &entry : globalBucketOverlapHistory) {
+            out.write(reinterpret_cast<const char *>(&entry.first), sizeof(entry.first));
+            out.write(reinterpret_cast<const char *>(&entry.second.prev1), sizeof(entry.second.prev1));
+            out.write(reinterpret_cast<const char *>(&entry.second.prev2), sizeof(entry.second.prev2));
+            out.write(reinterpret_cast<const char *>(&entry.second.count), sizeof(entry.second.count));
+        }
+
         // Write stats
         out.write(reinterpret_cast<const char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
         out.write(reinterpret_cast<const char *>(&stats.totalQueries), sizeof(stats.totalQueries));
@@ -3776,6 +3997,16 @@ namespace orangedb {
                 sizeof(config.quantizationTrainPercentage));
         in.read(reinterpret_cast<char *>(&config.hardClusterSizeLimit), sizeof(config.hardClusterSizeLimit));
         in.read(reinterpret_cast<char *>(&config.kmeansSamplingRatio), sizeof(config.kmeansSamplingRatio));
+        in.read(reinterpret_cast<char *>(&config.scoreChangeThreshold), sizeof(config.scoreChangeThreshold));
+        in.read(reinterpret_cast<char *>(&config.centroidChangeThreshold), sizeof(config.centroidChangeThreshold));
+        in.read(reinterpret_cast<char *>(&config.powerAvgCoefficient), sizeof(config.powerAvgCoefficient));
+        in.read(reinterpret_cast<char *>(&config.workElementsForAveraging), sizeof(config.workElementsForAveraging));
+        in.read(reinterpret_cast<char *>(&config.overlappingScoreThreshold), sizeof(config.overlappingScoreThreshold));
+        in.read(reinterpret_cast<char *>(&config.overlapLshBits), sizeof(config.overlapLshBits));
+        in.read(reinterpret_cast<char *>(&config.overlapWorstMiniCount), sizeof(config.overlapWorstMiniCount));
+        in.read(reinterpret_cast<char *>(&config.overlapWorstAvgCount), sizeof(config.overlapWorstAvgCount));
+        in.read(reinterpret_cast<char *>(&config.overlapScoreChangeThreshold),
+                sizeof(config.overlapScoreChangeThreshold));
 
         // Read mega centroids
         size_t megaCentroidsCount;
@@ -3897,6 +4128,39 @@ namespace orangedb {
         // Read quantizer
         quantizer = std::make_unique<SQ8Bit>(dim);
         quantizer->load_from_disk(in);
+
+        // Read overlap LSH index
+        size_t lshBytes;
+        in.read(reinterpret_cast<char *>(&lshBytes), sizeof(lshBytes));
+        if (lshBytes > 0) {
+            std::vector<uint8_t> lshData(lshBytes);
+            in.read(reinterpret_cast<char *>(lshData.data()), lshBytes);
+            faiss::VectorIOReader lshReader;
+            lshReader.data = std::move(lshData);
+            std::unique_ptr<faiss::Index> loadedIndex(faiss::read_index(&lshReader));
+            auto *lshIndex = dynamic_cast<faiss::IndexLSH *>(loadedIndex.release());
+            if (lshIndex) {
+                overlapLshIndex.reset(lshIndex);
+            } else {
+                overlapLshIndex = std::make_unique<faiss::IndexLSH>(dim, config.overlapLshBits);
+            }
+        } else {
+            overlapLshIndex = std::make_unique<faiss::IndexLSH>(dim, config.overlapLshBits);
+        }
+
+        // Read overlap history
+        size_t overlapHistorySize;
+        in.read(reinterpret_cast<char *>(&overlapHistorySize), sizeof(overlapHistorySize));
+        globalBucketOverlapHistory.clear();
+        for (size_t i = 0; i < overlapHistorySize; i++) {
+            uint32_t bucket;
+            OverlapHistory history;
+            in.read(reinterpret_cast<char *>(&bucket), sizeof(bucket));
+            in.read(reinterpret_cast<char *>(&history.prev1), sizeof(history.prev1));
+            in.read(reinterpret_cast<char *>(&history.prev2), sizeof(history.prev2));
+            in.read(reinterpret_cast<char *>(&history.count), sizeof(history.count));
+            globalBucketOverlapHistory.emplace(bucket, history);
+        }
 
         // Read stats
         in.read(reinterpret_cast<char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));

@@ -9,6 +9,10 @@
 #include <hnsw.h>
 #include <faiss/Clustering.h>
 
+namespace faiss {
+    class IndexLSH;
+}
+
 
 namespace orangedb {
 
@@ -63,6 +67,14 @@ namespace orangedb {
         int workElementsForAveraging = 10;
         // Overlapping score threshold
         float overlappingScoreThreshold = 0.1;
+        // LSH bucket bits for overlap tracking
+        int overlapLshBits = 10;
+        // Worst mini centroids used for bucketed overlap score
+        int overlapWorstMiniCount = 20;
+        // Worst overlap values to average (after bucketing)
+        int overlapWorstAvgCount = 30;
+        // Threshold for overlap score change to trigger reclustering
+        float overlapScoreChangeThreshold = 0.05;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -75,14 +87,21 @@ namespace orangedb {
                                          const float kmeansSamplingRatio = 1.0,
                                          const float scoreChangeThreshold = 0.2,
                                          const float centroidChangeThreshold = 0.6,
-                                         const float overlappingScoreThreshold = 0.1)
+                                         const float overlappingScoreThreshold = 0.1,
+                                         const int overlapLshBits = 8,
+                                         const int overlapWorstMiniCount = 20,
+                                         const int overlapWorstAvgCount = 30,
+                                         const float overlapScoreChangeThreshold = 0.05)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
               numNewMiniReclusterCentroids(numNewMiniReclusterCentroids),
               quantizationTrainPercentage(quantizationTrainPercentage), hardClusterSizeLimit(hardClusterSizeLimit),
               kmeansSamplingRatio(kmeansSamplingRatio), scoreChangeThreshold(scoreChangeThreshold),
-              centroidChangeThreshold(centroidChangeThreshold), overlappingScoreThreshold(overlappingScoreThreshold) {
+              centroidChangeThreshold(centroidChangeThreshold), overlappingScoreThreshold(overlappingScoreThreshold),
+              overlapLshBits(overlapLshBits), overlapWorstMiniCount(overlapWorstMiniCount),
+              overlapWorstAvgCount(overlapWorstAvgCount),
+              overlapScoreChangeThreshold(overlapScoreChangeThreshold) {
         }
     };
 
@@ -124,6 +143,8 @@ namespace orangedb {
         void reclusterBasedOnScore(int n);
 
         void reclusterBasedOnMSEScore();
+
+        void reclusterBasedOnOverlapHistory();
 
         void reclusterAllMegaCentroids(int n = INT_MAX);
 
@@ -188,6 +209,8 @@ namespace orangedb {
 
         std::vector<vector_idx_t> getMegaCentroidsToRecluster() const;
 
+        std::vector<vector_idx_t> getMegaCentroidsToReclusterByOverlapHistory();
+
         void computeAllSubCells(int avgSubCellSize);
 
         void quantizeVectors();
@@ -242,6 +265,8 @@ namespace orangedb {
         std::tuple<vector_idx_t, vector_idx_t, vector_idx_t> getClusterRanks(
             const float *query, vector_idx_t megaId, vector_idx_t miniId) const;
 
+        void updateOverlapHistory();
+
     private:
         void fixBoundaryMiniCentroid(int miniCentroidId, std::unordered_set<vector_idx_t> *alreadyFixed = nullptr);
 
@@ -268,6 +293,17 @@ namespace orangedb {
         void reclusterOnlyMegaCentroids(std::vector<vector_idx_t> megaCentroids);
 
         void reclusterOnlyMegaCentroidsQuant(std::vector<vector_idx_t> megaCentroids);
+
+        void updateGlobalBucketHistory(const std::unordered_map<uint32_t, double> &bucketScores);
+
+        void ensureOverlapLshIndex();
+
+        uint32_t getOverlapLshBucket(const float *vec);
+
+        std::vector<vector_idx_t> getWorstMiniCentroidsByRealOverlap(
+            const std::vector<vector_idx_t> &miniIds, int k) const;
+
+        void calculateOverlapScoreForL2All(int megaCentroidId);
 
         void resetInputBuffer();
 
@@ -522,6 +558,12 @@ namespace orangedb {
         void printStatsForTrackId();
 
     private:
+        struct OverlapHistory {
+            double prev1 = -10.0;
+            double prev2 = -10.0;
+            int count = 0;
+        };
+
         int dim;
         ReclusteringIndexConfig config;
         size_t size;
@@ -533,6 +575,7 @@ namespace orangedb {
         std::vector<double> megaClusteringScore;
         std::vector<double> approxOverlapScores;
         std::vector<double> realOverlapScores;
+        std::unordered_map<uint32_t, OverlapHistory> globalBucketOverlapHistory;
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
         std::vector<double> miniClusteringScore;
@@ -559,6 +602,8 @@ namespace orangedb {
         std::vector<std::vector<uint8_t>> quantizedMiniClusters;
         std::unordered_map<vector_idx_t, std::tuple<vector_idx_t, vector_idx_t, vector_idx_t, std::vector<float>,
         std::vector<float>>> prevQueryState;
+
+        std::unique_ptr<faiss::IndexLSH> overlapLshIndex;
 
         // Stats
         ReclusteringIndexStats stats;

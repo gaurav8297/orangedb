@@ -3437,6 +3437,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     float centroidChangeThreshold = stof(input.getCmdOption("-centroidChangeThreshold"));
     const bool useMSEToRecluster = stoi(input.getCmdOption("-useMSEToRecluster"));
     const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
+    const float overlapScoreChangeThreshold = stof(input.getCmdOption("-overlapScoreChangeThreshold"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -3446,7 +3447,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     DistanceType distanceType = useIP ? IP : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
                                    0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio,
-                                   scoreChangeThreshold, centroidChangeThreshold);
+                                   scoreChangeThreshold, centroidChangeThreshold, 0.1, 10, 20, 30,
+                                   overlapScoreChangeThreshold);
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -3634,16 +3636,11 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.storeMSEScoreForMegaClusters();
     for (int iter = 0; iter < iterations; iter++) {
         printf("Started Iteration: %d\n", iter);
-        // index.reclusterAllMiniCentroidsQuant();
-        // index.fixBoundaryMiniCentroids(numFixBoundaries);
-        index.storeMSEScoreForMegaClusters();
-        index.saveOldScoreForMegaClusters();
-        // index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension, gtVecs + k * track_query_id, k,
-                                         // true);
+        index.updateOverlapHistory();
         index.reclusterAllMegaCentroids(nMegaRecluster);
         index.storeMSEScoreForMegaClusters();
         index.computeOverlapScores();
-        index.printStats();
+        // index.printStats();
 
         // Calculate and write recall after writing overlap scores
         // Write per-query recall for the first probe combination
@@ -3676,40 +3673,41 @@ void benchmark_fast_reclustering(InputParser &input) {
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         if (numMegaReclusterCentroids == 1) {
-            std::vector<vector_idx_t> megaClusterIds;
-            index.getMegaClusterIds(megaClusterIds);
-            for (auto megaClusterId : megaClusterIds) {
-                index.reclusterInternalMegaCentroid(megaClusterId);
-
-                // bool bigChangeInRecall = false;
-                // for (int i = 0; i < nMegaProbes.size(); i++) {
-                //     auto nMegaProbe = nMegaProbes[i];
-                //     for (int j = 0; j < nMiniProbes.size(); j++) {
-                //         auto nMiniProbe = nMiniProbes[j];
-                //         std::vector<double> queryRecalls;
-                //         auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                //                                  nMegaProbe,
-                //                                  nMiniProbe, queryRecalls);
-                //         auto &prevRecall = prevRecallValues[i * nMiniProbes.size() + j];
-                //         for (size_t m = 0; m < queryRecalls.size(); m++) {
-                //             if (queryRecalls[m] < prevRecall[m] - 5) {
-                //                 if (m == track_query_id) {
-                //                     bigChangeInRecall = true;
-                //                 }
-                //                 printf(
-                //                     "Warning: Recall decreased for nMegaProbes: %d, nMiniProbes: %d, Query %zu, Previous Recall: %f, Current Recall: %f\n",
-                //                     nMegaProbe, nMiniProbe, m, prevRecall[m], queryRecalls[m]);
-                //             }
-                //         }
-                //     }
-                // }
-
-                // if (bigChangeInRecall) {
-                //     index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension,
-                //                                      gtVecs + k * track_query_id, k,
-                //                                      false);
-                // }
-            }
+            index.reclusterBasedOnOverlapHistory();
+            // std::vector<vector_idx_t> megaClusterIds;
+            // index.getMegaClusterIds(megaClusterIds);
+            // for (auto megaClusterId : megaClusterIds) {
+            //     index.reclusterInternalMegaCentroid(megaClusterId);
+            //
+            //     // bool bigChangeInRecall = false;
+            //     // for (int i = 0; i < nMegaProbes.size(); i++) {
+            //     //     auto nMegaProbe = nMegaProbes[i];
+            //     //     for (int j = 0; j < nMiniProbes.size(); j++) {
+            //     //         auto nMiniProbe = nMiniProbes[j];
+            //     //         std::vector<double> queryRecalls;
+            //     //         auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+            //     //                                  nMegaProbe,
+            //     //                                  nMiniProbe, queryRecalls);
+            //     //         auto &prevRecall = prevRecallValues[i * nMiniProbes.size() + j];
+            //     //         for (size_t m = 0; m < queryRecalls.size(); m++) {
+            //     //             if (queryRecalls[m] < prevRecall[m] - 5) {
+            //     //                 if (m == track_query_id) {
+            //     //                     bigChangeInRecall = true;
+            //     //                 }
+            //     //                 printf(
+            //     //                     "Warning: Recall decreased for nMegaProbes: %d, nMiniProbes: %d, Query %zu, Previous Recall: %f, Current Recall: %f\n",
+            //     //                     nMegaProbe, nMiniProbe, m, prevRecall[m], queryRecalls[m]);
+            //     //             }
+            //     //         }
+            //     //     }
+            //     // }
+            //
+            //     // if (bigChangeInRecall) {
+            //     //     index.analyzeQueryClusterChanges(queryVecs + track_query_id * queryDimension,
+            //     //                                      gtVecs + k * track_query_id, k,
+            //     //                                      false);
+            //     // }
+            // }
         } else {
             if (reclusterOnScore) {
                 index.reclusterBasedOnScore(numMegaReclusterCentroids);
@@ -3741,7 +3739,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.printStats();
 
     }
-    index.storeMSEScoreForMegaClusters();
+    // index.storeMSEScoreForMegaClusters();
     // index.computeOverlapScores();
     index.printStats();
     if (iterations > 0) {
