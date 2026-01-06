@@ -8,10 +8,7 @@
 #include <clustering.h>
 #include <hnsw.h>
 #include <faiss/Clustering.h>
-
-namespace faiss {
-    class IndexLSH;
-}
+#include <faiss/IndexLSH.h>
 
 
 namespace orangedb {
