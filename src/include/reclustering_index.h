@@ -12,6 +12,12 @@
 
 namespace orangedb {
 
+    enum CLUSTERING_MODE {
+        HARD_LIMIT,    // 0
+        REBALANCE_CENTROIDS, // 1
+        REBALANCE_VECTORS, // 2
+    };
+
     struct ReclusteringIndexStats {
         // The number of distance computations
         uint64_t numDistanceCompForSearch = 0;
@@ -239,6 +245,18 @@ namespace orangedb {
             const float *query, vector_idx_t megaId, vector_idx_t miniId) const;
 
     private:
+        // Helper struct to hold clustering results
+        struct ClusteringResult {
+            std::vector<int64_t> assignments;
+            std::vector<int> histogram;
+            std::vector<float> centroids;
+            int numClusters;
+        };
+
+        // Core clustering logic extracted to avoid duplication
+        ClusteringResult performCoreClustering(float *data, int n, int avgClusterSize, 
+                                               int nClusters = -1, bool verbose = false);
+
         void fixBoundaryMiniCentroid(int miniCentroidId, std::unordered_set<vector_idx_t> *alreadyFixed = nullptr);
 
         void fixBoundaryMiniCentroidV2(int miniCentroidId);
@@ -290,15 +308,17 @@ namespace orangedb {
                                     size_t sample_size = 10000);
 
         void clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
-                                  std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
-                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
-
-        void clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                   std::vector<float> &centroids,
-                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters = -1);
+                                  std::vector<std::vector<float> > *clusters,
+                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds,
+                                  int nClusters = -1);
 
         void clusterDataWithRebalancing(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
-                                    std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
+                                    std::vector<float> &centroids, std::vector<std::vector<float> > *clusters,
+                                    std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
+
+        void clusterDataWithCentoidRebalancing(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                    std::vector<float> &centroids, std::vector<std::vector<float> > *clusters,
                                     std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
 
         // Generic clustering method

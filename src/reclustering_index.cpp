@@ -587,7 +587,7 @@ namespace orangedb {
             auto& cluster = miniClusters[microCentroidId];
             totalVecs += (cluster.size() / dim);
         }
-        printf("Running reclusterInternalMegaCentroid on %llu with %lu vectors\n", megaClusterId, totalVecs);
+        // printf("Running reclusterInternalMegaCentroid on %llu with %lu vectors\n", megaClusterId, totalVecs);
         if (totalVecs == 0) {
             printf("No vectors to recluster for mega centroid %llu\n", megaClusterId);
             return;
@@ -1255,11 +1255,13 @@ namespace orangedb {
         // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
         // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds,
         //                     dc.get(), dim, [](const float x, int d) { return x; });
-        if (use_rebalancing) {
-            clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds);
+        if (use_rebalancing==REBALANCE_VECTORS) {
+            clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
+        }else if (use_rebalancing==REBALANCE_CENTROIDS) {
+            clusterDataWithCentoidRebalancing(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
         }else{
-            clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds);
-        }
+            clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
+        }       
     }
 
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -1269,16 +1271,16 @@ namespace orangedb {
         // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
         // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
         //                     dc.get(), dim, [](const float x, int d) { return x; });
-        if (use_rebalancing) {
-            // This overload doesn't have clusters parameter, so we can't use rebalancing
-            // Fall back to regular FAISS clustering
-            // GILLI: check
-            clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds, nClusters);
+        
+        // This overload doesn't have clusters parameter, so we pass nullptr
+        if (use_rebalancing == REBALANCE_CENTROIDS) {
+           clusterDataWithCentoidRebalancing(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds);
+        }else if (use_rebalancing == REBALANCE_VECTORS) {
+            clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds);
         }else{
-            clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds, nClusters);
+            clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds, nClusters);
         }
     }
-
     void ReclusteringIndex::clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                              std::vector<float> &centroids,
                                              std::vector<std::vector<uint8_t> > &clusters,
@@ -1376,7 +1378,7 @@ namespace orangedb {
             printf("No vectors to rebalance\n"); // shouldnt reach here - if rebalancing is triggered, there should be vectors to rebalance
             return;
         }
-        printf("Collected %zu vectors for rebalancing\n", vector_indices.size());
+        // printf("Collected %zu vectors for rebalancing\n", vector_indices.size());
         
         // Extract the data for these vectors
         int num_vecs = vector_indices.size();
@@ -1461,17 +1463,19 @@ namespace orangedb {
             std::copy(src, src + dim, dst);
         }
         
+        /*
         printf("Rebalancing complete. New cluster sizes in region:\n");
         for (auto cluster_id : clusters_to_rebalance) {
             printf("  Cluster %lld: %d vectors\n", cluster_id, hist[cluster_id]);
         }
+        */
     }
 
-    void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+    void ReclusteringIndex::clusterDataWithCentoidRebalancing(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                                  std::vector<float> &centroids,
-                                                 std::vector<std::vector<float> > &clusters,
+                                                 std::vector<std::vector<float> > *clusters,
                                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
-        printf("Clustering %d vectors with avgClusterSize %d\n", n, avgClusterSize);
+        // printf("Clustering %d vectors with avgClusterSize %d\n", n, avgClusterSize);
         if (n == 0) {
             return;
         }
@@ -1481,19 +1485,22 @@ namespace orangedb {
         if (numClusters <= 1) {
             calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
             // Copy all data to the single cluster
-            clusters.resize(1);
-            clusters[0].resize(n * dim);
-            memcpy(clusters[0].data(), data, n * dim * sizeof(float));
+            if (clusters != nullptr) {
+                clusters->resize(1);
+                (*clusters)[0].resize(n * dim);
+                memcpy((*clusters)[0].data(), data, n * dim * sizeof(float));
+            }
             return;
         }
 
+        auto updated_num_clusters = round(numClusters * 0.85); // 90% of the original number of clusters
         faiss::ClusteringParameters cl;
         cl.niter = config.nIter;
         if (config.distanceType == IP) {
             cl.spherical = true;
         }
-        cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
-        cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
+        cl.min_points_per_centroid = getMinCentroidSize(n, updated_num_clusters);
+        cl.max_points_per_centroid = getMaxCentroidSize(n, updated_num_clusters);
         // cl.seed = -1;
         std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
         if (config.lambda > 0) {
@@ -1502,7 +1509,7 @@ namespace orangedb {
             cl.dist_modifier = distModifier.get();
             printf("cl.lambda = %f\n", lambda);
         }
-        cl.verbose = true;
+        cl.verbose = false; // GILLI: I changed this to false to avoid printing the clustering progress
         faiss::Clustering clustering(dim, numClusters, cl);
         // TODO: This is a hack
         auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
@@ -1510,6 +1517,13 @@ namespace orangedb {
 
         // Initialize the centroids
         clustering.train(n, data, index);
+
+        // see if in the initial train there are any clusters that are oversized
+        for (int i = 0; i < numClusters; i++) {
+            if (clustering.cluster_sizes[i] > config.hardClusterSizeLimit) {
+                printf("Cluster %d is oversize with size %d\n", i, clustering.cluster_sizes[i]);
+            }
+        }
 
         // Assign the centroids
         std::vector<int64_t> assign(n);
@@ -1532,7 +1546,7 @@ namespace orangedb {
 
         // Validate that no histogram is greater than 4500
         for (int i=0; i<numClusters; i++) {
-            if (config.hardClusterSizeLimit>0 && hist[i]>=config.hardClusterSizeLimit) {
+            if (config.hardClusterSizeLimit>0 && hist[i]>config.hardClusterSizeLimit) {
                 printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
             }
         }
@@ -1540,41 +1554,194 @@ namespace orangedb {
         // Copy the centroids
         centroids.resize(numClusters * dim);
         memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
-        clusters.resize(numClusters);
+        if (clusters != nullptr) {
+            clusters->resize(numClusters);
+            for (int i = 0; i < numClusters; i++) {
+                std::vector<float> cluster(hist[i] * dim);
+                (*clusters)[i] = std::move(cluster);
+            }
+        }
         clusterVectorIds.resize(numClusters);
         for (int i = 0; i < numClusters; i++) {
-            std::vector<float> cluster(hist[i] * dim);
-            clusters[i] = std::move(cluster);
             std::vector<vector_idx_t> vectorId(hist[i]);
             clusterVectorIds[i] = std::move(vectorId);
             hist[i] = 0;
         }
 
-        auto total_size = 0;
-        for (int i = 0; i < numClusters; i++) {
-            total_size += clusters[i].size() / dim;
+        if (clusters != nullptr) {
+            auto total_size = 0;
+            for (int i = 0; i < numClusters; i++) {
+                total_size += (*clusters)[i].size() / dim;
+            }
+            assert(total_size == n);
         }
-        assert(total_size == n);
 
         for (int i = 0; i < n; i++) {
             auto assignId = assign[i];
             auto idx = hist[assignId];
-            auto &cluster = clusters[assignId];
-            auto maxClusterSize = cluster.size() / dim;
-            memcpy(cluster.data() + static_cast<size_t>(idx) * dim,
-                   data + static_cast<size_t>(i) * dim,
-                   dim * sizeof(float));
+            // Copy cluster data if requested
+            if (clusters != nullptr) {
+                auto &cluster = (*clusters)[assignId];
+                // auto maxClusterSize = cluster.size() / dim;
+                memcpy(cluster.data() + static_cast<size_t>(idx) * dim,
+                       data + static_cast<size_t>(i) * dim,
+                       dim * sizeof(float));
+            }
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
         }
         stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
     }
 
+    void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                                                 std::vector<float> &centroids,
+                                                 std::vector<std::vector<float> > *clusters,
+                                                 std::vector<std::vector<vector_idx_t> > &clusterVectorIds,
+                                                 int nClusters) {
+        // printf("Clustering %d vectors with avgClusterSize %d\n", n, avgClusterSize);
+        if (n == 0) {
+            return;
+        }
+        
+        // Create the clustering object
+        auto numClusters = nClusters > 0 ? nClusters : getNumCentroids(n, avgClusterSize);
+        // printf("Performing reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
+        
+        if (numClusters <= 1) {
+            calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
+            // Copy all data to the single cluster if clusters output is requested
+            if (clusters != nullptr) {
+                clusters->resize(1);
+                (*clusters)[0].resize(n * dim);
+                memcpy((*clusters)[0].data(), data, n * dim * sizeof(float));
+            }
+            return;
+        }
+
+        faiss::ClusteringParameters cl;
+        cl.niter = config.nIter;
+        if (config.distanceType == IP) {
+            cl.spherical = true;
+        }
+        cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
+        cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
+        // cl.seed = -1;
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
+        if (config.lambda > 0) {
+            auto lambda = findAppropriateLambda(data, n, dim, numClusters);
+            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, lambda);
+            cl.dist_modifier = distModifier.get();
+            printf("cl.lambda = %f\n", lambda);
+        }
+        cl.verbose = false; // GILLI: I changed this to false to avoid printing the clustering progress
+        faiss::Clustering clustering(dim, numClusters, cl);
+        // TODO: This is a hack
+        auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
+        auto index = faiss::IndexFlat(dim, metric_type);
+
+        // Initialize the centroids
+        clustering.train(n, data, index);
+
+        // Assign the centroids
+        std::vector<int64_t> assign(n);
+        std::vector<float> distances(n);
+        std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
+        faiss::SearchParameters params;
+
+        if (config.hardClusterSizeLimit > 0) {
+            hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
+            params.dist_modifier = hardLimitDistModifier.get();
+            printf("hard limit = %llu\n", config.hardClusterSizeLimit);
+        }
+        index.search(n, data, 1, distances.data(), assign.data(), &params);
+
+        // Build histogram
+        std::vector<int> hist(numClusters, 0);
+        for (int i = 0; i < n; i++) {
+            if (assign[i] >= 0 && assign[i] < numClusters) {
+                hist[assign[i]]++;
+            } else {
+                printf("WARNING: Invalid assignment at i=%d: assign[i]=%ld (numClusters=%d)\n",
+                       i, assign[i], numClusters);
+            }
+        }
+
+        // Validate that no histogram is greater than hard limit
+        for (int i = 0; i < numClusters; i++) {
+            if (config.hardClusterSizeLimit > 0 && hist[i] > config.hardClusterSizeLimit) {
+                printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
+            }
+        }
+
+        // Copy the centroids
+        centroids.resize(numClusters * dim);
+        memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
+        
+        // Allocate space for cluster data if requested
+        if (clusters != nullptr) {
+            clusters->resize(numClusters);
+            for (int i = 0; i < numClusters; i++) {
+                std::vector<float> cluster(hist[i] * dim);
+                (*clusters)[i] = std::move(cluster);
+            }
+        }
+        
+        // Always allocate clusterVectorIds
+        clusterVectorIds.resize(numClusters);
+        for (int i = 0; i < numClusters; i++) {
+            std::vector<vector_idx_t> vectorId(hist[i]);
+            clusterVectorIds[i] = std::move(vectorId);
+        }
+        
+        // Reset histogram for use as insertion counters
+        std::fill(hist.begin(), hist.end(), 0);
+
+        // Validate total size if clusters are requested
+        if (clusters != nullptr) {
+            auto total_size = 0;
+            for (int i = 0; i < numClusters; i++) {
+                total_size += (*clusters)[i].size() / dim;
+            }
+            assert(total_size == n);
+        }
+
+        // Assign vectors to clusters
+        for (int i = 0; i < n; i++) {
+            auto assignId = assign[i];
+            if (assignId < 0 || assignId >= numClusters) {
+                printf("ERROR: Invalid assignId = %ld for vector i = %d (numClusters = %d)\n", assignId, i, numClusters);
+                continue;  // Skip this vector
+            }
+            
+            auto idx = hist[assignId];
+            if (idx >= clusterVectorIds[assignId].size()) {
+                printf("ERROR: idx = %d >= clusterVectorIds size = %lu for i = %d, assignId = %ld\n",
+                       idx, clusterVectorIds[assignId].size(), i, assignId);
+                continue;  // Skip this vector
+            }
+            
+            // Copy cluster data if requested
+            if (clusters != nullptr) {
+                auto &cluster = (*clusters)[assignId];
+                // auto maxClusterSize = cluster.size() / dim;
+                memcpy(cluster.data() + static_cast<size_t>(idx) * dim,
+                       data + static_cast<size_t>(i) * dim,
+                       dim * sizeof(float));
+            }
+            
+            clusterVectorIds[assignId][idx] = vectorIds[i];
+            hist[assignId]++;
+        }
+        
+        stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
+    }
+
     void ReclusteringIndex::clusterDataWithRebalancing(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                                         std::vector<float> &centroids,
-                                                        std::vector<std::vector<float> > &clusters,
+                                                        std::vector<std::vector<float> > *clusters,
                                                         std::vector<std::vector<vector_idx_t> > &clusterVectorIds) {
-        printf("Clustering %d vectors with avgClusterSize %d\n", n, avgClusterSize);
+        
+                                                            //printf("Clustering %d vectors with avgClusterSize %d\n", n, avgClusterSize);
         if (n == 0) {
             return;
         }
@@ -1584,9 +1751,11 @@ namespace orangedb {
         if (numClusters <= 1) {
             calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
             // Copy all data to the single cluster
-            clusters.resize(1);
-            clusters[0].resize(n * dim);
-            memcpy(clusters[0].data(), data, n * dim * sizeof(float));
+            if (clusters != nullptr) {
+                clusters->resize(1);
+                (*clusters)[0].resize(n * dim);
+                memcpy((*clusters)[0].data(), data, n * dim * sizeof(float));
+            }
             return;
         }
 
@@ -1702,128 +1871,43 @@ namespace orangedb {
         // Copy the centroids
         centroids.resize(numClusters * dim);
         memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
-        clusters.resize(numClusters);
+        if (clusters != nullptr) {
+            clusters->resize(numClusters);
+            for (int i = 0; i < numClusters; i++) {
+                std::vector<float> cluster(hist[i] * dim);
+                (*clusters)[i] = std::move(cluster);
+            }
+        }
         clusterVectorIds.resize(numClusters);
         for (int i = 0; i < numClusters; i++) {
-            std::vector<float> cluster(hist[i] * dim);
-            clusters[i] = std::move(cluster);
             std::vector<vector_idx_t> vectorId(hist[i]);
             clusterVectorIds[i] = std::move(vectorId);
-            hist[i] = 0;
         }
 
-        auto total_size = 0;
-        for (int i = 0; i < numClusters; i++) {
-            total_size += clusters[i].size() / dim;
+        if (clusters != nullptr) {
+            auto total_size = 0;
+            for (int i = 0; i < numClusters; i++) {
+                total_size += (*clusters)[i].size() / dim;
+            }
+            assert(total_size == n);
         }
-        assert(total_size == n);
 
         for (int i = 0; i < n; i++) {
             auto assignId = assign[i];
             auto idx = hist[assignId];
-            auto &cluster = clusters[assignId];
-            auto maxClusterSize = cluster.size() / dim;
-            memcpy(cluster.data() + static_cast<size_t>(idx) * dim,
-                    data + static_cast<size_t>(i) * dim,
-                    dim * sizeof(float));
+            // Copy cluster data if requested
+            if (clusters != nullptr) {
+                auto &cluster = (*clusters)[assignId];
+                // auto maxClusterSize = cluster.size() / dim;
+                memcpy(cluster.data() + static_cast<size_t>(idx) * dim,
+                       data + static_cast<size_t>(i) * dim,
+                       dim * sizeof(float));
+            }
             clusterVectorIds[assignId][idx] = vectorIds[i];
             hist[assignId]++;
         }
         stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
 }
-
-    void ReclusteringIndex::clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
-                                                 std::vector<float> &centroids,
-                                                 std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters) {
-        // Create the clustering object
-        auto numClusters = nClusters > 0 ? nClusters : getNumCentroids(n, avgClusterSize);
-        // printf("Performing mega-reclustering on %d vectors with %d clusters %d avgClusterSize\n", n, numClusters, avgClusterSize);
-        if (numClusters <= 1) {
-            calcMeanCentroid(data, vectorIds, n, dim, centroids, clusterVectorIds);
-            return;
-        }
-
-        faiss::ClusteringParameters cl;
-        cl.niter = config.nIter;
-        // cl.seed = -1;
-        if (config.distanceType == IP) {
-            cl.spherical = true;
-        }
-        cl.min_points_per_centroid = getMinCentroidSize(n, numClusters);
-        cl.max_points_per_centroid = getMaxCentroidSize(n, numClusters);
-        std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
-        if (config.lambda > 0) {
-            auto lambda = findAppropriateLambda(data, n, dim, numClusters);
-            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, lambda);
-            cl.dist_modifier = distModifier.get();
-            printf("cl.lambda = %f\n", lambda);
-        }
-        cl.verbose = true;
-        faiss::Clustering clustering(dim, numClusters, cl);
-        // TODO: This is a hack
-        auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
-        auto index = faiss::IndexFlat(dim, metric_type);
-
-        // Initialize the centroids
-        clustering.train(n, data, index);
-
-        // Assign the centroids
-        std::vector<int64_t> assign(n);
-        std::vector<float> distances(n);
-        std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
-        faiss::SearchParameters params;
-        if (config.hardClusterSizeLimit > 0) {
-            hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
-            params.dist_modifier = hardLimitDistModifier.get();
-            printf("hard limit = %llu\n", config.hardClusterSizeLimit);
-        }
-        index.search(n, data, 1, distances.data(), assign.data(), &params);
-
-        // Get the hist
-        std::vector<int> hist(numClusters, 0);
-        for (int i = 0; i < n; i++) {
-            if (assign[i] >= 0 && assign[i] < numClusters) {
-                hist[assign[i]]++;
-            } else {
-                printf("WARNING: Invalid assignment at i=%d: assign[i]=%ld (numClusters=%d)\n",
-                       i, assign[i], numClusters);
-            }
-        }
-
-        // Validate that no histo is greating than 4500
-        for (int i = 0; i < numClusters; i++) {
-            if (config.hardClusterSizeLimit > 0 && hist[i] >= config.hardClusterSizeLimit) {
-                printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
-            }
-        }
-
-        // Copy the centroids
-        centroids.resize(numClusters * dim);
-        memcpy(centroids.data(), clustering.centroids.data(), numClusters * dim * sizeof(float));
-        clusterVectorIds.resize(numClusters);
-        for (int i = 0; i < numClusters; i++) {
-            std::vector<vector_idx_t> vectorId(hist[i]);
-            clusterVectorIds[i] = vectorId;
-            hist[i] = 0;
-        }
-
-        for (int i = 0; i < n; i++) {
-            auto assignId = assign[i];
-            if (assignId < 0 || assignId >= numClusters) {
-                printf("ERROR: Invalid assignId = %ld for vector i = %d (numClusters = %d)\n", assignId, i, numClusters);
-                continue;  // Skip this vector
-            }
-            auto idx = hist[assignId];
-            if (idx >= clusterVectorIds[assignId].size()) {
-                printf("ERROR: idx = %d >= clusterVectorIds size = %lu for i = %d, assignId = %ld\n",
-                       idx, clusterVectorIds[assignId].size(), i, assignId);
-                continue;  // Skip this vector
-            }
-            clusterVectorIds[assignId][idx] = vectorIds[i];
-            hist[assignId]++;
-        }
-        stats.numDistanceCompForRecluster += config.nIter * numClusters * n;
-    }
 
     template <typename T>
     void ReclusteringIndex::clusterData_(T *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -2322,12 +2406,14 @@ namespace orangedb {
         double worstRealAvg = (k > 0) ? worstRealSum / k : 0.0;
 
         // Print aggregated statistics
+        /*
         printf("Mega Centroid %d [%zu mini clusters]:\n", megaCentroidId, miniIds.size());
         printf("  Overall Stats - Approx Overlap: avg=%.4f, power_avg=%.4f | Real Overlap: avg=%.4f, power_avg=%.4f\n",
                avgOverlapRatio, powerAvgOverlapRatio, avgRealOverlapScore, powerAvgRealOverlapScore);
         printf("  Worst %d Elements - Approx Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f | Real Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f\n",
                k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
                worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
+        */
         avgRealOverlapScores[megaCentroidId] = powerAvgRealOverlapScore;
         overlapScores[megaCentroidId] = powerAvgOverlapRatio;
     }
@@ -2644,7 +2730,7 @@ namespace orangedb {
             return;
         }
 
-        printf("ReclusteringIndex::printChangeClusterStats\n");
+        // printf("ReclusteringIndex::printChangeClusterStats\n");
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numOldMegaCentroids = oldMegaCentroids.size() / dim;
         auto dc = getDistanceComputer(oldMegaCentroids.data(), numOldMegaCentroids);
@@ -2720,6 +2806,7 @@ namespace orangedb {
                 double relativeScoreChange = (std::abs(oldMegaClusteringScore[oldCentroidId]) > 1e-9) ?
                     (scoreChange / std::abs(oldMegaClusteringScore[oldCentroidId])) : 0.0;
 
+                /*
                 printf("Mega Centroid %d: Old id = %d, Dist to Old = %.6f, RelChange(origin) = %.6f, RelChange(centroid) = %.6f, Score = %.4f->%.4f, RelScoreChange = %.6f\n",
                        i,
                        oldCentroidId,
@@ -2729,6 +2816,7 @@ namespace orangedb {
                        oldMegaClusteringScore[oldCentroidId],
                        megaClusteringScore[i],
                        relativeScoreChange);
+                */
 
                 // Update statistics
                 validCentroids++;
@@ -2757,18 +2845,19 @@ namespace orangedb {
                 }
 
             } else {
-                printf("Mega Centroid %d: No old centroid found!\n", i);
+                // printf("Mega Centroid %d: No old centroid found!\n", i);
             }
         }
 
         // Print aggregated statistics
         if (validCentroids > 0) {
-            printf("\n=== Aggregated Statistics ===\n");
-            printf("Total centroids: %d\n", validCentroids);
-            printf("Average relative change (origin-based): %.6f\n", totalRelativeChange / validCentroids);
-            printf("Average relative change (centroid-based): %.6f\n", totalRelativeChangeCentroid / validCentroids);
-            printf("Average relative score change: %.6f\n", totalRelativeScoreChange / validCentroids);
+            // printf("\n=== Aggregated Statistics ===\n");
+            // printf("Total centroids: %d\n", validCentroids);
+            // printf("Average relative change (origin-based): %.6f\n", totalRelativeChange / validCentroids);
+            // printf("Average relative change (centroid-based): %.6f\n", totalRelativeChangeCentroid / validCentroids);
+            //printf("Average relative score change: %.6f\n", totalRelativeScoreChange / validCentroids);
 
+            /*
             printf("\n=== Origin-Based Relative Change Distribution ===\n");
             for (size_t t = 0; t < changeThresholds.size(); t++) {
                 printf("  < %.2f (%.0f%%):\t%d (%.1f%%)\n",
@@ -2794,7 +2883,8 @@ namespace orangedb {
                        countRelativeScoreChange[t],
                        100.0 * countRelativeScoreChange[t] / validCentroids);
             }
-
+            */
+            
             // Print overlap score statistics if available
             if (overlapScores.size() == numMegaCentroids) {
                 double overlapMin = std::numeric_limits<double>::max();
@@ -2813,8 +2903,8 @@ namespace orangedb {
                 double overlapAvg = (overlapValidCount > 0) ? overlapSum / overlapValidCount : 0.0;
                 double overlapPowerAvg = computePowerAvgOnWorstElement(overlapScores);
                 printf("\n=== Overlap Score Statistics ===\n");
-                printf("Overlap scores available for %d centroids\n", overlapValidCount);
-                printf("Min: %.6f, Max: %.6f, Avg: %.6f, Power Avg (worst): %.6f\n",
+                printf("Overlap scores available for %d centroids: ", overlapValidCount);
+                printf("Min: %.6f, Max: %.6f, Avg: %.6f, Power Avg (worst): %.6f, ",
                        overlapMin, overlapMax, overlapAvg, overlapPowerAvg);
                 printf("Threshold: %.6f\n", config.overlappingScoreThreshold);
             } else {
@@ -2822,6 +2912,58 @@ namespace orangedb {
                 printf("Overlap scores not available (expected %lu, got %zu)\n", numMegaCentroids, overlapScores.size());
             }
 
+            // Print MSE score of L2 clusters (mega) statistics if available
+            if (megaClusteringScore.size() == numMegaCentroids) {
+                double mseMin = std::numeric_limits<double>::max();
+                double mseMax = std::numeric_limits<double>::lowest();
+                double mseSum = 0.0;
+                int mseValidCount = 0;
+                
+                for (size_t i = 0; i < megaClusteringScore.size(); i++) {
+                    double score = megaClusteringScore[i];
+                    mseMin = std::min(mseMin, score);
+                    mseMax = std::max(mseMax, score);
+                    mseSum += score;
+                    mseValidCount++;
+                }
+                
+                double mseAvg = (mseValidCount > 0) ? mseSum / mseValidCount : 0.0;
+                printf("\n=== MSE Score Statistics (L2 Clusters) ===\n");
+                printf("MSE scores available for %d centroids: ", mseValidCount);
+                printf("Min: %.6f, Max: %.6f, Avg: %.6f\n",
+                       mseMin, mseMax, mseAvg);
+            } else {
+                printf("\n=== MSE Score Statistics (L2 Clusters) ===\n");
+                printf("MSE scores not available (expected %lu, got %zu)\n", numMegaCentroids, megaClusteringScore.size());
+            }
+
+            // Print MSE score of L1 clusters (mini) statistics if available
+            auto numMiniCentroids = miniCentroids.size() / dim;
+            if (miniClusteringScore.size() == numMiniCentroids) {
+                double mseMin = std::numeric_limits<double>::max();
+                double mseMax = std::numeric_limits<double>::lowest();
+                double mseSum = 0.0;
+                int mseValidCount = 0;
+                
+                for (size_t i = 0; i < miniClusteringScore.size(); i++) {
+                    double score = miniClusteringScore[i];
+                    mseMin = std::min(mseMin, score);
+                    mseMax = std::max(mseMax, score);
+                    mseSum += score;
+                    mseValidCount++;
+                }
+                
+                double mseAvg = (mseValidCount > 0) ? mseSum / mseValidCount : 0.0;
+                printf("\n=== MSE Score Statistics (L1 Clusters) ===\n");
+                printf("MSE scores available for %d centroids: ", mseValidCount);
+                printf("Min: %.6f, Max: %.6f, Avg: %.6f\n",
+                       mseMin, mseMax, mseAvg);
+            } else {
+                printf("\n=== MSE Score Statistics (L1 Clusters) ===\n");
+                printf("MSE scores not available (expected %lu, got %zu)\n", numMiniCentroids, miniClusteringScore.size());
+            }
+            
+            /*
             printf("\nNumber of mega centroids that should NOT be reclustered (RelScoreChange < %.6f and RelChange(centroid) < %.6f): %d (%.1f%%)\n",
                 config.scoreChangeThreshold,
                 config.centroidChangeThreshold,
@@ -2834,6 +2976,7 @@ namespace orangedb {
                        shouldReclusterCountWithOverlapScore,
                        100.0 * shouldReclusterCountWithOverlapScore / validCentroids);
             }
+            */
         }
     }
 
@@ -3624,8 +3767,7 @@ namespace orangedb {
     void ReclusteringIndex::printStats() {
         printf("ReclusteringIndex::printStats\n");
         // Print the number of mega clusters
-        printf("Number of mega clusters: %zu\n", megaCentroids.size() / dim);
-        printf("Number of mini clusters: %zu\n", miniCentroids.size() / dim);
+        printf("Number of mega clusters: %zu, number of mini clusters: %zu\n", megaCentroids.size() / dim, miniCentroids.size() / dim);
         // print min, max, avg size of the clusters
         auto minSize = std::numeric_limits<size_t>::max();
         size_t maxSize = 0;
@@ -3638,11 +3780,10 @@ namespace orangedb {
             avgSize += size;
             clusterSizes.push_back(size);
         }
-        printf("Min size of clusters: %zu\n", minSize);
-        printf("Max size of clusters: %zu\n", maxSize);
-        printf("Avg size of clusters: %zu\n", avgSize / miniClusters.size());
+        printf("L1 cluster size: Min: %zu, Max: %zu, Avg: %zu\n", minSize, maxSize, avgSize / miniClusters.size());
         // Print top 10 largest clusters and smallest clusters
         std::sort(clusterSizes.begin(), clusterSizes.end());
+       /*
         printf("Top 10 smallest clusters sizes: ");
         for (int i = 0; i < 100 && i < clusterSizes.size(); i++) {
             printf("%zu ", clusterSizes[i]);
@@ -3654,7 +3795,8 @@ namespace orangedb {
             printf("%zu ", clusterSizes[clusterSizes.size() - 1 - i]);
         }
         printf("\n");
-        printf("Total number of vectors: %zu/%zu\n", avgSize, size);
+        */
+        //printf("Total number of vectors: %zu/%zu\n", avgSize, size);
         // Print min, max and avg for mega clusters
         auto megaMinSize = std::numeric_limits<size_t>::max();
         size_t megaMaxSize = 0;
@@ -3665,9 +3807,7 @@ namespace orangedb {
             megaMaxSize = std::max(megaMaxSize, size);
             megaAvgSize += size;
         }
-        printf("Min size of mega clusters: %zu\n", megaMinSize);
-        printf("Max size of mega clusters: %zu\n", megaMaxSize);
-        printf("Avg size of mega clusters: %zu\n", megaAvgSize / megaMiniCentroidIds.size());
+        printf("L2 cluster size: Min: %zu, Max: %zu, Avg: %zu\n", megaMinSize, megaMaxSize, megaAvgSize / megaMiniCentroidIds.size());
 
         // Print total number of mini clusters with bad silhouette score
         auto totalBadScore = 0;
@@ -3733,6 +3873,7 @@ namespace orangedb {
         //     printf("\n\n");
         // }
 
+        /*
         if (!miniClusterSubCells.empty()) {
             // Print stats for subcells
             size_t totalSubCells = 0;
@@ -3748,6 +3889,7 @@ namespace orangedb {
             printf("Avg number of subcells: %zu\n", avgSubCells);
             printf("Max number of subcells: %lu\n", maxSubCells);
         }
+        */
 
         // printf("Number of quantized mini clusters: %zu\n", quantizedMiniCentroids.size() / quantizer->codeSize);
         // // print min, max, avg size of the quantized clusters
@@ -3782,11 +3924,14 @@ namespace orangedb {
         // Print top 5 scores for mega clusters in increasing order
         // std::vector<std::pair<double, int>> scores;
 
+        
+        /*
         // Uncomment!
         for (int i = 0; i < megaClusteringScore.size(); i++) {
             printf("Mega cluster %d score: %f\n", i, megaClusteringScore[i]);
             // scores.push_back(std::make_pair(megaClusteringScore[i], i));
         }
+        */
 
         // std::sort(scores.begin(), scores.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
         // printf("Top 5 mega cluster scores:\n");
@@ -3795,8 +3940,8 @@ namespace orangedb {
         // }
 
         // Print stats
-        printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
-        printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
+        // printf("Write amplification: %f\n", static_cast<double>(stats.totalDataWrittenBySystem) / stats.totalDataWrittenByUser);
+        //printf("Total Distance Computations for reclustering: %lld\n", stats.numDistanceCompForRecluster);
         printChangeClusterStats();
     }
 

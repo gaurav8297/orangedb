@@ -560,6 +560,51 @@ void Clustering::train_encoded(
         index.reset();
         index.add(k, best_centroids.data());
     }
+
+    // Compute final cluster sizes by doing one last assignment pass
+    cluster_sizes.resize(k);
+    std::fill(cluster_sizes.begin(), cluster_sizes.end(), 0);
+
+    // Re-use the assign and dis arrays for final assignment
+    if (!codec) {
+        SearchParameters params;
+        params.dist_modifier = nullptr; // No distance modifier for final count
+        index.search(
+                nx,
+                reinterpret_cast<const float*>(x),
+                1,
+                dis.get(),
+                assign.get(),
+                &params);
+    } else {
+        // search by blocks of decode_block_size vectors
+        size_t code_size = codec->sa_code_size();
+        SearchParameters params;
+        params.dist_modifier = nullptr;
+        for (size_t i0 = 0; i0 < nx; i0 += decode_block_size) {
+            size_t i1 = i0 + decode_block_size;
+            if (i1 > nx) {
+                i1 = nx;
+            }
+            codec->sa_decode(
+                    i1 - i0, x + code_size * i0, decode_buffer.data());
+            index.search(
+                    i1 - i0,
+                    decode_buffer.data(),
+                    1,
+                    dis.get() + i0,
+                    assign.get() + i0,
+                    &params);
+        }
+    }
+
+    // Count assignments per cluster
+    for (idx_t i = 0; i < nx; i++) {
+        idx_t ci = assign[i];
+        if (ci >= 0 && ci < k) {
+            cluster_sizes[ci]++;
+        }
+    }
 }
 
 Clustering1D::Clustering1D(int k) : Clustering(1, k) {}

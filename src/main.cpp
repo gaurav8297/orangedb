@@ -2637,7 +2637,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             num_recall_below_75++;
         }
         queryRecalls[i] = localRecall;
-        printf("Query %d: Recall: %f%%\n", i, localRecall);
+        // printf("Query %d: Recall: %f%%\n", i, localRecall);
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
     printf("Max Recall: %f, Min Recall: %f, Num Recall below 75%%: %f\n", max_recall, min_recall, num_recall_below_75);
@@ -3329,8 +3329,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     float centroidChangeThreshold = stof(input.getCmdOption("-centroidChangeThreshold"));
     const bool useMSEToRecluster = stoi(input.getCmdOption("-useMSEToRecluster"));
     const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
-    const bool use_rebase = stoi(input.getCmdOption("-use_rebase"));
-
+    const int clustering_mode = stoi(input.getCmdOption("-clustering_mode"));
+    
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -3392,7 +3392,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                     printf("Working on parquet file: %s\n", filePaths[j].c_str());
                 }
                 auto data = readParquetFiles(paths, &baseDimension, &baseNumVectors);
-                index.naiveInsert(data, baseNumVectors, use_rebase);
+                index.naiveInsert(data, baseNumVectors, clustering_mode);
                 totalVectors += baseNumVectors;
                 delete[] data;
             }
@@ -3401,9 +3401,9 @@ void benchmark_fast_reclustering(InputParser &input) {
             if (quantBuild) {
                 index.trainQuant(baseVecs, baseNumVectors);
             }
-            printf("Building index with realtime reclustering\n");
+            //printf("Building index with realtime reclustering\n");
             auto chunkSize = baseNumVectors / numInserts;
-            printf("Chunk size: %lu\n", chunkSize);
+            //printf("Chunk size: %lu\n", chunkSize);
             auto startReclusterPoint = (numInserts / 2) - 1;
             for (long i = 0; i < numInserts; i++) {
                 auto start = i * chunkSize;
@@ -3411,11 +3411,11 @@ void benchmark_fast_reclustering(InputParser &input) {
                 if (i == (numInserts - 1)) {
                     end = baseNumVectors;
                 }
-                printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+                //printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
                 if (quantBuild) {
                     index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
                 } else {
-                    index.naiveInsert(baseVecs + start * baseDimension, end - start, use_rebase);
+                    index.naiveInsert(baseVecs + start * baseDimension, end - start, clustering_mode);
                 }
 
                 // Recluster after 50 inserts, then every 2 inserts thereafter
@@ -3445,7 +3445,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 }
             }
         }
-        printf("Writing index to disk\n");
+        //printf("Writing index to disk\n");
         index.flush_to_disk(storagePath);
     }
     // index.quantizeVectors();
@@ -3687,7 +3687,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     if (iterations > 0) {
         // index.storeScoreForMegaClusters();
         // index.printStats();
-        printf("Flushing to disk\n");
+        //printf("Flushing to disk\n");
         index.flush_to_disk(storagePath);
     }
 }

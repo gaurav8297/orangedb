@@ -37,7 +37,7 @@
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 1 \
-  -use_rebase 0
+  -clustering_mode 0
 
 # with hard limit 600 - live UMAP
 ./build/release/bin/orangedb_main \
@@ -74,7 +74,7 @@
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 1 \
-  -use_rebase 0
+  -clustering_mode 0
 
 # no hard limit - offline UMAP
 ./build/release/bin/orangedb_main \
@@ -111,7 +111,7 @@
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 2 \
-  -use_rebase 0
+  -clustering_mode 0
 
 # with hard limit 600 - offline UMAP
 ./build/release/bin/orangedb_main \
@@ -148,7 +148,7 @@
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 2 \
-  -use_rebase 0 \
+  -clustering_mode 0 \
   > output_hard_limit_600_offline_umap.txt 2>&1
 
 
@@ -205,7 +205,7 @@
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 1 \
-  -use_rebase 0
+  -clustering_mode 0
 
 # with hard limit 600
 ./build/release/bin/orangedb_main \
@@ -242,5 +242,42 @@
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 1 \
-  -use_rebase 0
+  -clustering_mode 0
 
+
+
+./build/release/bin/orangedb_main \
+  -run benchmarkFastReclustering \
+  -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs \
+  -queryVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/query.fvecs \
+  -groundTruthPath /Users/gilli.hadayo/orangedb/data/siftsmall/gt.bin \
+  -k 100 \
+  -numInserts 1 \
+  -numVectors 10000 \
+  -numIters 20 \
+  -megaCentroidSize 5 \
+  -miniCentroidSize 150 \
+  -iterations 1 \
+  -lambda 0 \
+  -nMegaProbes 4 \
+  -nMiniProbes 40 \
+  -numQueries 50 \
+  -readFromDisk 0 \
+  -storagePath /Users/gilli.hadayo/orangedb/data/siftsmall/reclustering_fast_index.bin \
+  -isParquet 0 \
+  -numMegaReclusterCentroids 1 \
+  -reclusterOnScore 0 \
+  -numThreads 1 \
+  -useIP 0 \
+  -quantTrainPercentage 0.0 \
+  -quantBuild 0 \
+  -nMegaRecluster 0 \
+  -nFiles 1 \
+  -hardClusterSizeLimit 200 \
+  -kmeansSamplingRatio 1.0 \
+  -numFixBoundaries 0 \
+  -scoreChangeThreshold 0.01 \
+  -centroidChangeThreshold 0.01 \
+  -useMSEToRecluster 0 \
+  -umap_mode 2 \
+  -clustering_mode 0 

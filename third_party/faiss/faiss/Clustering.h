@@ -234,6 +234,10 @@ struct Clustering : ClusteringParameters {
     /// stats at every iteration of clustering
     std::vector<ClusteringIterationStats> iteration_stats;
 
+    /// number of vectors assigned to each cluster after training (size k)
+    /// populated after train() completes
+    std::vector<idx_t> cluster_sizes; // GILLI: relative cluster sizes - should this be a field or an output of .train()?
+
     Clustering(int d, int k);
     Clustering(int d, int k, const ClusteringParameters& cp);
 
