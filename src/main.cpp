@@ -3604,8 +3604,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     // printf("Recall: %f, Recall without bad clusters: %f, Recall with bad clusters: %f\n", recall, recallWithoutBadClusters, recallWithBadCluster);
     // index.reclusterAllMegaCentroids(nMegaRecluster);
     // index.flush_to_disk(storagePath);
-    index.storeMSEScoreForMegaClusters();
-    index.computeOverlapScores();
+    // index.storeMSEScoreForMegaClusters();
+    // index.computeOverlapScores();
     index.printStats();
 
     std::vector<std::vector<double>> prevRecallValues;
