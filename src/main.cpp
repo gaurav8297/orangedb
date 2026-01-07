@@ -3514,25 +3514,25 @@ void benchmark_fast_reclustering(InputParser &input) {
                     index.naiveInsert(data + batchStart * baseDimension, batchSize);
                     totalVectors += batchSize;
                     batchCount++;
-                }
-                delete[] data;
 
-                if (fileIdx == numFiles - 2) {
-                    // One file before last, adjust insertsPerFile to match total numInserts. Run reclustering
-                    index.storeMSEScoreForMegaClusters();
-                    index.computeOverlapScores();
-                    // Run 6 iteration of reclustering
-                    for (int iter = 0; iter < iterations; iter++) {
-                        printf("Reclustering Iteration: %d\n", iter);
-                        index.updateOverlapHistory();
-                        index.reclusterAllMegaCentroids(nMegaRecluster);
+                    if (fileIdx == numFiles - 1 && batchIdx == insertsPerFile - 2) {
+                        // One file before last, adjust insertsPerFile to match total numInserts. Run reclustering
                         index.storeMSEScoreForMegaClusters();
                         index.computeOverlapScores();
-                        index.reclusterBasedOnOverlapHistory();
-                        index.printStats();
-                        printf("Reclustering Iteration %d completed\n", iter);
+                        // Run 6 iteration of reclustering
+                        for (int iter = 0; iter < iterations; iter++) {
+                            printf("Reclustering Iteration: %d\n", iter);
+                            index.updateOverlapHistory();
+                            index.reclusterAllMegaCentroids(nMegaRecluster);
+                            index.storeMSEScoreForMegaClusters();
+                            index.computeOverlapScores();
+                            index.reclusterBasedOnOverlapHistory();
+                            index.printStats();
+                            printf("Reclustering Iteration %d completed\n", iter);
+                        }
                     }
                 }
+                delete[] data;
             }
             printf("Total vectors inserted: %zu in %d batches\n", totalVectors, batchCount);
         } else {
