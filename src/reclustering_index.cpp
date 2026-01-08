@@ -1255,15 +1255,17 @@ namespace orangedb {
         // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
         // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds,
         //                     dc.get(), dim, [](const float x, int d) { return x; });
+        
+        // Only use rebalancing for L1 (mini clusters), not for L2 (mega clusters)
         if (!is_clustering_centroids) {
             if (use_rebalancing==REBALANCE_VECTORS) {
                 clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
-            }else if (use_rebalancing==REBALANCE_CENTROIDS) {
+            } else if (use_rebalancing==REBALANCE_CENTROIDS) {
                 clusterDataWithCentoidRebalancing(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
             } else {
                 clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
             }
-        }else{
+        } else {
             clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
         }       
     }
@@ -1277,15 +1279,16 @@ namespace orangedb {
         //                     dc.get(), dim, [](const float x, int d) { return x; });
         
         // This overload doesn't have clusters parameter, so we pass nullptr
+        // Only use rebalancing for L1 (mini clusters), not for L2 (mega clusters)
         if (!is_clustering_centroids) {
             if (use_rebalancing == REBALANCE_CENTROIDS) {
                 clusterDataWithCentoidRebalancing(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds);
-            }else if (use_rebalancing == REBALANCE_VECTORS) {
+            } else if (use_rebalancing == REBALANCE_VECTORS) {
                 clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds);
-            }else{
+            } else {
                 clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds, nClusters);
             }
-        }else{
+        } else {
             clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds, nClusters);
         }
     }
@@ -1609,7 +1612,7 @@ namespace orangedb {
             }
             else {
                 // no clusters are oversized. split the biggest clusters into 2 new clusters
-                for (int i = 0; i < updated_num_clusters; i++) {
+                for (int i = 0; i < (numClusters - updated_num_clusters); i++) {
                     clusters_to_rebalance.push_back(std::make_pair(i, clustering.init_cluster_sizes[i]));
                     num_of_centroids_to_split_to.push_back(2);
                 }

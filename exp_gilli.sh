@@ -213,6 +213,7 @@
   -umap_mode 1 \
   -clustering_mode 0
 
+
 ./build/release/bin/orangedb_main \
   -run benchmarkFastReclustering \
   -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs \
@@ -221,7 +222,7 @@
   -k 100 \
   -numInserts 1 \
   -numVectors 10000 \
-  -numIters 20 \
+  -numIters 5 \
   -megaCentroidSize 5 \
   -miniCentroidSize 150 \
   -iterations 1 \
