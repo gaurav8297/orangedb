@@ -1556,9 +1556,24 @@ namespace orangedb {
         });
 
         int num_of_new_clusters = std::accumulate(num_of_centroids_to_split_to.begin(), num_of_centroids_to_split_to.end(), 0) - num_of_centroids_to_split_to.size();
+        
+        // Safety check: ensure we won't divide by zero
+        for (int i = 0; i < num_of_centroids_to_split_to.size(); i++) {
+            if (num_of_centroids_to_split_to[i] <= 1) {
+                throw std::runtime_error("before while loop,num_of_centroids_to_split_to[" + std::to_string(i) + "] = " + std::to_string(num_of_centroids_to_split_to[i]) + " (should be > 1)");
+            }
+        }
+        
         if (updated_num_clusters + num_of_new_clusters > numClusters) {
             int cluster_iter_big = 0;
             while(updated_num_clusters + num_of_new_clusters > numClusters) {
+                
+                //  Safety check: print all of the num_of_centroids_to_split_to
+                for (int i = 0; i < num_of_centroids_to_split_to.size(); i++) {
+                    printf("num_of_centroids_to_split_to[%d] = %d   |   ", i, num_of_centroids_to_split_to[i]);
+                }
+                printf("\n");
+                
                 // This should never happen - throw error if it does
                 if (clusters_to_rebalance.empty()) {
                     throw std::runtime_error("clusters_to_rebalance is empty during rebalancing - this should not happen");
@@ -1575,16 +1590,6 @@ namespace orangedb {
                     cluster_iter_big = 0;
                 }
                 
-                // Safety check: ensure we won't divide by zero
-                if (num_of_centroids_to_split_to[cluster_iter_big] <= 1) {
-                    throw std::runtime_error("cluster_iter_big (" + std::to_string(cluster_iter_big) + ") has num_of_centroids_to_split_to = " + 
-                                           std::to_string(num_of_centroids_to_split_to[cluster_iter_big]) + " (should be > 1)");
-                }
-                if (num_of_centroids_to_split_to.back() <= 1) {
-                    throw std::runtime_error("back element has num_of_centroids_to_split_to = " + 
-                                           std::to_string(num_of_centroids_to_split_to.back()) + " (should be > 1)");
-                }
-
                 //compare biggest cluster with smallest one and remove the extra centroid when it's less needed
                 int split_cluster_size_bigger = clusters_to_rebalance[cluster_iter_big].second / (num_of_centroids_to_split_to[cluster_iter_big] - 1);
                 int split_cluster_size_smaller = clusters_to_rebalance.back().second / (num_of_centroids_to_split_to.back() - 1);
