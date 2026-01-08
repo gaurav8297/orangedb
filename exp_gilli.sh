@@ -213,45 +213,6 @@
   -umap_mode 1 \
   -clustering_mode 0
 
-# with hard limit 600
-./build/release/bin/orangedb_main \
-  -run benchmarkFastReclustering \
-  -baseVectorPath /home/centos/orangedb/data/sift_bill/bigann_base.bvecs \
-  -queryVectorPath /home/centos/orangedb/data/sift_bill/bigann_query.bvecs \
-  -groundTruthPath /home/centos/orangedb/data/sift_bill/sift_gt_10M.bin \
-  -k 100 \
-  -numInserts 10 \
-  -numVectors 10000000 \
-  -numIters 20 \
-  -megaCentroidSize 1000 \
-  -miniCentroidSize 1000 \
-  -iterations 3 \
-  -lambda 0 \
-  -nMegaProbes 4 \
-  -nMiniProbes 40 \
-  -numQueries 50 \
-  -readFromDisk 0 \
-  -storagePath /home/centos/orangedb/data/sift_bill/reclustering_fast_index.bin \
-  -isParquet 0 \
-  -numMegaReclusterCentroids 1 \
-  -reclusterOnScore 0 \
-  -numThreads 1 \
-  -useIP 0 \
-  -quantTrainPercentage 0.0 \
-  -quantBuild 0 \
-  -nMegaRecluster 0 \
-  -nFiles 1 \
-  -hardClusterSizeLimit 1100 \
-  -kmeansSamplingRatio 1.0 \
-  -numFixBoundaries 0 \
-  -scoreChangeThreshold 0.01 \
-  -centroidChangeThreshold 0.01 \
-  -useMSEToRecluster 0 \
-  -umap_mode 0 \
-  -clustering_mode 0
-
-
-
 ./build/release/bin/orangedb_main \
   -run benchmarkFastReclustering \
   -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs \
@@ -287,3 +248,44 @@
   -useMSEToRecluster 0 \
   -umap_mode 2 \
   -clustering_mode 0 
+
+
+
+
+
+  # with hard limit 600
+./build/release/bin/orangedb_main \
+  -run benchmarkFastReclustering \
+  -baseVectorPath /home/centos/orangedb/data/sift_bill/bigann_base.bvecs \
+  -queryVectorPath /home/centos/orangedb/data/sift_bill/bigann_query.bvecs \
+  -groundTruthPath /home/centos/orangedb/data/sift_bill/sift_gt_10M.bin \
+  -k 100 \
+  -numInserts 10 \
+  -numVectors 10000000 \
+  -numIters 20 \
+  -megaCentroidSize 1000 \
+  -miniCentroidSize 1000 \
+  -iterations 3 \
+  -lambda 0 \
+  -nMegaProbes 4 \
+  -nMiniProbes 40 \
+  -numQueries 50 \
+  -readFromDisk 0 \
+  -storagePath /home/centos/orangedb/data/sift_bill/reclustering_fast_index.bin \
+  -isParquet 0 \
+  -numMegaReclusterCentroids 1 \
+  -reclusterOnScore 0 \
+  -numThreads 32 \
+  -useIP 0 \
+  -quantTrainPercentage 0.0 \
+  -quantBuild 0 \
+  -nMegaRecluster 0 \
+  -nFiles 1 \
+  -hardClusterSizeLimit 1100 \
+  -kmeansSamplingRatio 1.0 \
+  -numFixBoundaries 0 \
+  -scoreChangeThreshold 0.01 \
+  -centroidChangeThreshold 0.01 \
+  -useMSEToRecluster 0 \
+  -umap_mode 0 \
+  -clustering_mode 0
