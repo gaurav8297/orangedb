@@ -1564,15 +1564,14 @@ namespace orangedb {
                     throw std::runtime_error("clusters_to_rebalance is empty during rebalancing - this should not happen");
                 }
                 
-                // If we've reached the end of the array, wrap around to the beginning
+                // Need at least 2 elements to compare (cluster_iter_big and back must be different)
+                if (clusters_to_rebalance.size() < 2) {
+                    throw std::runtime_error("Not enough clusters to continue rebalancing - cannot satisfy numClusters constraint");
+                }
+                
+                // If cluster_iter_big is pointing at or past the last element, wrap around to the beginning
                 if (cluster_iter_big >= clusters_to_rebalance.size() - 1) {
                     cluster_iter_big = 0;
-                    
-                    // Remove all back elements that have been reduced to 1 (can't be split further)
-                    while (!clusters_to_rebalance.empty() && num_of_centroids_to_split_to.back() == 1) {
-                        clusters_to_rebalance.pop_back();
-                        num_of_centroids_to_split_to.pop_back();
-                    }
                 }
                 
                 // Need at least 2 elements to compare (cluster_iter_big and back must be different)
