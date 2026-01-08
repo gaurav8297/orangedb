@@ -1558,16 +1558,34 @@ namespace orangedb {
         int num_of_new_clusters = std::accumulate(num_of_centroids_to_split_to.begin(), num_of_centroids_to_split_to.end(), 0) - num_of_centroids_to_split_to.size();
         if (updated_num_clusters + num_of_new_clusters > numClusters) {
             int cluster_iter_big = 0;
-            int cluster_iter_small = clusters_to_rebalance.size()-1;
             while(updated_num_clusters + num_of_new_clusters > numClusters) {
+                // This should never happen - throw error if it does
+                if (clusters_to_rebalance.empty()) {
+                    throw std::runtime_error("clusters_to_rebalance is empty during rebalancing - this should not happen");
+                }
+                
+                // Need at least 2 elements to compare (cluster_iter_big and back must be different)
+                if (clusters_to_rebalance.size() < 2) {
+                    throw std::runtime_error("Not enough clusters to continue rebalancing - cannot satisfy numClusters constraint");
+                }
+                
+                // If we've reached the end of the array, wrap around to the beginning
+                if (cluster_iter_big >= clusters_to_rebalance.size() - 1) {
+                    cluster_iter_big = 0;
+                }
+                
                 //compare biggest cluster with smallest one and remove the extra centroid when it's less needed
                 int split_cluster_size_bigger = clusters_to_rebalance[cluster_iter_big].second / (num_of_centroids_to_split_to[cluster_iter_big] - 1);
-                int split_cluster_size_smaller = clusters_to_rebalance[cluster_iter_small].second / (num_of_centroids_to_split_to[cluster_iter_small] - 1);
+                int split_cluster_size_smaller = clusters_to_rebalance.back().second / (num_of_centroids_to_split_to.back() - 1);
 
                 if (split_cluster_size_bigger > split_cluster_size_smaller) {
                     // remove the extra centroid from the smaller cluster
-                    num_of_centroids_to_split_to[cluster_iter_small]--;
-                    cluster_iter_small--;
+                    num_of_centroids_to_split_to.back()--;
+                    // if we no longer need to split the cluster, we can remove it from the list
+                    if(num_of_centroids_to_split_to.back() == 1) {
+                        clusters_to_rebalance.pop_back();
+                        num_of_centroids_to_split_to.pop_back();
+                    }
                     cluster_iter_big++;
                 } else {
                     // remove the extra centroid from the bigger cluster
