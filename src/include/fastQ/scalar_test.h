@@ -314,7 +314,9 @@ namespace fastq {
             static constexpr size_t HISTOGRAM_NUM_BINS = 512;
         public:
             explicit SQ8Bit(int dim, float break_point_data_ratio = 0.99f)
-                    : dim(dim), codeSize(dim + 4), break_point_data_ratio(break_point_data_ratio) {
+                    : dim(dim), codeSize(dim + 4), break_point_data_ratio(break_point_data_ratio),
+                      vmin(nullptr), vdiff(nullptr), alpha(nullptr), beta(nullptr),
+                      alphaSqr(nullptr), betaSqr(nullptr) {
                 vmin = new float[dim];
                 vdiff = new float[dim];
                 for (size_t i = 0; i < dim; i++) {
@@ -328,7 +330,9 @@ namespace fastq {
             }
 
             SQ8Bit(const SQ8Bit &other) : dim(other.dim), codeSize(dim + 4),
-                                          break_point_data_ratio(other.break_point_data_ratio) {
+                                          break_point_data_ratio(other.break_point_data_ratio),
+                                          vmin(nullptr), vdiff(nullptr), alpha(nullptr), beta(nullptr),
+                                          alphaSqr(nullptr), betaSqr(nullptr) {
                 vmin = new float[dim];
                 vdiff = new float[dim];
                 alpha = new float[dim];

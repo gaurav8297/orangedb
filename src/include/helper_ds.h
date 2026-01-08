@@ -353,7 +353,7 @@ namespace orangedb {
                 cd.pop();
 
                 size_t begin, end;
-                if (visitedSet.contains(candidate)) {
+                if (visitedSet.find(candidate) != visitedSet.end()) {
                     continue;
                 }
                 visitedSet.insert(candidate);

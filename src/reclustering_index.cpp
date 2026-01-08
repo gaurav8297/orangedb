@@ -224,7 +224,7 @@ namespace orangedb {
         std::vector<float> newMegaCentroid;
         std::vector<std::vector<vector_idx_t> > miniClusterIds;
         clusterData(newMiniCentroids.data(), newMiniClusterIds.data(), newMiniClusterIds.size(),
-                    config.megaCentroidSize, newMegaCentroid, miniClusterIds, use_rebalancing);
+                    config.megaCentroidSize, newMegaCentroid, miniClusterIds, use_rebalancing, true);
 
         // Copy the new mega centroids
         auto curMegaClusterSize = megaCentroids.size() / dim;
@@ -315,7 +315,7 @@ namespace orangedb {
         std::vector<float> megaMegaCentroids;
         std::vector<std::vector<vector_idx_t>> megaMegaCentroidIds;
         clusterData(megaCentroids.data(), megaClusterIds.data(), megaClusterSize,
-                    n, megaMegaCentroids, megaMegaCentroidIds);
+                    n, megaMegaCentroids, megaMegaCentroidIds, false, true);
         for (size_t i = 0; i < megaMegaCentroidIds.size(); i++) {
             if (fast) {
                 reclusterFastMegaCentroids(megaMegaCentroidIds[i]);
@@ -369,7 +369,7 @@ namespace orangedb {
         std::vector<float> megaMegaCentroids;
         std::vector<std::vector<vector_idx_t>> megaMegaCentroidIds;
         clusterData(megaCentroids.data(), megaClusterIds.data(), megaClusterIds.size(),
-                    numMegaCentroids, megaMegaCentroids, megaMegaCentroidIds);
+                    numMegaCentroids, megaMegaCentroids, megaMegaCentroidIds, false, true);
 
         for (const auto & megaMegaCentroidId : megaMegaCentroidIds) {
             if (megaMegaCentroidId.size() == 0) {
@@ -430,7 +430,7 @@ namespace orangedb {
         std::vector<std::vector<vector_idx_t> > newMiniClusterIds;
         if (numMegaCentroids > config.numMegaReclusterCentroids * 3) {
             clusterData(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
-                        config.numNewMiniReclusterCentroids, newMegaCentroids, newMiniClusterIds);
+                        config.numNewMiniReclusterCentroids, newMegaCentroids, newMiniClusterIds, false, true);
             for (size_t i = 0; i < (newMegaCentroids.size() / dim); i++) {
                 mergeNewMiniCentroidsBatch(newMegaCentroids.data() + i * dim,
                                            newMiniClusterIds[i]);
@@ -522,7 +522,7 @@ namespace orangedb {
         std::vector<float> newMegaCentroids;
         std::vector<std::vector<vector_idx_t> > newMiniClusterIds;
         clusterData(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
-                    config.megaCentroidSize, newMegaCentroids, newMiniClusterIds);
+                    config.megaCentroidSize, newMegaCentroids, newMiniClusterIds, false, true);
 
         // Append the new mini and mega centroids to the index
         return appendOrMergeCentroids(megaClusterIds, newMegaCentroids, newMiniClusterIds, newMiniCentroids,
@@ -1124,7 +1124,7 @@ namespace orangedb {
         std::vector<float> newMegaCentroids;
         std::vector<std::vector<vector_idx_t> > newMiniClusterIds;
         clusterData(newMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
-                    config.megaCentroidSize, newMegaCentroids, newMiniClusterIds);
+                    config.megaCentroidSize, newMegaCentroids, newMiniClusterIds, false, true);
 
         // Append the new mini and mega centroids to the index
         appendOrMergeCentroids(megaAssign, newMegaCentroids, newMiniClusterIds, newMiniCentroids,
@@ -1168,7 +1168,7 @@ namespace orangedb {
         std::vector<float> tempMegaCentroids;
         std::vector<std::vector<vector_idx_t> > tempMiniClusterIds;
         clusterData(tempMiniCentroids.data(), miniCentroidIds.data(), miniCentroidIds.size(),
-                    config.megaCentroidSize, tempMegaCentroids, tempMiniClusterIds);
+                    config.megaCentroidSize, tempMegaCentroids, tempMiniClusterIds, false, true);
 
         // Move the mini and mega centroids to the index
         megaCentroids = std::move(tempMegaCentroids);
@@ -1251,14 +1251,18 @@ namespace orangedb {
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
                                         std::vector<std::vector<vector_idx_t> > &clusterVectorIds,
-                                        bool use_rebalancing) {
+                                        bool use_rebalancing, bool is_clustering_centroids) {
         // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
         // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusters, clusterVectorIds,
         //                     dc.get(), dim, [](const float x, int d) { return x; });
-        if (use_rebalancing==REBALANCE_VECTORS) {
-            clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
-        }else if (use_rebalancing==REBALANCE_CENTROIDS) {
-            clusterDataWithCentoidRebalancing(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
+        if (!is_clustering_centroids) {
+            if (use_rebalancing==REBALANCE_VECTORS) {
+                clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
+            }else if (use_rebalancing==REBALANCE_CENTROIDS) {
+                clusterDataWithCentoidRebalancing(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
+            } else {
+                clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
+            }
         }else{
             clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, &clusters, clusterVectorIds);
         }       
@@ -1267,16 +1271,20 @@ namespace orangedb {
     void ReclusteringIndex::clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                         std::vector<float> &centroids,
                                         std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters,
-                                         bool use_rebalancing) {
+                                         bool use_rebalancing, bool is_clustering_centroids) {
         // auto dc = createDistanceComputer(data, dim, n, config.distanceType);
         // clusterData_<float>(data, vectorIds, n, avgClusterSize, centroids, clusterVectorIds,
         //                     dc.get(), dim, [](const float x, int d) { return x; });
         
         // This overload doesn't have clusters parameter, so we pass nullptr
-        if (use_rebalancing == REBALANCE_CENTROIDS) {
-           clusterDataWithCentoidRebalancing(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds);
-        }else if (use_rebalancing == REBALANCE_VECTORS) {
-            clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds);
+        if (!is_clustering_centroids) {
+            if (use_rebalancing == REBALANCE_CENTROIDS) {
+                clusterDataWithCentoidRebalancing(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds);
+            }else if (use_rebalancing == REBALANCE_VECTORS) {
+                clusterDataWithRebalancing(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds);
+            }else{
+                clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds, nClusters);
+            }
         }else{
             clusterDataWithFaiss(data, vectorIds, n, avgClusterSize, centroids, nullptr, clusterVectorIds, nClusters);
         }
@@ -1403,14 +1411,17 @@ namespace orangedb {
         // Run k-means on the region with equal cluster sizes
         faiss::ClusteringParameters cl;
         cl.niter = 10;  // Fewer iterations for quick rebalancing
-        // Use the hard limit to ensure rebalancing respects cluster size constraints
-        cl.min_points_per_centroid = hardClusterSizeLimit * 0.5;  // Allow some flexibility for rebalancing
-        cl.max_points_per_centroid = hardClusterSizeLimit;
+        // Adjust min/max based on actual number of vectors available
+        // FAISS requires: num_vecs >= num_clusters * min_points_per_centroid
+        int max_min_points = num_vecs / num_region_clusters;  // Maximum feasible min
+        cl.min_points_per_centroid = std::max(1, std::min((int)(hardClusterSizeLimit * 0.5), max_min_points));
+        cl.max_points_per_centroid = std::max((int)hardClusterSizeLimit, num_vecs);  // Allow more if we have many vectors
         cl.verbose = false;
         
         faiss::Clustering clustering(dim, num_region_clusters, cl);
         faiss::IndexFlat index(dim, metric_type);
         
+        /* GILLI_DEBUG: we can do better centroid init if we have neighbors and not just split
         // Initialize clustering centroids directly from global centroids - avoid intermediate copy
         clustering.centroids.resize(num_region_clusters * dim);
         idx = 0;
@@ -1420,8 +1431,13 @@ namespace orangedb {
             std::copy(src, src + dim, dst);
             idx++;
         }
+        */
+        // Don't initialize centroids - let FAISS start fresh with random sampling
+        // This ensures effective splitting when rebalancing oversized clusters
+        // FAISS will randomly sample initial centroids from region_data
+        clustering.centroids.clear();
         
-        // Train
+        // Train - FAISS will initialize all centroids from scratch
         clustering.train(num_vecs, region_data.data(), index);
         
         // Reassign vectors in the region with hard limit enforcement
@@ -1503,14 +1519,8 @@ namespace orangedb {
         cl.max_points_per_centroid = getMaxCentroidSize(n, updated_num_clusters);
         // cl.seed = -1;
         std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
-        if (config.lambda > 0) {
-            auto lambda = findAppropriateLambda(data, n, dim, numClusters);
-            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, lambda);
-            cl.dist_modifier = distModifier.get();
-            printf("cl.lambda = %f\n", lambda);
-        }
         cl.verbose = false; // GILLI: I changed this to false to avoid printing the clustering progress
-        faiss::Clustering clustering(dim, numClusters, cl);
+        faiss::Clustering clustering(dim, updated_num_clusters, cl);
         // TODO: This is a hack
         auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
         auto index = faiss::IndexFlat(dim, metric_type);
@@ -1518,18 +1528,146 @@ namespace orangedb {
         // Initialize the centroids
         clustering.train(n, data, index);
 
-        // see if in the initial train there are any clusters that are oversized
-        for (int i = 0; i < numClusters; i++) {
-            if (clustering.cluster_sizes[i] > config.hardClusterSizeLimit) {
-                printf("Cluster %d is oversize with size %d\n", i, clustering.cluster_sizes[i]);
+        // find out how many new clusters are oversized 
+        std::vector<std::pair<int64_t, int64_t>> clusters_to_rebalance;
+
+        for (int i = 0; i < updated_num_clusters; i++) {
+            if (clustering.init_cluster_sizes[i] > config.hardClusterSizeLimit) {
+                clusters_to_rebalance.push_back(std::make_pair(i, clustering.init_cluster_sizes[i]));
+            }
+        }
+        
+        // Initialize after clusters_to_rebalance is populated
+        std::vector<int64_t> num_of_centroids_to_split_to(clusters_to_rebalance.size());
+        
+        // decide where to add new clusters - based on the cluster sizes
+        // sort from the biggest oversized cluster to smallest
+        std::sort(clusters_to_rebalance.begin(), clusters_to_rebalance.end(), 
+                [](const std::pair<int64_t, int64_t>& a, const std::pair<int64_t, int64_t>& b)
+        {
+            return a.second > b.second;
+        });
+        
+        // calculate the number of new clusters to add
+        std::transform(clusters_to_rebalance.begin(), clusters_to_rebalance.end(), 
+        num_of_centroids_to_split_to.begin(),
+        [&](const std::pair<int64_t, int64_t>& cluster) {
+            return static_cast<int64_t>(ceil(static_cast<double>(cluster.second) / config.hardClusterSizeLimit));
+        });
+
+        int num_of_new_clusters = std::accumulate(num_of_centroids_to_split_to.begin(), num_of_centroids_to_split_to.end(), 0) - num_of_centroids_to_split_to.size();
+        if (updated_num_clusters + num_of_new_clusters > numClusters) {
+            int cluster_iter_big = 0;
+            int cluster_iter_small = clusters_to_rebalance.size()-1;
+            while(updated_num_clusters + num_of_new_clusters > numClusters) {
+                //compare biggest cluster with smallest one and remove the extra centroid when it's less needed
+                int split_cluster_size_bigger = clusters_to_rebalance[cluster_iter_big].second / (num_of_centroids_to_split_to[cluster_iter_big] - 1);
+                int split_cluster_size_smaller = clusters_to_rebalance[cluster_iter_small].second / (num_of_centroids_to_split_to[cluster_iter_small] - 1);
+
+                if (split_cluster_size_bigger > split_cluster_size_smaller) {
+                    // remove the extra centroid from the smaller cluster
+                    num_of_centroids_to_split_to[cluster_iter_small]--;
+                    cluster_iter_small--;
+                    cluster_iter_big++;
+                } else {
+                    // remove the extra centroid from the bigger cluster
+                    num_of_centroids_to_split_to[cluster_iter_big]--;
+                    cluster_iter_big++;
+                }
+                num_of_new_clusters--;
+            }
+        }
+        // GILLI_DEBUG: we can do a smarter logic than that
+        else if (updated_num_clusters + num_of_new_clusters < numClusters) {
+            if (!clusters_to_rebalance.empty()) {
+                int num_of_clusters_to_add = ceil((numClusters - updated_num_clusters) / clusters_to_rebalance.size());
+                int cluster_iter = 0;
+                while(updated_num_clusters +num_of_new_clusters < numClusters) {
+                    num_of_centroids_to_split_to[cluster_iter] += num_of_clusters_to_add;
+                    cluster_iter++;
+                    num_of_new_clusters++;
+                }
+            }
+            else {
+                // no clusters are oversized. split the biggest clusters into 2 new clusters
+                for (int i = 0; i < updated_num_clusters; i++) {
+                    clusters_to_rebalance.push_back(std::make_pair(i, clustering.init_cluster_sizes[i]));
+                    num_of_centroids_to_split_to.push_back(2);
+                }
             }
         }
 
+        clustering.centroids.resize(numClusters * dim); // does resize copy old centroids? GILLI
+        // update assign 
+        std::vector<int64_t> assign(n,-1);
+        std::vector<int64_t> hist(numClusters, 0);
+        int max_sampled_idx =0;
+
+        // Handle both subsampled and non-subsampled cases
+        if (!clustering.sampled_indices.empty()) {
+            // Subsampling occurred - use sampled_indices mapping
+            for (int i = 0; i < clustering.sampled_indices.size(); i++) {
+                assign[clustering.sampled_indices[i]] = clustering.init_assign.get()[i];
+                if (clustering.sampled_indices[i] > max_sampled_idx) {
+                    max_sampled_idx = clustering.sampled_indices[i];
+                }
+            }
+        } else {
+            // No subsampling - direct mapping
+            for (int i = 0; i < n; i++) {
+                assign[i] = clustering.init_assign.get()[i];
+                if (i > max_sampled_idx) {
+                    max_sampled_idx = i;
+                }
+            }
+        }
+
+        // rebalance the oversized clusters
+        for (int i = 0; i < clusters_to_rebalance.size(); i++) {
+            int64_t cluster_id = clusters_to_rebalance[i].first;
+            int64_t num_of_centroids_to_split = num_of_centroids_to_split_to[i];
+
+            // Create the set of clusters to rebalance (1 full cluster + k neighbors)
+            std::unordered_set<int64_t> clusters_to_rebalance_set;
+            clusters_to_rebalance_set.insert(cluster_id);
+            for (int j = 0 ; j < (num_of_centroids_to_split - 1); j++) {
+                clusters_to_rebalance_set.insert(updated_num_clusters + j);
+            }
+            
+            // split the cluster into num_of_centroids_to_split clusters
+            // Add (num_of_centroids_to_split - 1) new clusters (original cluster remains)
+            updated_num_clusters += (num_of_centroids_to_split - 1);
+            // Update the index with the new cluster
+            clustering.centroids.resize(updated_num_clusters * dim); // does resize copy old centroids? GILLI
+            hist.resize(updated_num_clusters, 0);
+            //index.reset();
+            //index.add(updated_num_clusters, clustering.centroids.data());
+                                    
+            // Rebalance the cluster region - this will compute fresh centroids
+            rebalanceClusterRegion(
+                data, max_sampled_idx + 1, assign.data(), hist, 
+                clustering.centroids.data(), updated_num_clusters, dim,
+                clusters_to_rebalance_set, metric_type, config.hardClusterSizeLimit);
+
+            // Update the index with the rebalanced centroids
+            index.reset();
+            index.add(updated_num_clusters, clustering.centroids.data());
+
+        }
+
+        // Verify that the adjustment logic correctly balanced the number of clusters
+        // Lines 1560-1589 should guarantee: updated_num_clusters == numClusters
+        if (updated_num_clusters != numClusters) {
+            printf("ERROR: Cluster count mismatch after rebalancing! updated_num_clusters=%d, numClusters=%d\n",
+                   updated_num_clusters, numClusters);
+            throw std::runtime_error("Cluster rebalancing logic error: final cluster count doesn't match expected");
+        }
+        
         // Assign the centroids
-        std::vector<int64_t> assign(n);
+        std::fill(assign.begin(), assign.end(), -1);
         std::vector<float> distances(n);
         std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
-        std::vector<int> hist(numClusters, 0);
+        std::fill(hist.begin(), hist.end(), 0);
         faiss::SearchParameters params;
 
         if (config.hardClusterSizeLimit > 0) {
@@ -1544,7 +1682,7 @@ namespace orangedb {
             hist[assign[i]]++;
         }
 
-        // Validate that no histogram is greater than 4500
+        // Validate that no histogram is greater than the hard limit
         for (int i=0; i<numClusters; i++) {
             if (config.hardClusterSizeLimit>0 && hist[i]>config.hardClusterSizeLimit) {
                 printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
@@ -1769,13 +1907,7 @@ namespace orangedb {
         cl.max_points_per_centroid = getMaxCentroidSize(n, updated_num_clusters);
         // cl.seed = -1;
         std::unique_ptr<faiss::BalancedClusteringDistModifier> distModifier;
-        if (config.lambda > 0) {
-            auto lambda = findAppropriateLambda(data, n, dim, numClusters);
-            distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, lambda);
-            cl.dist_modifier = distModifier.get();
-            printf("cl.lambda = %f\n", lambda);
-        }
-        cl.verbose = true;
+        cl.verbose = false;
         faiss::Clustering clustering(dim, updated_num_clusters, cl); // cluster to only 90% of the original number of clusters
         // TODO: This is a hack
         auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;

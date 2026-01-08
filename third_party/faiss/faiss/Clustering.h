@@ -236,7 +236,14 @@ struct Clustering : ClusteringParameters {
 
     /// number of vectors assigned to each cluster after training (size k)
     /// populated after train() completes
-    std::vector<idx_t> cluster_sizes; // GILLI: relative cluster sizes - should this be a field or an output of .train()?
+    std::vector<idx_t> init_cluster_sizes; // GILLI: the assignments of the sampled data to the centroids - should this be a field or an output of .train()?
+    std::unique_ptr<idx_t> init_assign;
+    
+    /// Maps sampled index to original index (empty if no subsampling occurred)
+    /// If non-empty: sampled_indices[i] = original index of i-th sampled vector
+    /// populated after train() completes
+    std::vector<idx_t> sampled_indices;
+
 
     Clustering(int d, int k);
     Clustering(int d, int k, const ClusteringParameters& cp);

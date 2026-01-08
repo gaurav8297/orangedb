@@ -287,11 +287,11 @@ namespace orangedb {
 
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                          std::vector<float>& centroids, std::vector<std::vector<float>>& clusters,
-                         std::vector<std::vector<vector_idx_t>> &clusterVectorIds, bool use_rebalancing = false);
+                         std::vector<std::vector<vector_idx_t>> &clusterVectorIds, bool use_rebalancing = false, bool is_clustering_centroids = false);
 
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                  std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds, 
-                 int nClusters = -1, bool use_rebalancing = false);
+                 int nClusters = -1, bool use_rebalancing = false, bool is_clustering_centroids = false);
 
         // Quantized clustering methods
         void clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,

@@ -370,7 +370,10 @@ namespace fastq {
             static constexpr size_t SCALAR_RANGE = 256;
         public:
             explicit SQ8Bit(int dim, float breakPointDataRatio = 1.0f) : Quantizer(dim, dim + 4),
-                                                                       breakPointDataRatio(breakPointDataRatio) {
+                                                                       breakPointDataRatio(breakPointDataRatio),
+                                                                       vmin(nullptr), vdiff(nullptr),
+                                                                       alpha(nullptr), beta(nullptr),
+                                                                       alphaSqr(nullptr), betaSqr(nullptr) {
                 vmin = new float[dim];
                 vdiff = new float[dim];
                 for (size_t i = 0; i < dim; i++) {

@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <sys/fcntl.h>
 #include <random>
+#include <stdexcept>
+#include <new>
 #include "spdlog/fmt/fmt.h"
 #include <unordered_map>
 #include <simsimd/simsimd.h>
@@ -36,20 +38,20 @@ namespace orangedb {
         *ptr = nullptr;
         if (!IS_ALIGNED(size, align)) {
             printf("size: %lu, align: %lu\n", size, align);
-            throw;
+            throw std::runtime_error("Size is not aligned");
         }
 #ifdef __APPLE__
         int err = posix_memalign(ptr, align, size);
         if (err) {
             printf("posix_memalign failed with error code %d\n", err);
-            throw;
+            throw std::runtime_error("posix_memalign failed");
         }
 #else
         *ptr = ::aligned_alloc(align, size);
 #endif
         if (*ptr == nullptr) {
             printf("aligned_alloc failed\n");
-            throw;
+            throw std::bad_alloc();
         }
     }
 
@@ -382,7 +384,7 @@ namespace orangedb {
             std::unordered_map<uint64_t, uint64_t> m;
             for (int i = 0; i < nPerm - 1; i++) {
                 auto i2 = i + randInt(n - i);
-                if (m.contains(i2)) {
+                if (m.find(i2) != m.end()) {
                     perm[i] = m[i2];
                 } else {
                     perm[i] = i2;
@@ -391,7 +393,7 @@ namespace orangedb {
             }
 
             // last element
-            if (m.contains(nPerm - 1)) {
+            if (m.find(nPerm - 1) != m.end()) {
                 perm[nPerm - 1] = m[nPerm - 1];
             } else {
                 perm[nPerm - 1] = nPerm - 1;

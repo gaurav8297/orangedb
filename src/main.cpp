@@ -3523,6 +3523,7 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     if (useMSEToRecluster) {
         // Generate UMAP visualization with cluster assignments (before early return)
+        /*
         if (baseVecs != nullptr && baseNumVectors > 0) {
             if(umap_mode==LIVE_UMAP) {
                 printf("\n=== Generating UMAP Visualization ===\n");
@@ -3538,6 +3539,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         } else {
             printf("Skipping UMAP visualization\n");
         }
+        */
         return;
     }
     printf("Starting reclustering iterations\n");
@@ -3600,17 +3602,33 @@ void benchmark_fast_reclustering(InputParser &input) {
         if(umap_mode==LIVE_UMAP) {
             printf("\n=== Generating UMAP Visualization ===\n");
             // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+            if (clustering_mode == REBALANCE_CENTROIDS) {
             run_umap_3D_with_cluster_data(index,
-                                          "umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
+                                          "REBALANCE_CENTROIDS_umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
                                           100000, numThreads);
             // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
             run_umap_3D_with_cluster_data(index,
-                                          "umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
+                                          "REBALANCE_CENTROIDS_umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
                                           100000, numThreads);
+            }
+            else if (clustering_mode == HARD_LIMIT) {
+                run_umap_3D_with_cluster_data(index,
+                                          "HARD_LIMIT_umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
+                                          100000, numThreads);
+                run_umap_3D_with_cluster_data(index,
+                                          "HARD_LIMIT_umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
+                                          100000, numThreads);
+            }
         } else if(umap_mode==OFFLINE_UMAP) {
             printf("\n=== saving clustering data ===\n");
-            save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
-            save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.bin", C_L1);
+            if (clustering_mode == REBALANCE_CENTROIDS) {
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "REBALANCE_CENTROIDS_clustering_data_l2.bin", C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "REBALANCE_CENTROIDS_clustering_data_l1.bin", C_L1);
+            }
+            else if (clustering_mode == HARD_LIMIT) {
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "HARD_LIMIT_clustering_data_l2.bin", C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "HARD_LIMIT_clustering_data_l1.bin", C_L1);
+            }
         }
 
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,

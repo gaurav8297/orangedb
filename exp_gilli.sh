@@ -167,6 +167,12 @@
   -numVectors 10000 \
   -outputPath /Users/gilli.hadayo/orangedb/umap_3D_without_clustering.bin
 
+# run dataset 3D projection
+./build/release/bin/orangedb_main \
+  -run run_umap_3D_without_clustering \
+  -baseVectorPath /home/centos/orangedb/data/sift_bill/bigann_base.bvecs \
+  -numVectors 1000000000 \
+  -outputPath /home/centos/orangedb/umap_3D_without_clustering.bin
 
 # VM
 #-----------------------------------
@@ -210,22 +216,22 @@
 # with hard limit 600
 ./build/release/bin/orangedb_main \
   -run benchmarkFastReclustering \
-  -baseVectorPath /home/centos/orangedb/data/siftsmall/base.fvecs \
-  -queryVectorPath /home/centos/orangedb/data/siftsmall/query.fvecs \
-  -groundTruthPath /home/centos/orangedb/data/siftsmall/gt.bin \
+  -baseVectorPath /home/centos/orangedb/data/sift_bill/bigann_base.bvecs \
+  -queryVectorPath /home/centos/orangedb/data/sift_bill/bigann_query.bvecs \
+  -groundTruthPath /home/centos/orangedb/data/sift_bill/sift_gt_10M.bin \
   -k 100 \
-  -numInserts 1 \
-  -numVectors 10000 \
+  -numInserts 10 \
+  -numVectors 10000000 \
   -numIters 20 \
-  -megaCentroidSize 10 \
-  -miniCentroidSize 500 \
-  -iterations 1 \
+  -megaCentroidSize 1000 \
+  -miniCentroidSize 1000 \
+  -iterations 3 \
   -lambda 0 \
   -nMegaProbes 4 \
   -nMiniProbes 40 \
   -numQueries 50 \
   -readFromDisk 0 \
-  -storagePath /home/centos/orangedb/data/siftsmall/reclustering_fast_index.bin \
+  -storagePath /home/centos/orangedb/data/sift_bill/reclustering_fast_index.bin \
   -isParquet 0 \
   -numMegaReclusterCentroids 1 \
   -reclusterOnScore 0 \
@@ -235,13 +241,13 @@
   -quantBuild 0 \
   -nMegaRecluster 0 \
   -nFiles 1 \
-  -hardClusterSizeLimit 600 \
+  -hardClusterSizeLimit 1100 \
   -kmeansSamplingRatio 1.0 \
   -numFixBoundaries 0 \
   -scoreChangeThreshold 0.01 \
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
-  -umap_mode 1 \
+  -umap_mode 0 \
   -clustering_mode 0
 
 

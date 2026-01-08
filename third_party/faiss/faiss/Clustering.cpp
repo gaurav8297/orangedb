@@ -158,7 +158,8 @@ idx_t subsample_training_set(
         size_t line_size,
         const float* weights,
         uint8_t** x_out,
-        float** weights_out) {
+        float** weights_out,
+        std::vector<idx_t>* sampled_indices_out = nullptr) {
     if (clus.verbose) {
         printf("Sampling a subset of %zd / %" PRId64 " for training\n",
                clus.k * clus.max_points_per_centroid,
@@ -200,6 +201,15 @@ idx_t subsample_training_set(
     } else {
         *weights_out = nullptr;
     }
+    
+    // Save the sampled indices mapping if requested
+    if (sampled_indices_out) {
+        sampled_indices_out->resize(nx);
+        for (idx_t i = 0; i < nx; i++) {
+            (*sampled_indices_out)[i] = perm[i];
+        }
+    }
+    
     return nx;
 }
 
@@ -312,19 +322,24 @@ void Clustering::train_encoded(
         uint8_t* x_new;
         float* weights_new;
         nx = subsample_training_set(
-                *this, nx, x, line_size, weights, &x_new, &weights_new);
+                *this, nx, x, line_size, weights, &x_new, &weights_new, &sampled_indices);
         del1.reset(x_new);
         x = x_new;
         del3.reset(weights_new);
         weights = weights_new;
-    } else if (nx < k * min_points_per_centroid) {
-        fprintf(stderr,
-                "WARNING clustering %" PRId64
-                " points to %zd centroids: "
-                "please provide at least %" PRId64 " training points\n",
-                nx,
-                k,
-                idx_t(k) * min_points_per_centroid);
+    } else {
+        // No subsampling occurred - clear sampled_indices
+        sampled_indices.clear();
+        
+        if (nx < k * min_points_per_centroid) {
+            fprintf(stderr,
+                    "WARNING clustering %" PRId64
+                    " points to %zd centroids: "
+                    "please provide at least %" PRId64 " training points\n",
+                    nx,
+                    k,
+                    idx_t(k) * min_points_per_centroid);
+        }
     }
 
     if (nx == k) {
@@ -562,8 +577,8 @@ void Clustering::train_encoded(
     }
 
     // Compute final cluster sizes by doing one last assignment pass
-    cluster_sizes.resize(k);
-    std::fill(cluster_sizes.begin(), cluster_sizes.end(), 0);
+    init_cluster_sizes.resize(k);
+    std::fill(init_cluster_sizes.begin(), init_cluster_sizes.end(), 0);
 
     // Re-use the assign and dis arrays for final assignment
     if (!codec) {
@@ -598,11 +613,14 @@ void Clustering::train_encoded(
         }
     }
 
+    init_assign.reset(new idx_t[nx]);
+    memcpy(init_assign.get(), assign.get(), nx * sizeof(idx_t));
+
     // Count assignments per cluster
     for (idx_t i = 0; i < nx; i++) {
         idx_t ci = assign[i];
         if (ci >= 0 && ci < k) {
-            cluster_sizes[ci]++;
+            init_cluster_sizes[ci]++;
         }
     }
 }
@@ -626,9 +644,13 @@ void Clustering1D::train_exact(idx_t n, const float* x) {
                 sizeof(float) * d,
                 nullptr,
                 &x_new,
-                &weights_new);
+                &weights_new,
+                &sampled_indices);
         del.reset(x_new);
         xt = (float*)x_new;
+    } else {
+        // No subsampling occurred - clear sampled_indices
+        sampled_indices.clear();
     }
 
     centroids.resize(k);
