@@ -65,7 +65,7 @@ namespace orangedb {
         // Overlapping score threshold
         float overlappingScoreThreshold = 0.1;
         // LSH bucket bits for overlap tracking
-        int overlapLshBits = 10;
+        int overlapLshBits = 8;
         // Worst mini centroids used for bucketed overlap score
         int overlapWorstMiniCount = 20;
         // Worst overlap values to average (after bucketing)
@@ -165,7 +165,7 @@ namespace orangedb {
 
         double calculateRealOverlapScore(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
 
-        double calculateRealOverlapScoreForAngular(vector_idx_t miniCentroidId, std::vector<vector_idx_t> &closestMiniIds);
+        double calculateRealOverlapScoreForAngular(vector_idx_t megaId, vector_idx_t miniCentroidId, int k = 20);
 
         void computeOverlapScores();
 

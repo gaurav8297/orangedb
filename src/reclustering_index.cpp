@@ -2019,10 +2019,12 @@ namespace orangedb {
     }
 
     void ReclusteringIndex::calculateOverlapScoreForAngular2(int megaCentroidId) {
+        printf("ReclusteringIndex::calculateOverlapScoreForAngular2()\n");
         auto &miniIds = megaMiniCentroidIds[megaCentroidId];
+#pragma omp parallel for
         for (size_t idx = 0; idx < miniIds.size(); idx++) {
             auto miniId = miniIds[idx];
-            double realOverlapScore = calculateRealOverlapScoreForAngular(miniId, miniIds);
+            double realOverlapScore = calculateRealOverlapScoreForAngular(megaCentroidId, miniId);
             double approxOverlapScore = calculateApproxOverlapScoreForAngular(miniId, miniIds);
             realOverlapScores[miniId] = realOverlapScore;
             approxOverlapScores[miniId] = approxOverlapScore;
@@ -2120,7 +2122,7 @@ namespace orangedb {
         for (int i = 0; i < numWorst; i++) {
             size_t idx = worstIndices[i];
             auto miniId = miniIds[idx];
-            realOverlapScores[idx] = calculateRealOverlapScoreForAngular(miniId, miniIds);
+            realOverlapScores[idx] = calculateRealOverlapScoreForAngular(megaCentroidId, miniId);
         }
 
         auto avgOverlapRatio = computeAvg(approxOverlapScores);
@@ -2191,13 +2193,18 @@ namespace orangedb {
         return {1.0 - cosSim, dot}; // Cosine distance
     }
 
-    double ReclusteringIndex::calculateRealOverlapScoreForAngular(vector_idx_t miniCentroidId,
-                                                               std::vector<vector_idx_t> &closestMiniIds) {
+    double ReclusteringIndex::calculateRealOverlapScoreForAngular(vector_idx_t megaId, vector_idx_t miniCentroidId, int k) {
         auto numMiniClusters = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters, COSINE);
         double avgScore = 0.0;
         auto &miniClusterVectors = miniClusters[miniCentroidId];
         auto miniClusterSize = miniClusterVectors.size() / dim;
+
+        // TODO: Find k closest centroids to miniCentroidId
+        float* miniCentroidVec = miniCentroids.data() + static_cast<size_t>(miniCentroidId) * dim;
+        std::vector<vector_idx_t> kClosestMiniCentroidIds;
+        ReclusteringIndexStats stats;
+        findKClosestMiniCentroids(miniCentroidVec, k, {megaId}, kClosestMiniCentroidIds, stats);
 
         for (int i = 0; i < miniClusterSize; i++) {
             dc->setQuery(miniClusterVectors.data() + static_cast<size_t>(i) * dim);
@@ -2244,7 +2251,7 @@ namespace orangedb {
             // Find minimum distance to other centroids
             // double minAngularDist = std::numeric_limits<double>::max();
             double minCosineDist = std::numeric_limits<double>::max();
-            for (const auto &closestMiniCentroidId : closestMiniIds) {
+            for (const auto &closestMiniCentroidId : kClosestMiniCentroidIds) {
                 if (closestMiniCentroidId == miniCentroidId) {
                     continue;
                 }
@@ -2312,8 +2319,6 @@ namespace orangedb {
 
             double overlapRatio;
             if (angularRadiusJ == 0 or angularRadiusMiniId == 0) {
-                printf("Warning: angularRadiusJ=%.6f or angularRadiusMiniId=%.6f is zero for miniCentroidId %llu and j %llu\n",
-                       angularRadiusJ, angularRadiusMiniId, miniCentroidId, j);
                 // No spread means no overlap
                 overlapRatio = 1.0;
             } else {
@@ -2468,7 +2473,6 @@ namespace orangedb {
         auto numMiniCentroids = miniCentroids.size() / dim;
         approxOverlapScores.resize(numMiniCentroids);
         realOverlapScores.resize(numMiniCentroids);
-#pragma omp parallel for
         for (auto i = 0; i < numMegaCentroids; i++) {
             if (config.distanceType == COSINE || config.distanceType == IP) {
                 calculateOverlapScoreForAngular2(i);
@@ -2593,7 +2597,7 @@ namespace orangedb {
                 uint32_t bucket = getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
                 auto currOverlapScore = realOverlapScores[miniId];
                 // Always recluster if current overlap score is negative
-                if (currOverlapScore < 0.0) {
+                if (currOverlapScore < -0.02) {
                     printf("OverlapHistory: mega %zu mini %llu bucket %u has negative overlap score %.6f, recluster=true\n",
                            i, miniId, bucket, currOverlapScore);
                     shouldRecluster = true;
@@ -2627,13 +2631,18 @@ namespace orangedb {
                     triggerCount++;
                 }
             }
+
+            if (triggerCount < 2) {
+                shouldRecluster = false;
+            }
+
             if (shouldRecluster) {
                 megaCentroidsToRecluster.push_back(i);
                 printf("OverlapHistory: mega %zu recluster=true (worst=%zu, triggers=%d)\n",
                        i, worstMiniIds.size(), triggerCount);
             } else {
-                printf("OverlapHistory: mega %zu recluster=false (worst=%zu)\n",
-                       i, worstMiniIds.size());
+                printf("OverlapHistory: mega %zu recluster=false (worst=%zu, triggers=%d)\n",
+                       i, worstMiniIds.size(), triggerCount);
             }
         }
 
