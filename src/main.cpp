@@ -3438,6 +3438,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const bool useMSEToRecluster = stoi(input.getCmdOption("-useMSEToRecluster"));
     const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
     const float overlapScoreChangeThreshold = stof(input.getCmdOption("-overlapScoreChangeThreshold"));
+    const int LshNbits = stoi(input.getCmdOption("-LshNbits"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -3447,7 +3448,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     DistanceType distanceType = useIP ? IP : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
                                    0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio,
-                                   scoreChangeThreshold, centroidChangeThreshold, 0.1, 10, 20, 30,
+                                   scoreChangeThreshold, centroidChangeThreshold, 0.1, LshNbits, 20, 30,
                                    overlapScoreChangeThreshold);
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
