@@ -1624,7 +1624,7 @@ namespace orangedb {
                 while(updated_num_clusters +num_of_new_clusters < numClusters) {
                     num_of_centroids_to_split_to[cluster_iter] += num_of_clusters_to_add;
                     cluster_iter++;
-                    num_of_new_clusters++;
+                    num_of_new_clusters += num_of_clusters_to_add;
                 }
             }
             else {
