@@ -3340,7 +3340,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     DistanceType distanceType = useIP ? IP : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
                                    0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio,
-                                   scoreChangeThreshold, centroidChangeThreshold);
+                                   scoreChangeThreshold, centroidChangeThreshold, 0.1, 
+                                   static_cast<CLUSTERING_MODE>(clustering_mode));
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));

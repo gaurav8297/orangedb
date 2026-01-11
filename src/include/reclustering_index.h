@@ -69,6 +69,8 @@ namespace orangedb {
         int workElementsForAveraging = 10;
         // Overlapping score threshold
         float overlappingScoreThreshold = 0.1;
+        // Clustering mode for reclustering operations
+        CLUSTERING_MODE clusteringMode = HARD_LIMIT;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -81,14 +83,16 @@ namespace orangedb {
                                          const float kmeansSamplingRatio = 1.0,
                                          const float scoreChangeThreshold = 0.2,
                                          const float centroidChangeThreshold = 0.6,
-                                         const float overlappingScoreThreshold = 0.1)
+                                         const float overlappingScoreThreshold = 0.1,
+                                         const CLUSTERING_MODE clusteringMode = HARD_LIMIT)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
               numNewMiniReclusterCentroids(numNewMiniReclusterCentroids),
               quantizationTrainPercentage(quantizationTrainPercentage), hardClusterSizeLimit(hardClusterSizeLimit),
               kmeansSamplingRatio(kmeansSamplingRatio), scoreChangeThreshold(scoreChangeThreshold),
-              centroidChangeThreshold(centroidChangeThreshold), overlappingScoreThreshold(overlappingScoreThreshold) {
+              centroidChangeThreshold(centroidChangeThreshold), overlappingScoreThreshold(overlappingScoreThreshold),
+              clusteringMode(clusteringMode) {
         }
     };
 
