@@ -89,10 +89,13 @@ void Clustering::compute_centroids(
 
     size_t line_size = codec ? codec->sa_code_size() : d * sizeof(float);
 
-#pragma omp parallel
+// #pragma omp parallel
     {
-        int nt = omp_get_num_threads();
-        int rank = omp_get_thread_num();
+        // int nt = omp_get_num_threads();
+        // int rank = omp_get_thread_num();
+
+        int nt = 1;
+        int rank = 0;
 
         // this thread is taking care of centroids c0:c1
         size_t c0 = (k * rank) / nt;
@@ -129,7 +132,7 @@ void Clustering::compute_centroids(
         }
     }
 
-#pragma omp parallel for
+// #pragma omp parallel for
     for (idx_t ci = 0; ci < k; ci++) {
         if (hassign[ci] == 0) {
             continue;
