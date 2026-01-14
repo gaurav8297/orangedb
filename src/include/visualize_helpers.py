@@ -93,3 +93,18 @@ def read_binary_clustering(filepath):
     df = pd.DataFrame(data, columns=['ROW_ID', 'Cluster_ID'])
     return df
 
+
+def read_ground_truth(filepath):
+    """Read ground truth file (vector_idx_t format).
+    
+    Binary format:
+    - Array of integers representing ground truth indices
+    - For k=100 queries, this is a flat array: [q0_gt0, q0_gt1, ..., q0_gt99, q1_gt0, ...]
+    
+    Returns: raw array of integers
+    """
+    import numpy as np
+    # Read as 64-bit unsigned integers (vector_idx_t is uint64_t in C++)
+    gt_data = np.fromfile(filepath, dtype=np.uint64)
+    return gt_data
+

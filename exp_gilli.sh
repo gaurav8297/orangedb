@@ -174,6 +174,17 @@
   -numVectors 1000000000 \
   -outputPath /home/centos/orangedb/umap_3D_without_clustering.bin
 
+
+# run dataset 3D projection with queries
+./build/release/bin/orangedb_main \
+  -run run_umap_3D_without_clustering \
+  -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs \
+  -numVectors 10000 \
+  -outputPath /Users/gilli.hadayo/orangedb/umap_3D_with_query_without_clustering.bin \
+  -includeQuery 1 \
+  -queryVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/query.fvecs \
+  -numQueries 50 
+  
 # VM
 #-----------------------------------
 # no hard limit
@@ -224,8 +235,8 @@
   -numVectors 10000 \
   -numIters 5 \
   -megaCentroidSize 10 \
-  -miniCentroidSize 500 \
-  -iterations 20 \
+  -miniCentroidSize 250 \
+  -iterations 10 \
   -lambda 0 \
   -nMegaProbes 1 \
   -nMiniProbes 3 \
@@ -241,14 +252,14 @@
   -quantBuild 0 \
   -nMegaRecluster 0 \
   -nFiles 1 \
-  -hardClusterSizeLimit 600 \
+  -hardClusterSizeLimit 300 \
   -kmeansSamplingRatio 1.0 \
   -numFixBoundaries 0 \
   -scoreChangeThreshold 0.01 \
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 2 \
-  -clustering_mode 0 
+  -clustering_mode 0 > hard_limit_300_log.txt 2>&1
 
 
 
@@ -269,7 +280,7 @@
   -iterations 10 \
   -lambda 0 \
   -nMegaProbes 4 \
-  -nMiniProbes 100 \
+  -nMiniProbes 1500 \
   -numQueries 50 \
   -readFromDisk 0 \
   -storagePath /home/centos/orangedb/data/sift_bill/reclustering_fast_index.bin \

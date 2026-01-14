@@ -38,20 +38,20 @@ namespace orangedb {
         *ptr = nullptr;
         if (!IS_ALIGNED(size, align)) {
             printf("size: %lu, align: %lu\n", size, align);
-            throw std::runtime_error("Size is not aligned");
+            throw;
         }
 #ifdef __APPLE__
         int err = posix_memalign(ptr, align, size);
         if (err) {
             printf("posix_memalign failed with error code %d\n", err);
-            throw std::runtime_error("posix_memalign failed");
+            throw;
         }
 #else
         *ptr = ::aligned_alloc(align, size);
 #endif
         if (*ptr == nullptr) {
             printf("aligned_alloc failed\n");
-            throw std::bad_alloc();
+            throw;
         }
     }
 

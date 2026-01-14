@@ -2619,7 +2619,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     double num_recall_below_75 = 0;
     for (int i = 0; i < queryNumVectors; i++) {
         std::priority_queue<NodeDistCloser> results;
-        index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats);
+        index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats, i);
         auto gt = gtVecs + i * k;
         double localRecall = 0;
         while (!results.empty()) {
@@ -2836,11 +2836,40 @@ void run_umap_2D_without_clustering(InputParser &input) {
 void run_umap_3D_without_clustering(InputParser &input) {
     
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
-    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    int numVectors = stoi(input.getCmdOption("-numVectors"));
     const std::string &outputPath = input.getCmdOption("-outputPath");
+    const int includeQuery = stoi(input.getCmdOption("-includeQuery"));
+    
     size_t baseDimension, baseNumVectors;
-    float* baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
- 
+    float* baseVecs = nullptr;
+
+    if (includeQuery) {
+        const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+        const int numQueries = stoi(input.getCmdOption("-numQueries"));
+        
+        float* onlyBaseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors); 
+
+        // Read query vectors
+        size_t queryDimension, queryNumVectors;
+        float* queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
+        CHECK_ARGUMENT(queryDimension == baseDimension, "Query and base dimensions must match");
+
+         // Reallocate baseVecs to be larger
+        size_t newSize = (numVectors + numQueries) * baseDimension;
+        allocAligned((void**)&baseVecs, newSize * sizeof(float), 8 * sizeof(float));  
+        // concatenate baseVecs and queryVecs
+        std::memcpy(baseVecs, onlyBaseVecs, numVectors * baseDimension * sizeof(float));
+        std::memcpy(baseVecs + numVectors * baseDimension, queryVecs, numQueries * baseDimension * sizeof(float));
+        
+        numVectors += numQueries;
+        free(onlyBaseVecs);
+        free(queryVecs);
+
+    }
+    else{
+        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors); 
+    }
+    
     using namespace orangedb;
   
     // K-NN
@@ -2881,6 +2910,8 @@ void run_umap_3D_without_clustering(InputParser &input) {
     fclose(fp);
     printf("UMAP projection of the dataset (without clustering) is written to %s\n", outputPath.c_str());
     printf("Binary format: num_vectors (int), then for each vector: UMAP_1 (float), UMAP_2 (float), UMAP_3 (float), row_id (int)\n");
+
+    free(baseVecs); 
 }
 
 void run_umap_2D_with_cluster_data(
@@ -3599,39 +3630,6 @@ void benchmark_fast_reclustering(InputParser &input) {
         writeToFile(recall_file_path, reinterpret_cast<const uint8_t *>(queryRecalls.data()),
                     queryRecalls.size() * sizeof(double));
 
-        // Generate UMAP visualization with cluster assignments (before early return)
-        if(umap_mode==LIVE_UMAP) {
-            printf("\n=== Generating UMAP Visualization ===\n");
-            // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
-            if (clustering_mode == REBALANCE_CENTROIDS) {
-            run_umap_3D_with_cluster_data(index,
-                                          "REBALANCE_CENTROIDS_umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
-                                          100000, numThreads);
-            // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
-            run_umap_3D_with_cluster_data(index,
-                                          "REBALANCE_CENTROIDS_umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
-                                          100000, numThreads);
-            }
-            else if (clustering_mode == HARD_LIMIT) {
-                run_umap_3D_with_cluster_data(index,
-                                          "HARD_LIMIT_umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
-                                          100000, numThreads);
-                run_umap_3D_with_cluster_data(index,
-                                          "HARD_LIMIT_umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
-                                          100000, numThreads);
-            }
-        } else if(umap_mode==OFFLINE_UMAP) {
-            printf("\n=== saving clustering data ===\n");
-            if (clustering_mode == REBALANCE_CENTROIDS) {
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "REBALANCE_CENTROIDS_clustering_data_l2.bin", C_L2);
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "REBALANCE_CENTROIDS_clustering_data_l1.bin", C_L1);
-            }
-            else if (clustering_mode == HARD_LIMIT) {
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "HARD_LIMIT_clustering_data_l2.bin", C_L2);
-                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "HARD_LIMIT_clustering_data_l1.bin", C_L1);
-            }
-        }
-
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         if (numMegaReclusterCentroids == 1) {
@@ -3676,6 +3674,47 @@ void benchmark_fast_reclustering(InputParser &input) {
                 index.reclusterFull(numMegaReclusterCentroids);
             }
         }
+
+        // Save clustering data AFTER reclustering
+        // Generate UMAP visualization with cluster assignments (before early return)
+        if(umap_mode==LIVE_UMAP) {
+            printf("\n=== Generating UMAP Visualization ===\n");
+            // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l2_clusters_2D.bin", C_L2);
+            if (clustering_mode == REBALANCE_CENTROIDS) {
+            run_umap_3D_with_cluster_data(index,
+                                            "REBALANCE_CENTROIDS_umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
+                                            100000, numThreads);
+            // run_umap_2D_with_cluster_data(index, baseVecs, (int)baseNumVectors, baseDimension, "umap_l1_clusters_2D.bin", C_L1);
+            run_umap_3D_with_cluster_data(index,
+                                            "REBALANCE_CENTROIDS_umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
+                                            100000, numThreads);
+            }
+            else if (clustering_mode == HARD_LIMIT) {
+                run_umap_3D_with_cluster_data(index,
+                                            "HARD_LIMIT_umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
+                                            100000, numThreads);
+                run_umap_3D_with_cluster_data(index,
+                                            "HARD_LIMIT_umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
+                                            100000, numThreads);
+            }
+        } else if(umap_mode==OFFLINE_UMAP) {
+            printf("\n=== saving clustering data ===\n");
+            std::string file_name_l2;
+            std::string file_name_l1;
+            if (clustering_mode == REBALANCE_CENTROIDS) {
+                file_name_l2 = "REBALANCE_CENTROIDS_clustering_data_l2_iter_" + std::to_string(iter + 1) + ".bin";
+                file_name_l1 = "REBALANCE_CENTROIDS_clustering_data_l1_iter_" + std::to_string(iter + 1) + ".bin";
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, file_name_l2, C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, file_name_l1, C_L1);
+            }
+            else if (clustering_mode == HARD_LIMIT) {
+                file_name_l2 = "HARD_LIMIT_clustering_data_l2_iter_" + std::to_string(iter + 1) + ".bin";
+                file_name_l1 = "HARD_LIMIT_clustering_data_l1_iter_" + std::to_string(iter + 1) + ".bin";
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, file_name_l2, C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, file_name_l1, C_L1);
+            }
+        }
+        
         // index.quantizeVectors();
         // index.fixBoundaryMiniCentroidsV2();
         // index.storeScoreForMegaClusters();

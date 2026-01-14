@@ -3478,7 +3478,7 @@ namespace orangedb {
     }
 
     void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
-                                   int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats) {
+                                   int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats, int queryId) {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
         nMegaProbes = std::min(nMegaProbes, (int)numMegaCentroids);
@@ -3493,6 +3493,20 @@ namespace orangedb {
         std::vector<vector_idx_t> miniAssign;
         findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
         // printf("Total mini centroids to search: %zu\n", miniAssign.size());
+
+        // Print cluster assignments for query 49
+        if (queryId == 49) {
+            printf("\n=== Query 49 Cluster Assignments ===\n");
+            printf("L2 (Mega) Clusters chosen (%zu total): ", megaAssign.size());
+            for (size_t i = 0; i < megaAssign.size(); i++) {
+                printf("%llu, ", megaAssign[i]);
+            }
+            printf("\nL1 (Mini) Clusters chosen (%zu total): ", miniAssign.size());
+            for (size_t i = 0; i < miniAssign.size(); i++) {
+                printf("%llu, ", miniAssign[i]);
+            }
+            printf("=====================================\n\n");
+        }
 
         // auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
         // dc->setQuery(query);

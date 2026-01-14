@@ -205,7 +205,7 @@ namespace orangedb {
         void flush_to_disk(const std::string &file_path) const;
 
         void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
-                    int nMegaProbes, int nMiniProbes, ReclusteringIndexStats &stats);
+                    int nMegaProbes, int nMiniProbes, ReclusteringIndexStats &stats, int queryId = -1);
 
         void searchWithBadClusters(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
                     int nMegaProbes, int nMiniProbes, int nMiniProbesForBadClusters, ReclusteringIndexStats &stats, bool searchEachBadCluster = false);

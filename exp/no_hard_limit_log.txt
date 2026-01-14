@@ -1,0 +1,2876 @@
+x: 0x118008000
+align_x: 0x148008000
+x: 0x118018000
+align_x: 0x118508000
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+Query 0: Recall: 82.000000%
+Query 1: Recall: 94.000000%
+Query 2: Recall: 85.000000%
+Query 3: Recall: 94.000000%
+Query 4: Recall: 97.000000%
+Query 5: Recall: 71.000000%
+Query 6: Recall: 85.000000%
+Query 7: Recall: 98.000000%
+Query 8: Recall: 96.000000%
+Query 9: Recall: 98.000000%
+Query 10: Recall: 75.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 88.000000%
+Query 13: Recall: 91.000000%
+Query 14: Recall: 96.000000%
+Query 15: Recall: 79.000000%
+Query 16: Recall: 83.000000%
+Query 17: Recall: 86.000000%
+Query 18: Recall: 97.000000%
+Query 19: Recall: 87.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 69.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 82.000000%
+Query 28: Recall: 99.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 76.000000%
+Query 32: Recall: 63.000000%
+Query 33: Recall: 77.000000%
+Query 34: Recall: 65.000000%
+Query 35: Recall: 83.000000%
+Query 36: Recall: 61.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 94.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 68.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 99.000000%
+Query 43: Recall: 96.000000%
+Query 44: Recall: 93.000000%
+Query 45: Recall: 94.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 45.000000%
+Query 48: Recall: 79.000000%
+Query 49: Recall: 100.000000%
+Avg Distance Computation: 1755
+Max Recall: 100.000000, Min Recall: 45.000000, Num Recall below 75%: 7.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.300000, Recall with bad clusters: 0.000000
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 200, Max: 1078, Avg: 500
+L2 cluster size: Min: 8, Max: 12, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76137.205705
+No old mega centroid or score to compare!
+Query 0: Recall: 82.000000%
+Query 1: Recall: 94.000000%
+Query 2: Recall: 85.000000%
+Query 3: Recall: 94.000000%
+Query 4: Recall: 97.000000%
+Query 5: Recall: 71.000000%
+Query 6: Recall: 85.000000%
+Query 7: Recall: 98.000000%
+Query 8: Recall: 96.000000%
+Query 9: Recall: 98.000000%
+Query 10: Recall: 75.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 88.000000%
+Query 13: Recall: 91.000000%
+Query 14: Recall: 96.000000%
+Query 15: Recall: 79.000000%
+Query 16: Recall: 83.000000%
+Query 17: Recall: 86.000000%
+Query 18: Recall: 97.000000%
+Query 19: Recall: 87.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 69.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 82.000000%
+Query 28: Recall: 99.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 76.000000%
+Query 32: Recall: 63.000000%
+Query 33: Recall: 77.000000%
+Query 34: Recall: 65.000000%
+Query 35: Recall: 83.000000%
+Query 36: Recall: 61.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 94.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 68.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 99.000000%
+Query 43: Recall: 96.000000%
+Query 44: Recall: 93.000000%
+Query 45: Recall: 94.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 45.000000%
+Query 48: Recall: 79.000000%
+Query 49: Recall: 100.000000%
+Avg Distance Computation: 1755
+Max Recall: 100.000000, Min Recall: 45.000000, Num Recall below 75%: 7.000000
+Starting reclustering iterations
+Started Iteration: 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 200, Max: 1078, Avg: 500
+L2 cluster size: Min: 8, Max: 12, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76137.205705
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.292048, Max: 0.301699, Avg: 0.296873, Power Avg (worst): 0.296677, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 75493.844917, Max: 76780.566493, Avg: 76137.205705
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 51625.505146, Max: 92956.596497, Avg: 76008.533547
+Query 0: Recall: 82.000000%
+Query 1: Recall: 94.000000%
+Query 2: Recall: 85.000000%
+Query 3: Recall: 94.000000%
+Query 4: Recall: 97.000000%
+Query 5: Recall: 71.000000%
+Query 6: Recall: 85.000000%
+Query 7: Recall: 98.000000%
+Query 8: Recall: 96.000000%
+Query 9: Recall: 98.000000%
+Query 10: Recall: 75.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 88.000000%
+Query 13: Recall: 91.000000%
+Query 14: Recall: 96.000000%
+Query 15: Recall: 79.000000%
+Query 16: Recall: 83.000000%
+Query 17: Recall: 86.000000%
+Query 18: Recall: 97.000000%
+Query 19: Recall: 87.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 69.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 82.000000%
+Query 28: Recall: 99.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 76.000000%
+Query 32: Recall: 63.000000%
+Query 33: Recall: 77.000000%
+Query 34: Recall: 65.000000%
+Query 35: Recall: 83.000000%
+Query 36: Recall: 61.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 94.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 68.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 99.000000%
+Query 43: Recall: 96.000000%
+Query 44: Recall: 93.000000%
+Query 45: Recall: 94.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 45.000000%
+Query 48: Recall: 79.000000%
+Query 49: Recall: 100.000000%
+Avg Distance Computation: 1755
+Max Recall: 100.000000, Min Recall: 45.000000, Num Recall below 75%: 7.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 82.000000%
+Query 1: Recall: 92.000000%
+Query 2: Recall: 88.000000%
+Query 3: Recall: 96.000000%
+Query 4: Recall: 100.000000%
+Query 5: Recall: 66.000000%
+Query 6: Recall: 98.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 98.000000%
+Query 9: Recall: 98.000000%
+Query 10: Recall: 91.000000%
+Query 11: Recall: 98.000000%
+Query 12: Recall: 90.000000%
+Query 13: Recall: 97.000000%
+Query 14: Recall: 71.000000%
+Query 15: Recall: 96.000000%
+Query 16: Recall: 90.000000%
+Query 17: Recall: 87.000000%
+Query 18: Recall: 90.000000%
+Query 19: Recall: 93.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 97.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 97.000000%
+Query 25: Recall: 98.000000%
+Query 26: Recall: 96.000000%
+Query 27: Recall: 82.000000%
+Query 28: Recall: 97.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 77.000000%
+Query 31: Recall: 88.000000%
+Query 32: Recall: 72.000000%
+Query 33: Recall: 78.000000%
+Query 34: Recall: 87.000000%
+Query 35: Recall: 72.000000%
+Query 36: Recall: 68.000000%
+Query 37: Recall: 99.000000%
+Query 38: Recall: 82.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 83.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 98.000000%
+Query 43: Recall: 93.000000%
+Query 44: Recall: 98.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 72.000000%
+Query 48: Recall: 84.000000%
+Query 49: Recall: 90.000000%
+Avg Distance Computation: 1752
+Max Recall: 100.000000, Min Recall: 66.000000, Num Recall below 75%: 6.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 90.520000, Recall with bad clusters: 0.000000
+Started Iteration: 1
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 210, Max: 885, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76290.765365
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.290912, Max: 0.306210, Avg: 0.298561, Power Avg (worst): 0.298072, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 74595.034138, Max: 77986.496592, Avg: 76290.765365
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 57301.775235, Max: 89086.111578, Avg: 76290.765365
+Query 0: Recall: 82.000000%
+Query 1: Recall: 92.000000%
+Query 2: Recall: 88.000000%
+Query 3: Recall: 96.000000%
+Query 4: Recall: 100.000000%
+Query 5: Recall: 66.000000%
+Query 6: Recall: 98.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 98.000000%
+Query 9: Recall: 98.000000%
+Query 10: Recall: 91.000000%
+Query 11: Recall: 98.000000%
+Query 12: Recall: 90.000000%
+Query 13: Recall: 97.000000%
+Query 14: Recall: 71.000000%
+Query 15: Recall: 96.000000%
+Query 16: Recall: 90.000000%
+Query 17: Recall: 87.000000%
+Query 18: Recall: 90.000000%
+Query 19: Recall: 93.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 97.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 97.000000%
+Query 25: Recall: 98.000000%
+Query 26: Recall: 96.000000%
+Query 27: Recall: 82.000000%
+Query 28: Recall: 97.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 77.000000%
+Query 31: Recall: 88.000000%
+Query 32: Recall: 72.000000%
+Query 33: Recall: 78.000000%
+Query 34: Recall: 87.000000%
+Query 35: Recall: 72.000000%
+Query 36: Recall: 68.000000%
+Query 37: Recall: 99.000000%
+Query 38: Recall: 82.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 83.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 98.000000%
+Query 43: Recall: 93.000000%
+Query 44: Recall: 98.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 72.000000%
+Query 48: Recall: 84.000000%
+Query 49: Recall: 90.000000%
+Avg Distance Computation: 1752
+Max Recall: 100.000000, Min Recall: 66.000000, Num Recall below 75%: 6.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 97.000000%
+Query 1: Recall: 63.000000%
+Query 2: Recall: 99.000000%
+Query 3: Recall: 100.000000%
+Query 4: Recall: 97.000000%
+Query 5: Recall: 81.000000%
+Query 6: Recall: 87.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 97.000000%
+Query 9: Recall: 84.000000%
+Query 10: Recall: 91.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 95.000000%
+Query 13: Recall: 90.000000%
+Query 14: Recall: 79.000000%
+Query 15: Recall: 98.000000%
+Query 16: Recall: 93.000000%
+Query 17: Recall: 92.000000%
+Query 18: Recall: 59.000000%
+Query 19: Recall: 93.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 99.000000%
+Query 22: Recall: 98.000000%
+Query 23: Recall: 100.000000%
+Query 24: Recall: 97.000000%
+Query 25: Recall: 99.000000%
+Query 26: Recall: 91.000000%
+Query 27: Recall: 92.000000%
+Query 28: Recall: 96.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 42.000000%
+Query 31: Recall: 89.000000%
+Query 32: Recall: 89.000000%
+Query 33: Recall: 81.000000%
+Query 34: Recall: 86.000000%
+Query 35: Recall: 77.000000%
+Query 36: Recall: 96.000000%
+Query 37: Recall: 98.000000%
+Query 38: Recall: 98.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 92.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 64.000000%
+Query 43: Recall: 84.000000%
+Query 44: Recall: 95.000000%
+Query 45: Recall: 96.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 86.000000%
+Query 48: Recall: 72.000000%
+Query 49: Recall: 97.000000%
+Avg Distance Computation: 1777
+Max Recall: 100.000000, Min Recall: 42.000000, Num Recall below 75%: 5.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 90.180000, Recall with bad clusters: 0.000000
+Started Iteration: 2
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 201, Max: 941, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75973.923432
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.301222, Max: 0.302399, Avg: 0.301811, Power Avg (worst): 0.301808, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 73958.457746, Max: 77989.389119, Avg: 75973.923432
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 50303.770342, Max: 91594.317584, Avg: 75973.923432
+Query 0: Recall: 97.000000%
+Query 1: Recall: 63.000000%
+Query 2: Recall: 99.000000%
+Query 3: Recall: 100.000000%
+Query 4: Recall: 97.000000%
+Query 5: Recall: 81.000000%
+Query 6: Recall: 87.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 97.000000%
+Query 9: Recall: 84.000000%
+Query 10: Recall: 91.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 95.000000%
+Query 13: Recall: 90.000000%
+Query 14: Recall: 79.000000%
+Query 15: Recall: 98.000000%
+Query 16: Recall: 93.000000%
+Query 17: Recall: 92.000000%
+Query 18: Recall: 59.000000%
+Query 19: Recall: 93.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 99.000000%
+Query 22: Recall: 98.000000%
+Query 23: Recall: 100.000000%
+Query 24: Recall: 97.000000%
+Query 25: Recall: 99.000000%
+Query 26: Recall: 91.000000%
+Query 27: Recall: 92.000000%
+Query 28: Recall: 96.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 42.000000%
+Query 31: Recall: 89.000000%
+Query 32: Recall: 89.000000%
+Query 33: Recall: 81.000000%
+Query 34: Recall: 86.000000%
+Query 35: Recall: 77.000000%
+Query 36: Recall: 96.000000%
+Query 37: Recall: 98.000000%
+Query 38: Recall: 98.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 92.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 64.000000%
+Query 43: Recall: 84.000000%
+Query 44: Recall: 95.000000%
+Query 45: Recall: 96.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 86.000000%
+Query 48: Recall: 72.000000%
+Query 49: Recall: 97.000000%
+Avg Distance Computation: 1777
+Max Recall: 100.000000, Min Recall: 42.000000, Num Recall below 75%: 5.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 90.000000%
+Query 1: Recall: 86.000000%
+Query 2: Recall: 98.000000%
+Query 3: Recall: 99.000000%
+Query 4: Recall: 87.000000%
+Query 5: Recall: 84.000000%
+Query 6: Recall: 93.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 91.000000%
+Query 9: Recall: 78.000000%
+Query 10: Recall: 85.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 89.000000%
+Query 13: Recall: 90.000000%
+Query 14: Recall: 50.000000%
+Query 15: Recall: 90.000000%
+Query 16: Recall: 94.000000%
+Query 17: Recall: 90.000000%
+Query 18: Recall: 66.000000%
+Query 19: Recall: 95.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 95.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 99.000000%
+Query 24: Recall: 89.000000%
+Query 25: Recall: 81.000000%
+Query 26: Recall: 90.000000%
+Query 27: Recall: 84.000000%
+Query 28: Recall: 93.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 87.000000%
+Query 31: Recall: 75.000000%
+Query 32: Recall: 79.000000%
+Query 33: Recall: 82.000000%
+Query 34: Recall: 64.000000%
+Query 35: Recall: 90.000000%
+Query 36: Recall: 84.000000%
+Query 37: Recall: 96.000000%
+Query 38: Recall: 87.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 55.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 86.000000%
+Query 43: Recall: 93.000000%
+Query 44: Recall: 98.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 73.000000%
+Query 48: Recall: 66.000000%
+Query 49: Recall: 95.000000%
+Avg Distance Computation: 1724
+Max Recall: 100.000000, Min Recall: 50.000000, Num Recall below 75%: 6.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 87.860000, Recall with bad clusters: 0.000000
+Started Iteration: 3
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 237, Max: 934, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 74948.487309
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.296603, Max: 0.299874, Avg: 0.298239, Power Avg (worst): 0.298216, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 73960.524858, Max: 75936.449760, Avg: 74948.487309
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 43847.789949, Max: 90441.152377, Avg: 74948.487309
+Query 0: Recall: 90.000000%
+Query 1: Recall: 86.000000%
+Query 2: Recall: 98.000000%
+Query 3: Recall: 99.000000%
+Query 4: Recall: 87.000000%
+Query 5: Recall: 84.000000%
+Query 6: Recall: 93.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 91.000000%
+Query 9: Recall: 78.000000%
+Query 10: Recall: 85.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 89.000000%
+Query 13: Recall: 90.000000%
+Query 14: Recall: 50.000000%
+Query 15: Recall: 90.000000%
+Query 16: Recall: 94.000000%
+Query 17: Recall: 90.000000%
+Query 18: Recall: 66.000000%
+Query 19: Recall: 95.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 95.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 99.000000%
+Query 24: Recall: 89.000000%
+Query 25: Recall: 81.000000%
+Query 26: Recall: 90.000000%
+Query 27: Recall: 84.000000%
+Query 28: Recall: 93.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 87.000000%
+Query 31: Recall: 75.000000%
+Query 32: Recall: 79.000000%
+Query 33: Recall: 82.000000%
+Query 34: Recall: 64.000000%
+Query 35: Recall: 90.000000%
+Query 36: Recall: 84.000000%
+Query 37: Recall: 96.000000%
+Query 38: Recall: 87.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 55.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 86.000000%
+Query 43: Recall: 93.000000%
+Query 44: Recall: 98.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 73.000000%
+Query 48: Recall: 66.000000%
+Query 49: Recall: 95.000000%
+Avg Distance Computation: 1724
+Max Recall: 100.000000, Min Recall: 50.000000, Num Recall below 75%: 6.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 71.000000%
+Query 1: Recall: 92.000000%
+Query 2: Recall: 100.000000%
+Query 3: Recall: 93.000000%
+Query 4: Recall: 98.000000%
+Query 5: Recall: 56.000000%
+Query 6: Recall: 87.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 96.000000%
+Query 9: Recall: 97.000000%
+Query 10: Recall: 77.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 92.000000%
+Query 13: Recall: 94.000000%
+Query 14: Recall: 86.000000%
+Query 15: Recall: 77.000000%
+Query 16: Recall: 93.000000%
+Query 17: Recall: 90.000000%
+Query 18: Recall: 89.000000%
+Query 19: Recall: 97.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 99.000000%
+Query 22: Recall: 96.000000%
+Query 23: Recall: 100.000000%
+Query 24: Recall: 85.000000%
+Query 25: Recall: 79.000000%
+Query 26: Recall: 90.000000%
+Query 27: Recall: 71.000000%
+Query 28: Recall: 91.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 99.000000%
+Query 31: Recall: 85.000000%
+Query 32: Recall: 94.000000%
+Query 33: Recall: 84.000000%
+Query 34: Recall: 79.000000%
+Query 35: Recall: 75.000000%
+Query 36: Recall: 82.000000%
+Query 37: Recall: 99.000000%
+Query 38: Recall: 80.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 76.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 90.000000%
+Query 43: Recall: 90.000000%
+Query 44: Recall: 99.000000%
+Query 45: Recall: 95.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 42.000000%
+Query 48: Recall: 76.000000%
+Query 49: Recall: 94.000000%
+Avg Distance Computation: 1647
+Max Recall: 100.000000, Min Recall: 42.000000, Num Recall below 75%: 4.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.680000, Recall with bad clusters: 0.000000
+Started Iteration: 4
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 319, Max: 708, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75489.112204
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.299716, Max: 0.302299, Avg: 0.301008, Power Avg (worst): 0.300994, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 73655.859393, Max: 77322.365016, Avg: 75489.112204
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 56417.226453, Max: 90719.175034, Avg: 75489.112204
+Query 0: Recall: 71.000000%
+Query 1: Recall: 92.000000%
+Query 2: Recall: 100.000000%
+Query 3: Recall: 93.000000%
+Query 4: Recall: 98.000000%
+Query 5: Recall: 56.000000%
+Query 6: Recall: 87.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 96.000000%
+Query 9: Recall: 97.000000%
+Query 10: Recall: 77.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 92.000000%
+Query 13: Recall: 94.000000%
+Query 14: Recall: 86.000000%
+Query 15: Recall: 77.000000%
+Query 16: Recall: 93.000000%
+Query 17: Recall: 90.000000%
+Query 18: Recall: 89.000000%
+Query 19: Recall: 97.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 99.000000%
+Query 22: Recall: 96.000000%
+Query 23: Recall: 100.000000%
+Query 24: Recall: 85.000000%
+Query 25: Recall: 79.000000%
+Query 26: Recall: 90.000000%
+Query 27: Recall: 71.000000%
+Query 28: Recall: 91.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 99.000000%
+Query 31: Recall: 85.000000%
+Query 32: Recall: 94.000000%
+Query 33: Recall: 84.000000%
+Query 34: Recall: 79.000000%
+Query 35: Recall: 75.000000%
+Query 36: Recall: 82.000000%
+Query 37: Recall: 99.000000%
+Query 38: Recall: 80.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 76.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 90.000000%
+Query 43: Recall: 90.000000%
+Query 44: Recall: 99.000000%
+Query 45: Recall: 95.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 42.000000%
+Query 48: Recall: 76.000000%
+Query 49: Recall: 94.000000%
+Avg Distance Computation: 1647
+Max Recall: 100.000000, Min Recall: 42.000000, Num Recall below 75%: 4.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 82.000000%
+Query 1: Recall: 95.000000%
+Query 2: Recall: 94.000000%
+Query 3: Recall: 86.000000%
+Query 4: Recall: 94.000000%
+Query 5: Recall: 55.000000%
+Query 6: Recall: 97.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 91.000000%
+Query 9: Recall: 78.000000%
+Query 10: Recall: 77.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 99.000000%
+Query 13: Recall: 95.000000%
+Query 14: Recall: 72.000000%
+Query 15: Recall: 98.000000%
+Query 16: Recall: 91.000000%
+Query 17: Recall: 88.000000%
+Query 18: Recall: 63.000000%
+Query 19: Recall: 87.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 96.000000%
+Query 23: Recall: 94.000000%
+Query 24: Recall: 90.000000%
+Query 25: Recall: 98.000000%
+Query 26: Recall: 83.000000%
+Query 27: Recall: 95.000000%
+Query 28: Recall: 96.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 76.000000%
+Query 31: Recall: 81.000000%
+Query 32: Recall: 86.000000%
+Query 33: Recall: 80.000000%
+Query 34: Recall: 89.000000%
+Query 35: Recall: 85.000000%
+Query 36: Recall: 79.000000%
+Query 37: Recall: 98.000000%
+Query 38: Recall: 84.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 90.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 96.000000%
+Query 43: Recall: 66.000000%
+Query 44: Recall: 97.000000%
+Query 45: Recall: 99.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 80.000000%
+Query 48: Recall: 64.000000%
+Query 49: Recall: 98.000000%
+Avg Distance Computation: 1633
+Max Recall: 100.000000, Min Recall: 55.000000, Num Recall below 75%: 5.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.800000, Recall with bad clusters: 0.000000
+Started Iteration: 5
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 289, Max: 845, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76510.364079
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.289057, Max: 0.293917, Avg: 0.291487, Power Avg (worst): 0.291436, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 74878.456268, Max: 78142.271890, Avg: 76510.364079
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 55517.062489, Max: 92032.578314, Avg: 76510.364079
+Query 0: Recall: 82.000000%
+Query 1: Recall: 95.000000%
+Query 2: Recall: 94.000000%
+Query 3: Recall: 86.000000%
+Query 4: Recall: 94.000000%
+Query 5: Recall: 55.000000%
+Query 6: Recall: 97.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 91.000000%
+Query 9: Recall: 78.000000%
+Query 10: Recall: 77.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 99.000000%
+Query 13: Recall: 95.000000%
+Query 14: Recall: 72.000000%
+Query 15: Recall: 98.000000%
+Query 16: Recall: 91.000000%
+Query 17: Recall: 88.000000%
+Query 18: Recall: 63.000000%
+Query 19: Recall: 87.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 96.000000%
+Query 23: Recall: 94.000000%
+Query 24: Recall: 90.000000%
+Query 25: Recall: 98.000000%
+Query 26: Recall: 83.000000%
+Query 27: Recall: 95.000000%
+Query 28: Recall: 96.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 76.000000%
+Query 31: Recall: 81.000000%
+Query 32: Recall: 86.000000%
+Query 33: Recall: 80.000000%
+Query 34: Recall: 89.000000%
+Query 35: Recall: 85.000000%
+Query 36: Recall: 79.000000%
+Query 37: Recall: 98.000000%
+Query 38: Recall: 84.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 90.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 96.000000%
+Query 43: Recall: 66.000000%
+Query 44: Recall: 97.000000%
+Query 45: Recall: 99.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 80.000000%
+Query 48: Recall: 64.000000%
+Query 49: Recall: 98.000000%
+Avg Distance Computation: 1633
+Max Recall: 100.000000, Min Recall: 55.000000, Num Recall below 75%: 5.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 88.000000%
+Query 1: Recall: 70.000000%
+Query 2: Recall: 91.000000%
+Query 3: Recall: 88.000000%
+Query 4: Recall: 97.000000%
+Query 5: Recall: 73.000000%
+Query 6: Recall: 74.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 91.000000%
+Query 9: Recall: 97.000000%
+Query 10: Recall: 69.000000%
+Query 11: Recall: 85.000000%
+Query 12: Recall: 96.000000%
+Query 13: Recall: 86.000000%
+Query 14: Recall: 78.000000%
+Query 15: Recall: 69.000000%
+Query 16: Recall: 91.000000%
+Query 17: Recall: 76.000000%
+Query 18: Recall: 87.000000%
+Query 19: Recall: 83.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 71.000000%
+Query 22: Recall: 88.000000%
+Query 23: Recall: 95.000000%
+Query 24: Recall: 95.000000%
+Query 25: Recall: 98.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 72.000000%
+Query 28: Recall: 100.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 94.000000%
+Query 31: Recall: 90.000000%
+Query 32: Recall: 92.000000%
+Query 33: Recall: 71.000000%
+Query 34: Recall: 87.000000%
+Query 35: Recall: 72.000000%
+Query 36: Recall: 70.000000%
+Query 37: Recall: 93.000000%
+Query 38: Recall: 89.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 87.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 93.000000%
+Query 43: Recall: 82.000000%
+Query 44: Recall: 92.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 61.000000%
+Query 48: Recall: 83.000000%
+Query 49: Recall: 90.000000%
+Avg Distance Computation: 1598
+Max Recall: 100.000000, Min Recall: 61.000000, Num Recall below 75%: 11.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 87.020000, Recall with bad clusters: 0.000000
+Started Iteration: 6
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 291, Max: 749, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75772.533996
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.303540, Max: 0.305670, Avg: 0.304605, Power Avg (worst): 0.304596, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 74223.312735, Max: 77321.755257, Avg: 75772.533996
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 59056.098864, Max: 91861.916391, Avg: 75772.533996
+Query 0: Recall: 88.000000%
+Query 1: Recall: 70.000000%
+Query 2: Recall: 91.000000%
+Query 3: Recall: 88.000000%
+Query 4: Recall: 97.000000%
+Query 5: Recall: 73.000000%
+Query 6: Recall: 74.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 91.000000%
+Query 9: Recall: 97.000000%
+Query 10: Recall: 69.000000%
+Query 11: Recall: 85.000000%
+Query 12: Recall: 96.000000%
+Query 13: Recall: 86.000000%
+Query 14: Recall: 78.000000%
+Query 15: Recall: 69.000000%
+Query 16: Recall: 91.000000%
+Query 17: Recall: 76.000000%
+Query 18: Recall: 87.000000%
+Query 19: Recall: 83.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 71.000000%
+Query 22: Recall: 88.000000%
+Query 23: Recall: 95.000000%
+Query 24: Recall: 95.000000%
+Query 25: Recall: 98.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 72.000000%
+Query 28: Recall: 100.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 94.000000%
+Query 31: Recall: 90.000000%
+Query 32: Recall: 92.000000%
+Query 33: Recall: 71.000000%
+Query 34: Recall: 87.000000%
+Query 35: Recall: 72.000000%
+Query 36: Recall: 70.000000%
+Query 37: Recall: 93.000000%
+Query 38: Recall: 89.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 87.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 93.000000%
+Query 43: Recall: 82.000000%
+Query 44: Recall: 92.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 61.000000%
+Query 48: Recall: 83.000000%
+Query 49: Recall: 90.000000%
+Avg Distance Computation: 1598
+Max Recall: 100.000000, Min Recall: 61.000000, Num Recall below 75%: 11.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 92.000000%
+Query 1: Recall: 99.000000%
+Query 2: Recall: 77.000000%
+Query 3: Recall: 100.000000%
+Query 4: Recall: 99.000000%
+Query 5: Recall: 76.000000%
+Query 6: Recall: 94.000000%
+Query 7: Recall: 91.000000%
+Query 8: Recall: 94.000000%
+Query 9: Recall: 100.000000%
+Query 10: Recall: 85.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 96.000000%
+Query 13: Recall: 77.000000%
+Query 14: Recall: 53.000000%
+Query 15: Recall: 100.000000%
+Query 16: Recall: 98.000000%
+Query 17: Recall: 94.000000%
+Query 18: Recall: 93.000000%
+Query 19: Recall: 98.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 95.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 96.000000%
+Query 25: Recall: 95.000000%
+Query 26: Recall: 99.000000%
+Query 27: Recall: 97.000000%
+Query 28: Recall: 97.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 89.000000%
+Query 32: Recall: 91.000000%
+Query 33: Recall: 87.000000%
+Query 34: Recall: 85.000000%
+Query 35: Recall: 80.000000%
+Query 36: Recall: 95.000000%
+Query 37: Recall: 98.000000%
+Query 38: Recall: 95.000000%
+Query 39: Recall: 98.000000%
+Query 40: Recall: 84.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 74.000000%
+Query 43: Recall: 89.000000%
+Query 44: Recall: 94.000000%
+Query 45: Recall: 94.000000%
+Query 46: Recall: 96.000000%
+Query 47: Recall: 73.000000%
+Query 48: Recall: 81.000000%
+Query 49: Recall: 99.000000%
+Avg Distance Computation: 1827
+Max Recall: 100.000000, Min Recall: 53.000000, Num Recall below 75%: 3.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 91.860000, Recall with bad clusters: 0.000000
+Started Iteration: 7
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 202, Max: 960, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 77031.496005
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.288920, Max: 0.300082, Avg: 0.294501, Power Avg (worst): 0.294237, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 75520.992265, Max: 78541.999745, Avg: 77031.496005
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 57841.793193, Max: 92098.307322, Avg: 77031.496005
+Query 0: Recall: 92.000000%
+Query 1: Recall: 99.000000%
+Query 2: Recall: 77.000000%
+Query 3: Recall: 100.000000%
+Query 4: Recall: 99.000000%
+Query 5: Recall: 76.000000%
+Query 6: Recall: 94.000000%
+Query 7: Recall: 91.000000%
+Query 8: Recall: 94.000000%
+Query 9: Recall: 100.000000%
+Query 10: Recall: 85.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 96.000000%
+Query 13: Recall: 77.000000%
+Query 14: Recall: 53.000000%
+Query 15: Recall: 100.000000%
+Query 16: Recall: 98.000000%
+Query 17: Recall: 94.000000%
+Query 18: Recall: 93.000000%
+Query 19: Recall: 98.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 95.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 96.000000%
+Query 25: Recall: 95.000000%
+Query 26: Recall: 99.000000%
+Query 27: Recall: 97.000000%
+Query 28: Recall: 97.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 89.000000%
+Query 32: Recall: 91.000000%
+Query 33: Recall: 87.000000%
+Query 34: Recall: 85.000000%
+Query 35: Recall: 80.000000%
+Query 36: Recall: 95.000000%
+Query 37: Recall: 98.000000%
+Query 38: Recall: 95.000000%
+Query 39: Recall: 98.000000%
+Query 40: Recall: 84.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 74.000000%
+Query 43: Recall: 89.000000%
+Query 44: Recall: 94.000000%
+Query 45: Recall: 94.000000%
+Query 46: Recall: 96.000000%
+Query 47: Recall: 73.000000%
+Query 48: Recall: 81.000000%
+Query 49: Recall: 99.000000%
+Avg Distance Computation: 1827
+Max Recall: 100.000000, Min Recall: 53.000000, Num Recall below 75%: 3.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 86.000000%
+Query 1: Recall: 97.000000%
+Query 2: Recall: 94.000000%
+Query 3: Recall: 96.000000%
+Query 4: Recall: 100.000000%
+Query 5: Recall: 45.000000%
+Query 6: Recall: 96.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 97.000000%
+Query 9: Recall: 100.000000%
+Query 10: Recall: 71.000000%
+Query 11: Recall: 98.000000%
+Query 12: Recall: 94.000000%
+Query 13: Recall: 96.000000%
+Query 14: Recall: 88.000000%
+Query 15: Recall: 83.000000%
+Query 16: Recall: 95.000000%
+Query 17: Recall: 89.000000%
+Query 18: Recall: 85.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 96.000000%
+Query 26: Recall: 95.000000%
+Query 27: Recall: 72.000000%
+Query 28: Recall: 90.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 100.000000%
+Query 31: Recall: 79.000000%
+Query 32: Recall: 90.000000%
+Query 33: Recall: 81.000000%
+Query 34: Recall: 98.000000%
+Query 35: Recall: 86.000000%
+Query 36: Recall: 81.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 70.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 91.000000%
+Query 41: Recall: 98.000000%
+Query 42: Recall: 82.000000%
+Query 43: Recall: 80.000000%
+Query 44: Recall: 94.000000%
+Query 45: Recall: 75.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 80.000000%
+Query 48: Recall: 82.000000%
+Query 49: Recall: 99.000000%
+Avg Distance Computation: 1733
+Max Recall: 100.000000, Min Recall: 45.000000, Num Recall below 75%: 4.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 90.360000, Recall with bad clusters: 0.000000
+Started Iteration: 8
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 234, Max: 1037, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76320.542844
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.296170, Max: 0.308120, Avg: 0.302145, Power Avg (worst): 0.301850, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 75495.000766, Max: 77146.084923, Avg: 76320.542844
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 53799.727520, Max: 92293.348138, Avg: 76320.542844
+Query 0: Recall: 86.000000%
+Query 1: Recall: 97.000000%
+Query 2: Recall: 94.000000%
+Query 3: Recall: 96.000000%
+Query 4: Recall: 100.000000%
+Query 5: Recall: 45.000000%
+Query 6: Recall: 96.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 97.000000%
+Query 9: Recall: 100.000000%
+Query 10: Recall: 71.000000%
+Query 11: Recall: 98.000000%
+Query 12: Recall: 94.000000%
+Query 13: Recall: 96.000000%
+Query 14: Recall: 88.000000%
+Query 15: Recall: 83.000000%
+Query 16: Recall: 95.000000%
+Query 17: Recall: 89.000000%
+Query 18: Recall: 85.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 96.000000%
+Query 26: Recall: 95.000000%
+Query 27: Recall: 72.000000%
+Query 28: Recall: 90.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 100.000000%
+Query 31: Recall: 79.000000%
+Query 32: Recall: 90.000000%
+Query 33: Recall: 81.000000%
+Query 34: Recall: 98.000000%
+Query 35: Recall: 86.000000%
+Query 36: Recall: 81.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 70.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 91.000000%
+Query 41: Recall: 98.000000%
+Query 42: Recall: 82.000000%
+Query 43: Recall: 80.000000%
+Query 44: Recall: 94.000000%
+Query 45: Recall: 75.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 80.000000%
+Query 48: Recall: 82.000000%
+Query 49: Recall: 99.000000%
+Avg Distance Computation: 1733
+Max Recall: 100.000000, Min Recall: 45.000000, Num Recall below 75%: 4.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 90.000000%
+Query 1: Recall: 76.000000%
+Query 2: Recall: 100.000000%
+Query 3: Recall: 90.000000%
+Query 4: Recall: 73.000000%
+Query 5: Recall: 73.000000%
+Query 6: Recall: 86.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 92.000000%
+Query 9: Recall: 88.000000%
+Query 10: Recall: 80.000000%
+Query 11: Recall: 96.000000%
+Query 12: Recall: 95.000000%
+Query 13: Recall: 88.000000%
+Query 14: Recall: 78.000000%
+Query 15: Recall: 97.000000%
+Query 16: Recall: 96.000000%
+Query 17: Recall: 80.000000%
+Query 18: Recall: 97.000000%
+Query 19: Recall: 85.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 91.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 93.000000%
+Query 24: Recall: 90.000000%
+Query 25: Recall: 95.000000%
+Query 26: Recall: 69.000000%
+Query 27: Recall: 98.000000%
+Query 28: Recall: 82.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 87.000000%
+Query 32: Recall: 94.000000%
+Query 33: Recall: 77.000000%
+Query 34: Recall: 85.000000%
+Query 35: Recall: 81.000000%
+Query 36: Recall: 65.000000%
+Query 37: Recall: 99.000000%
+Query 38: Recall: 88.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 82.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 73.000000%
+Query 43: Recall: 91.000000%
+Query 44: Recall: 99.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 99.000000%
+Query 47: Recall: 68.000000%
+Query 48: Recall: 61.000000%
+Query 49: Recall: 98.000000%
+Avg Distance Computation: 1667
+Max Recall: 100.000000, Min Recall: 61.000000, Num Recall below 75%: 7.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.460000, Recall with bad clusters: 0.000000
+Started Iteration: 9
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 256, Max: 870, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75767.251625
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.298876, Max: 0.307299, Avg: 0.303087, Power Avg (worst): 0.302941, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 73833.703971, Max: 77700.799279, Avg: 75767.251625
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 51589.459262, Max: 94700.914232, Avg: 75767.251625
+Query 0: Recall: 90.000000%
+Query 1: Recall: 76.000000%
+Query 2: Recall: 100.000000%
+Query 3: Recall: 90.000000%
+Query 4: Recall: 73.000000%
+Query 5: Recall: 73.000000%
+Query 6: Recall: 86.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 92.000000%
+Query 9: Recall: 88.000000%
+Query 10: Recall: 80.000000%
+Query 11: Recall: 96.000000%
+Query 12: Recall: 95.000000%
+Query 13: Recall: 88.000000%
+Query 14: Recall: 78.000000%
+Query 15: Recall: 97.000000%
+Query 16: Recall: 96.000000%
+Query 17: Recall: 80.000000%
+Query 18: Recall: 97.000000%
+Query 19: Recall: 85.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 91.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 93.000000%
+Query 24: Recall: 90.000000%
+Query 25: Recall: 95.000000%
+Query 26: Recall: 69.000000%
+Query 27: Recall: 98.000000%
+Query 28: Recall: 82.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 87.000000%
+Query 32: Recall: 94.000000%
+Query 33: Recall: 77.000000%
+Query 34: Recall: 85.000000%
+Query 35: Recall: 81.000000%
+Query 36: Recall: 65.000000%
+Query 37: Recall: 99.000000%
+Query 38: Recall: 88.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 82.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 73.000000%
+Query 43: Recall: 91.000000%
+Query 44: Recall: 99.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 99.000000%
+Query 47: Recall: 68.000000%
+Query 48: Recall: 61.000000%
+Query 49: Recall: 98.000000%
+Avg Distance Computation: 1667
+Max Recall: 100.000000, Min Recall: 61.000000, Num Recall below 75%: 7.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 95.000000%
+Query 1: Recall: 93.000000%
+Query 2: Recall: 95.000000%
+Query 3: Recall: 89.000000%
+Query 4: Recall: 49.000000%
+Query 5: Recall: 73.000000%
+Query 6: Recall: 95.000000%
+Query 7: Recall: 98.000000%
+Query 8: Recall: 98.000000%
+Query 9: Recall: 96.000000%
+Query 10: Recall: 86.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 97.000000%
+Query 13: Recall: 76.000000%
+Query 14: Recall: 79.000000%
+Query 15: Recall: 100.000000%
+Query 16: Recall: 94.000000%
+Query 17: Recall: 88.000000%
+Query 18: Recall: 65.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 97.000000%
+Query 24: Recall: 98.000000%
+Query 25: Recall: 96.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 98.000000%
+Query 28: Recall: 96.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 39.000000%
+Query 31: Recall: 73.000000%
+Query 32: Recall: 92.000000%
+Query 33: Recall: 73.000000%
+Query 34: Recall: 79.000000%
+Query 35: Recall: 82.000000%
+Query 36: Recall: 84.000000%
+Query 37: Recall: 96.000000%
+Query 38: Recall: 85.000000%
+Query 39: Recall: 99.000000%
+Query 40: Recall: 87.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 62.000000%
+Query 43: Recall: 95.000000%
+Query 44: Recall: 91.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 97.000000%
+Query 47: Recall: 78.000000%
+Query 48: Recall: 76.000000%
+Query 49: Recall: 95.000000%
+Avg Distance Computation: 1828
+Max Recall: 100.000000, Min Recall: 39.000000, Num Recall below 75%: 7.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.500000, Recall with bad clusters: 0.000000
+Started Iteration: 10
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 206, Max: 1015, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75277.896244
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.288621, Max: 0.316134, Avg: 0.302378, Power Avg (worst): 0.300822, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 74337.542060, Max: 76218.250428, Avg: 75277.896244
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 51081.189676, Max: 90921.686211, Avg: 75277.896244
+Query 0: Recall: 95.000000%
+Query 1: Recall: 93.000000%
+Query 2: Recall: 95.000000%
+Query 3: Recall: 89.000000%
+Query 4: Recall: 49.000000%
+Query 5: Recall: 73.000000%
+Query 6: Recall: 95.000000%
+Query 7: Recall: 98.000000%
+Query 8: Recall: 98.000000%
+Query 9: Recall: 96.000000%
+Query 10: Recall: 86.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 97.000000%
+Query 13: Recall: 76.000000%
+Query 14: Recall: 79.000000%
+Query 15: Recall: 100.000000%
+Query 16: Recall: 94.000000%
+Query 17: Recall: 88.000000%
+Query 18: Recall: 65.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 97.000000%
+Query 24: Recall: 98.000000%
+Query 25: Recall: 96.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 98.000000%
+Query 28: Recall: 96.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 39.000000%
+Query 31: Recall: 73.000000%
+Query 32: Recall: 92.000000%
+Query 33: Recall: 73.000000%
+Query 34: Recall: 79.000000%
+Query 35: Recall: 82.000000%
+Query 36: Recall: 84.000000%
+Query 37: Recall: 96.000000%
+Query 38: Recall: 85.000000%
+Query 39: Recall: 99.000000%
+Query 40: Recall: 87.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 62.000000%
+Query 43: Recall: 95.000000%
+Query 44: Recall: 91.000000%
+Query 45: Recall: 100.000000%
+Query 46: Recall: 97.000000%
+Query 47: Recall: 78.000000%
+Query 48: Recall: 76.000000%
+Query 49: Recall: 95.000000%
+Avg Distance Computation: 1828
+Max Recall: 100.000000, Min Recall: 39.000000, Num Recall below 75%: 7.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 92.000000%
+Query 1: Recall: 96.000000%
+Query 2: Recall: 83.000000%
+Query 3: Recall: 88.000000%
+Query 4: Recall: 96.000000%
+Query 5: Recall: 80.000000%
+Query 6: Recall: 90.000000%
+Query 7: Recall: 98.000000%
+Query 8: Recall: 90.000000%
+Query 9: Recall: 94.000000%
+Query 10: Recall: 90.000000%
+Query 11: Recall: 97.000000%
+Query 12: Recall: 70.000000%
+Query 13: Recall: 91.000000%
+Query 14: Recall: 94.000000%
+Query 15: Recall: 73.000000%
+Query 16: Recall: 86.000000%
+Query 17: Recall: 89.000000%
+Query 18: Recall: 70.000000%
+Query 19: Recall: 87.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 99.000000%
+Query 22: Recall: 97.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 94.000000%
+Query 25: Recall: 93.000000%
+Query 26: Recall: 98.000000%
+Query 27: Recall: 93.000000%
+Query 28: Recall: 97.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 41.000000%
+Query 31: Recall: 70.000000%
+Query 32: Recall: 90.000000%
+Query 33: Recall: 70.000000%
+Query 34: Recall: 90.000000%
+Query 35: Recall: 65.000000%
+Query 36: Recall: 72.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 91.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 78.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 79.000000%
+Query 43: Recall: 90.000000%
+Query 44: Recall: 93.000000%
+Query 45: Recall: 76.000000%
+Query 46: Recall: 96.000000%
+Query 47: Recall: 57.000000%
+Query 48: Recall: 68.000000%
+Query 49: Recall: 88.000000%
+Avg Distance Computation: 1608
+Max Recall: 100.000000, Min Recall: 41.000000, Num Recall below 75%: 10.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 86.740000, Recall with bad clusters: 0.000000
+Started Iteration: 11
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 315, Max: 778, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75979.434321
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.292202, Max: 0.295290, Avg: 0.293746, Power Avg (worst): 0.293726, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 74303.109454, Max: 77655.759188, Avg: 75979.434321
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 53653.356659, Max: 91568.996790, Avg: 75979.434321
+Query 0: Recall: 92.000000%
+Query 1: Recall: 96.000000%
+Query 2: Recall: 83.000000%
+Query 3: Recall: 88.000000%
+Query 4: Recall: 96.000000%
+Query 5: Recall: 80.000000%
+Query 6: Recall: 90.000000%
+Query 7: Recall: 98.000000%
+Query 8: Recall: 90.000000%
+Query 9: Recall: 94.000000%
+Query 10: Recall: 90.000000%
+Query 11: Recall: 97.000000%
+Query 12: Recall: 70.000000%
+Query 13: Recall: 91.000000%
+Query 14: Recall: 94.000000%
+Query 15: Recall: 73.000000%
+Query 16: Recall: 86.000000%
+Query 17: Recall: 89.000000%
+Query 18: Recall: 70.000000%
+Query 19: Recall: 87.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 99.000000%
+Query 22: Recall: 97.000000%
+Query 23: Recall: 98.000000%
+Query 24: Recall: 94.000000%
+Query 25: Recall: 93.000000%
+Query 26: Recall: 98.000000%
+Query 27: Recall: 93.000000%
+Query 28: Recall: 97.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 41.000000%
+Query 31: Recall: 70.000000%
+Query 32: Recall: 90.000000%
+Query 33: Recall: 70.000000%
+Query 34: Recall: 90.000000%
+Query 35: Recall: 65.000000%
+Query 36: Recall: 72.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 91.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 78.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 79.000000%
+Query 43: Recall: 90.000000%
+Query 44: Recall: 93.000000%
+Query 45: Recall: 76.000000%
+Query 46: Recall: 96.000000%
+Query 47: Recall: 57.000000%
+Query 48: Recall: 68.000000%
+Query 49: Recall: 88.000000%
+Avg Distance Computation: 1608
+Max Recall: 100.000000, Min Recall: 41.000000, Num Recall below 75%: 10.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 93.000000%
+Query 1: Recall: 79.000000%
+Query 2: Recall: 99.000000%
+Query 3: Recall: 100.000000%
+Query 4: Recall: 100.000000%
+Query 5: Recall: 62.000000%
+Query 6: Recall: 95.000000%
+Query 7: Recall: 99.000000%
+Query 8: Recall: 90.000000%
+Query 9: Recall: 96.000000%
+Query 10: Recall: 82.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 97.000000%
+Query 13: Recall: 81.000000%
+Query 14: Recall: 92.000000%
+Query 15: Recall: 87.000000%
+Query 16: Recall: 90.000000%
+Query 17: Recall: 93.000000%
+Query 18: Recall: 100.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 97.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 100.000000%
+Query 24: Recall: 95.000000%
+Query 25: Recall: 66.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 71.000000%
+Query 28: Recall: 98.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 95.000000%
+Query 31: Recall: 80.000000%
+Query 32: Recall: 80.000000%
+Query 33: Recall: 96.000000%
+Query 34: Recall: 94.000000%
+Query 35: Recall: 62.000000%
+Query 36: Recall: 79.000000%
+Query 37: Recall: 97.000000%
+Query 38: Recall: 96.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 61.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 87.000000%
+Query 43: Recall: 94.000000%
+Query 44: Recall: 97.000000%
+Query 45: Recall: 52.000000%
+Query 46: Recall: 93.000000%
+Query 47: Recall: 50.000000%
+Query 48: Recall: 84.000000%
+Query 49: Recall: 98.000000%
+Avg Distance Computation: 1767
+Max Recall: 100.000000, Min Recall: 50.000000, Num Recall below 75%: 7.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.960000, Recall with bad clusters: 0.000000
+Started Iteration: 12
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 294, Max: 921, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76156.280390
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.294713, Max: 0.308089, Avg: 0.301401, Power Avg (worst): 0.301031, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 75880.416859, Max: 76432.143920, Avg: 76156.280390
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 50627.598398, Max: 93322.121678, Avg: 76156.280390
+Query 0: Recall: 93.000000%
+Query 1: Recall: 79.000000%
+Query 2: Recall: 99.000000%
+Query 3: Recall: 100.000000%
+Query 4: Recall: 100.000000%
+Query 5: Recall: 62.000000%
+Query 6: Recall: 95.000000%
+Query 7: Recall: 99.000000%
+Query 8: Recall: 90.000000%
+Query 9: Recall: 96.000000%
+Query 10: Recall: 82.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 97.000000%
+Query 13: Recall: 81.000000%
+Query 14: Recall: 92.000000%
+Query 15: Recall: 87.000000%
+Query 16: Recall: 90.000000%
+Query 17: Recall: 93.000000%
+Query 18: Recall: 100.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 97.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 100.000000%
+Query 24: Recall: 95.000000%
+Query 25: Recall: 66.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 71.000000%
+Query 28: Recall: 98.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 95.000000%
+Query 31: Recall: 80.000000%
+Query 32: Recall: 80.000000%
+Query 33: Recall: 96.000000%
+Query 34: Recall: 94.000000%
+Query 35: Recall: 62.000000%
+Query 36: Recall: 79.000000%
+Query 37: Recall: 97.000000%
+Query 38: Recall: 96.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 61.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 87.000000%
+Query 43: Recall: 94.000000%
+Query 44: Recall: 97.000000%
+Query 45: Recall: 52.000000%
+Query 46: Recall: 93.000000%
+Query 47: Recall: 50.000000%
+Query 48: Recall: 84.000000%
+Query 49: Recall: 98.000000%
+Avg Distance Computation: 1767
+Max Recall: 100.000000, Min Recall: 50.000000, Num Recall below 75%: 7.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 87.000000%
+Query 1: Recall: 88.000000%
+Query 2: Recall: 98.000000%
+Query 3: Recall: 96.000000%
+Query 4: Recall: 83.000000%
+Query 5: Recall: 77.000000%
+Query 6: Recall: 87.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 89.000000%
+Query 9: Recall: 73.000000%
+Query 10: Recall: 89.000000%
+Query 11: Recall: 97.000000%
+Query 12: Recall: 92.000000%
+Query 13: Recall: 80.000000%
+Query 14: Recall: 98.000000%
+Query 15: Recall: 93.000000%
+Query 16: Recall: 94.000000%
+Query 17: Recall: 90.000000%
+Query 18: Recall: 100.000000%
+Query 19: Recall: 92.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 79.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 83.000000%
+Query 26: Recall: 96.000000%
+Query 27: Recall: 49.000000%
+Query 28: Recall: 97.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 88.000000%
+Query 32: Recall: 71.000000%
+Query 33: Recall: 83.000000%
+Query 34: Recall: 80.000000%
+Query 35: Recall: 86.000000%
+Query 36: Recall: 75.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 64.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 89.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 85.000000%
+Query 43: Recall: 78.000000%
+Query 44: Recall: 91.000000%
+Query 45: Recall: 97.000000%
+Query 46: Recall: 97.000000%
+Query 47: Recall: 74.000000%
+Query 48: Recall: 63.000000%
+Query 49: Recall: 95.000000%
+Avg Distance Computation: 1711
+Max Recall: 100.000000, Min Recall: 49.000000, Num Recall below 75%: 6.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.320000, Recall with bad clusters: 0.000000
+Started Iteration: 13
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 128, Max: 868, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75918.153591
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.308583, Max: 0.319244, Avg: 0.313914, Power Avg (worst): 0.313688, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 74336.206082, Max: 77500.101100, Avg: 75918.153591
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 51270.732060, Max: 90310.465929, Avg: 75918.153591
+Query 0: Recall: 87.000000%
+Query 1: Recall: 88.000000%
+Query 2: Recall: 98.000000%
+Query 3: Recall: 96.000000%
+Query 4: Recall: 83.000000%
+Query 5: Recall: 77.000000%
+Query 6: Recall: 87.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 89.000000%
+Query 9: Recall: 73.000000%
+Query 10: Recall: 89.000000%
+Query 11: Recall: 97.000000%
+Query 12: Recall: 92.000000%
+Query 13: Recall: 80.000000%
+Query 14: Recall: 98.000000%
+Query 15: Recall: 93.000000%
+Query 16: Recall: 94.000000%
+Query 17: Recall: 90.000000%
+Query 18: Recall: 100.000000%
+Query 19: Recall: 92.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 79.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 83.000000%
+Query 26: Recall: 96.000000%
+Query 27: Recall: 49.000000%
+Query 28: Recall: 97.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 88.000000%
+Query 32: Recall: 71.000000%
+Query 33: Recall: 83.000000%
+Query 34: Recall: 80.000000%
+Query 35: Recall: 86.000000%
+Query 36: Recall: 75.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 64.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 89.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 85.000000%
+Query 43: Recall: 78.000000%
+Query 44: Recall: 91.000000%
+Query 45: Recall: 97.000000%
+Query 46: Recall: 97.000000%
+Query 47: Recall: 74.000000%
+Query 48: Recall: 63.000000%
+Query 49: Recall: 95.000000%
+Avg Distance Computation: 1711
+Max Recall: 100.000000, Min Recall: 49.000000, Num Recall below 75%: 6.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 94.000000%
+Query 1: Recall: 97.000000%
+Query 2: Recall: 98.000000%
+Query 3: Recall: 95.000000%
+Query 4: Recall: 65.000000%
+Query 5: Recall: 67.000000%
+Query 6: Recall: 85.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 90.000000%
+Query 9: Recall: 85.000000%
+Query 10: Recall: 81.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 96.000000%
+Query 13: Recall: 83.000000%
+Query 14: Recall: 80.000000%
+Query 15: Recall: 93.000000%
+Query 16: Recall: 92.000000%
+Query 17: Recall: 85.000000%
+Query 18: Recall: 96.000000%
+Query 19: Recall: 95.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 94.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 91.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 58.000000%
+Query 26: Recall: 95.000000%
+Query 27: Recall: 66.000000%
+Query 28: Recall: 92.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 92.000000%
+Query 32: Recall: 84.000000%
+Query 33: Recall: 94.000000%
+Query 34: Recall: 88.000000%
+Query 35: Recall: 55.000000%
+Query 36: Recall: 74.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 93.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 88.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 64.000000%
+Query 43: Recall: 89.000000%
+Query 44: Recall: 91.000000%
+Query 45: Recall: 83.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 76.000000%
+Query 48: Recall: 77.000000%
+Query 49: Recall: 99.000000%
+Avg Distance Computation: 1636
+Max Recall: 100.000000, Min Recall: 55.000000, Num Recall below 75%: 7.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.320000, Recall with bad clusters: 0.000000
+Started Iteration: 14
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 289, Max: 869, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76839.275383
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.304577, Max: 0.308094, Avg: 0.306335, Power Avg (worst): 0.306310, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 75531.224307, Max: 78147.326459, Avg: 76839.275383
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 55864.654845, Max: 94215.326823, Avg: 76839.275383
+Query 0: Recall: 94.000000%
+Query 1: Recall: 97.000000%
+Query 2: Recall: 98.000000%
+Query 3: Recall: 95.000000%
+Query 4: Recall: 65.000000%
+Query 5: Recall: 67.000000%
+Query 6: Recall: 85.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 90.000000%
+Query 9: Recall: 85.000000%
+Query 10: Recall: 81.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 96.000000%
+Query 13: Recall: 83.000000%
+Query 14: Recall: 80.000000%
+Query 15: Recall: 93.000000%
+Query 16: Recall: 92.000000%
+Query 17: Recall: 85.000000%
+Query 18: Recall: 96.000000%
+Query 19: Recall: 95.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 94.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 91.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 58.000000%
+Query 26: Recall: 95.000000%
+Query 27: Recall: 66.000000%
+Query 28: Recall: 92.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 98.000000%
+Query 31: Recall: 92.000000%
+Query 32: Recall: 84.000000%
+Query 33: Recall: 94.000000%
+Query 34: Recall: 88.000000%
+Query 35: Recall: 55.000000%
+Query 36: Recall: 74.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 93.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 88.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 64.000000%
+Query 43: Recall: 89.000000%
+Query 44: Recall: 91.000000%
+Query 45: Recall: 83.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 76.000000%
+Query 48: Recall: 77.000000%
+Query 49: Recall: 99.000000%
+Avg Distance Computation: 1636
+Max Recall: 100.000000, Min Recall: 55.000000, Num Recall below 75%: 7.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 92.000000%
+Query 1: Recall: 88.000000%
+Query 2: Recall: 99.000000%
+Query 3: Recall: 95.000000%
+Query 4: Recall: 86.000000%
+Query 5: Recall: 61.000000%
+Query 6: Recall: 89.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 98.000000%
+Query 9: Recall: 82.000000%
+Query 10: Recall: 78.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 95.000000%
+Query 13: Recall: 84.000000%
+Query 14: Recall: 85.000000%
+Query 15: Recall: 99.000000%
+Query 16: Recall: 93.000000%
+Query 17: Recall: 85.000000%
+Query 18: Recall: 79.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 87.000000%
+Query 22: Recall: 98.000000%
+Query 23: Recall: 80.000000%
+Query 24: Recall: 90.000000%
+Query 25: Recall: 94.000000%
+Query 26: Recall: 92.000000%
+Query 27: Recall: 92.000000%
+Query 28: Recall: 96.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 73.000000%
+Query 31: Recall: 86.000000%
+Query 32: Recall: 90.000000%
+Query 33: Recall: 83.000000%
+Query 34: Recall: 89.000000%
+Query 35: Recall: 59.000000%
+Query 36: Recall: 74.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 90.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 86.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 88.000000%
+Query 43: Recall: 81.000000%
+Query 44: Recall: 95.000000%
+Query 45: Recall: 76.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 66.000000%
+Query 48: Recall: 74.000000%
+Query 49: Recall: 94.000000%
+Avg Distance Computation: 1618
+Max Recall: 100.000000, Min Recall: 59.000000, Num Recall below 75%: 6.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.320000, Recall with bad clusters: 0.000000
+Started Iteration: 15
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 94, Max: 717, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76579.517558
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.294597, Max: 0.305171, Avg: 0.299884, Power Avg (worst): 0.299651, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 75711.209648, Max: 77447.825468, Avg: 76579.517558
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 56869.335350, Max: 92424.354056, Avg: 76579.517558
+Query 0: Recall: 92.000000%
+Query 1: Recall: 88.000000%
+Query 2: Recall: 99.000000%
+Query 3: Recall: 95.000000%
+Query 4: Recall: 86.000000%
+Query 5: Recall: 61.000000%
+Query 6: Recall: 89.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 98.000000%
+Query 9: Recall: 82.000000%
+Query 10: Recall: 78.000000%
+Query 11: Recall: 100.000000%
+Query 12: Recall: 95.000000%
+Query 13: Recall: 84.000000%
+Query 14: Recall: 85.000000%
+Query 15: Recall: 99.000000%
+Query 16: Recall: 93.000000%
+Query 17: Recall: 85.000000%
+Query 18: Recall: 79.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 87.000000%
+Query 22: Recall: 98.000000%
+Query 23: Recall: 80.000000%
+Query 24: Recall: 90.000000%
+Query 25: Recall: 94.000000%
+Query 26: Recall: 92.000000%
+Query 27: Recall: 92.000000%
+Query 28: Recall: 96.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 73.000000%
+Query 31: Recall: 86.000000%
+Query 32: Recall: 90.000000%
+Query 33: Recall: 83.000000%
+Query 34: Recall: 89.000000%
+Query 35: Recall: 59.000000%
+Query 36: Recall: 74.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 90.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 86.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 88.000000%
+Query 43: Recall: 81.000000%
+Query 44: Recall: 95.000000%
+Query 45: Recall: 76.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 66.000000%
+Query 48: Recall: 74.000000%
+Query 49: Recall: 94.000000%
+Avg Distance Computation: 1618
+Max Recall: 100.000000, Min Recall: 59.000000, Num Recall below 75%: 6.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 85.000000%
+Query 1: Recall: 94.000000%
+Query 2: Recall: 97.000000%
+Query 3: Recall: 99.000000%
+Query 4: Recall: 91.000000%
+Query 5: Recall: 71.000000%
+Query 6: Recall: 83.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 91.000000%
+Query 9: Recall: 97.000000%
+Query 10: Recall: 81.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 88.000000%
+Query 13: Recall: 90.000000%
+Query 14: Recall: 81.000000%
+Query 15: Recall: 98.000000%
+Query 16: Recall: 82.000000%
+Query 17: Recall: 89.000000%
+Query 18: Recall: 94.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 94.000000%
+Query 23: Recall: 97.000000%
+Query 24: Recall: 79.000000%
+Query 25: Recall: 65.000000%
+Query 26: Recall: 67.000000%
+Query 27: Recall: 89.000000%
+Query 28: Recall: 93.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 97.000000%
+Query 31: Recall: 75.000000%
+Query 32: Recall: 72.000000%
+Query 33: Recall: 84.000000%
+Query 34: Recall: 74.000000%
+Query 35: Recall: 73.000000%
+Query 36: Recall: 79.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 85.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 86.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 93.000000%
+Query 43: Recall: 86.000000%
+Query 44: Recall: 89.000000%
+Query 45: Recall: 92.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 68.000000%
+Query 48: Recall: 62.000000%
+Query 49: Recall: 50.000000%
+Avg Distance Computation: 1627
+Max Recall: 100.000000, Min Recall: 50.000000, Num Recall below 75%: 9.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 87.080000, Recall with bad clusters: 0.000000
+Started Iteration: 16
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 209, Max: 713, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76698.020895
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.289869, Max: 0.304344, Avg: 0.297106, Power Avg (worst): 0.296666, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 75753.251239, Max: 77642.790552, Avg: 76698.020895
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 54093.535918, Max: 100373.937201, Avg: 76698.020895
+Query 0: Recall: 85.000000%
+Query 1: Recall: 94.000000%
+Query 2: Recall: 97.000000%
+Query 3: Recall: 99.000000%
+Query 4: Recall: 91.000000%
+Query 5: Recall: 71.000000%
+Query 6: Recall: 83.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 91.000000%
+Query 9: Recall: 97.000000%
+Query 10: Recall: 81.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 88.000000%
+Query 13: Recall: 90.000000%
+Query 14: Recall: 81.000000%
+Query 15: Recall: 98.000000%
+Query 16: Recall: 82.000000%
+Query 17: Recall: 89.000000%
+Query 18: Recall: 94.000000%
+Query 19: Recall: 96.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 94.000000%
+Query 23: Recall: 97.000000%
+Query 24: Recall: 79.000000%
+Query 25: Recall: 65.000000%
+Query 26: Recall: 67.000000%
+Query 27: Recall: 89.000000%
+Query 28: Recall: 93.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 97.000000%
+Query 31: Recall: 75.000000%
+Query 32: Recall: 72.000000%
+Query 33: Recall: 84.000000%
+Query 34: Recall: 74.000000%
+Query 35: Recall: 73.000000%
+Query 36: Recall: 79.000000%
+Query 37: Recall: 100.000000%
+Query 38: Recall: 85.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 86.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 93.000000%
+Query 43: Recall: 86.000000%
+Query 44: Recall: 89.000000%
+Query 45: Recall: 92.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 68.000000%
+Query 48: Recall: 62.000000%
+Query 49: Recall: 50.000000%
+Avg Distance Computation: 1627
+Max Recall: 100.000000, Min Recall: 50.000000, Num Recall below 75%: 9.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 93.000000%
+Query 1: Recall: 84.000000%
+Query 2: Recall: 97.000000%
+Query 3: Recall: 67.000000%
+Query 4: Recall: 95.000000%
+Query 5: Recall: 69.000000%
+Query 6: Recall: 92.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 96.000000%
+Query 9: Recall: 97.000000%
+Query 10: Recall: 82.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 89.000000%
+Query 13: Recall: 92.000000%
+Query 14: Recall: 86.000000%
+Query 15: Recall: 94.000000%
+Query 16: Recall: 83.000000%
+Query 17: Recall: 97.000000%
+Query 18: Recall: 98.000000%
+Query 19: Recall: 88.000000%
+Query 20: Recall: 98.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 57.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 79.000000%
+Query 26: Recall: 93.000000%
+Query 27: Recall: 76.000000%
+Query 28: Recall: 98.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 96.000000%
+Query 31: Recall: 88.000000%
+Query 32: Recall: 88.000000%
+Query 33: Recall: 76.000000%
+Query 34: Recall: 93.000000%
+Query 35: Recall: 77.000000%
+Query 36: Recall: 67.000000%
+Query 37: Recall: 97.000000%
+Query 38: Recall: 80.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 94.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 98.000000%
+Query 43: Recall: 92.000000%
+Query 44: Recall: 92.000000%
+Query 45: Recall: 88.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 86.000000%
+Query 48: Recall: 81.000000%
+Query 49: Recall: 98.000000%
+Avg Distance Computation: 1688
+Max Recall: 100.000000, Min Recall: 57.000000, Num Recall below 75%: 4.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 89.720000, Recall with bad clusters: 0.000000
+Started Iteration: 17
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 156, Max: 933, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 76253.205847
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.306574, Max: 0.316684, Avg: 0.311629, Power Avg (worst): 0.311424, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 75040.194053, Max: 77466.217640, Avg: 76253.205847
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 56608.717672, Max: 90507.287356, Avg: 76253.205847
+Query 0: Recall: 93.000000%
+Query 1: Recall: 84.000000%
+Query 2: Recall: 97.000000%
+Query 3: Recall: 67.000000%
+Query 4: Recall: 95.000000%
+Query 5: Recall: 69.000000%
+Query 6: Recall: 92.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 96.000000%
+Query 9: Recall: 97.000000%
+Query 10: Recall: 82.000000%
+Query 11: Recall: 99.000000%
+Query 12: Recall: 89.000000%
+Query 13: Recall: 92.000000%
+Query 14: Recall: 86.000000%
+Query 15: Recall: 94.000000%
+Query 16: Recall: 83.000000%
+Query 17: Recall: 97.000000%
+Query 18: Recall: 98.000000%
+Query 19: Recall: 88.000000%
+Query 20: Recall: 98.000000%
+Query 21: Recall: 98.000000%
+Query 22: Recall: 99.000000%
+Query 23: Recall: 57.000000%
+Query 24: Recall: 99.000000%
+Query 25: Recall: 79.000000%
+Query 26: Recall: 93.000000%
+Query 27: Recall: 76.000000%
+Query 28: Recall: 98.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 96.000000%
+Query 31: Recall: 88.000000%
+Query 32: Recall: 88.000000%
+Query 33: Recall: 76.000000%
+Query 34: Recall: 93.000000%
+Query 35: Recall: 77.000000%
+Query 36: Recall: 67.000000%
+Query 37: Recall: 97.000000%
+Query 38: Recall: 80.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 94.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 98.000000%
+Query 43: Recall: 92.000000%
+Query 44: Recall: 92.000000%
+Query 45: Recall: 88.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 86.000000%
+Query 48: Recall: 81.000000%
+Query 49: Recall: 98.000000%
+Avg Distance Computation: 1688
+Max Recall: 100.000000, Min Recall: 57.000000, Num Recall below 75%: 4.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 97.000000%
+Query 1: Recall: 84.000000%
+Query 2: Recall: 98.000000%
+Query 3: Recall: 91.000000%
+Query 4: Recall: 75.000000%
+Query 5: Recall: 63.000000%
+Query 6: Recall: 98.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 87.000000%
+Query 9: Recall: 90.000000%
+Query 10: Recall: 77.000000%
+Query 11: Recall: 98.000000%
+Query 12: Recall: 92.000000%
+Query 13: Recall: 99.000000%
+Query 14: Recall: 60.000000%
+Query 15: Recall: 100.000000%
+Query 16: Recall: 94.000000%
+Query 17: Recall: 92.000000%
+Query 18: Recall: 74.000000%
+Query 19: Recall: 93.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 94.000000%
+Query 23: Recall: 95.000000%
+Query 24: Recall: 92.000000%
+Query 25: Recall: 100.000000%
+Query 26: Recall: 83.000000%
+Query 27: Recall: 99.000000%
+Query 28: Recall: 87.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 51.000000%
+Query 31: Recall: 82.000000%
+Query 32: Recall: 93.000000%
+Query 33: Recall: 78.000000%
+Query 34: Recall: 78.000000%
+Query 35: Recall: 91.000000%
+Query 36: Recall: 81.000000%
+Query 37: Recall: 94.000000%
+Query 38: Recall: 90.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 82.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 89.000000%
+Query 43: Recall: 96.000000%
+Query 44: Recall: 94.000000%
+Query 45: Recall: 79.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 75.000000%
+Query 48: Recall: 80.000000%
+Query 49: Recall: 58.000000%
+Avg Distance Computation: 1705
+Max Recall: 100.000000, Min Recall: 51.000000, Num Recall below 75%: 5.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.040000, Recall with bad clusters: 0.000000
+Started Iteration: 18
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 250, Max: 824, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75295.363818
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.302704, Max: 0.303015, Avg: 0.302860, Power Avg (worst): 0.302859, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 74141.772977, Max: 76448.954658, Avg: 75295.363818
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 48729.281501, Max: 90062.812971, Avg: 75295.363818
+Query 0: Recall: 97.000000%
+Query 1: Recall: 84.000000%
+Query 2: Recall: 98.000000%
+Query 3: Recall: 91.000000%
+Query 4: Recall: 75.000000%
+Query 5: Recall: 63.000000%
+Query 6: Recall: 98.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 87.000000%
+Query 9: Recall: 90.000000%
+Query 10: Recall: 77.000000%
+Query 11: Recall: 98.000000%
+Query 12: Recall: 92.000000%
+Query 13: Recall: 99.000000%
+Query 14: Recall: 60.000000%
+Query 15: Recall: 100.000000%
+Query 16: Recall: 94.000000%
+Query 17: Recall: 92.000000%
+Query 18: Recall: 74.000000%
+Query 19: Recall: 93.000000%
+Query 20: Recall: 100.000000%
+Query 21: Recall: 100.000000%
+Query 22: Recall: 94.000000%
+Query 23: Recall: 95.000000%
+Query 24: Recall: 92.000000%
+Query 25: Recall: 100.000000%
+Query 26: Recall: 83.000000%
+Query 27: Recall: 99.000000%
+Query 28: Recall: 87.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 51.000000%
+Query 31: Recall: 82.000000%
+Query 32: Recall: 93.000000%
+Query 33: Recall: 78.000000%
+Query 34: Recall: 78.000000%
+Query 35: Recall: 91.000000%
+Query 36: Recall: 81.000000%
+Query 37: Recall: 94.000000%
+Query 38: Recall: 90.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 82.000000%
+Query 41: Recall: 99.000000%
+Query 42: Recall: 89.000000%
+Query 43: Recall: 96.000000%
+Query 44: Recall: 94.000000%
+Query 45: Recall: 79.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 75.000000%
+Query 48: Recall: 80.000000%
+Query 49: Recall: 58.000000%
+Avg Distance Computation: 1705
+Max Recall: 100.000000, Min Recall: 51.000000, Num Recall below 75%: 5.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 85.000000%
+Query 1: Recall: 96.000000%
+Query 2: Recall: 99.000000%
+Query 3: Recall: 96.000000%
+Query 4: Recall: 88.000000%
+Query 5: Recall: 85.000000%
+Query 6: Recall: 96.000000%
+Query 7: Recall: 97.000000%
+Query 8: Recall: 95.000000%
+Query 9: Recall: 90.000000%
+Query 10: Recall: 88.000000%
+Query 11: Recall: 90.000000%
+Query 12: Recall: 96.000000%
+Query 13: Recall: 70.000000%
+Query 14: Recall: 87.000000%
+Query 15: Recall: 88.000000%
+Query 16: Recall: 95.000000%
+Query 17: Recall: 92.000000%
+Query 18: Recall: 91.000000%
+Query 19: Recall: 98.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 97.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 86.000000%
+Query 24: Recall: 97.000000%
+Query 25: Recall: 94.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 91.000000%
+Query 28: Recall: 93.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 97.000000%
+Query 31: Recall: 78.000000%
+Query 32: Recall: 80.000000%
+Query 33: Recall: 80.000000%
+Query 34: Recall: 93.000000%
+Query 35: Recall: 93.000000%
+Query 36: Recall: 97.000000%
+Query 37: Recall: 99.000000%
+Query 38: Recall: 87.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 91.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 100.000000%
+Query 43: Recall: 83.000000%
+Query 44: Recall: 96.000000%
+Query 45: Recall: 96.000000%
+Query 46: Recall: 97.000000%
+Query 47: Recall: 85.000000%
+Query 48: Recall: 69.000000%
+Query 49: Recall: 97.000000%
+Avg Distance Computation: 1746
+Max Recall: 100.000000, Min Recall: 69.000000, Num Recall below 75%: 2.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 91.880000, Recall with bad clusters: 0.000000
+Started Iteration: 19
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::saveOldScoreForMegaClusters
+Reclustering only mega centroids with size 0
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 225, Max: 927, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75942.661056
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.295360, Max: 0.307006, Avg: 0.301183, Power Avg (worst): 0.300902, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 74750.581108, Max: 77134.741004, Avg: 75942.661056
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 50325.681575, Max: 93704.310398, Avg: 75942.661056
+Query 0: Recall: 85.000000%
+Query 1: Recall: 96.000000%
+Query 2: Recall: 99.000000%
+Query 3: Recall: 96.000000%
+Query 4: Recall: 88.000000%
+Query 5: Recall: 85.000000%
+Query 6: Recall: 96.000000%
+Query 7: Recall: 97.000000%
+Query 8: Recall: 95.000000%
+Query 9: Recall: 90.000000%
+Query 10: Recall: 88.000000%
+Query 11: Recall: 90.000000%
+Query 12: Recall: 96.000000%
+Query 13: Recall: 70.000000%
+Query 14: Recall: 87.000000%
+Query 15: Recall: 88.000000%
+Query 16: Recall: 95.000000%
+Query 17: Recall: 92.000000%
+Query 18: Recall: 91.000000%
+Query 19: Recall: 98.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 97.000000%
+Query 22: Recall: 100.000000%
+Query 23: Recall: 86.000000%
+Query 24: Recall: 97.000000%
+Query 25: Recall: 94.000000%
+Query 26: Recall: 97.000000%
+Query 27: Recall: 91.000000%
+Query 28: Recall: 93.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 97.000000%
+Query 31: Recall: 78.000000%
+Query 32: Recall: 80.000000%
+Query 33: Recall: 80.000000%
+Query 34: Recall: 93.000000%
+Query 35: Recall: 93.000000%
+Query 36: Recall: 97.000000%
+Query 37: Recall: 99.000000%
+Query 38: Recall: 87.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 91.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 100.000000%
+Query 43: Recall: 83.000000%
+Query 44: Recall: 96.000000%
+Query 45: Recall: 96.000000%
+Query 46: Recall: 97.000000%
+Query 47: Recall: 85.000000%
+Query 48: Recall: 69.000000%
+Query 49: Recall: 97.000000%
+Avg Distance Computation: 1746
+Max Recall: 100.000000, Min Recall: 69.000000, Num Recall below 75%: 2.000000
+
+=== saving clustering data ===
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l2.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Total vectors assigned to clusters: 10000
+Clustering data written to HARD_LIMIT_clustering_data_l1.bin
+Binary format: num_records (int), then for each record: ROW_ID (int), Cluster_ID (int)
+Running reclusterInternalMegaCentroid on 0 with 4899 vectors
+Running reclusterInternalMegaCentroid on 1 with 5101 vectors
+Query 0: Recall: 95.000000%
+Query 1: Recall: 81.000000%
+Query 2: Recall: 96.000000%
+Query 3: Recall: 88.000000%
+Query 4: Recall: 95.000000%
+Query 5: Recall: 77.000000%
+Query 6: Recall: 80.000000%
+Query 7: Recall: 100.000000%
+Query 8: Recall: 90.000000%
+Query 9: Recall: 96.000000%
+Query 10: Recall: 82.000000%
+Query 11: Recall: 92.000000%
+Query 12: Recall: 97.000000%
+Query 13: Recall: 93.000000%
+Query 14: Recall: 96.000000%
+Query 15: Recall: 61.000000%
+Query 16: Recall: 78.000000%
+Query 17: Recall: 91.000000%
+Query 18: Recall: 87.000000%
+Query 19: Recall: 83.000000%
+Query 20: Recall: 99.000000%
+Query 21: Recall: 70.000000%
+Query 22: Recall: 84.000000%
+Query 23: Recall: 87.000000%
+Query 24: Recall: 90.000000%
+Query 25: Recall: 95.000000%
+Query 26: Recall: 94.000000%
+Query 27: Recall: 91.000000%
+Query 28: Recall: 95.000000%
+Query 29: Recall: 100.000000%
+Query 30: Recall: 97.000000%
+Query 31: Recall: 83.000000%
+Query 32: Recall: 95.000000%
+Query 33: Recall: 56.000000%
+Query 34: Recall: 87.000000%
+Query 35: Recall: 79.000000%
+Query 36: Recall: 83.000000%
+Query 37: Recall: 97.000000%
+Query 38: Recall: 93.000000%
+Query 39: Recall: 100.000000%
+Query 40: Recall: 92.000000%
+Query 41: Recall: 100.000000%
+Query 42: Recall: 83.000000%
+Query 43: Recall: 64.000000%
+Query 44: Recall: 98.000000%
+Query 45: Recall: 83.000000%
+Query 46: Recall: 100.000000%
+Query 47: Recall: 79.000000%
+Query 48: Recall: 85.000000%
+Query 49: Recall: 96.000000%
+Avg Distance Computation: 1603
+Max Recall: 100.000000, Min Recall: 56.000000, Num Recall below 75%: 4.000000
+nMegaProbes: 1, nMiniProbes: 3, Recall: 88.260000, Recall with bad clusters: 0.000000
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 2
+ReclusteringIndex::printStats
+Number of mega clusters: 2, number of mini clusters: 20
+L1 cluster size: Min: 245, Max: 692, Avg: 500
+L2 cluster size: Min: 10, Max: 10, Avg: 10
+Number of mini clusters with bad silhouette score: 0 out of 20
+Avg mega cluster score: 75294.365177
+
+=== Overlap Score Statistics ===
+Overlap scores available for 2 centroids: Min: 0.302484, Max: 0.308693, Avg: 0.305588, Power Avg (worst): 0.305510, Threshold: 0.100000
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 2 centroids: Min: 73367.108199, Max: 77221.622155, Avg: 75294.365177
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 20 centroids: Min: 56262.893371, Max: 92534.334523, Avg: 75294.365177
