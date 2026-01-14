@@ -208,7 +208,7 @@ void exhaustive_L2sqr_seq_simple(
         size_t ny,
         BlockResultHandler& res) {
     res.begin_multiple(0, nx);
-#pragma omp parallel for schedule(dynamic)
+#pragma omp parallel for schedule(static)
     for (int64_t i = 0; i < (int64_t)nx; i++) {
         const float* x_i = x + i * d;
         const float* y_j = y;
