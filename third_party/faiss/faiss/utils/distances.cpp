@@ -208,6 +208,7 @@ void exhaustive_L2sqr_seq_simple(
         size_t ny,
         BlockResultHandler& res) {
     std::vector<float> dists(ny, 0);
+#pragma omp parallel for if (nx > 1000)
     for (int64_t i = 0; i < nx; i++) {
         const float* x_i = x + i * d;
         const float* y_j = y;
