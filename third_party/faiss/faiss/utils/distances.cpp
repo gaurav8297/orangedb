@@ -207,18 +207,21 @@ void exhaustive_L2sqr_seq_simple(
         size_t nx,
         size_t ny,
         BlockResultHandler& res) {
-    std::vector<float> dists(ny, 0);
-#pragma omp parallel for if (nx > 1000)
-    for (int64_t i = 0; i < nx; i++) {
-        const float* x_i = x + i * d;
-        const float* y_j = y;
-        res.begin_multiple(i, i + 1);
-        for (size_t j = 0; j < ny; j++, y_j += d) {
-            dists[j] = fvec_L2sqr(x_i, y_j, d);
+#pragma omp parallel
+    {
+        std::vector<float> dists(ny, 0);
+#pragma omp for
+        for (int64_t i = 0; i < nx; i++) {
+            const float* x_i = x + i * d;
+            const float* y_j = y;
+            res.begin_multiple(i, i + 1);
+            for (size_t j = 0; j < ny; j++, y_j += d) {
+                dists[j] = fvec_L2sqr(x_i, y_j, d);
+            }
+            res.add_results(0, ny, dists.data());
+            res.end_multiple();
+            InterruptCallback::check();
         }
-        res.add_results(0, ny, dists.data());
-        res.end_multiple();
-        InterruptCallback::check();
     }
 }
 
