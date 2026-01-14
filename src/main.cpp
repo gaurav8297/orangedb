@@ -28,6 +28,7 @@
 // #include "faiss/IndexACORN.h"
 #include "faiss/IndexHNSW.h"
 #include "faiss/IndexIVFFlat.h"
+#include "faiss/IndexScalarQuantizer.h"
 #include "fastQ/scalar_test.h"
 #include "faiss/IndexPQ.h"
 #include "umappp/umappp.hpp"
@@ -4476,6 +4477,153 @@ void test_quantization_issue(InputParser &input) {
                 codesDistances.size() * sizeof(float));
 }
 
+/**
+ * Benchmark comparing kmeans performance across different configurations:
+ * - Dimensions: 1024 vs 128
+ * - Scalar quantization: with vs without
+ * - Distance metrics: L2 vs IP (Inner Product)
+ *
+ * Uses Faiss Clustering for all kmeans operations.
+ */
+void benchmark_kmeans_dimensions_quantization(InputParser &input) {
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const int numClusters = stoi(input.getCmdOption("-numClusters"));
+    const int nIter = stoi(input.getCmdOption("-nIter"));
+    const int nThreads = stoi(input.getCmdOption("-nThreads"));
+    const int seed = stoi(input.getCmdOption("-seed"));
+
+    omp_set_num_threads(nThreads);
+
+    // Dimensions to test
+    std::vector<int> dimensions = {128, 1024};
+    // Metrics to test
+    std::vector<std::pair<faiss::MetricType, std::string>> metrics = {
+        {faiss::METRIC_L2, "L2"},
+        {faiss::METRIC_INNER_PRODUCT, "IP"}
+    };
+    // Quantization modes
+    std::vector<std::pair<bool, std::string>> quantizeModes = {
+        {false, "raw"},
+        {true, "sq8"}
+    };
+
+    printf("=======================================================\n");
+    printf("Kmeans Benchmark: Dimensions x Quantization x Metrics\n");
+    printf("=======================================================\n");
+    printf("NumVectors: %d, NumClusters: %d, nIter: %d, nThreads: %d\n\n", numVectors, numClusters, nIter, nThreads);
+
+    for (int dim : dimensions) {
+        // Generate random data for this dimension
+        printf("Generating %d random vectors of dimension %d...\n", numVectors, dim);
+        RandomGenerator rg(seed);
+        std::vector<float> data(numVectors * dim);
+        for (size_t i = 0; i < data.size(); i++) {
+            data[i] = rg.randFloat();
+        }
+
+        // Normalize for IP metric (to make results meaningful)
+        std::vector<float> normalizedData(numVectors * dim);
+        for (int i = 0; i < numVectors; i++) {
+            float norm = 0;
+            for (int j = 0; j < dim; j++) {
+                norm += data[i * dim + j] * data[i * dim + j];
+            }
+            norm = std::sqrt(norm);
+            for (int j = 0; j < dim; j++) {
+                normalizedData[i * dim + j] = data[i * dim + j] / norm;
+            }
+        }
+
+        for (auto& [metric, metricName] : metrics) {
+            for (auto& [useQuantized, quantizeName] : quantizeModes) {
+                printf("\n-------------------------------------------------------\n");
+                printf("Config: dim=%d, metric=%s, data=%s\n", dim, metricName.c_str(), quantizeName.c_str());
+                printf("-------------------------------------------------------\n");
+
+                // Select appropriate input data (normalized for IP)
+                float* inputData = (metric == faiss::METRIC_INNER_PRODUCT)
+                                   ? normalizedData.data() : data.data();
+
+                // Setup clustering parameters
+                faiss::ClusteringParameters cp;
+                cp.niter = nIter;
+                cp.verbose = true;
+                cp.seed = seed;
+                if (metric == faiss::METRIC_INNER_PRODUCT) {
+                    cp.spherical = true;
+                }
+
+                // Create clustering object
+                faiss::Clustering clustering(dim, numClusters, cp);
+
+                // Create index for distance computation
+                faiss::IndexFlat index(dim, metric);
+
+                // Run kmeans and measure time
+                auto start = std::chrono::high_resolution_clock::now();
+
+                if (useQuantized) {
+                    // Create IndexScalarQuantizer as codec for train_encoded
+                    faiss::IndexScalarQuantizer sqIndex(dim, faiss::ScalarQuantizer::QT_8bit, metric);
+                    printf("Training scalar quantizer codec...\n");
+                    sqIndex.train(numVectors, inputData);
+
+                    // Encode data using the codec
+                    std::vector<uint8_t> codes(numVectors * sqIndex.code_size);
+                    sqIndex.sa_encode(numVectors, inputData, codes.data());
+
+                    // Run kmeans directly on encoded data using train_encoded
+                    printf("Running kmeans with train_encoded on scalar quantized data...\n");
+                    clustering.train_encoded(numVectors, codes.data(), &sqIndex, index);
+                } else {
+                    clustering.train(numVectors, inputData, index);
+                }
+
+                auto end = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+                printf("\nResults:\n");
+                printf("  Training time: %lld ms\n", duration.count());
+                if (!clustering.iteration_stats.empty()) {
+                    printf("  Final objective: %f\n", clustering.iteration_stats.back().obj);
+                    printf("  Iterations completed: %zu\n", clustering.iteration_stats.size());
+                }
+
+                // Compute cluster sizes for analysis using the centroids now in the index
+                std::vector<int64_t> assignments(numVectors);
+                index.assign(numVectors, inputData, assignments.data());
+
+                std::vector<int> histogram(numClusters, 0);
+                for (int i = 0; i < numVectors; i++) {
+                    if (assignments[i] >= 0 && assignments[i] < numClusters) {
+                        histogram[assignments[i]]++;
+                    }
+                }
+
+                int minClusterSize = *std::min_element(histogram.begin(), histogram.end());
+                int maxClusterSize = *std::max_element(histogram.begin(), histogram.end());
+                double avgClusterSize = static_cast<double>(numVectors) / numClusters;
+
+                double sumSquaredDiff = 0.0;
+                for (int count : histogram) {
+                    double diff = count - avgClusterSize;
+                    sumSquaredDiff += diff * diff;
+                }
+                double stdDev = std::sqrt(sumSquaredDiff / numClusters);
+
+                printf("  Cluster size stats:\n");
+                printf("    Min: %d, Max: %d, Avg: %.2f, StdDev: %.2f\n",
+                       minClusterSize, maxClusterSize, avgClusterSize, stdDev);
+            }
+        }
+        printf("\n");
+    }
+
+    printf("=======================================================\n");
+    printf("Benchmark Complete\n");
+    printf("=======================================================\n");
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     backward::SignalHandling sh;
@@ -4557,6 +4705,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "run_umap_3D_without_clustering") {
         run_umap_3D_without_clustering(input);
+    }
+    else if (run == "benchmarkKmeansDimensionsQuantization") {
+        benchmark_kmeans_dimensions_quantization(input);
     }
     return 0;
 }
