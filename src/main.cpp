@@ -4549,6 +4549,7 @@ void benchmark_kmeans_dimensions_quantization(InputParser &input) {
                 cp.niter = nIter;
                 cp.verbose = true;
                 cp.seed = seed;
+                cp.max_points_per_centroid = INT_MAX;  // Disable sampling
                 if (metric == faiss::METRIC_INNER_PRODUCT) {
                     cp.spherical = true;
                 }
