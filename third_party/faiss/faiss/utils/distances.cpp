@@ -207,22 +207,24 @@ void exhaustive_L2sqr_seq_simple(
         size_t nx,
         size_t ny,
         BlockResultHandler& res) {
-#pragma omp parallel
-    {
-        std::vector<float> dists(ny, 0);
-#pragma omp for
-        for (int64_t i = 0; i < nx; i++) {
-            const float* x_i = x + i * d;
-            const float* y_j = y;
-            res.begin_multiple(i, i + 1);
-            for (size_t j = 0; j < ny; j++, y_j += d) {
-                dists[j] = fvec_L2sqr(x_i, y_j, d);
+    res.begin_multiple(0, nx);
+#pragma omp parallel for schedule(dynamic)
+    for (int64_t i = 0; i < (int64_t)nx; i++) {
+        const float* x_i = x + i * d;
+        const float* y_j = y;
+        float min_dist = std::numeric_limits<float>::max();
+        int64_t min_idx = -1;
+        for (size_t j = 0; j < ny; j++, y_j += d) {
+            float dist = fvec_L2sqr(x_i, y_j, d);
+            if (dist < min_dist) {
+                min_dist = dist;
+                min_idx = j;
             }
-            res.add_results(0, ny, dists.data());
-            res.end_multiple();
-            InterruptCallback::check();
         }
+        res.add_result(i, min_dist, min_idx);
     }
+    res.end_multiple();
+    InterruptCallback::check();
 }
 
 /** Find the nearest neighbors for nx queries in a set of ny vectors */

@@ -59,6 +59,11 @@ struct BlockResultHandler {
     // add results for queries [i0, i1) and database [j0, j1)
     virtual void add_results(size_t, size_t, const typename C::T*) {}
 
+    virtual void add_result(
+            const size_t i,
+            const typename C::T dis,
+            const typename C::TI idx) {}
+
     // series of results for queries i0..i1 is done
     virtual void end_multiple() {}
 
