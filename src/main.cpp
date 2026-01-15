@@ -4836,6 +4836,124 @@ void benchmark_faiss_sq8_distance(InputParser &input) {
         printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
     }
 
+    // Benchmark Blocked SimSIMD Inner Product (demonstrating sgemm_-like blocking)
+    // This shows that blocking alone gives SOME benefit, but nowhere near sgemm_
+    printf("--- Blocked SimSIMD: Inner Product (sgemm_-like blocking) ---\n");
+    {
+        struct BatchConfig {
+            size_t bs_x;  // query batch size
+            size_t bs_y;  // database batch size
+        };
+        std::vector<BatchConfig> configs = {
+            {64, 64},
+            {512, 512},
+        };
+
+        for (const auto& cfg : configs) {
+            size_t bs_x = cfg.bs_x;
+            size_t bs_y = cfg.bs_y;
+
+            auto start = std::chrono::high_resolution_clock::now();
+            double totalDist = 0;
+            simsimd_distance_t dist;
+
+            for (int iter = 0; iter < numIterations; iter++) {
+                // Outer loops: iterate over blocks (like sgemm_)
+                for (size_t i0 = 0; i0 < numQuery; i0 += bs_x) {
+                    size_t i1 = std::min(i0 + bs_x, numQuery);
+
+                    for (size_t j0 = 0; j0 < numBase; j0 += bs_y) {
+                        size_t j1 = std::min(j0 + bs_y, numBase);
+
+                        // Inner loops: process all pairs within the block
+                        // This is where sgemm_ would do a cache-optimized matmul
+                        // We can only do vector-by-vector here
+                        for (size_t q = i0; q < i1; q++) {
+                            const float* query_ptr = queryVecs.data() + q * dim;
+                            for (size_t b = j0; b < j1; b++) {
+                                simsimd_dot_f32(
+                                    query_ptr,
+                                    baseVecs.data() + b * dim,
+                                    dim,
+                                    &dist
+                                );
+                                totalDist += dist;
+                            }
+                        }
+                    }
+                }
+            }
+
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+            size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+            double throughput = totalComputations / (duration.count() / 1000.0);
+
+            printf("  bs_x=%5zu, bs_y=%5zu | Time: %6lld ms | %.2f M dist/sec\n",
+                   bs_x, bs_y, duration.count(), throughput / 1e6);
+        }
+        printf("\n");
+        printf("  NOTE: Blocking helps cache locality, but individual dot products\n");
+        printf("        still suffer from poor arithmetic intensity (2D loads/FLOP).\n");
+        printf("        sgemm_ uses micro-kernels that keep data in registers.\n\n");
+    }
+
+    // Benchmark Manual Micro-Kernel Style Inner Product
+    // This demonstrates the KEY insight: compute multiple outputs per base vector load
+    printf("--- Manual Micro-Kernel Style: Multiple queries per base load ---\n");
+    {
+        // The key insight of sgemm_'s micro-kernel:
+        // For each base vector loaded, compute dot products against MULTIPLE queries
+        // This amortizes the memory load cost across multiple outputs
+
+        constexpr size_t QUERY_UNROLL = 4;  // Process 4 queries per base vector load
+
+        auto start = std::chrono::high_resolution_clock::now();
+        double totalDist = 0;
+        simsimd_distance_t dist[QUERY_UNROLL];
+
+        for (int iter = 0; iter < numIterations; iter++) {
+            // Process queries in groups of QUERY_UNROLL
+            for (size_t q = 0; q < numQuery; q += QUERY_UNROLL) {
+                size_t q_end = std::min(q + QUERY_UNROLL, numQuery);
+                size_t actual_queries = q_end - q;
+
+                // For each base vector (loaded ONCE)
+                for (size_t b = 0; b < numBase; b++) {
+                    const float* base_ptr = baseVecs.data() + b * dim;
+
+                    // Compute dot product against ALL queries in the group
+                    // This means: 1 base load -> QUERY_UNROLL outputs
+                    // Much better arithmetic intensity!
+                    for (size_t qi = 0; qi < actual_queries; qi++) {
+                        simsimd_dot_f32(
+                            queryVecs.data() + (q + qi) * dim,
+                            base_ptr,
+                            dim,
+                            &dist[qi]
+                        );
+                        totalDist += dist[qi];
+                    }
+                }
+            }
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+        double throughput = totalComputations / (duration.count() / 1000.0);
+
+        printf("  QUERY_UNROLL=%zu | Time: %6lld ms | %.2f M dist/sec\n",
+               QUERY_UNROLL, duration.count(), throughput / 1e6);
+        printf("\n");
+        printf("  This is STILL slow because:\n");
+        printf("  1. simsimd_dot_f32 loads base_ptr anew each call (no register reuse)\n");
+        printf("  2. sgemm_ keeps base data in SIMD registers across multiple FMAs\n");
+        printf("  3. sgemm_ unrolls BOTH query and base dimensions in registers\n\n");
+    }
+
     // Benchmark BLAS sgemm_ Inner Product with various batch sizes
     printf("--- BLAS sgemm_: Inner Product (varying batch sizes) ---\n");
     {
@@ -4844,6 +4962,8 @@ void benchmark_faiss_sq8_distance(InputParser &input) {
             size_t bs_y;  // database batch size
         };
         std::vector<BatchConfig> configs = {
+            {1, 1},
+            {1, 64},
             {64, 64},
             {256, 256},
             {512, 512},
