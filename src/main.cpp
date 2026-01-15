@@ -5048,7 +5048,64 @@ void benchmark_faiss_sq8_distance(InputParser &input) {
 
         printf("Total distance sum: %.6e\n", totalDist);
         printf("Time: %lld ms\n", duration.count());
-        printf("Throughput: %.2f M distances/sec\n", throughput / 1e6);
+        printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    }
+
+    // Benchmark Blocked SQ8 Inner Product (demonstrating sgemm_-like blocking)
+    printf("--- Blocked SQ8: Inner Product (sgemm_-like blocking) ---\n");
+    {
+        struct BatchConfig {
+            size_t bs_x;  // query batch size
+            size_t bs_y;  // database batch size
+        };
+        std::vector<BatchConfig> configs = {
+            {64, 64},
+            {512, 512},
+            {1, 1024},
+        };
+
+        std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
+            sq.get_distance_computer(faiss::METRIC_INNER_PRODUCT)
+        );
+        dc->codes = codes.data();
+        dc->code_size = sq.code_size;
+
+        for (const auto& cfg : configs) {
+            size_t bs_x = cfg.bs_x;
+            size_t bs_y = cfg.bs_y;
+
+            auto start = std::chrono::high_resolution_clock::now();
+            double totalDist = 0;
+
+            for (int iter = 0; iter < numIterations; iter++) {
+                // Outer loops: iterate over blocks (like sgemm_)
+                for (size_t i0 = 0; i0 < numQuery; i0 += bs_x) {
+                    size_t i1 = std::min(i0 + bs_x, numQuery);
+
+                    for (size_t j0 = 0; j0 < numBase; j0 += bs_y) {
+                        size_t j1 = std::min(j0 + bs_y, numBase);
+
+                        // Inner loops: process all pairs within the block
+                        for (size_t q = i0; q < i1; q++) {
+                            dc->set_query(queryVecs.data() + q * dim);
+                            for (size_t b = j0; b < j1; b++) {
+                                totalDist += dc->distance_to_code(codes.data() + b * sq.code_size);
+                            }
+                        }
+                    }
+                }
+            }
+
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+            size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+            double throughput = totalComputations / (duration.count() / 1000.0);
+
+            printf("  bs_x=%5zu, bs_y=%5zu | Time: %6lld ms | %.2f M dist/sec\n",
+                   bs_x, bs_y, duration.count(), throughput / 1e6);
+        }
+        printf("\n");
     }
 
     printf("\n=======================================================\n");
