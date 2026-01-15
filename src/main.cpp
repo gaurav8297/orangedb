@@ -15,6 +15,7 @@
 #include <reclustering_index.h>
 #include <faiss/index_io.h>
 #include <faiss/utils/distances.h>
+#include <faiss/utils/random.h>
 #include <fastQ/scalar_8bit.h>
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
@@ -4625,6 +4626,170 @@ void benchmark_kmeans_dimensions_quantization(InputParser &input) {
     printf("=======================================================\n");
 }
 
+/**
+ * Benchmark Faiss ScalarQuantizer 8-bit distance computation
+ */
+void benchmark_faiss_sq8_distance(InputParser &input) {
+    const size_t dim = input.getCmdOption("-dim").empty() ? 1024 : stoi(input.getCmdOption("-dim"));
+    const size_t numBase = input.getCmdOption("-numBase").empty() ? 100000 : stoi(input.getCmdOption("-numBase"));
+    const size_t numQuery = input.getCmdOption("-numQuery").empty() ? 100 : stoi(input.getCmdOption("-numQuery"));
+    const int numIterations = input.getCmdOption("-n").empty() ? 10 : stoi(input.getCmdOption("-n"));
+
+    printf("=======================================================\n");
+    printf("Faiss ScalarQuantizer 8-bit Distance Benchmark\n");
+    printf("=======================================================\n");
+    printf("Base vectors: %zu x %zu\n", numBase, dim);
+    printf("Query vectors: %zu x %zu\n", numQuery, dim);
+    printf("Iterations: %d\n", numIterations);
+    printf("=======================================================\n\n");
+
+    // Generate random vectors using Faiss
+    std::vector<float> baseVecs(numBase * dim);
+    std::vector<float> queryVecs(numQuery * dim);
+
+    printf("Generating random vectors...\n");
+    faiss::float_rand(baseVecs.data(), baseVecs.size(), 1234);
+    faiss::float_rand(queryVecs.data(), queryVecs.size(), 5678);
+
+    // Create and train the 8-bit scalar quantizer
+    faiss::ScalarQuantizer sq(dim, faiss::ScalarQuantizer::QT_8bit);
+
+    printf("Training ScalarQuantizer...\n");
+    auto trainStart = std::chrono::high_resolution_clock::now();
+    sq.train(numBase, baseVecs.data());
+    auto trainEnd = std::chrono::high_resolution_clock::now();
+    auto trainDuration = std::chrono::duration_cast<std::chrono::milliseconds>(trainEnd - trainStart);
+    printf("Training time: %lld ms\n", trainDuration.count());
+    printf("Code size per vector: %zu bytes\n", sq.code_size);
+
+    // Encode base vectors
+    std::vector<uint8_t> codes(sq.code_size * numBase);
+    printf("Encoding base vectors...\n");
+    auto encodeStart = std::chrono::high_resolution_clock::now();
+    sq.compute_codes(baseVecs.data(), codes.data(), numBase);
+    auto encodeEnd = std::chrono::high_resolution_clock::now();
+    auto encodeDuration = std::chrono::duration_cast<std::chrono::milliseconds>(encodeEnd - encodeStart);
+    printf("Encoding time: %lld ms\n\n", encodeDuration.count());
+
+    // Benchmark non-quantized L2 distance (baseline)
+    printf("--- Baseline: Non-quantized L2 distance ---\n");
+    {
+        auto start = std::chrono::high_resolution_clock::now();
+        double totalDist = 0;
+        for (int iter = 0; iter < numIterations; iter++) {
+            for (size_t q = 0; q < numQuery; q++) {
+                for (size_t b = 0; b < numBase; b++) {
+                    totalDist += faiss::fvec_L2sqr(
+                        queryVecs.data() + q * dim,
+                        baseVecs.data() + b * dim,
+                        dim
+                    );
+                }
+            }
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+        double throughput = totalComputations / (duration.count() / 1000.0);
+
+        printf("Total distance sum: %.6e\n", totalDist);
+        printf("Time: %lld ms\n", duration.count());
+        printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    }
+
+    // Benchmark SQ8 L2 distance
+    printf("--- SQ8 L2 distance ---\n");
+    {
+        std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
+            sq.get_distance_computer(faiss::METRIC_L2)
+        );
+        dc->codes = codes.data();
+        dc->code_size = sq.code_size;
+
+        auto start = std::chrono::high_resolution_clock::now();
+        double totalDist = 0;
+        for (int iter = 0; iter < numIterations; iter++) {
+            for (size_t q = 0; q < numQuery; q++) {
+                dc->set_query(queryVecs.data() + q * dim);
+                for (size_t b = 0; b < numBase; b++) {
+                    totalDist += dc->distance_to_code(codes.data() + b * sq.code_size);
+                }
+            }
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+        double throughput = totalComputations / (duration.count() / 1000.0);
+
+        printf("Total distance sum: %.6e\n", totalDist);
+        printf("Time: %lld ms\n", duration.count());
+        printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    }
+
+    // Benchmark non-quantized Inner Product distance (baseline)
+    printf("--- Baseline: Non-quantized Inner Product ---\n");
+    {
+        auto start = std::chrono::high_resolution_clock::now();
+        double totalDist = 0;
+        for (int iter = 0; iter < numIterations; iter++) {
+            for (size_t q = 0; q < numQuery; q++) {
+                for (size_t b = 0; b < numBase; b++) {
+                    totalDist += faiss::fvec_inner_product(
+                        queryVecs.data() + q * dim,
+                        baseVecs.data() + b * dim,
+                        dim
+                    );
+                }
+            }
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+        double throughput = totalComputations / (duration.count() / 1000.0);
+
+        printf("Total distance sum: %.6e\n", totalDist);
+        printf("Time: %lld ms\n", duration.count());
+        printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    }
+
+    // Benchmark SQ8 Inner Product distance
+    printf("--- SQ8 Inner Product ---\n");
+    {
+        std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
+            sq.get_distance_computer(faiss::METRIC_INNER_PRODUCT)
+        );
+        dc->codes = codes.data();
+        dc->code_size = sq.code_size;
+
+        auto start = std::chrono::high_resolution_clock::now();
+        double totalDist = 0;
+        for (int iter = 0; iter < numIterations; iter++) {
+            for (size_t q = 0; q < numQuery; q++) {
+                dc->set_query(queryVecs.data() + q * dim);
+                for (size_t b = 0; b < numBase; b++) {
+                    totalDist += dc->distance_to_code(codes.data() + b * sq.code_size);
+                }
+            }
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+        double throughput = totalComputations / (duration.count() / 1000.0);
+
+        printf("Total distance sum: %.6e\n", totalDist);
+        printf("Time: %lld ms\n", duration.count());
+        printf("Throughput: %.2f M distances/sec\n", throughput / 1e6);
+    }
+
+    printf("\n=======================================================\n");
+    printf("Benchmark Complete\n");
+    printf("=======================================================\n");
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     backward::SignalHandling sh;
@@ -4706,6 +4871,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "run_umap_3D_without_clustering") {
         run_umap_3D_without_clustering(input);
+    }
+    else if (run == "benchmarkFaissSQ8Distance") {
+        benchmark_faiss_sq8_distance(input);
     }
     else if (run == "benchmarkKmeansDimensionsQuantization") {
         benchmark_kmeans_dimensions_quantization(input);
