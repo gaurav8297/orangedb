@@ -4847,6 +4847,7 @@ void benchmark_faiss_sq8_distance(InputParser &input) {
         std::vector<BatchConfig> configs = {
             {64, 64},
             {512, 512},
+            {1, 1024},
         };
 
         for (const auto& cfg : configs) {
