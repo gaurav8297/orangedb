@@ -39,6 +39,27 @@
 #include <liburing.h>
 #endif
 
+#ifndef FINTEGER
+#define FINTEGER long
+#endif
+
+extern "C" {
+int sgemm_(
+        const char* transa,
+        const char* transb,
+        FINTEGER* m,
+        FINTEGER* n,
+        FINTEGER* k,
+        const float* alpha,
+        const float* a,
+        FINTEGER* lda,
+        const float* b,
+        FINTEGER* ldb,
+        float* beta,
+        float* c,
+        FINTEGER* ldc);
+}
+
 using namespace orangedb;
 
 #if defined(__GNUC__)
@@ -4813,6 +4834,70 @@ void benchmark_faiss_sq8_distance(InputParser &input) {
         printf("Total distance sum: %.6e\n", totalDist);
         printf("Time: %lld ms\n", duration.count());
         printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    }
+
+    // Benchmark BLAS sgemm_ Inner Product with various batch sizes
+    printf("--- BLAS sgemm_: Inner Product (varying batch sizes) ---\n");
+    {
+        struct BatchConfig {
+            size_t bs_x;  // query batch size
+            size_t bs_y;  // database batch size
+        };
+        std::vector<BatchConfig> configs = {
+            {64, 64},
+            {256, 256},
+            {512, 512},
+            {1024, 1024},
+            {4096, 1024},   // Faiss default
+            {4096, 4096},
+            {8192, 8192},
+        };
+
+        for (const auto& cfg : configs) {
+            size_t bs_x = cfg.bs_x;
+            size_t bs_y = cfg.bs_y;
+            std::vector<float> ip_block(bs_x * bs_y);
+
+            auto start = std::chrono::high_resolution_clock::now();
+            double totalDist = 0;
+
+            for (int iter = 0; iter < numIterations; iter++) {
+                for (size_t i0 = 0; i0 < numQuery; i0 += bs_x) {
+                    size_t i1 = std::min(i0 + bs_x, numQuery);
+
+                    for (size_t j0 = 0; j0 < numBase; j0 += bs_y) {
+                        size_t j1 = std::min(j0 + bs_y, numBase);
+
+                        float one = 1.0f, zero = 0.0f;
+                        FINTEGER nyi = j1 - j0;
+                        FINTEGER nxi = i1 - i0;
+                        FINTEGER di = dim;
+
+                        sgemm_("T", "N",
+                               &nyi, &nxi, &di,
+                               &one,
+                               baseVecs.data() + j0 * dim, &di,
+                               queryVecs.data() + i0 * dim, &di,
+                               &zero,
+                               ip_block.data(), &nyi);
+
+                        for (size_t i = 0; i < (size_t)(nxi * nyi); i++) {
+                            totalDist += ip_block[i];
+                        }
+                    }
+                }
+            }
+
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+            size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+            double throughput = totalComputations / (duration.count() / 1000.0);
+
+            printf("  bs_x=%5zu, bs_y=%5zu | Time: %6lld ms | %.2f M dist/sec\n",
+                   bs_x, bs_y, duration.count(), throughput / 1e6);
+        }
+        printf("\n");
     }
 
     // Benchmark SQ8 Inner Product distance
