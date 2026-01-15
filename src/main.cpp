@@ -4692,119 +4692,119 @@ void benchmark_faiss_sq8_distance(InputParser &input) {
     auto encodeDuration = std::chrono::duration_cast<std::chrono::milliseconds>(encodeEnd - encodeStart);
     printf("Encoding time: %lld ms\n\n", encodeDuration.count());
 
-    // Benchmark non-quantized L2 distance (baseline)
-    printf("--- Baseline: Non-quantized L2 distance ---\n");
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        double totalDist = 0;
-        for (int iter = 0; iter < numIterations; iter++) {
-            for (size_t q = 0; q < numQuery; q++) {
-                for (size_t b = 0; b < numBase; b++) {
-                    totalDist += faiss::fvec_L2sqr(
-                        queryVecs.data() + q * dim,
-                        baseVecs.data() + b * dim,
-                        dim
-                    );
-                }
-            }
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    // // Benchmark non-quantized L2 distance (baseline)
+    // printf("--- Baseline: Non-quantized L2 distance ---\n");
+    // {
+    //     auto start = std::chrono::high_resolution_clock::now();
+    //     double totalDist = 0;
+    //     for (int iter = 0; iter < numIterations; iter++) {
+    //         for (size_t q = 0; q < numQuery; q++) {
+    //             for (size_t b = 0; b < numBase; b++) {
+    //                 totalDist += faiss::fvec_L2sqr(
+    //                     queryVecs.data() + q * dim,
+    //                     baseVecs.data() + b * dim,
+    //                     dim
+    //                 );
+    //             }
+    //         }
+    //     }
+    //     auto end = std::chrono::high_resolution_clock::now();
+    //     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    //
+    //     size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+    //     double throughput = totalComputations / (duration.count() / 1000.0);
+    //
+    //     printf("Total distance sum: %.6e\n", totalDist);
+    //     printf("Time: %lld ms\n", duration.count());
+    //     printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    // }
+    //
+    // // Benchmark SimSIMD non-quantized L2 distance
+    // printf("--- SimSIMD: Non-quantized L2 distance ---\n");
+    // {
+    //     auto start = std::chrono::high_resolution_clock::now();
+    //     double totalDist = 0;
+    //     simsimd_distance_t dist;
+    //     for (int iter = 0; iter < numIterations; iter++) {
+    //         for (size_t q = 0; q < numQuery; q++) {
+    //             for (size_t b = 0; b < numBase; b++) {
+    //                 simsimd_l2sq_f32(
+    //                     queryVecs.data() + q * dim,
+    //                     baseVecs.data() + b * dim,
+    //                     dim,
+    //                     &dist
+    //                 );
+    //                 totalDist += dist;
+    //             }
+    //         }
+    //     }
+    //     auto end = std::chrono::high_resolution_clock::now();
+    //     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    //
+    //     size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+    //     double throughput = totalComputations / (duration.count() / 1000.0);
+    //
+    //     printf("Total distance sum: %.6e\n", totalDist);
+    //     printf("Time: %lld ms\n", duration.count());
+    //     printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    // }
+    //
+    // // Benchmark SQ8 L2 distance
+    // printf("--- SQ8 L2 distance ---\n");
+    // {
+    //     std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
+    //         sq.get_distance_computer(faiss::METRIC_L2)
+    //     );
+    //     dc->codes = codes.data();
+    //     dc->code_size = sq.code_size;
+    //
+    //     auto start = std::chrono::high_resolution_clock::now();
+    //     double totalDist = 0;
+    //     for (int iter = 0; iter < numIterations; iter++) {
+    //         for (size_t q = 0; q < numQuery; q++) {
+    //             dc->set_query(queryVecs.data() + q * dim);
+    //             for (size_t b = 0; b < numBase; b++) {
+    //                 totalDist += dc->distance_to_code(codes.data() + b * sq.code_size);
+    //             }
+    //         }
+    //     }
+    //     auto end = std::chrono::high_resolution_clock::now();
+    //     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    //
+    //     size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+    //     double throughput = totalComputations / (duration.count() / 1000.0);
+    //
+    //     printf("Total distance sum: %.6e\n", totalDist);
+    //     printf("Time: %lld ms\n", duration.count());
+    //     printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    // }
 
-        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
-        double throughput = totalComputations / (duration.count() / 1000.0);
-
-        printf("Total distance sum: %.6e\n", totalDist);
-        printf("Time: %lld ms\n", duration.count());
-        printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
-    }
-
-    // Benchmark SimSIMD non-quantized L2 distance
-    printf("--- SimSIMD: Non-quantized L2 distance ---\n");
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        double totalDist = 0;
-        simsimd_distance_t dist;
-        for (int iter = 0; iter < numIterations; iter++) {
-            for (size_t q = 0; q < numQuery; q++) {
-                for (size_t b = 0; b < numBase; b++) {
-                    simsimd_l2sq_f32(
-                        queryVecs.data() + q * dim,
-                        baseVecs.data() + b * dim,
-                        dim,
-                        &dist
-                    );
-                    totalDist += dist;
-                }
-            }
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
-        double throughput = totalComputations / (duration.count() / 1000.0);
-
-        printf("Total distance sum: %.6e\n", totalDist);
-        printf("Time: %lld ms\n", duration.count());
-        printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
-    }
-
-    // Benchmark SQ8 L2 distance
-    printf("--- SQ8 L2 distance ---\n");
-    {
-        std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
-            sq.get_distance_computer(faiss::METRIC_L2)
-        );
-        dc->codes = codes.data();
-        dc->code_size = sq.code_size;
-
-        auto start = std::chrono::high_resolution_clock::now();
-        double totalDist = 0;
-        for (int iter = 0; iter < numIterations; iter++) {
-            for (size_t q = 0; q < numQuery; q++) {
-                dc->set_query(queryVecs.data() + q * dim);
-                for (size_t b = 0; b < numBase; b++) {
-                    totalDist += dc->distance_to_code(codes.data() + b * sq.code_size);
-                }
-            }
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
-        double throughput = totalComputations / (duration.count() / 1000.0);
-
-        printf("Total distance sum: %.6e\n", totalDist);
-        printf("Time: %lld ms\n", duration.count());
-        printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
-    }
-
-    // Benchmark non-quantized Inner Product distance (baseline)
-    printf("--- Baseline: Non-quantized Inner Product ---\n");
-    {
-        auto start = std::chrono::high_resolution_clock::now();
-        double totalDist = 0;
-        for (int iter = 0; iter < numIterations; iter++) {
-            for (size_t q = 0; q < numQuery; q++) {
-                for (size_t b = 0; b < numBase; b++) {
-                    totalDist += faiss::fvec_inner_product(
-                        queryVecs.data() + q * dim,
-                        baseVecs.data() + b * dim,
-                        dim
-                    );
-                }
-            }
-        }
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-        size_t totalComputations = (size_t)numIterations * numQuery * numBase;
-        double throughput = totalComputations / (duration.count() / 1000.0);
-
-        printf("Total distance sum: %.6e\n", totalDist);
-        printf("Time: %lld ms\n", duration.count());
-        printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
-    }
+    // // Benchmark non-quantized Inner Product distance (baseline)
+    // printf("--- Baseline: Non-quantized Inner Product ---\n");
+    // {
+    //     auto start = std::chrono::high_resolution_clock::now();
+    //     double totalDist = 0;
+    //     for (int iter = 0; iter < numIterations; iter++) {
+    //         for (size_t q = 0; q < numQuery; q++) {
+    //             for (size_t b = 0; b < numBase; b++) {
+    //                 totalDist += faiss::fvec_inner_product(
+    //                     queryVecs.data() + q * dim,
+    //                     baseVecs.data() + b * dim,
+    //                     dim
+    //                 );
+    //             }
+    //         }
+    //     }
+    //     auto end = std::chrono::high_resolution_clock::now();
+    //     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    //
+    //     size_t totalComputations = (size_t)numIterations * numQuery * numBase;
+    //     double throughput = totalComputations / (duration.count() / 1000.0);
+    //
+    //     printf("Total distance sum: %.6e\n", totalDist);
+    //     printf("Time: %lld ms\n", duration.count());
+    //     printf("Throughput: %.2f M distances/sec\n\n", throughput / 1e6);
+    // }
 
     // Benchmark SimSIMD non-quantized Inner Product
     printf("--- SimSIMD: Non-quantized Inner Product ---\n");
