@@ -253,13 +253,14 @@
   -nMegaRecluster 0 \
   -nFiles 1 \
   -hardClusterSizeLimit 300 \
-  -kmeansSamplingRatio 1.0 \
+  -kmeansSamplingRatio 0.2 \
   -numFixBoundaries 0 \
   -scoreChangeThreshold 0.01 \
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 2 \
-  -clustering_mode 0 > hard_limit_300_log.txt 2>&1
+  -clustering_mode 0 \
+  -rebalancing_ratio 0.7 > hard_limit_300_log.txt 2>&1
 
 
 

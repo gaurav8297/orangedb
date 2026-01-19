@@ -145,16 +145,16 @@ if len(ground_truth_coords) == 0:
 fig = plt.figure(figsize=(14, 10))
 ax = fig.add_subplot(111, projection='3d')
 
-"""
+
 # Plot all vectors in light gray (optional - comment out for cleaner view)
 ax.scatter(df_umap['UMAP_1'], 
           df_umap['UMAP_2'], 
           df_umap['UMAP_3'],
-          c='lightgray', 
+          c='gray', 
           s=1, 
           alpha=0.1,
           label='All vectors')
-"""
+
 
 # Plot ground truth vectors colored by cluster
 # Generate colors for each cluster

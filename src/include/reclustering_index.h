@@ -111,7 +111,7 @@ namespace orangedb {
 
         void simpleInsertWithoutClustering(float *data, size_t n);
 
-        void naiveInsert(float *data, size_t n, bool use_rebalancing = false);
+        void naiveInsert(float *data, size_t n, bool use_rebalancing = false, float rebalancing_ratio = 0.75);
 
         void trainQuant(float *data, size_t n);
 
@@ -291,11 +291,13 @@ namespace orangedb {
 
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                          std::vector<float>& centroids, std::vector<std::vector<float>>& clusters,
-                         std::vector<std::vector<vector_idx_t>> &clusterVectorIds, bool use_rebalancing = false, bool is_clustering_centroids = false);
+                         std::vector<std::vector<vector_idx_t>> &clusterVectorIds, bool use_rebalancing = false, 
+                         bool is_clustering_centroids = false, float rebalancing_ratio = 0.75);
 
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                  std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds, 
-                 int nClusters = -1, bool use_rebalancing = false, bool is_clustering_centroids = false);
+                 int nClusters = -1, bool use_rebalancing = false, bool is_clustering_centroids = false, 
+                 float rebalancing_ratio = 0.75);
 
         // Quantized clustering methods
         void clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -323,7 +325,7 @@ namespace orangedb {
 
         void clusterDataWithCentoidRebalancing(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                     std::vector<float> &centroids, std::vector<std::vector<float> > *clusters,
-                                    std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
+                                    std::vector<std::vector<vector_idx_t> > &clusterVectorIds, float rebalancing_ratio);
 
         // Generic clustering method
         template <typename T>
@@ -484,13 +486,13 @@ namespace orangedb {
         inline int getMinCentroidSize(int numVectors, int numCentroids) const {
             // 50% of the average size
             // Adjust based on sample size
-            auto sampleSize = std::min(std::max(int(numVectors * config.kmeansSamplingRatio), 50000), numVectors);
+            auto sampleSize = std::min(int(numVectors * config.kmeansSamplingRatio), numVectors);
             return (sampleSize / numCentroids) * 0.4;
         }
 
         inline int getMaxCentroidSize(int numVectors, int numCentroids) const {
-            // 120% of the average size such all vecs are used during reclustering
-            auto sampleSize = std::min(std::max(int(numVectors * config.kmeansSamplingRatio), 50000), numVectors);
+            // Calculate sample size based on sampling ratio
+            auto sampleSize = std::min(int(numVectors * config.kmeansSamplingRatio), numVectors);
             return (sampleSize / numCentroids) + 1;
         }
 

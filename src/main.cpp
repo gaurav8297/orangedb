@@ -3361,7 +3361,13 @@ void benchmark_fast_reclustering(InputParser &input) {
     const bool useMSEToRecluster = stoi(input.getCmdOption("-useMSEToRecluster"));
     const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
     const int clustering_mode = stoi(input.getCmdOption("-clustering_mode"));
-    
+    float rebalancing_ratio;
+    if (clustering_mode){
+        rebalancing_ratio = stof(input.getCmdOption("-rebalancing_ratio"));
+    }
+    else {
+        rebalancing_ratio = 1;
+    }
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -3424,7 +3430,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                     printf("Working on parquet file: %s\n", filePaths[j].c_str());
                 }
                 auto data = readParquetFiles(paths, &baseDimension, &baseNumVectors);
-                index.naiveInsert(data, baseNumVectors, clustering_mode);
+                index.naiveInsert(data, baseNumVectors, clustering_mode, rebalancing_ratio);
                 totalVectors += baseNumVectors;
                 delete[] data;
             }
@@ -3447,7 +3453,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 if (quantBuild) {
                     index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
                 } else {
-                    index.naiveInsert(baseVecs + start * baseDimension, end - start, clustering_mode);
+                    index.naiveInsert(baseVecs + start * baseDimension, end - start, clustering_mode, rebalancing_ratio);
                 }
 
                 // Recluster after 50 inserts, then every 2 inserts thereafter
@@ -3532,14 +3538,14 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     index.printStats();
     // Write overlapping scores
-    auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(0) + ".bin";
-    auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(0) + ".bin";
+    // auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(0) + ".bin";
+    //auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(0) + ".bin";
     const double* overlapScores;
     size_t numScores;
     index.getOverlapScores(&overlapScores, numScores);
-    writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+    // writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
     index.getRealOverlapScores(&overlapScores, numScores);
-    writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+    //writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
 
     // Calculate and write recall after writing overlap scores
     // Write per-query recall for the first probe combination
@@ -3597,14 +3603,14 @@ void benchmark_fast_reclustering(InputParser &input) {
         index.printStats();
 
         // Write overlapping scores
-        auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(iter + 1) + ".bin";
-        auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(iter + 1) + ".bin";
+        //auto approx_overlapping_file_path = "approx_overlap_scores_iter_" + std::to_string(iter + 1) + ".bin";
+        // auto real_overlapping_file_path = "real_overlap_scores_iter_" + std::to_string(iter + 1) + ".bin";
         const double* overlapScores;
         size_t numScores;
         index.getOverlapScores(&overlapScores, numScores);
-        writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+        // writeToFile(approx_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
         index.getRealOverlapScores(&overlapScores, numScores);
-        writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
+        // writeToFile(real_overlapping_file_path, reinterpret_cast<const uint8_t *>(overlapScores), numScores * sizeof(double));
 
         // Write centroids too
         auto mega_centroids_file_path = "mega_centroids_iter_" + std::to_string(iter + 1) + ".bin";
