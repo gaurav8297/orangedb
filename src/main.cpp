@@ -2618,6 +2618,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     double min_recall = std::numeric_limits<double>::max();
     double num_recall_below_75 = 0;
     for (int i = 0; i < queryNumVectors; i++) {
+        unsigned long long prev_num_dist_comp = stats.numDistanceCompForSearch;
         std::priority_queue<NodeDistCloser> results;
         index.search(queryVecs + i * queryDimension, k, results, nMegaProbes, nMiniProbes, stats, i);
         auto gt = gtVecs + i * k;
@@ -2637,7 +2638,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             num_recall_below_75++;
         }
         queryRecalls[i] = localRecall;
-        printf("Query %d: Recall: %f%%\n", i, localRecall);
+        printf("Query %d: Recall: %f%%, distance computations: %llu\n", i, localRecall, stats.numDistanceCompForSearch - prev_num_dist_comp);
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
     printf("Max Recall: %f, Min Recall: %f, Num Recall below 75%%: %f\n", max_recall, min_recall, num_recall_below_75);
@@ -3361,6 +3362,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     const bool useMSEToRecluster = stoi(input.getCmdOption("-useMSEToRecluster"));
     const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
     const int clustering_mode = stoi(input.getCmdOption("-clustering_mode"));
+
+    float sampling_ratio = kmeansSamplingRatio;
     float rebalancing_ratio;
     if (clustering_mode){
         rebalancing_ratio = stof(input.getCmdOption("-rebalancing_ratio"));
@@ -3430,7 +3433,8 @@ void benchmark_fast_reclustering(InputParser &input) {
                     printf("Working on parquet file: %s\n", filePaths[j].c_str());
                 }
                 auto data = readParquetFiles(paths, &baseDimension, &baseNumVectors);
-                index.naiveInsert(data, baseNumVectors, clustering_mode, rebalancing_ratio);
+
+                index.naiveInsert(data, baseNumVectors, clustering_mode, rebalancing_ratio, sampling_ratio);
                 totalVectors += baseNumVectors;
                 delete[] data;
             }
@@ -3453,7 +3457,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 if (quantBuild) {
                     index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
                 } else {
-                    index.naiveInsert(baseVecs + start * baseDimension, end - start, clustering_mode, rebalancing_ratio);
+                    index.naiveInsert(baseVecs + start * baseDimension, end - start, clustering_mode, rebalancing_ratio, sampling_ratio);
                 }
 
                 // Recluster after 50 inserts, then every 2 inserts thereafter

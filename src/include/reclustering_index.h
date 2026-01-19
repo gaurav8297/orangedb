@@ -111,7 +111,7 @@ namespace orangedb {
 
         void simpleInsertWithoutClustering(float *data, size_t n);
 
-        void naiveInsert(float *data, size_t n, bool use_rebalancing = false, float rebalancing_ratio = 0.75);
+        void naiveInsert(float *data, size_t n, bool use_rebalancing = false, float rebalancing_ratio = 0.75, float sampling_ratio = 0.2);
 
         void trainQuant(float *data, size_t n);
 
@@ -292,12 +292,12 @@ namespace orangedb {
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                          std::vector<float>& centroids, std::vector<std::vector<float>>& clusters,
                          std::vector<std::vector<vector_idx_t>> &clusterVectorIds, bool use_rebalancing = false, 
-                         bool is_clustering_centroids = false, float rebalancing_ratio = 0.75);
+                         bool is_clustering_centroids = false, float rebalancing_ratio = 0.75, float sampling_ratio = 0.2);
 
         void clusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                  std::vector<float>& centroids, std::vector<std::vector<vector_idx_t>> &clusterVectorIds, 
                  int nClusters = -1, bool use_rebalancing = false, bool is_clustering_centroids = false, 
-                 float rebalancing_ratio = 0.75);
+                 float rebalancing_ratio = 0.75, float sampling_ratio = 0.2);
 
         // Quantized clustering methods
         void clusterDataQuant(uint8_t *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
@@ -325,7 +325,8 @@ namespace orangedb {
 
         void clusterDataWithCentoidRebalancing(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
                                     std::vector<float> &centroids, std::vector<std::vector<float> > *clusters,
-                                    std::vector<std::vector<vector_idx_t> > &clusterVectorIds, float rebalancing_ratio);
+                                    std::vector<std::vector<vector_idx_t> > &clusterVectorIds, float rebalancing_ratio, 
+                                    float sampling_ratio);
 
         // Generic clustering method
         template <typename T>

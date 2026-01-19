@@ -280,8 +280,8 @@
   -miniCentroidSize 1000 \
   -iterations 10 \
   -lambda 0 \
-  -nMegaProbes 4 \
-  -nMiniProbes 1500 \
+  -nMegaProbes 2 \
+  -nMiniProbes 1000 \
   -numQueries 50 \
   -readFromDisk 0 \
   -storagePath /home/centos/orangedb/data/sift_bill/reclustering_fast_index.bin \
@@ -294,14 +294,16 @@
   -quantBuild 0 \
   -nMegaRecluster 0 \
   -nFiles 1 \
-  -hardClusterSizeLimit 0 \
-  -kmeansSamplingRatio 1.0 \
+  -hardClusterSizeLimit 1200 \
+  -kmeansSamplingRatio 0.2 \
   -numFixBoundaries 0 \
   -scoreChangeThreshold 0.01 \
   -centroidChangeThreshold 0.01 \
   -useMSEToRecluster 0 \
   -umap_mode 2 \
-  -clustering_mode 0 > no_hard_limit_log.txt 2>&1
+  -clustering_mode 0 \
+  -rebalancing_ratio 0.85 \
+  > rebalance_1200_log.txt 2>&1
 
 
 ./build/release/bin/orangedb_main \
