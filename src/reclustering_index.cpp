@@ -3479,7 +3479,16 @@ namespace orangedb {
             dc->computeDistance(i, &dist);
             totalMSE += dist;
         }
-        return (numPoints > 0) ? totalMSE / numPoints : 0.0;
+        
+        double mse = (numPoints > 0) ? totalMSE / numPoints : 0.0;
+        
+        // Diagnostic: print cluster info when MSE is 0
+        if (mse == 0.0 || numPoints <= 1) {
+            printf("Mini cluster %d has MSE=%.6f with %lu vectors (totalMSE=%.6f)\n", 
+                   miniClusterId, mse, numPoints, totalMSE);
+        }
+        
+        return mse;
     }
 
     std::vector<vector_idx_t> ReclusteringIndex::appendOrMergeMegaCentroids(std::vector<vector_idx_t> oldMegaCentroidIds,
