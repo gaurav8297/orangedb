@@ -1680,9 +1680,6 @@ namespace orangedb {
             }
         }
 
-        // Track how many clusters we had before rebalancing splits
-        int updated_num_clusters_before_rebalancing = updated_num_clusters;
-        
         // Track which clusters were touched by rebalancing (both original and new)
         std::unordered_set<int64_t> all_rebalanced_clusters;
         
@@ -1751,51 +1748,93 @@ namespace orangedb {
         }
 
         // Validate that no histogram is greater than the hard limit
-        // Also check for empty clusters and identify their source
+        // Also check for small/empty clusters and identify their source
         int num_empty_clusters = 0;
+        int num_singleton_clusters = 0;
+        int num_small_clusters = 0;  // size <= 10
         int num_empty_from_original_kmeans = 0;
-        int num_empty_from_rebalanced_original = 0;
-        int num_empty_from_new_splits = 0;
+        int num_empty_from_rebalanced = 0;
+        int num_singleton_from_original_kmeans = 0;
+        int num_singleton_from_rebalanced = 0;
         int num_oversized_clusters = 0;
+        
+        // Calculate average sizes for different cluster sources
+        long long sum_size_original_kmeans = 0;
+        long long sum_size_rebalanced = 0;
+        int count_original_kmeans = 0;
+        int count_rebalanced = 0;
         
         for (int i=0; i<numClusters; i++) {
             if (config.hardClusterSizeLimit>0 && hist[i]>config.hardClusterSizeLimit) {
                 printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
                 num_oversized_clusters++;
             }
+            
+            // Track which source this cluster came from
+            bool is_rebalanced = (all_rebalanced_clusters.find(i) != all_rebalanced_clusters.end());
+            
+            // Accumulate sizes by source
+            if (is_rebalanced) {
+                sum_size_rebalanced += hist[i];
+                count_rebalanced++;
+            } else {
+                sum_size_original_kmeans += hist[i];
+                count_original_kmeans++;
+            }
+            
             if (hist[i] == 0) {
                 num_empty_clusters++;
-                
-                // Determine the source of this empty cluster
-                const char* source;
-                if (all_rebalanced_clusters.find(i) != all_rebalanced_clusters.end()) {
-                    // This cluster was involved in rebalancing
-                    if (i < updated_num_clusters_before_rebalancing) {
-                        source = "original k-means (recalculated during split)";
-                        num_empty_from_rebalanced_original++;
-                    } else {
-                        source = "new cluster created by split";
-                        num_empty_from_new_splits++;
-                    }
+                if (is_rebalanced) {
+                    num_empty_from_rebalanced++;
+                    printf("Warning: Cluster %d is EMPTY after final assignment (source: rebalanced)\n", i);
                 } else {
-                    // This cluster was never touched by rebalancing
-                    source = "original k-means (never rebalanced)";
                     num_empty_from_original_kmeans++;
+                    printf("Warning: Cluster %d is EMPTY after final assignment (source: original k-means)\n", i);
                 }
-                printf("Warning: Cluster %d is EMPTY after final assignment (source: %s)\n", i, source);
+            } else if (hist[i] == 1) {
+                num_singleton_clusters++;
+                if (is_rebalanced) {
+                    num_singleton_from_rebalanced++;
+                    printf("Warning: Cluster %d is SINGLETON (1 vector) after final assignment (source: rebalanced)\n", i);
+                } else {
+                    num_singleton_from_original_kmeans++;
+                    printf("Warning: Cluster %d is SINGLETON (1 vector) after final assignment (source: original k-means)\n", i);
+                }
+            } else if (hist[i] <= 10) {
+                num_small_clusters++;
             }
         }
         
-        if (num_empty_clusters > 0) {
-            printf("\n=== EMPTY CLUSTER SUMMARY ===\n");
-            printf("Total empty clusters: %d out of %d (%.2f%%)\n", 
-                   num_empty_clusters, numClusters, 100.0 * num_empty_clusters / numClusters);
-            printf("  - From original k-means (never rebalanced): %d\n", num_empty_from_original_kmeans);
-            printf("  - From original k-means (recalculated during split): %d\n", num_empty_from_rebalanced_original);
-            printf("  - From new clusters created by splitting: %d\n", num_empty_from_new_splits);
-            printf("Total clusters involved in rebalancing: %zu out of %d\n", 
-                   all_rebalanced_clusters.size(), numClusters);
+        if (num_empty_clusters > 0 || num_singleton_clusters > 0) {
+            printf("\n=== CLUSTER SIZE ANALYSIS ===\n");
+            if (num_empty_clusters > 0) {
+                printf("Total EMPTY clusters: %d out of %d (%.2f%%)\n", 
+                       num_empty_clusters, numClusters, 100.0 * num_empty_clusters / numClusters);
+                printf("  - From original k-means (never rebalanced): %d\n", num_empty_from_original_kmeans);
+                printf("  - From rebalanced clusters: %d\n", num_empty_from_rebalanced);
+            }
+            if (num_singleton_clusters > 0) {
+                printf("Total SINGLETON clusters: %d out of %d (%.2f%%)\n", 
+                       num_singleton_clusters, numClusters, 100.0 * num_singleton_clusters / numClusters);
+                printf("  - From original k-means (never rebalanced): %d\n", num_singleton_from_original_kmeans);
+                printf("  - From rebalanced clusters: %d\n", num_singleton_from_rebalanced);
+            }
+            if (num_small_clusters > 0) {
+                printf("Total SMALL clusters (2-10 vectors): %d out of %d (%.2f%%)\n", 
+                       num_small_clusters, numClusters, 100.0 * num_small_clusters / numClusters);
+            }
         }
+        
+        printf("\n=== AVERAGE CLUSTER SIZES BY SOURCE ===\n");
+        printf("Original k-means (never rebalanced): %d clusters, avg size = %.2f\n",
+               count_original_kmeans, 
+               count_original_kmeans > 0 ? (double)sum_size_original_kmeans / count_original_kmeans : 0.0);
+        printf("Rebalanced clusters (local k-means): %d clusters, avg size = %.2f\n",
+               count_rebalanced,
+               count_rebalanced > 0 ? (double)sum_size_rebalanced / count_rebalanced : 0.0);
+        printf("Total clusters involved in rebalancing: %zu out of %d\n", 
+               all_rebalanced_clusters.size(), numClusters);
+        
         if (num_oversized_clusters > 0) {
             printf("Total oversized clusters (exceeding hard limit): %d\n", num_oversized_clusters);
         }
