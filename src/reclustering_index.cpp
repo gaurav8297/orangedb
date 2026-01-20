@@ -1414,17 +1414,14 @@ namespace orangedb {
         }
         
         // Run k-means on the region with equal cluster sizes
-        faiss::ClusteringParameters cl;
-        cl.niter = 10;  // Fewer iterations for quick rebalancing
-        // Adjust min/max based on actual number of vectors available
-        // FAISS requires: num_vecs >= num_clusters * min_points_per_centroid
-        int max_min_points = num_vecs / num_region_clusters;  // Maximum feasible min
-        cl.min_points_per_centroid = std::max(1, std::min((int)(hardClusterSizeLimit * 0.5), max_min_points));
-        cl.max_points_per_centroid = std::max((int)hardClusterSizeLimit, num_vecs);  // Allow more if we have many vectors
-        cl.verbose = false;
+        faiss::ClusteringParameters temp_cl;
+        temp_cl.niter = 10;  // Fewer iterations for quick rebalancing
+        temp_cl.min_points_per_centroid = 1;  // to make sure train does not sub sample
+        temp_cl.max_points_per_centroid = num_vecs;  // to make sure train does not sub sample
+        temp_cl.verbose = false;
         
-        faiss::Clustering clustering(dim, num_region_clusters, cl);
-        faiss::IndexFlat index(dim, metric_type);
+        faiss::Clustering temp_clustering(dim, num_region_clusters, temp_cl);
+        faiss::IndexFlat temp_index(dim, metric_type);
         
         /* GILLI_DEBUG: we can do better centroid init if we have neighbors and not just split
         // Initialize clustering centroids directly from global centroids - avoid intermediate copy
@@ -1440,10 +1437,11 @@ namespace orangedb {
         // Don't initialize centroids - let FAISS start fresh with random sampling
         // This ensures effective splitting when rebalancing oversized clusters
         // FAISS will randomly sample initial centroids from region_data
-        clustering.centroids.clear();
+        temp_clustering.centroids.clear();
         
+        printf("Splitting cluster %d (size %d), into %d clusters \n", cluster_id_mapping[0], num_vecs, num_region_clusters);
         // Train - FAISS will initialize all centroids from scratch
-        clustering.train(num_vecs, region_data.data(), index);
+        temp_clustering.train(num_vecs, region_data.data(), temp_index);
         
         // Reassign vectors in the region with hard limit enforcement
         std::vector<int64_t> new_assignments(num_vecs);
@@ -1461,7 +1459,7 @@ namespace orangedb {
         hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(num_region_clusters, hardClusterSizeLimit);
         params.dist_modifier = hardLimitDistModifier.get();
         
-        index.search(num_vecs, region_data.data(), 1, distances.data(), new_assignments.data(), &params);
+        temp_index.search(num_vecs, region_data.data(), 1, distances.data(), new_assignments.data(), &params);
         
         // Update the global assignments and histograms
         // First, clear the old histogram counts for these clusters
@@ -1479,7 +1477,7 @@ namespace orangedb {
         // Update the centroids in the original array
         for (int i = 0; i < num_region_clusters; i++) {
             int64_t global_cluster_id = cluster_id_mapping[i];
-            const float* src = clustering.centroids.data() + i * dim;
+            const float* src = temp_clustering.centroids.data() + i * dim;
             float* dst = centroids + global_cluster_id * dim;
             std::copy(src, src + dim, dst);
         }
