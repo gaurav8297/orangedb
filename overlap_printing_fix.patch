@@ -1,0 +1,39 @@
+diff --git a/src/reclustering_index.cpp b/src/reclustering_index.cpp
+index 83f6d5f..2fa1c3e 100644
+--- a/src/reclustering_index.cpp
++++ b/src/reclustering_index.cpp
+@@ -2613,14 +2613,12 @@ namespace orangedb {
+         double worstRealAvg = (k > 0) ? worstRealSum / k : 0.0;
+ 
+         // Print aggregated statistics
+-        /*
+-        printf("Mega Centroid %d [%zu mini clusters]:\n", megaCentroidId, miniIds.size());
++        printf("Mega Centroid %d [%zu mini clusters] (L2):\n", megaCentroidId, miniIds.size());
+         printf("  Overall Stats - Approx Overlap: avg=%.4f, power_avg=%.4f | Real Overlap: avg=%.4f, power_avg=%.4f\n",
+                avgOverlapRatio, powerAvgOverlapRatio, avgRealOverlapScore, powerAvgRealOverlapScore);
+         printf("  Worst %d Elements - Approx Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f | Real Overlap: min=%.4f, max=%.4f, avg=%.4f, power_avg=%.4f\n",
+                k, worstApproxMin, worstApproxMax, worstApproxAvg, powerAvgOverlapRatio,
+                worstRealMin, worstRealMax, worstRealAvg, powerAvgRealOverlapScore);
+-        */
+         avgRealOverlapScores[megaCentroidId] = powerAvgRealOverlapScore;
+         overlapScores[megaCentroidId] = powerAvgOverlapRatio;
+     }
+@@ -3093,7 +3091,7 @@ namespace orangedb {
+             */
+             
+             // Print overlap score statistics if available
+-            /*if (overlapScores.size() == numMegaCentroids) {
++            if (overlapScores.size() == numMegaCentroids) {
+                 double overlapMin = std::numeric_limits<double>::max();
+                 double overlapMax = std::numeric_limits<double>::lowest();
+                 double overlapSum = 0.0;
+@@ -3117,7 +3115,7 @@ namespace orangedb {
+             } else {
+                 printf("\n=== Overlap Score Statistics ===\n");
+                 printf("Overlap scores not available (expected %lu, got %zu)\n", numMegaCentroids, overlapScores.size());
+-            }*/
++            }
+ 
+             // Print MSE score of L2 clusters (mega) statistics if available
+             if (megaClusteringScore.size() == numMegaCentroids) {
+

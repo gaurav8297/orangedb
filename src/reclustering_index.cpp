@@ -1682,6 +1682,12 @@ namespace orangedb {
             }
         }
 
+        // Track how many clusters we had before rebalancing splits
+        int updated_num_clusters_before_rebalancing = updated_num_clusters;
+        
+        // Track which clusters were touched by rebalancing (both original and new)
+        std::unordered_set<int64_t> all_rebalanced_clusters;
+        
         // rebalance the oversized clusters
         for (int i = 0; i < clusters_to_rebalance.size(); i++) {
             int64_t cluster_id = clusters_to_rebalance[i].first;
@@ -1690,8 +1696,12 @@ namespace orangedb {
             // Create the set of clusters to rebalance (1 full cluster + k neighbors)
             std::unordered_set<int64_t> clusters_to_rebalance_set;
             clusters_to_rebalance_set.insert(cluster_id);
+            all_rebalanced_clusters.insert(cluster_id); // Track the original cluster
+            
             for (int j = 0 ; j < (num_of_centroids_to_split - 1); j++) {
-                clusters_to_rebalance_set.insert(updated_num_clusters + j);
+                int64_t new_cluster_id = updated_num_clusters + j;
+                clusters_to_rebalance_set.insert(new_cluster_id);
+                all_rebalanced_clusters.insert(new_cluster_id); // Track the new cluster
             }
             
             // split the cluster into num_of_centroids_to_split clusters
@@ -1743,10 +1753,53 @@ namespace orangedb {
         }
 
         // Validate that no histogram is greater than the hard limit
+        // Also check for empty clusters and identify their source
+        int num_empty_clusters = 0;
+        int num_empty_from_original_kmeans = 0;
+        int num_empty_from_rebalanced_original = 0;
+        int num_empty_from_new_splits = 0;
+        int num_oversized_clusters = 0;
+        
         for (int i=0; i<numClusters; i++) {
             if (config.hardClusterSizeLimit>0 && hist[i]>config.hardClusterSizeLimit) {
                 printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
+                num_oversized_clusters++;
             }
+            if (hist[i] == 0) {
+                num_empty_clusters++;
+                
+                // Determine the source of this empty cluster
+                const char* source;
+                if (all_rebalanced_clusters.find(i) != all_rebalanced_clusters.end()) {
+                    // This cluster was involved in rebalancing
+                    if (i < updated_num_clusters_before_rebalancing) {
+                        source = "original k-means (recalculated during split)";
+                        num_empty_from_rebalanced_original++;
+                    } else {
+                        source = "new cluster created by split";
+                        num_empty_from_new_splits++;
+                    }
+                } else {
+                    // This cluster was never touched by rebalancing
+                    source = "original k-means (never rebalanced)";
+                    num_empty_from_original_kmeans++;
+                }
+                printf("Warning: Cluster %d is EMPTY after final assignment (source: %s)\n", i, source);
+            }
+        }
+        
+        if (num_empty_clusters > 0) {
+            printf("\n=== EMPTY CLUSTER SUMMARY ===\n");
+            printf("Total empty clusters: %d out of %d (%.2f%%)\n", 
+                   num_empty_clusters, numClusters, 100.0 * num_empty_clusters / numClusters);
+            printf("  - From original k-means (never rebalanced): %d\n", num_empty_from_original_kmeans);
+            printf("  - From original k-means (recalculated during split): %d\n", num_empty_from_rebalanced_original);
+            printf("  - From new clusters created by splitting: %d\n", num_empty_from_new_splits);
+            printf("Total clusters involved in rebalancing: %zu out of %d\n", 
+                   all_rebalanced_clusters.size(), numClusters);
+        }
+        if (num_oversized_clusters > 0) {
+            printf("Total oversized clusters (exceeding hard limit): %d\n", num_oversized_clusters);
         }
 
         // Copy the centroids
