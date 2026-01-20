@@ -1717,7 +1717,7 @@ namespace orangedb {
             rebalanceClusterRegion(
                 data, max_sampled_idx + 1, assign.data(), hist, 
                 clustering.centroids.data(), updated_num_clusters, dim,
-                clusters_to_rebalance_set, metric_type, config.hardClusterSizeLimit);
+                clusters_to_rebalance_set, metric_type, sampling_ratio * config.hardClusterSizeLimit);
 
             // Update the index with the rebalanced centroids
             index.reset();
