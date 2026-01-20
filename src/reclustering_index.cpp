@@ -3590,7 +3590,7 @@ namespace orangedb {
         findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
         // printf("Total mini centroids to search: %zu\n", miniAssign.size());
 
-
+        /*    
         // Print cluster assignments for query 49
         if (queryId == 49) {
             printf("\n=== List of all cluster Assignments ===\n");
@@ -3651,6 +3651,7 @@ namespace orangedb {
             
             printf("=====================================\n\n");
         }
+        */
 
         // auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
         // dc->setQuery(query);
