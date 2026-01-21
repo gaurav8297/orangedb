@@ -1581,7 +1581,7 @@ namespace orangedb {
         std::transform(clusters_to_rebalance.begin(), clusters_to_rebalance.end(), 
         num_of_centroids_to_split_to.begin(),
         [&](const std::pair<int64_t, int64_t>& cluster) {
-            return static_cast<int64_t>(ceil(static_cast<double>(cluster.second) / (sampling_ratio * config.hardClusterSizeLimit)));
+            return static_cast<int64_t>(floor(static_cast<double>(cluster.second) / (sampling_ratio * config.hardClusterSizeLimit)));
         });
 
         int num_of_new_clusters = std::accumulate(num_of_centroids_to_split_to.begin(), num_of_centroids_to_split_to.end(), 0) - num_of_centroids_to_split_to.size();
