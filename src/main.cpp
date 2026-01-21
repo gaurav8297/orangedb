@@ -2617,6 +2617,31 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     double max_recall = 0;
     double min_recall = std::numeric_limits<double>::max();
     double num_recall_below_75 = 0;
+    
+    // Build reverse mappings once before the loop
+    std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
+    std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
+    index.getMiniClusterVectorIds(&miniClusterVectorIds);
+    index.getMegaMiniCentroids(&megaMiniCentroidIds);
+    
+    // Map: vector ID -> L1 cluster ID
+    std::map<vector_idx_t, faiss::idx_t> vectorId_to_l1cluster;
+    for (size_t miniId = 0; miniId < miniClusterVectorIds.size(); miniId++) {
+        const auto& clusterVectorIds = miniClusterVectorIds[miniId];
+        for (auto vectorId : clusterVectorIds) {
+            vectorId_to_l1cluster[vectorId] = miniId;
+        }
+    }
+    
+    // Map: L1 cluster ID -> L2 cluster ID
+    std::map<faiss::idx_t, faiss::idx_t> l1cluster_to_l2cluster;
+    for (size_t megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+        const auto& miniIds = megaMiniCentroidIds[megaId];
+        for (auto miniId : miniIds) {
+            l1cluster_to_l2cluster[miniId] = megaId;
+        }
+    }
+    
     for (int i = 0; i < queryNumVectors; i++) {
         unsigned long long prev_num_dist_comp = stats.numDistanceCompForSearch;
         std::priority_queue<NodeDistCloser> results;
@@ -2638,7 +2663,32 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             num_recall_below_75++;
         }
         queryRecalls[i] = localRecall;
+        
+        // calc in how many L1s and L2s the gt is scattered
+        std::set<faiss::idx_t> unique_l1_clusters;
+        std::set<faiss::idx_t> unique_l2_clusters;
+
+        // lookup each GT vector
+        for (int j = 0; j < k; j++) {
+            // Find L1 cluster for this vector
+            auto it = vectorId_to_l1cluster.find(gt[j]);
+            if (it != vectorId_to_l1cluster.end()) {
+                faiss::idx_t l1_cluster = it->second;
+                unique_l1_clusters.insert(l1_cluster);
+                
+                // Find L2 cluster for this L1 cluster
+                auto it_l2 = l1cluster_to_l2cluster.find(l1_cluster);
+                if (it_l2 != l1cluster_to_l2cluster.end()) {
+                    unique_l2_clusters.insert(it_l2->second);
+                }
+            }
+        }
+
+        printf("Query %d: GT vectors scattered across %zu L1 clusters\n", i, unique_l1_clusters.size());
+        printf("Query %d: GT vectors scattered across %zu L2 clusters\n", i, unique_l2_clusters.size());
+
         printf("Query %d: Recall: %f%%, distance computations: %llu\n", i, localRecall, stats.numDistanceCompForSearch - prev_num_dist_comp);
+
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
     printf("Max Recall: %f, Min Recall: %f, Num Recall below 75%%: %f\n", max_recall, min_recall, num_recall_below_75);

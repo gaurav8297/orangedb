@@ -1633,26 +1633,38 @@ namespace orangedb {
         }
         // GILLI_DEBUG: we can do a smarter logic than that
         else if (updated_num_clusters + num_of_new_clusters < numClusters) {
+            std::vector<std::pair<int64_t, int64_t>> temp_clusters_sizes;
+            for (int i = 0; i < updated_num_clusters; i++) {
+                temp_clusters_sizes.push_back(std::make_pair(i, clustering.init_cluster_sizes[i]));
+            }
             if (!clusters_to_rebalance.empty()) {
-                int cluster_iter = 0;
-                while(updated_num_clusters + num_of_new_clusters < numClusters) {
-                    // Add one cluster at a time to avoid overshooting
-                    num_of_centroids_to_split_to[cluster_iter]++;
-                    num_of_new_clusters++;
-                    cluster_iter++;
-                    // Wrap around to distribute evenly across all clusters
-                    if (cluster_iter >= clusters_to_rebalance.size()) {
-                        cluster_iter = 0;
-                    }
+                for (int j = 0; j < clusters_to_rebalance.size(); j++) {
+                    temp_clusters_sizes[clusters_to_rebalance[j].first].second = clusters_to_rebalance[j].second / num_of_centroids_to_split_to[j];
                 }
             }
-            else {
-                // no clusters are oversized. split the biggest clusters into 2 new clusters
-                for (int i = 0; i < (numClusters - updated_num_clusters); i++) {
-                    clusters_to_rebalance.push_back(std::make_pair(i, clustering.init_cluster_sizes[i]));
+            // sort the temp_clusters_sizes by the size
+            std::sort(temp_clusters_sizes.begin(), temp_clusters_sizes.end(), 
+                [](const std::pair<int64_t, int64_t>& a, const std::pair<int64_t, int64_t>& b)
+                {
+                    return a.second > b.second;
+                });
+
+            // add the clusters to the list
+            int num_of_clusters_to_add = numClusters - updated_num_clusters - num_of_new_clusters;
+            for (int i = 0; i < num_of_clusters_to_add; i++) {
+                auto it = std::find_if(clusters_to_rebalance.begin(), clusters_to_rebalance.end(),
+                    [&](const std::pair<int64_t, int64_t>& p) { return p.first == temp_clusters_sizes[i].first; });
+                if (it == clusters_to_rebalance.end()) {
+                    clusters_to_rebalance.push_back(std::make_pair(temp_clusters_sizes[i].first, temp_clusters_sizes[i].second));
                     num_of_centroids_to_split_to.push_back(2);
                 }
+                else{
+                    // Find the index in clusters_to_rebalance to update num_of_centroids_to_split_to
+                    int idx = std::distance(clusters_to_rebalance.begin(), it);
+                    num_of_centroids_to_split_to[idx]++;
+                }
             }
+
         }
 
         clustering.centroids.resize(numClusters * dim); // does resize copy old centroids? GILLI
@@ -1693,12 +1705,25 @@ namespace orangedb {
             clusters_to_rebalance_set.insert(cluster_id);
             all_rebalanced_clusters.insert(cluster_id); // Track the original cluster
             
+            /*
+            // Find 4 nearest neighbor clusters
+            auto neighbor_clusters = findKNearestClusters(
+                clustering.centroids.data(), updated_num_clusters, dim, clusters_to_rebalance_set.data(), 5, metric_type);
+
+            // add region cluster Ids
+            for (auto neighbor_id : neighbor_clusters) {
+                clusters_to_rebalance_set.insert(neighbor_id);
+                all_rebalanced_clusters.insert(neighbor_id); // Track the neighbor cluster
+            }
+            */
+
+            // add new cluster Ids 
             for (int j = 0 ; j < (num_of_centroids_to_split - 1); j++) {
                 int64_t new_cluster_id = updated_num_clusters + j;
                 clusters_to_rebalance_set.insert(new_cluster_id);
                 all_rebalanced_clusters.insert(new_cluster_id); // Track the new cluster
             }
-            
+
             // split the cluster into num_of_centroids_to_split clusters
             // Add (num_of_centroids_to_split - 1) new clusters (original cluster remains)
             updated_num_clusters += (num_of_centroids_to_split - 1);
@@ -1970,10 +1995,54 @@ namespace orangedb {
         }
 
         // Validate that no histogram is greater than hard limit
+        // Also calculate statistics for comparison with rebalancing mode
+        int num_empty_clusters = 0;
+        int num_singleton_clusters = 0;
+        int num_small_clusters = 0;  // size <= 10
+        int num_oversized_clusters = 0;
+        long long sum_size = 0;
+        
         for (int i = 0; i < numClusters; i++) {
+            sum_size += hist[i];
+            
             if (config.hardClusterSizeLimit > 0 && hist[i] > config.hardClusterSizeLimit) {
                 printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
+                num_oversized_clusters++;
             }
+            
+            if (hist[i] == 0) {
+                num_empty_clusters++;
+                printf("Warning: Cluster %d is EMPTY after final assignment\n", i);
+            } else if (hist[i] == 1) {
+                num_singleton_clusters++;
+                printf("Warning: Cluster %d is SINGLETON (1 vector) after final assignment\n", i);
+            } else if (hist[i] <= 10) {
+                num_small_clusters++;
+            }
+        }
+        
+        if (num_empty_clusters > 0 || num_singleton_clusters > 0) {
+            printf("\n=== CLUSTER SIZE ANALYSIS ===\n");
+            if (num_empty_clusters > 0) {
+                printf("Total EMPTY clusters: %d out of %d (%.2f%%)\n", 
+                       num_empty_clusters, numClusters, 100.0 * num_empty_clusters / numClusters);
+            }
+            if (num_singleton_clusters > 0) {
+                printf("Total SINGLETON clusters: %d out of %d (%.2f%%)\n", 
+                       num_singleton_clusters, numClusters, 100.0 * num_singleton_clusters / numClusters);
+            }
+            if (num_small_clusters > 0) {
+                printf("Total SMALL clusters (2-10 vectors): %d out of %d (%.2f%%)\n", 
+                       num_small_clusters, numClusters, 100.0 * num_small_clusters / numClusters);
+            }
+        }
+        
+        printf("\n=== AVERAGE CLUSTER SIZES (HARD_LIMIT mode) ===\n");
+        printf("All clusters (global k-means): %d clusters, avg size = %.2f\n",
+               numClusters, numClusters > 0 ? (double)sum_size / numClusters : 0.0);
+        
+        if (num_oversized_clusters > 0) {
+            printf("Total oversized clusters (exceeding hard limit): %d\n", num_oversized_clusters);
         }
 
         // Copy the centroids
