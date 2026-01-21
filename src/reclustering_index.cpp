@@ -1378,12 +1378,15 @@ namespace orangedb {
             hist[assign[i]]++;
         }
 
+        int total_limit_violations = 0;
         // Validate that no histo is greating than 4500
         for (int i = 0; i < numClusters; i++) {
             if (config.hardClusterSizeLimit > 0 && hist[i] >= config.hardClusterSizeLimit) {
-                printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
+                // printf("Warning: Cluster %d has size %d greater than %llu\n", i, hist[i], config.hardClusterSizeLimit);
+                total_limit_violations += 1;
             }
         }
+        printf("Total clusters violating size limit: %d out of %d\n", total_limit_violations, numClusters);
 
         // Copy the centroids
         centroids.resize(numClusters * dim);
