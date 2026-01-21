@@ -81,7 +81,7 @@ void Clustering::compute_centroids(
         const float* weights,
         float* hassign,
         float* centroids) {
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
     k -= k_frozen;
     centroids += k_frozen * d;
 
@@ -141,12 +141,12 @@ void Clustering::compute_centroids(
         }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    double elapsed =
-            std::chrono::duration<double, std::milli>(end - start).count();
-    if (verbose) {
-        printf("Computed centroids in %.3f ms\n", elapsed);
-    }
+    // auto end = std::chrono::high_resolution_clock::now();
+    // double elapsed =
+    //         std::chrono::duration<double, std::milli>(end - start).count();
+    // if (verbose) {
+    //     printf("Computed centroids in %.3f ms\n", elapsed);
+    // }
 }
 
 namespace {
