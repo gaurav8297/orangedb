@@ -246,7 +246,7 @@ void exhaustive_inner_product_blas(
     // TODO: Somehow later use distance_compute_blas_database_bs to fit everything
     //  in cache line for performance. However, Currently add_results dep on that we pass all
     //  ny at once.
-    const size_t bs_y = distance_compute_blas_database_bs;
+    const size_t bs_y = ny;
     std::unique_ptr<float[]> ip_block(new float[bs_x * bs_y]);
 
     for (size_t i0 = 0; i0 < nx; i0 += bs_x) {
@@ -309,7 +309,7 @@ void exhaustive_L2sqr_blas_default_impl(
     // TODO: Somehow later use distance_compute_blas_database_bs to fit everything
     //  in cache line for performance. However, Currently add_results dep on that we pass all
     //  ny at once.
-    const size_t bs_y = distance_compute_blas_database_bs;
+    const size_t bs_y = ny;
     // const size_t bs_x = 16, bs_y = 16;
     std::unique_ptr<float[]> ip_block(new float[bs_x * bs_y]);
     std::unique_ptr<float[]> x_norms(new float[nx]);
