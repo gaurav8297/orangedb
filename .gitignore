@@ -49,3 +49,6 @@ cmake-build-default*
 data/scores/*
 *.png
 *.txt
+
+exp/
+exp_2/
