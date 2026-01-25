@@ -7,6 +7,7 @@
 #include <simsimd/simsimd.h>
 #include <common.h>
 #include <fastQ/scalar_8bit.h>
+#include <faiss/Index.h>
 
 using namespace std;
 using namespace fastq::scalar_8bit;
@@ -523,6 +524,18 @@ namespace orangedb {
         return std::make_unique<DelegateDC<uint8_t> >(std::move(delegate), data, quantizer->codeSize, n);
     }
 
+    struct FarthestFirst {
+        bool operator()(const std::pair<faiss::idx_t, double>& a, 
+                        const std::pair<faiss::idx_t, double>& b) const {
+            // Sort by distance (second) descending
+            if (a.second != b.second) {
+                return a.second > b.second; 
+            }
+            // If distances are equal, sort by ID to prevent the set 
+            // from treating them as the same element (sets only keep unique keys)
+            return a.first < b.first;
+        }
+    };
         // struct QuantizedDistanceComputer : public DistanceComputer {
         //     explicit QuantizedDistanceComputer(
         //             const uint8_t *data,

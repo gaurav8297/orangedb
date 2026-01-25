@@ -59,6 +59,10 @@ enum UMAP_VISUALIZATION_MODE {
     OFFLINE_UMAP, // 2
 };
 
+// Forward declarations
+std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, 
+                                                  size_t queryNumVectors, int k, vector_idx_t *gtVecs, double recall_val);
+
 class InputParser {
 public:
     InputParser(int &argc, char **argv) {
@@ -2609,7 +2613,7 @@ void benchmark_faiss_clustering(InputParser &input) {
 }
 
 double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
-                  vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes, std::vector<double> &queryRecalls) {
+                  vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes, std::vector<double> &queryRecalls, int queryIdOffset = 0) {
     queryRecalls.resize(queryNumVectors);
     // search
     double recall = 0;
@@ -2642,6 +2646,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
         }
     }
     
+    int avg_num_misassigned = 0;
     for (int i = 0; i < queryNumVectors; i++) {
         unsigned long long prev_num_dist_comp = stats.numDistanceCompForSearch;
         std::priority_queue<NodeDistCloser> results;
@@ -2664,10 +2669,23 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
         }
         queryRecalls[i] = localRecall;
         
+        // Get L1 centroids from index
+        const float *l1_centroids = nullptr;
+        size_t num_l1_centroids = 0;
+        index.getMiniCentroids(&l1_centroids, num_l1_centroids);
+        const float *l2_centroids = nullptr;
+        size_t num_l2_centroids = 0;
+        index.getMegaCentroids(&l2_centroids, num_l2_centroids);
+        
         // calc in how many L1s and L2s the gt is scattered
         std::set<faiss::idx_t> unique_l1_clusters;
         std::set<faiss::idx_t> unique_l2_clusters;
 
+        double furthest_l1_dist = 0;
+        double furthest_l2_dist = 0;
+        double closest_l1_dist = -1;
+        double closest_l2_dist = -1;
+        const float *query = queryVecs + i * queryDimension;
         // lookup each GT vector
         for (int j = 0; j < k; j++) {
             // Find L1 cluster for this vector
@@ -2676,20 +2694,68 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
                 faiss::idx_t l1_cluster = it->second;
                 unique_l1_clusters.insert(l1_cluster);
                 
+                // Compute distance from query to this L1 centroid
+                const float *l1_centroid = l1_centroids + l1_cluster * queryDimension;
+                double dist_to_l1_centroid = 0.0;
+                for (size_t d = 0; d < queryDimension; d++) {
+                    double diff = query[d] - l1_centroid[d];
+                    dist_to_l1_centroid += diff * diff;  // L2 distance squared
+                }
+                if (dist_to_l1_centroid > furthest_l1_dist) {
+                    furthest_l1_dist = dist_to_l1_centroid;
+                }
+                if (dist_to_l1_centroid < closest_l1_dist || closest_l1_dist == -1) {
+                    closest_l1_dist = dist_to_l1_centroid;
+                }
+                
                 // Find L2 cluster for this L1 cluster
                 auto it_l2 = l1cluster_to_l2cluster.find(l1_cluster);
                 if (it_l2 != l1cluster_to_l2cluster.end()) {
                     unique_l2_clusters.insert(it_l2->second);
                 }
+                // Compute distance from query to this L2 centroid
+                faiss::idx_t l2_cluster = it_l2->second;
+                const float *l2_centroid = l2_centroids + l2_cluster * queryDimension;
+                double dist_to_l2_centroid = 0.0;
+                for (size_t d = 0; d < queryDimension; d++) {
+                    double diff = query[d] - l2_centroid[d];
+                    dist_to_l2_centroid += diff * diff;  // L2 distance squared
+                }
+                if (dist_to_l2_centroid > furthest_l2_dist) {
+                    furthest_l2_dist = dist_to_l2_centroid;
+                }
+                if (dist_to_l2_centroid < closest_l2_dist || closest_l2_dist == -1) {
+                    closest_l2_dist = dist_to_l2_centroid;
+                }
             }
         }
 
-        printf("Query %d: GT vectors scattered across %zu L1 clusters\n", i, unique_l1_clusters.size());
-        printf("Query %d: GT vectors scattered across %zu L2 clusters\n", i, unique_l2_clusters.size());
+        printf("Query %d: GT vectors scattered across %zu L1 clusters, furthest L1 distance: %f, closest L1 distance: %f\n", i + queryIdOffset, unique_l1_clusters.size(), furthest_l1_dist, closest_l1_dist);
+        printf("Query %d: GT vectors scattered across %zu L2 clusters, furthest L2 distance: %f, closest L2 distance: %f\n", i + queryIdOffset, unique_l2_clusters.size(), furthest_l2_dist, closest_l2_dist);
 
-        printf("Query %d: Recall: %f%%, distance computations: %llu\n", i, localRecall, stats.numDistanceCompForSearch - prev_num_dist_comp);
+        // check if query was affected by the hard limit
+        // for every gt vector, check if it is assigned to the closest centroid:
+        // if it is - no effect. if it is not - damaged by hard limit.
+        int num_misassigned = 0;
+        for (int j = 0; j < k; j++) {
+            auto it = vectorId_to_l1cluster.find(gt[j]);
+            if (it != vectorId_to_l1cluster.end()) {
+                faiss::idx_t assigned_l1_cluster = it->second;
+                vector_idx_t closest_l1_cluster = index.findClosestMiniCentroid(gt[j]);
+                
+                if (closest_l1_cluster != assigned_l1_cluster) {
+                    num_misassigned++;
+                }
+            }
+        }
+
+        printf("Query %d: Recall: %f%%, distance computations: %llu, misassigned: %d/%d (%.1f%%)\n", i + queryIdOffset, localRecall, 
+            stats.numDistanceCompForSearch - prev_num_dist_comp, num_misassigned, k, (num_misassigned * 100.0 / k));
+
+        avg_num_misassigned += num_misassigned;
 
     }
+    printf("Avg misassigned: %.1f%%\n", (avg_num_misassigned * 100.0) / (k * queryNumVectors));
     printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
     printf("Max Recall: %f, Min Recall: %f, Num Recall below 75%%: %f\n", max_recall, min_recall, num_recall_below_75);
     return recall / queryNumVectors;
@@ -3413,7 +3479,6 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
     const int clustering_mode = stoi(input.getCmdOption("-clustering_mode"));
 
-    float sampling_ratio = kmeansSamplingRatio;
     float rebalancing_ratio;
     if (clustering_mode){
         rebalancing_ratio = stof(input.getCmdOption("-rebalancing_ratio"));
@@ -3484,7 +3549,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 }
                 auto data = readParquetFiles(paths, &baseDimension, &baseNumVectors);
 
-                index.naiveInsert(data, baseNumVectors, clustering_mode, rebalancing_ratio, sampling_ratio);
+                index.naiveInsert(data, baseNumVectors, clustering_mode, rebalancing_ratio);
                 totalVectors += baseNumVectors;
                 delete[] data;
             }
@@ -3507,7 +3572,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 if (quantBuild) {
                     index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
                 } else {
-                    index.naiveInsert(baseVecs + start * baseDimension, end - start, clustering_mode, rebalancing_ratio, sampling_ratio);
+                    index.naiveInsert(baseVecs + start * baseDimension, end - start, clustering_mode, rebalancing_ratio);
                 }
 
                 // Recluster after 50 inserts, then every 2 inserts thereafter
@@ -3810,6 +3875,274 @@ void benchmark_fast_reclustering(InputParser &input) {
     }
 }
 
+void benchmark_fixed_recall(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    int numInserts = stoi(input.getCmdOption("-numInserts"));
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numIters = stoi(input.getCmdOption("-numIters"));
+    const int megaCentroidSize = stoi(input.getCmdOption("-megaCentroidSize"));
+    const int miniCentroidSize = stoi(input.getCmdOption("-miniCentroidSize"));
+    const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
+    const int reclusterOnScore = stoi(input.getCmdOption("-reclusterOnScore"));
+    const int iterations = stoi(input.getCmdOption("-iterations"));
+    const int numQueries = stoi(input.getCmdOption("-numQueries"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
+    const int numThreads = stoi(input.getCmdOption("-numThreads"));
+    const bool useIP = stoi(input.getCmdOption("-useIP"));
+    const float quantTrainPercentage = stof(input.getCmdOption("-quantTrainPercentage"));
+    const bool quantBuild = stoi(input.getCmdOption("-quantBuild"));
+    const int nMegaRecluster = stoi(input.getCmdOption("-nMegaRecluster"));
+    int hardClusterSizeLimit = stoi(input.getCmdOption("-hardClusterSizeLimit"));
+    float kmeansSamplingRatio = stof(input.getCmdOption("-kmeansSamplingRatio"));
+    int numFixBoundaries = stoi(input.getCmdOption("-numFixBoundaries"));
+    float scoreChangeThreshold = stof(input.getCmdOption("-scoreChangeThreshold"));
+    float centroidChangeThreshold = stof(input.getCmdOption("-centroidChangeThreshold"));
+    const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
+    const int clustering_mode = stoi(input.getCmdOption("-clustering_mode"));
+    const double recall_val = stod(input.getCmdOption("-recall_val"));
+
+    float rebalancing_ratio;
+    if (clustering_mode){
+        rebalancing_ratio = stof(input.getCmdOption("-rebalancing_ratio"));
+    }
+    else {
+        rebalancing_ratio = 1;
+    }
+    const float lambda = 0;
+    omp_set_num_threads(numThreads);
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
+    queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
+
+    DistanceType distanceType = useIP ? IP : L2;
+    ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
+                                   0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio,
+                                   scoreChangeThreshold, centroidChangeThreshold, 0.1, 
+                                   static_cast<CLUSTERING_MODE>(clustering_mode));
+    // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    RandomGenerator rng(1234);
+    ReclusteringIndex index(queryDimension, config, &rng);
+
+    size_t baseDimension = queryDimension;
+    size_t baseNumVectors = 0;
+    float *baseVecs = nullptr;
+
+    if (readFromDisk) {
+        index = ReclusteringIndex(storagePath, &rng);
+    } else {
+        // Read dataset
+        std::vector<std::string> filePaths;
+        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
+        
+        baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
+        assert(baseDimension == queryDimension);
+        if (quantBuild) {
+            index.trainQuant(baseVecs, baseNumVectors);
+        }
+        //printf("Building index with realtime reclustering\n");
+        auto chunkSize = baseNumVectors / numInserts;
+        //printf("Chunk size: %lu\n", chunkSize);
+        auto startReclusterPoint = (numInserts / 2) - 1;
+        for (long i = 0; i < numInserts; i++) {
+            auto start = i * chunkSize;
+            auto end = (i + 1) * chunkSize;
+            if (i == (numInserts - 1)) {
+                end = baseNumVectors;
+            }
+            //printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
+            if (quantBuild) {
+                index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
+            } else {
+                index.naiveInsert(baseVecs + start * baseDimension, end - start, clustering_mode, rebalancing_ratio);
+            }
+
+            // Recluster after 50 inserts, then every 2 inserts thereafter
+            bool should_recluster = false;
+            if (i == startReclusterPoint) {
+                // After 50 inserts (0-indexed, so i == 49)
+                printf("=== Completed %ld inserts - Running reclustering ===\n", i + 1);
+                should_recluster = true;
+            } else if (i > startReclusterPoint && (i - startReclusterPoint) % 2 == 0) {
+                // Every 2 inserts after the 50th (i.e., at 51, 53, 55, ...)
+                printf("=== Completed %ld inserts - Running reclustering ===\n", i + 1);
+                should_recluster = true;
+            }
+        }
+        index.flush_to_disk(storagePath);
+    }
+
+    index.storeMSEScoreForMegaClusters();
+
+    // clac amount of Probes needed for each query to get fixed_recall
+    std::vector<std::pair<int, int>> nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val);
+    // make sure the probe number is correct
+    std::vector<double> queryRecallValues;
+    for (int j = 0; j < queryNumVectors; j++) {
+        float *query = queryVecs + j * queryDimension;
+        std::vector<double> singleQueryRecall;
+        auto recall = get_recall(index, query, queryDimension, 1, k, gtVecs + j * k, nProbes[j].first,
+            nProbes[j].second, singleQueryRecall, j);
+        double recallValue = singleQueryRecall[0];
+        queryRecallValues.push_back(recallValue);
+        printf("Query %d: Recall: %f, nL2Probes: %d, nL1Probes: %d\n", j, recallValue, nProbes[j].first, nProbes[j].second);
+    }
+    double avgRecall = std::accumulate(queryRecallValues.begin(), queryRecallValues.end(), 0.0) / queryNumVectors;
+    printf("Average Recall: %f, ", avgRecall);
+    
+    // Calculate average L2 and L1 probes
+    double totalL2Probes = 0, totalL1Probes = 0;
+    for (const auto& probe : nProbes) {
+        totalL2Probes += probe.first;
+        totalL1Probes += probe.second;
+    }
+    printf("Average L2 probes: %.2f, Average L1 probes: %.2f\n", 
+           totalL2Probes / queryNumVectors, totalL1Probes / queryNumVectors);
+    
+    //index.printStats();
+
+
+    printf("Starting reclustering iterations\n");
+    auto track_query_id = 0;
+
+    for (int iter = 0; iter < iterations; iter++) {
+        printf("Started Iteration: %d\n", iter);
+        index.storeMSEScoreForMegaClusters();
+        index.saveOldScoreForMegaClusters();
+
+
+        std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
+        index.getMegaMiniCentroids(&megaMiniCentroidIds);
+        auto mega_mini_centroids_file_path = "mega_mini_centroids_iter_prev_" + std::to_string(iter + 1) + ".bin";
+        writeNestedVectorToFile(mega_mini_centroids_file_path, megaMiniCentroidIds);
+        index.reclusterAllMegaCentroids(nMegaRecluster);
+        index.storeMSEScoreForMegaClusters();
+        index.computeOverlapScores();
+        index.printStats();
+
+        //const double* overlapScores;
+        //size_t numScores;
+        //index.getOverlapScores(&overlapScores, numScores);
+        //index.getRealOverlapScores(&overlapScores, numScores);
+        
+        queryRecallValues.clear();
+        nProbes.clear();
+        // clac amount of Probes needed for each query to get fixed_recall
+        nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val);
+        // make sure the probe number is correct
+        for (int j = 0; j < queryNumVectors; j++) {
+            float *query = queryVecs + j * queryDimension;
+            std::vector<double> singleQueryRecall;
+            auto recall = get_recall(index, query, queryDimension, 1, k, gtVecs + j * k, nProbes[j].first,
+                nProbes[j].second, singleQueryRecall, j);
+            double recallValue = singleQueryRecall[0];
+            queryRecallValues.push_back(recallValue);
+            printf("Query %d: Recall: %f, nL2Probes: %d, nL1Probes: %d\n", j, recallValue, nProbes[j].first, nProbes[j].second);
+        }
+        avgRecall = std::accumulate(queryRecallValues.begin(), queryRecallValues.end(), 0.0) / queryNumVectors;
+        printf("Average Recall: %f, ", avgRecall);
+
+        // Calculate average L2 and L1 probes
+        totalL2Probes = 0;
+        totalL1Probes = 0;
+        for (const auto& probe : nProbes) {
+            totalL2Probes += probe.first;
+            totalL1Probes += probe.second;
+        }
+        printf("Average L2 probes: %.2f, Average L1 probes: %.2f\n", 
+                totalL2Probes / queryNumVectors, totalL1Probes / queryNumVectors);
+
+        if (numMegaReclusterCentroids == 1) {
+            std::vector<vector_idx_t> megaClusterIds;
+            index.getMegaClusterIds(megaClusterIds);
+            for (auto megaClusterId : megaClusterIds) {
+                index.reclusterInternalMegaCentroid(megaClusterId);
+            }
+        } else {
+            index.reclusterFull(numMegaReclusterCentroids);
+
+        }
+
+        // Save clustering data AFTER reclustering
+        // Generate UMAP visualization with cluster assignments (before early return)
+        if(umap_mode==LIVE_UMAP) {
+            printf("\n=== Generating UMAP Visualization ===\n");
+            if (clustering_mode == REBALANCE_CENTROIDS) {
+            run_umap_3D_with_cluster_data(index,
+                                            "REBALANCE_CENTROIDS_umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
+                                            100000, numThreads);
+            run_umap_3D_with_cluster_data(index,
+                                            "REBALANCE_CENTROIDS_umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
+                                            100000, numThreads);
+            }
+            else if (clustering_mode == HARD_LIMIT) {
+                run_umap_3D_with_cluster_data(index,
+                                            "HARD_LIMIT_umap_l2_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L2,
+                                            100000, numThreads);
+                run_umap_3D_with_cluster_data(index,
+                                            "HARD_LIMIT_umap_l1_clusters_3D_iter_" + std::to_string(iter + 1) + ".bin", C_L1,
+                                            100000, numThreads);
+            }
+        } else if(umap_mode==OFFLINE_UMAP) {
+            printf("\n=== saving clustering data ===\n");
+            std::string file_name_l2;
+            std::string file_name_l1;
+            if (clustering_mode == REBALANCE_CENTROIDS) {
+                file_name_l2 = "REBALANCE_CENTROIDS_clustering_data_l2_iter_" + std::to_string(iter + 1) + ".bin";
+                file_name_l1 = "REBALANCE_CENTROIDS_clustering_data_l1_iter_" + std::to_string(iter + 1) + ".bin";
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, file_name_l2, C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, file_name_l1, C_L1);
+            }
+            else if (clustering_mode == HARD_LIMIT) {
+                file_name_l2 = "HARD_LIMIT_clustering_data_l2_iter_" + std::to_string(iter + 1) + ".bin";
+                file_name_l1 = "HARD_LIMIT_clustering_data_l1_iter_" + std::to_string(iter + 1) + ".bin";
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, file_name_l2, C_L2);
+                save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, file_name_l1, C_L1);
+            }
+        }
+        
+        queryRecallValues.clear();
+        nProbes.clear();
+        // clac amount of Probes needed for each query to get fixed_recall
+        nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val);
+        // make sure the probe number is correct
+        for (int j = 0; j < queryNumVectors; j++) {
+            float *query = queryVecs + j * queryDimension;
+            std::vector<double> singleQueryRecall;
+            auto recall = get_recall(index, query, queryDimension, 1, k, gtVecs + j * k, nProbes[j].first,
+                nProbes[j].second, singleQueryRecall, j);
+            double recallValue = singleQueryRecall[0];
+            queryRecallValues.push_back(recallValue);
+            printf("Query %d: Recall: %f, nL2Probes: %d, nL1Probes: %d\n", j, recallValue, nProbes[j].first, nProbes[j].second);
+        }
+        avgRecall = std::accumulate(queryRecallValues.begin(), queryRecallValues.end(), 0.0) / queryNumVectors;
+        printf("Average Recall: %f, ", avgRecall);
+
+        // Calculate average L2 and L1 probes
+        totalL2Probes = 0;
+        totalL1Probes = 0;
+        for (const auto& probe : nProbes) {
+            totalL2Probes += probe.first;
+            totalL1Probes += probe.second;
+        }
+        printf("Average L2 probes: %.2f, Average L1 probes: %.2f\n", 
+                totalL2Probes / queryNumVectors, totalL1Probes / queryNumVectors);
+    }
+    index.storeMSEScoreForMegaClusters();
+    index.computeOverlapScores();
+    index.printStats();
+    if (iterations > 0) {
+        index.flush_to_disk(storagePath);
+    }
+}
+
 double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
                   vector_idx_t *gtVecs, int nMegaProbes, int nMicroProbes) {
     IncrementalIndexStats stats;
@@ -3829,6 +4162,238 @@ double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimensi
     }
     printf("Avg Distance Computation: %llu\n", stats.numDistanceComp / queryNumVectors);
     return recall / queryNumVectors;
+}
+
+int binarySearch(const std::vector<pair<faiss::idx_t, double>>& arr, std::map<faiss::idx_t, int>& size_map, int target) {
+    if (arr.empty()) {
+        printf("Warning: No L1 clusters found for query %d\n", target);
+        return 0;
+    }
+    
+    std::vector<int> sorted_sizes;
+    sorted_sizes.push_back(size_map[arr.begin()->first]);
+    for (auto it = arr.begin() + 1; it != arr.end(); ++it){
+        sorted_sizes.push_back(sorted_sizes.back() + size_map[it->first]);
+    }
+
+    auto farthest_l1_it = std::lower_bound(sorted_sizes.begin(), sorted_sizes.end(), target);
+    int farthest_l1_index = std::distance(sorted_sizes.begin(), farthest_l1_it);
+
+    // find the closest value to target
+    int upper_value_diff = sorted_sizes[farthest_l1_index] - target;
+    int lower_value_diff = target - sorted_sizes[farthest_l1_index - 1];
+    
+    if (upper_value_diff < lower_value_diff) {
+        return farthest_l1_index;
+    } else {
+        return farthest_l1_index - 1;
+    }
+}
+
+std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
+    vector_idx_t *gtVecs, double recall_val) {
+
+    // params init
+    std::vector<std::pair<int, int>> nProbes(queryNumVectors, std::make_pair(0, 0)); 
+    std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
+    index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+    std::vector<std::vector<vector_idx_t>> L2_ClusterCentroidIds;
+    index.getMegaMiniCentroids(&L2_ClusterCentroidIds);
+
+    // search
+    double recall = 0;
+    for (int i = 0; i < queryNumVectors; i++) {
+        // I need to find the amount of nL2Probes and nL1Probes that allows a recall of recall_val for each query
+
+        // step 1: find all the mini clusters containing gt of the queried vector
+        // step 2: sort them from the closest L1 centroid to the farthest
+        // step 3: using binary search, find the amount of L1 clusters needed to achieve fixed_recall_val
+        // step 4: find all the L2 clusters containing the L1 clusters found in step 3
+        // step 5: compute all distances between the queried vector and the L2 clusters and sort them from the closest to the farthest
+        // step 6: nL2Probes is the smallest number allowing to find the farthest L2 from step 4 according to the sort in step 5
+        // step 7: take all L1 clusters under the L2 clusters found in step 6 and sort them from the closest to the farthest
+        // step 8: nL1Probes is the smallest number allowing to find the farthest L1 from step 3 according to the sort in step 7
+        // step 9: return nL2Probes and nL1Probes
+
+        // step 1:
+        // -------
+        // calc in how many L1s the gt is scattered
+        auto gt = gtVecs + i * k;
+        std::map<faiss::idx_t, int> unique_l1_clusters;
+        std::vector<pair<faiss::idx_t, double>> sorted_l1_clusters;
+        const float *query = queryVecs + i * queryDimension;
+
+        // Map: vector ID -> L1 cluster ID
+        std::map<vector_idx_t, faiss::idx_t> vectorId_to_l1cluster;
+        for (size_t miniId = 0; miniId < L1_ClusterVectorIds.size(); miniId++) {
+            const auto& clusterVectorIds = L1_ClusterVectorIds[miniId];
+            for (auto vectorId : clusterVectorIds) {
+                vectorId_to_l1cluster[vectorId] = miniId;
+            }
+        }
+    
+        // Map: L1 cluster ID -> L2 cluster ID
+        std::map<faiss::idx_t, faiss::idx_t> l1cluster_to_l2cluster;
+        // Map: L2 cluster ID -> list of L1 cluster IDs  
+        std::map<faiss::idx_t, std::vector<faiss::idx_t>> l2cluster_to_l1cluster;
+        for (size_t megaId = 0; megaId < L2_ClusterCentroidIds.size(); megaId++) {
+            const auto& miniIds = L2_ClusterCentroidIds[megaId];
+            for (auto miniId : miniIds) {
+                l1cluster_to_l2cluster[miniId] = megaId;
+                l2cluster_to_l1cluster[megaId].push_back(miniId);
+            }
+        }
+        
+        // Get L1 centroids from index
+        const float *l1_centroids = nullptr;
+        size_t num_l1_centroids = 0;
+        index.getMiniCentroids(&l1_centroids, num_l1_centroids);
+        const float *l2_centroids = nullptr;
+        size_t num_l2_centroids = 0;
+        index.getMegaCentroids(&l2_centroids, num_l2_centroids);
+
+        // lookup each GT vectors
+        for (int j = 0; j < k; j++) {
+            // Find L1 cluster for a GT vector
+            auto it = vectorId_to_l1cluster.find(gt[j]);
+            if (it != vectorId_to_l1cluster.end()) {
+                faiss::idx_t l1_cluster = it->second;
+
+                if (unique_l1_clusters.find(l1_cluster) == unique_l1_clusters.end()) {
+                    // Compute distance from query to this L1 centroid
+                    const float *l1_centroid = l1_centroids + l1_cluster * queryDimension;
+                    double dist_to_l1_centroid = 0.0;
+                    for (size_t d = 0; d < queryDimension; d++) {
+                        double diff = query[d] - l1_centroid[d];
+                        dist_to_l1_centroid += diff * diff;  // L2 distance squared
+                    }
+                    unique_l1_clusters[l1_cluster] = 1;
+                    sorted_l1_clusters.push_back(std::make_pair(l1_cluster, dist_to_l1_centroid));
+                } else {
+                    unique_l1_clusters[l1_cluster]++;
+                }
+            }
+        }
+
+
+        // step 2:
+        // -------
+        std::sort(sorted_l1_clusters.begin(), sorted_l1_clusters.end(), [](const auto& a, const auto& b){return a.second < b.second;});
+
+        // step 3:
+        // -------
+        // Check if we found any GT vectors
+        if (sorted_l1_clusters.empty()) {
+            printf("Warning: No GT vectors found in L1 clusters for query %d\n", i);
+            nProbes[i] = std::make_pair(1, 1); // Default to minimal probing
+            continue;
+        }
+
+        int target_l1 = (int)round(recall_val * (double)k); // 95% of the GT vectors should be scattered across the L1 clusters
+        int farthest_l1_index = binarySearch(sorted_l1_clusters, unique_l1_clusters, target_l1);
+        
+        // Clamp farthest_l1_index to valid range
+        if (farthest_l1_index >= sorted_l1_clusters.size()) {
+            printf("Warning: Query %d cannot achieve target recall %.2f%% - only %zu L1 clusters available with GT vectors\n",
+                i, recall_val * 100.0, sorted_l1_clusters.size());
+            farthest_l1_index = (int)sorted_l1_clusters.size() - 1;
+        }
+
+        // step 4:
+        // -------
+        std::set<faiss::idx_t> unique_l2_clusters;
+        std::vector<pair<faiss::idx_t, double>> sorted_l2_clusters;
+
+
+        // BUG FIX: Need to include farthest_l1_index (use <=), not stop before it
+        for (int j = 0; j <= farthest_l1_index; j++) {
+            auto l1_cluster = sorted_l1_clusters[j].first;
+            // Find L2 cluster for all gt L1 clusters from 3
+            auto it_l2 = l1cluster_to_l2cluster.find(l1_cluster);
+            if (it_l2 != l1cluster_to_l2cluster.end()) {
+                faiss::idx_t l2_cluster = it_l2->second;
+                if (unique_l2_clusters.find(l2_cluster) == unique_l2_clusters.end()) {
+                    // Compute distance from query to this L2 centroid
+                    const float *l2_centroid = l2_centroids + l2_cluster * queryDimension;
+                    double dist_to_l2_centroid = 0.0;
+                    for (size_t d = 0; d < queryDimension; d++) {
+                        double diff = query[d] - l2_centroid[d];
+                        dist_to_l2_centroid += diff * diff;  // L2 distance squared
+                    }
+                    unique_l2_clusters.insert(l2_cluster);
+                    sorted_l2_clusters.push_back(std::make_pair(l2_cluster, dist_to_l2_centroid));
+                }
+            }
+        }
+
+        // step 5:
+        // -------
+        if (sorted_l2_clusters.empty()) {
+            printf("Warning: No L2 clusters found for GT vectors of query %d\n", i);
+            nProbes[i] = std::make_pair(1, farthest_l1_index + 1); 
+            continue;
+        }
+        std::sort(sorted_l2_clusters.begin(), sorted_l2_clusters.end(), [](const auto& a, const auto& b){return a.second < b.second;});
+        int farthest_l2_ID = sorted_l2_clusters.back().first;
+
+        // step 6:
+        // -------
+        std::vector<pair<faiss::idx_t, double>> all_l2_clusters;
+
+        for (size_t j = 0; j < num_l2_centroids; j++) {
+            const float *l2_centroid = l2_centroids + j * queryDimension;
+            double dist_to_l2_centroid = 0.0;
+            for (size_t d = 0; d < queryDimension; d++) {
+                double diff = query[d] - l2_centroid[d];
+                dist_to_l2_centroid += diff * diff;  // L2 distance squared
+            }
+            all_l2_clusters.push_back(std::make_pair(j, dist_to_l2_centroid));
+        }
+        std::sort(all_l2_clusters.begin(), all_l2_clusters.end(), [](const auto& a, const auto& b){return a.second < b.second;});
+
+        int nL2Probes = distance(all_l2_clusters.begin(), std::find_if(all_l2_clusters.begin(), all_l2_clusters.end(), [farthest_l2_ID](const auto& a){return a.first == farthest_l2_ID;})) + 1;
+        
+        // step 7:
+        // -------
+        std::vector<pair<faiss::idx_t, double>> all_l1_clusters;
+
+        for (int j = 0; j < nL2Probes; j++) {
+            const float *l2_centroid = l2_centroids + all_l2_clusters[j].first * queryDimension;
+            // get all L1 clusters under the L2 cluster
+            auto it_l1s_under_l2 = l2cluster_to_l1cluster.find(all_l2_clusters[j].first);
+            if (it_l1s_under_l2 != l2cluster_to_l1cluster.end()) {
+                for (auto l1_cluster : it_l1s_under_l2->second) {
+                    // Compute distance from query to this L1 centroid
+                    const float *l1_centroid = l1_centroids + l1_cluster * queryDimension;
+                    double dist_to_l1_centroid = 0.0;
+                    for (size_t d = 0; d < queryDimension; d++) {
+                        double diff = query[d] - l1_centroid[d];
+                        dist_to_l1_centroid += diff * diff;  // L2 distance squared
+                    }
+                    all_l1_clusters.push_back(std::make_pair(l1_cluster, dist_to_l1_centroid));
+                }
+            }
+        }
+        
+        if (all_l1_clusters.empty()) {
+            printf("Warning: No L1 clusters found under L2 clusters for query %d\n", i);
+            nProbes[i] = std::make_pair(nL2Probes, 1);
+            continue;
+        }
+        
+        std::sort(all_l1_clusters.begin(), all_l1_clusters.end(), [](const auto& a, const auto& b){return a.second < b.second;});
+        
+        faiss::idx_t target_l1_cluster = sorted_l1_clusters[farthest_l1_index].first;
+        // Find how many L1 probes needed to reach this cluster
+        auto found_it = std::find_if(all_l1_clusters.begin(), all_l1_clusters.end(), 
+                                      [target_l1_cluster](const auto& a){return a.first == target_l1_cluster;});
+        int nL1Probes = (found_it != all_l1_clusters.end()) 
+                        ? distance(all_l1_clusters.begin(), found_it) + 1 
+                        : (int)all_l1_clusters.size();
+
+        nProbes[i] = std::make_pair(nL2Probes, nL1Probes);
+    }
+    return nProbes;
 }
 
 void benchmark_splitting(InputParser &input) {
@@ -4602,6 +5167,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "run_umap_3D_without_clustering") {
         run_umap_3D_without_clustering(input);
+    }
+    else if (run == "benchmarkFixedRecall") {
+        benchmark_fixed_recall(input);
     }
 //    testParallelPriorityQueue();
 //    benchmark_simd_distance();
