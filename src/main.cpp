@@ -73,9 +73,85 @@ enum UMAP_VISUALIZATION_MODE {
     OFFLINE_UMAP, // 2
 };
 
+// Struct to hold pre-computed cluster lookup maps (avoids recomputation)
+struct ClusterLookupMaps {
+    std::unordered_map<vector_idx_t, faiss::idx_t> vectorId_to_l1cluster;
+    std::unordered_map<faiss::idx_t, faiss::idx_t> l1cluster_to_l2cluster;
+    std::unordered_map<faiss::idx_t, std::vector<faiss::idx_t>> l2cluster_to_l1cluster;
+};
+
+// Helper function to build cluster lookup maps once (parallelized with batching)
+ClusterLookupMaps build_cluster_lookup_maps(
+    const std::vector<std::vector<vector_idx_t>>& L1_ClusterVectorIds,
+    const std::vector<std::vector<vector_idx_t>>& L2_ClusterCentroidIds) {
+    
+    ClusterLookupMaps maps;
+    
+    // Build vectorId_to_l1cluster map in parallel with thread-local batches
+    size_t total_vectors = 0;
+    for (const auto& clusterVectorIds : L1_ClusterVectorIds) {
+        total_vectors += clusterVectorIds.size();
+    }
+    maps.vectorId_to_l1cluster.reserve(total_vectors);
+    
+    // Use OpenMP to parallelize map building across L1 clusters
+    // Each thread builds its own local map, then we merge them
+    int num_threads = omp_get_max_threads();
+    std::vector<std::unordered_map<vector_idx_t, faiss::idx_t>> thread_local_maps(num_threads);
+    
+    // Pre-estimate capacity per thread with 10% buffer for load imbalance and integer division
+    // Using percentage ensures the buffer scales appropriately with dataset size
+    size_t capacity_per_thread = ((total_vectors / num_threads) * 11) / 10;  // 1.1x = 10% buffer
+    for (auto& local_map : thread_local_maps) {
+        local_map.reserve(capacity_per_thread);
+    }
+    
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        auto& local_map = thread_local_maps[thread_id];
+        
+        // Dynamic scheduling with chunk_size=16: threads grab batches of 16 L1 clusters at a time
+        // - Each batch: thread processes miniId [i, i+15], adds vectors to its local_map
+        // - When done, thread grabs next available batch from the work queue
+        // - Balances overhead (small chunks) vs load balancing (many batches per thread)
+        // - With 1000 clusters & 8 threads: ~63 batches, ~8 batches/thread on average
+        #pragma omp for schedule(dynamic, 16)
+        for (size_t miniId = 0; miniId < L1_ClusterVectorIds.size(); miniId++) {
+            const auto& clusterVectorIds = L1_ClusterVectorIds[miniId];
+            for (auto vectorId : clusterVectorIds) {
+                local_map[vectorId] = miniId;
+            }
+        }
+    }
+    
+    // Merge all thread-local maps into the main map
+    for (auto& local_map : thread_local_maps) {
+        for (auto& kv : local_map) {
+            maps.vectorId_to_l1cluster.insert(std::move(kv));
+        }
+    }
+    
+    // Build l1cluster_to_l2cluster and l2cluster_to_l1cluster maps
+    // These are typically much smaller, so sequential is fine
+    maps.l1cluster_to_l2cluster.reserve(L1_ClusterVectorIds.size());
+    maps.l2cluster_to_l1cluster.reserve(L2_ClusterCentroidIds.size());
+    
+    for (size_t megaId = 0; megaId < L2_ClusterCentroidIds.size(); megaId++) {
+        const auto& miniIds = L2_ClusterCentroidIds[megaId];
+        for (auto miniId : miniIds) {
+            maps.l1cluster_to_l2cluster[miniId] = megaId;
+            maps.l2cluster_to_l1cluster[megaId].push_back(miniId);
+        }
+    }
+    
+    return maps;
+}
+
 // Forward declarations
 std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, 
-                                                  size_t queryNumVectors, int k, vector_idx_t *gtVecs, double recall_val);
+                                                  size_t queryNumVectors, int k, vector_idx_t *gtVecs, double recall_val,
+                                                  const ClusterLookupMaps* precomputed_maps = nullptr);
 
 class InputParser {
 public:
@@ -2628,7 +2704,7 @@ void benchmark_faiss_clustering(InputParser &input) {
 
 double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
                   vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes, std::vector<double> &queryRecalls, int queryIdOffset = 0, 
-                  ReclusteringIndexStats* externalStats = nullptr) {
+                  ReclusteringIndexStats* externalStats = nullptr, const ClusterLookupMaps* precomputed_maps = nullptr) {
     TIMER_START(get_recall);
     
     queryRecalls.resize(queryNumVectors);
@@ -2640,30 +2716,26 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     double min_recall = std::numeric_limits<double>::max();
     double num_recall_below_75 = 0;
     
-    // Build reverse mappings once before the loop
+    // Build or use precomputed mappings
     TIMER_START(get_recall_build_mappings);
     std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
     std::vector<std::vector<vector_idx_t>> megaMiniCentroidIds;
-    index.getMiniClusterVectorIds(&miniClusterVectorIds);
-    index.getMegaMiniCentroids(&megaMiniCentroidIds);
+    ClusterLookupMaps local_maps;
+    const ClusterLookupMaps* maps_ptr;
     
-    // Map: vector ID -> L1 cluster ID
-    std::map<vector_idx_t, faiss::idx_t> vectorId_to_l1cluster;
-    for (size_t miniId = 0; miniId < miniClusterVectorIds.size(); miniId++) {
-        const auto& clusterVectorIds = miniClusterVectorIds[miniId];
-        for (auto vectorId : clusterVectorIds) {
-            vectorId_to_l1cluster[vectorId] = miniId;
-        }
+    if (precomputed_maps) {
+        // Use precomputed maps (no need to get cluster data or build maps)
+        maps_ptr = precomputed_maps;
+    } else {
+        // Build maps from scratch
+        index.getMiniClusterVectorIds(&miniClusterVectorIds);
+        index.getMegaMiniCentroids(&megaMiniCentroidIds);
+        local_maps = build_cluster_lookup_maps(miniClusterVectorIds, megaMiniCentroidIds);
+        maps_ptr = &local_maps;
     }
     
-    // Map: L1 cluster ID -> L2 cluster ID
-    std::map<faiss::idx_t, faiss::idx_t> l1cluster_to_l2cluster;
-    for (size_t megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
-        const auto& miniIds = megaMiniCentroidIds[megaId];
-        for (auto miniId : miniIds) {
-            l1cluster_to_l2cluster[miniId] = megaId;
-        }
-    }
+    const auto& vectorId_to_l1cluster = maps_ptr->vectorId_to_l1cluster;
+    const auto& l1cluster_to_l2cluster = maps_ptr->l1cluster_to_l2cluster;
     TIMER_END(get_recall_build_mappings);
     
     int avg_num_misassigned = 0;
@@ -2774,14 +2846,19 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             stats.numDistanceCompForSearch - prev_num_dist_comp, num_misassigned, k, (num_misassigned * 100.0 / k));
 
         avg_num_misassigned += num_misassigned;
+        
+        // Track misassigned in stats
+        stats.numMisassigned += num_misassigned;
+        stats.totalGroundTruthVectors += k;
 
     }
     TIMER_END(get_recall_search_loop);
     
-    printf("Avg misassigned: %.1f%%\n", (avg_num_misassigned * 100.0) / (k * queryNumVectors));
-    printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
-    printf("Max Recall: %f, Min Recall: %f, Num Recall below 75%%: %f\n", max_recall, min_recall, num_recall_below_75);
-    
+    if (queryNumVectors > 1) {
+        printf("Avg misassigned: %.1f%%\n", (avg_num_misassigned * 100.0) / (k * queryNumVectors));
+        printf("Avg Distance Computation: %llu\n", stats.numDistanceCompForSearch / queryNumVectors);
+        printf("Max Recall: %f, Min Recall: %f, Num Recall below 75%%: %f\n", max_recall, min_recall, num_recall_below_75);
+    }
     TIMER_END(get_recall);
     return recall / queryNumVectors;
 }
@@ -4032,9 +4109,19 @@ void benchmark_fixed_recall(InputParser &input) {
     index.storeMSEScoreForMegaClusters();
     TIMER_END(store_MSE_scores);
 
+
+    // OPTIMIZATION: Build cluster lookup maps ONCE for all queries
+    TIMER_START(initial_build_cluster_maps);
+    std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
+    std::vector<std::vector<vector_idx_t>> L2_ClusterCentroidIds;
+    index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+    index.getMegaMiniCentroids(&L2_ClusterCentroidIds);
+    ClusterLookupMaps cluster_maps = build_cluster_lookup_maps(L1_ClusterVectorIds, L2_ClusterCentroidIds);
+    TIMER_END(initial_build_cluster_maps);
+
     // clac amount of Probes needed for each query to get fixed_recall
     TIMER_START(initial_get_fixed_recall);
-    std::vector<std::pair<int, int>> nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val);
+    std::vector<std::pair<int, int>> nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val, &cluster_maps);
     TIMER_END(initial_get_fixed_recall);
     
     // make sure the probe number is correct
@@ -4046,7 +4133,7 @@ void benchmark_fixed_recall(InputParser &input) {
         std::vector<double> singleQueryRecall;
         printf("Query %d: ", j);
         auto recall = get_recall(index, query, queryDimension, 1, k, gtVecs + j * k, nProbes[j].first,
-            nProbes[j].second, singleQueryRecall, j, &accumulatedStats);
+            nProbes[j].second, singleQueryRecall, j, &accumulatedStats, &cluster_maps);
         double recallValue = singleQueryRecall[0];
         queryRecallValues.push_back(recallValue);
         //printf("Query %d: Recall: %f, nL2Probes: %d, nL1Probes: %d\n", j, recallValue, nProbes[j].first, nProbes[j].second);
@@ -4064,7 +4151,16 @@ void benchmark_fixed_recall(InputParser &input) {
     }
     printf("Average L2 probes: %.2f, Average L1 probes: %.2f, ", 
            totalL2Probes / queryNumVectors, totalL1Probes / queryNumVectors);
-    printf("Average Distance Computations: %llu\n", accumulatedStats.numDistanceCompForSearch / queryNumVectors);
+
+    printf("Average Distance Computations: %llu, ", accumulatedStats.numDistanceCompForSearch / queryNumVectors);
+    
+    // Print average misassigned percentage
+    if (accumulatedStats.totalGroundTruthVectors > 0) {
+        printf("Avg misassigned: %.1f%%\n", 
+               (accumulatedStats.numMisassigned * 100.0) / accumulatedStats.totalGroundTruthVectors);
+    } else {
+        printf("Avg misassigned: N/A\n");
+    }
     
     //index.printStats();
 
@@ -4103,11 +4199,22 @@ void benchmark_fixed_recall(InputParser &input) {
         //index.getOverlapScores(&overlapScores, numScores);
         //index.getRealOverlapScores(&overlapScores, numScores);
         
+        /*
         queryRecallValues.clear();
         nProbes.clear();
+        
+        // OPTIMIZATION: Rebuild cluster lookup maps after reclustering
+        TIMER_START(iter_rebuild_cluster_maps_1);
+        L1_ClusterVectorIds.clear();
+        L2_ClusterCentroidIds.clear();
+        index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+        index.getMegaMiniCentroids(&L2_ClusterCentroidIds);
+        cluster_maps = build_cluster_lookup_maps(L1_ClusterVectorIds, L2_ClusterCentroidIds);
+        TIMER_END(iter_rebuild_cluster_maps_1);
+        
         // clac amount of Probes needed for each query to get fixed_recall
         TIMER_START(iter_get_fixed_recall_1);
-        nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val);
+        nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val, &cluster_maps);
         TIMER_END(iter_get_fixed_recall_1);
         
         // make sure the probe number is correct
@@ -4118,7 +4225,7 @@ void benchmark_fixed_recall(InputParser &input) {
             std::vector<double> singleQueryRecall;
             printf("Query %d: ", j);
             auto recall = get_recall(index, query, queryDimension, 1, k, gtVecs + j * k, nProbes[j].first,
-                nProbes[j].second, singleQueryRecall, j, &iterStats1);
+                nProbes[j].second, singleQueryRecall, j, &iterStats1, &cluster_maps);
             double recallValue = singleQueryRecall[0];
             queryRecallValues.push_back(recallValue);
             //printf("Query %d: Recall: %f, nL2Probes: %d, nL1Probes: %d\n", j, recallValue, nProbes[j].first, nProbes[j].second);
@@ -4137,8 +4244,17 @@ void benchmark_fixed_recall(InputParser &input) {
         }
         printf("Average L2 probes: %.2f, Average L1 probes: %.2f, ", 
                 totalL2Probes / queryNumVectors, totalL1Probes / queryNumVectors);
-        printf("Average Distance Computations: %llu\n", iterStats1.numDistanceCompForSearch / queryNumVectors);
-
+        printf("Average Distance Computations: %llu, ", iterStats1.numDistanceCompForSearch / queryNumVectors);
+        
+        // Print average misassigned percentage
+        if (iterStats1.totalGroundTruthVectors > 0) {
+            printf("Avg misassigned: %.1f%%\n", 
+                (iterStats1.numMisassigned * 100.0) / iterStats1.totalGroundTruthVectors);
+        } else {
+            printf("Avg misassigned: N/A\n");
+        }
+        */
+       
         if (numMegaReclusterCentroids == 1) {
             TIMER_START(iter_reclusterInternalMegaCentroid);
             std::vector<vector_idx_t> megaClusterIds;
@@ -4197,9 +4313,19 @@ void benchmark_fixed_recall(InputParser &input) {
         
         queryRecallValues.clear();
         nProbes.clear();
+        
+        // OPTIMIZATION: Rebuild cluster lookup maps after reclustering
+        TIMER_START(iter_rebuild_cluster_maps_2);
+        L1_ClusterVectorIds.clear();
+        L2_ClusterCentroidIds.clear();
+        index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+        index.getMegaMiniCentroids(&L2_ClusterCentroidIds);
+        cluster_maps = build_cluster_lookup_maps(L1_ClusterVectorIds, L2_ClusterCentroidIds);
+        TIMER_END(iter_rebuild_cluster_maps_2);
+        
         // clac amount of Probes needed for each query to get fixed_recall
         TIMER_START(iter_get_fixed_recall_2);
-        nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val);
+        nProbes = get_fixed_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, recall_val, &cluster_maps);
         TIMER_END(iter_get_fixed_recall_2);
         
         // make sure the probe number is correct
@@ -4210,7 +4336,7 @@ void benchmark_fixed_recall(InputParser &input) {
             std::vector<double> singleQueryRecall;
             printf("Query %d: ", j);
             auto recall = get_recall(index, query, queryDimension, 1, k, gtVecs + j * k, nProbes[j].first,
-                nProbes[j].second, singleQueryRecall, j, &iterStats2);
+                nProbes[j].second, singleQueryRecall, j, &iterStats2, &cluster_maps);
             double recallValue = singleQueryRecall[0];
             queryRecallValues.push_back(recallValue);
             //printf("Query %d: Recall: %f, nL2Probes: %d, nL1Probes: %d\n", j, recallValue, nProbes[j].first, nProbes[j].second);
@@ -4229,7 +4355,15 @@ void benchmark_fixed_recall(InputParser &input) {
         }
         printf("Average L2 probes: %.2f, Average L1 probes: %.2f, ", 
                 totalL2Probes / queryNumVectors, totalL1Probes / queryNumVectors);
-        printf("Average Distance Computations: %llu\n", iterStats2.numDistanceCompForSearch / queryNumVectors);
+        printf("Average Distance Computations: %llu, ", iterStats2.numDistanceCompForSearch / queryNumVectors);
+        
+        // Print average misassigned percentage
+        if (iterStats2.totalGroundTruthVectors > 0) {
+            printf("Avg misassigned: %.1f%%\n", 
+                (iterStats2.numMisassigned * 100.0) / iterStats2.totalGroundTruthVectors);
+        } else {
+            printf("Avg misassigned: N/A\n");
+        }
     }
     TIMER_END(reclustering_iterations_loop);
     
@@ -4273,7 +4407,7 @@ double get_recall(IncrementalIndex &index, float *queryVecs, size_t queryDimensi
     return recall / queryNumVectors;
 }
 
-int binarySearch(const std::vector<pair<faiss::idx_t, double>>& arr, std::map<faiss::idx_t, int>& size_map, int target) {
+int binarySearch(const std::vector<pair<faiss::idx_t, double>>& arr, std::unordered_map<faiss::idx_t, int>& size_map, int target) {
     if (arr.empty()) {
         printf("Warning: No L1 clusters found for query %d\n", target);
         return 0;
@@ -4300,40 +4434,35 @@ int binarySearch(const std::vector<pair<faiss::idx_t, double>>& arr, std::map<fa
 }
 
 std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
-    vector_idx_t *gtVecs, double recall_val) {
+    vector_idx_t *gtVecs, double recall_val, const ClusterLookupMaps* precomputed_maps) {
     TIMER_START(get_fixed_recall);
 
     // params init
     TIMER_START(get_fixed_recall_get_cluster_data);
     std::vector<std::pair<int, int>> nProbes(queryNumVectors, std::make_pair(0, 0)); 
-    std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
-    index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
-    std::vector<std::vector<vector_idx_t>> L2_ClusterCentroidIds;
-    index.getMegaMiniCentroids(&L2_ClusterCentroidIds);
-    TIMER_END(get_fixed_recall_get_cluster_data);
-
-    // OPTIMIZATION: Build lookup maps ONCE for all queries (not inside the loop)
+    
+    // Build or use precomputed lookup maps
     TIMER_START(get_fixed_recall_build_lookup_maps);
-    // Map: vector ID -> L1 cluster ID
-    std::map<vector_idx_t, faiss::idx_t> vectorId_to_l1cluster;
-    for (size_t miniId = 0; miniId < L1_ClusterVectorIds.size(); miniId++) {
-        const auto& clusterVectorIds = L1_ClusterVectorIds[miniId];
-        for (auto vectorId : clusterVectorIds) {
-            vectorId_to_l1cluster[vectorId] = miniId;
-        }
-    }
+    std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
+    std::vector<std::vector<vector_idx_t>> L2_ClusterCentroidIds;
 
-    // Map: L1 cluster ID -> L2 cluster ID
-    std::map<faiss::idx_t, faiss::idx_t> l1cluster_to_l2cluster;
-    // Map: L2 cluster ID -> list of L1 cluster IDs  
-    std::map<faiss::idx_t, std::vector<faiss::idx_t>> l2cluster_to_l1cluster;
-    for (size_t megaId = 0; megaId < L2_ClusterCentroidIds.size(); megaId++) {
-        const auto& miniIds = L2_ClusterCentroidIds[megaId];
-        for (auto miniId : miniIds) {
-            l1cluster_to_l2cluster[miniId] = megaId;
-            l2cluster_to_l1cluster[megaId].push_back(miniId);
-        }
+    ClusterLookupMaps local_maps;
+    const ClusterLookupMaps* maps_ptr;
+    
+    if (precomputed_maps) {
+        // Use precomputed maps (no need to get cluster data or build maps)
+        maps_ptr = precomputed_maps;
+    } else {
+        // Build maps from scratch
+        index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
+        index.getMegaMiniCentroids(&L2_ClusterCentroidIds);
+        local_maps = build_cluster_lookup_maps(L1_ClusterVectorIds, L2_ClusterCentroidIds);
+        maps_ptr = &local_maps;
     }
+    
+    const auto& vectorId_to_l1cluster = maps_ptr->vectorId_to_l1cluster;
+    const auto& l1cluster_to_l2cluster = maps_ptr->l1cluster_to_l2cluster;
+    const auto& l2cluster_to_l1cluster = maps_ptr->l2cluster_to_l1cluster;
     TIMER_END(get_fixed_recall_build_lookup_maps);
 
     // Get centroids ONCE (shared across all queries)
@@ -4366,7 +4495,8 @@ std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, floa
         // -------
         // calc in how many L1s the gt is scattered
         auto gt = gtVecs + i * k;
-        std::map<faiss::idx_t, int> unique_l1_clusters;
+        std::unordered_map<faiss::idx_t, int> unique_l1_clusters;
+        unique_l1_clusters.reserve(k);  // Reserve space for k ground truth vectors
         std::vector<pair<faiss::idx_t, double>> sorted_l1_clusters;
         const float *query = queryVecs + i * queryDimension;
         

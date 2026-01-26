@@ -367,7 +367,7 @@
   -quantTrainPercentage 0.0 \
   -quantBuild 0 \
   -nMegaRecluster 10000000 \
-  -hardClusterSizeLimit 2000 \
+  -hardClusterSizeLimit 0 \
   -kmeansSamplingRatio 0.2 \
   -numFixBoundaries 0 \
   -scoreChangeThreshold 0.01 \
@@ -375,4 +375,4 @@
   -umap_mode 0 \
   -clustering_mode 3 \
   -recall_val 0.9 \
-  -rebalancing_ratio 0.85 > test_re_2 2>&1  
+  -rebalancing_ratio 0.85 > test_v 2>&1  

@@ -31,6 +31,10 @@ namespace orangedb {
         // Total data written to disk. This will help us measure write amplification.
         uint64_t totalDataWrittenBySystem = 0;
         uint64_t totalDataWrittenByUser = 0;
+
+        // Tracking misassigned vectors (vectors not assigned to their closest centroid)
+        uint64_t numMisassigned = 0;
+        uint64_t totalGroundTruthVectors = 0;  // Total GT vectors checked
     };
 
     struct ReclusteringIndexConfig {
