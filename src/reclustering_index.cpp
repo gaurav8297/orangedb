@@ -1564,7 +1564,9 @@ namespace orangedb {
             printf("Number of clusters with size 0: %d\n", empty_counter);
         }
 
+        
         // GILLI: print histogram of cluster sizes
+        /*
         printf("Histogram of cluster sizes:\n");
         for (int i = 0; i < updated_num_clusters; i++) {
             printf("Cluster %d: size = %d\n", i, clustering.init_cluster_sizes[i]);
@@ -1576,7 +1578,8 @@ namespace orangedb {
             total_vectors_assigned += clustering.init_cluster_sizes[i];
         }
         printf("total vectors assigned = %d\n", total_vectors_assigned);
-
+        */
+       
         // Track which clusters were touched by rebalancing (both original and new)
         std::unordered_set<int64_t> all_rebalanced_clusters;
 
@@ -2245,7 +2248,7 @@ namespace orangedb {
         // Initialize the centroids
         clustering.train(n, data, index);
 
-
+        /*
         if (!is_clustering_centroids) {
             // GILLI: print histogram of cluster sizes
             printf("Histogram of cluster sizes:\n");
@@ -2260,7 +2263,8 @@ namespace orangedb {
             }
             printf("total vectors assigned = %d\n", total_vectors_assigned);
         }
-                
+         */ 
+        
         // Assign the centroids
         std::vector<int64_t> assign(n);
         std::vector<float> distances(n);
