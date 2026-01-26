@@ -8,6 +8,7 @@
 
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
+#include <omp.h>       // OpenMP parallelization
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
 #include <fstream>
@@ -4200,8 +4201,38 @@ std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, floa
     std::vector<std::vector<vector_idx_t>> L2_ClusterCentroidIds;
     index.getMegaMiniCentroids(&L2_ClusterCentroidIds);
 
-    // search
-    double recall = 0;
+    // OPTIMIZATION: Build lookup maps ONCE for all queries (not inside the loop)
+    // Map: vector ID -> L1 cluster ID
+    std::map<vector_idx_t, faiss::idx_t> vectorId_to_l1cluster;
+    for (size_t miniId = 0; miniId < L1_ClusterVectorIds.size(); miniId++) {
+        const auto& clusterVectorIds = L1_ClusterVectorIds[miniId];
+        for (auto vectorId : clusterVectorIds) {
+            vectorId_to_l1cluster[vectorId] = miniId;
+        }
+    }
+
+    // Map: L1 cluster ID -> L2 cluster ID
+    std::map<faiss::idx_t, faiss::idx_t> l1cluster_to_l2cluster;
+    // Map: L2 cluster ID -> list of L1 cluster IDs  
+    std::map<faiss::idx_t, std::vector<faiss::idx_t>> l2cluster_to_l1cluster;
+    for (size_t megaId = 0; megaId < L2_ClusterCentroidIds.size(); megaId++) {
+        const auto& miniIds = L2_ClusterCentroidIds[megaId];
+        for (auto miniId : miniIds) {
+            l1cluster_to_l2cluster[miniId] = megaId;
+            l2cluster_to_l1cluster[megaId].push_back(miniId);
+        }
+    }
+
+    // Get centroids ONCE (shared across all queries)
+    const float *l1_centroids = nullptr;
+    size_t num_l1_centroids = 0;
+    index.getMiniCentroids(&l1_centroids, num_l1_centroids);
+    const float *l2_centroids = nullptr;
+    size_t num_l2_centroids = 0;
+    index.getMegaCentroids(&l2_centroids, num_l2_centroids);
+
+    // OPTIMIZATION: Parallelize query processing with OpenMP
+    #pragma omp parallel for schedule(dynamic, 1)
     for (int i = 0; i < queryNumVectors; i++) {
         // I need to find the amount of nL2Probes and nL1Probes that allows a recall of recall_val for each query
 
@@ -4222,36 +4253,7 @@ std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, floa
         std::map<faiss::idx_t, int> unique_l1_clusters;
         std::vector<pair<faiss::idx_t, double>> sorted_l1_clusters;
         const float *query = queryVecs + i * queryDimension;
-
-        // Map: vector ID -> L1 cluster ID
-        std::map<vector_idx_t, faiss::idx_t> vectorId_to_l1cluster;
-        for (size_t miniId = 0; miniId < L1_ClusterVectorIds.size(); miniId++) {
-            const auto& clusterVectorIds = L1_ClusterVectorIds[miniId];
-            for (auto vectorId : clusterVectorIds) {
-                vectorId_to_l1cluster[vectorId] = miniId;
-            }
-        }
-    
-        // Map: L1 cluster ID -> L2 cluster ID
-        std::map<faiss::idx_t, faiss::idx_t> l1cluster_to_l2cluster;
-        // Map: L2 cluster ID -> list of L1 cluster IDs  
-        std::map<faiss::idx_t, std::vector<faiss::idx_t>> l2cluster_to_l1cluster;
-        for (size_t megaId = 0; megaId < L2_ClusterCentroidIds.size(); megaId++) {
-            const auto& miniIds = L2_ClusterCentroidIds[megaId];
-            for (auto miniId : miniIds) {
-                l1cluster_to_l2cluster[miniId] = megaId;
-                l2cluster_to_l1cluster[megaId].push_back(miniId);
-            }
-        }
         
-        // Get L1 centroids from index
-        const float *l1_centroids = nullptr;
-        size_t num_l1_centroids = 0;
-        index.getMiniCentroids(&l1_centroids, num_l1_centroids);
-        const float *l2_centroids = nullptr;
-        size_t num_l2_centroids = 0;
-        index.getMegaCentroids(&l2_centroids, num_l2_centroids);
-
         // lookup each GT vectors
         for (int j = 0; j < k; j++) {
             // Find L1 cluster for a GT vector
@@ -4260,13 +4262,10 @@ std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, floa
                 faiss::idx_t l1_cluster = it->second;
 
                 if (unique_l1_clusters.find(l1_cluster) == unique_l1_clusters.end()) {
-                    // Compute distance from query to this L1 centroid
+                    // OPTIMIZATION: Use SIMD for distance computation
                     const float *l1_centroid = l1_centroids + l1_cluster * queryDimension;
                     double dist_to_l1_centroid = 0.0;
-                    for (size_t d = 0; d < queryDimension; d++) {
-                        double diff = query[d] - l1_centroid[d];
-                        dist_to_l1_centroid += diff * diff;  // L2 distance squared
-                    }
+                    simsimd_l2sq_f32(query, l1_centroid, queryDimension, &dist_to_l1_centroid);
                     unique_l1_clusters[l1_cluster] = 1;
                     sorted_l1_clusters.push_back(std::make_pair(l1_cluster, dist_to_l1_centroid));
                 } else {
@@ -4313,13 +4312,10 @@ std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, floa
             if (it_l2 != l1cluster_to_l2cluster.end()) {
                 faiss::idx_t l2_cluster = it_l2->second;
                 if (unique_l2_clusters.find(l2_cluster) == unique_l2_clusters.end()) {
-                    // Compute distance from query to this L2 centroid
+                    // OPTIMIZATION: Use SIMD for distance computation
                     const float *l2_centroid = l2_centroids + l2_cluster * queryDimension;
                     double dist_to_l2_centroid = 0.0;
-                    for (size_t d = 0; d < queryDimension; d++) {
-                        double diff = query[d] - l2_centroid[d];
-                        dist_to_l2_centroid += diff * diff;  // L2 distance squared
-                    }
+                    simsimd_l2sq_f32(query, l2_centroid, queryDimension, &dist_to_l2_centroid);
                     unique_l2_clusters.insert(l2_cluster);
                     sorted_l2_clusters.push_back(std::make_pair(l2_cluster, dist_to_l2_centroid));
                 }
@@ -4341,12 +4337,10 @@ std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, floa
         std::vector<pair<faiss::idx_t, double>> all_l2_clusters;
 
         for (size_t j = 0; j < num_l2_centroids; j++) {
+            // OPTIMIZATION: Use SIMD for distance computation
             const float *l2_centroid = l2_centroids + j * queryDimension;
             double dist_to_l2_centroid = 0.0;
-            for (size_t d = 0; d < queryDimension; d++) {
-                double diff = query[d] - l2_centroid[d];
-                dist_to_l2_centroid += diff * diff;  // L2 distance squared
-            }
+            simsimd_l2sq_f32(query, l2_centroid, queryDimension, &dist_to_l2_centroid);
             all_l2_clusters.push_back(std::make_pair(j, dist_to_l2_centroid));
         }
         std::sort(all_l2_clusters.begin(), all_l2_clusters.end(), [](const auto& a, const auto& b){return a.second < b.second;});
@@ -4358,18 +4352,14 @@ std::vector<std::pair<int, int>> get_fixed_recall(ReclusteringIndex &index, floa
         std::vector<pair<faiss::idx_t, double>> all_l1_clusters;
 
         for (int j = 0; j < nL2Probes; j++) {
-            const float *l2_centroid = l2_centroids + all_l2_clusters[j].first * queryDimension;
             // get all L1 clusters under the L2 cluster
             auto it_l1s_under_l2 = l2cluster_to_l1cluster.find(all_l2_clusters[j].first);
             if (it_l1s_under_l2 != l2cluster_to_l1cluster.end()) {
                 for (auto l1_cluster : it_l1s_under_l2->second) {
-                    // Compute distance from query to this L1 centroid
+                    // OPTIMIZATION: Use SIMD for distance computation
                     const float *l1_centroid = l1_centroids + l1_cluster * queryDimension;
                     double dist_to_l1_centroid = 0.0;
-                    for (size_t d = 0; d < queryDimension; d++) {
-                        double diff = query[d] - l1_centroid[d];
-                        dist_to_l1_centroid += diff * diff;  // L2 distance squared
-                    }
+                    simsimd_l2sq_f32(query, l1_centroid, queryDimension, &dist_to_l1_centroid);
                     all_l1_clusters.push_back(std::make_pair(l1_cluster, dist_to_l1_centroid));
                 }
             }

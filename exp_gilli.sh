@@ -353,13 +353,13 @@
   -numInserts 10 \
   -numVectors 10000000 \
   -k 100 \
-  -numIters 5 \
+  -numIters 3 \
   -megaCentroidSize 1000 \
   -miniCentroidSize 1000 \
   -numMegaReclusterCentroids 1 \
   -reclusterOnScore 0 \
   -iterations 5 \
-  -numQueries 50 \
+  -numQueries 10 \
   -readFromDisk 0 \
   -storagePath /home/centos/orangedb/test_bin_files/reclustering_fast_index.bin \
   -numThreads 40 \
@@ -373,6 +373,6 @@
   -scoreChangeThreshold 0.01 \
   -centroidChangeThreshold 0.01 \
   -umap_mode 0 \
-  -clustering_mode 1 \
-  -recall_val 0.75 \
-  -rebalancing_ratio 0.85 > test_re 2>&1  
+  -clustering_mode 0 \
+  -recall_val 0.9 \
+  -rebalancing_ratio 0.85 > test_hl 2>&1  
