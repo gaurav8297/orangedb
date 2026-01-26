@@ -197,6 +197,7 @@ namespace orangedb {
 
         // Run clustering to create mini clusters
         std::vector<float> newMiniCentroids;
+        newMiniCentroids.reserve(1000); //TEMP: adi added
         std::vector<std::vector<float> > newMiniClusters;
         std::vector<std::vector<vector_idx_t> > newMiniClusterVectorIds;
         clusterData(data, vectorIds.data(), n, config.miniCentroidSize, newMiniCentroids, newMiniClusters,
@@ -1579,7 +1580,7 @@ namespace orangedb {
         }
         printf("total vectors assigned = %d\n", total_vectors_assigned);
         */
-       
+
         // Track which clusters were touched by rebalancing (both original and new)
         std::unordered_set<int64_t> all_rebalanced_clusters;
 
