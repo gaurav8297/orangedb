@@ -9,6 +9,7 @@
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
 #include <cmath>       // isnan, isinf
+#include <random>      // mt19937, uniform_int_distribution
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
 #include <fstream>
@@ -5121,36 +5122,56 @@ void benchmark_faiss_sq8_distance(InputParser &input) {
 void test_knn_inner_product_parallel(InputParser& input) {
     printf("=======================================================\n");
     printf("Testing knn_inner_product in parallel for OpenBLAS thread safety\n");
+    printf("(with different data sizes, data, and queries per thread)\n");
     printf("=======================================================\n");
 
     const size_t dim = 128;
-    const size_t numQueries = 100;
-    const size_t numBase = 200000;
     const size_t k = 10;
     const int numIterations = 50;
     omp_set_num_threads(32);
     const int numThreads = omp_get_max_threads();
 
-    printf("Config: dim=%zu, numQueries=%zu, numBase=%zu, k=%zu\n",
-           dim, numQueries, numBase, k);
+    // Different sizes for each thread
+    const size_t minNumBase = 50000;
+    const size_t maxNumBase = 300000;
+    const size_t minNumQueries = 50;
+    const size_t maxNumQueries = 1000;
+
+    printf("Config: dim=%zu, k=%zu\n", dim, k);
+    printf("Base vectors per thread: %zu - %zu\n", minNumBase, maxNumBase);
+    printf("Queries per thread: %zu - %zu\n", minNumQueries, maxNumQueries);
     printf("Iterations: %d, Threads: %d\n\n", numIterations, numThreads);
 
-    // Generate random data using faiss::float_rand
-    std::vector<float> baseVecs(numBase * dim);
-    std::vector<float> queryVecs(numQueries * dim);
-
-    faiss::float_rand(baseVecs.data(), baseVecs.size(), 42);
-    faiss::float_rand(queryVecs.data(), queryVecs.size(), 123);
-
-    printf("Generated random vectors\n");
-
-    // Allocate per-thread result buffers
+    // Generate different data for each thread with different sizes
+    std::vector<size_t> threadNumBase(numThreads);
+    std::vector<size_t> threadNumQueries(numThreads);
+    std::vector<std::vector<float>> threadBaseVecs(numThreads);
+    std::vector<std::vector<float>> threadQueryVecs(numThreads);
     std::vector<std::vector<float>> threadDistances(numThreads);
     std::vector<std::vector<int64_t>> threadIndices(numThreads);
+
+    std::mt19937 rng(12345);
+    std::uniform_int_distribution<size_t> baseDist(minNumBase, maxNumBase);
+    std::uniform_int_distribution<size_t> queryDist(minNumQueries, maxNumQueries);
+
     for (int t = 0; t < numThreads; t++) {
-        threadDistances[t].resize(numQueries * k);
-        threadIndices[t].resize(numQueries * k);
+        threadNumBase[t] = baseDist(rng);
+        threadNumQueries[t] = queryDist(rng);
+
+        threadBaseVecs[t].resize(threadNumBase[t] * dim);
+        threadQueryVecs[t].resize(threadNumQueries[t] * dim);
+
+        // Use different seeds for each thread's data
+        faiss::float_rand(threadBaseVecs[t].data(), threadBaseVecs[t].size(), 42 + t * 1000);
+        faiss::float_rand(threadQueryVecs[t].data(), threadQueryVecs[t].size(), 123 + t * 1000);
+
+        threadDistances[t].resize(threadNumQueries[t] * k);
+        threadIndices[t].resize(threadNumQueries[t] * k);
+
+        printf("Thread %d: numBase=%zu, numQueries=%zu\n", t, threadNumBase[t], threadNumQueries[t]);
     }
+
+    printf("\nGenerated random vectors for all threads\n");
 
     std::atomic<int> completedIterations(0);
     std::atomic<bool> hasCrash(false);
@@ -5163,12 +5184,16 @@ void test_knn_inner_product_parallel(InputParser& input) {
         int tid = omp_get_thread_num();
         float* distances = threadDistances[tid].data();
         int64_t* indices = threadIndices[tid].data();
+        const float* baseVecs = threadBaseVecs[tid].data();
+        const float* queryVecs = threadQueryVecs[tid].data();
+        size_t numBase = threadNumBase[tid];
+        size_t numQueries = threadNumQueries[tid];
 
         for (int iter = 0; iter < numIterations && !hasCrash.load(); iter++) {
             try {
                 faiss::knn_inner_product(
-                    queryVecs.data(),
-                    baseVecs.data(),
+                    queryVecs,
+                    baseVecs,
                     dim,
                     numQueries,
                     numBase,
@@ -5211,7 +5236,7 @@ void test_knn_inner_product_parallel(InputParser& input) {
         // Verify results are reasonable (not NaN/inf)
         bool resultsValid = true;
         for (int t = 0; t < numThreads && resultsValid; t++) {
-            for (size_t i = 0; i < numQueries * k; i++) {
+            for (size_t i = 0; i < threadNumQueries[t] * k; i++) {
                 if (std::isnan(threadDistances[t][i]) || std::isinf(threadDistances[t][i])) {
                     printf("Invalid distance found in thread %d at index %zu\n", t, i);
                     resultsValid = false;
