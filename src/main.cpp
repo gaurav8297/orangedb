@@ -5125,9 +5125,10 @@ void test_knn_inner_product_parallel(InputParser& input) {
 
     const size_t dim = 128;
     const size_t numQueries = 100;
-    const size_t numBase = 10000;
+    const size_t numBase = 200000;
     const size_t k = 10;
     const int numIterations = 50;
+    omp_set_num_threads(32);
     const int numThreads = omp_get_max_threads();
 
     printf("Config: dim=%zu, numQueries=%zu, numBase=%zu, k=%zu\n",
