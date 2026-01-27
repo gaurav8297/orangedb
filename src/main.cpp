@@ -5113,6 +5113,118 @@ void benchmark_faiss_sq8_distance(InputParser &input) {
     printf("=======================================================\n");
 }
 
+/**
+ * Test function to validate OpenBLAS thread safety with knn_inner_product.
+ * Calls knn_inner_product in parallel from multiple threads to check for
+ * segmentation faults that may arise from OpenBLAS thread safety issues.
+ */
+void test_knn_inner_product_parallel(InputParser& input) {
+    printf("=======================================================\n");
+    printf("Testing knn_inner_product in parallel for OpenBLAS thread safety\n");
+    printf("=======================================================\n");
+
+    const size_t dim = 128;
+    const size_t numQueries = 100;
+    const size_t numBase = 10000;
+    const size_t k = 10;
+    const int numIterations = 50;
+    const int numThreads = omp_get_max_threads();
+
+    printf("Config: dim=%zu, numQueries=%zu, numBase=%zu, k=%zu\n",
+           dim, numQueries, numBase, k);
+    printf("Iterations: %d, Threads: %d\n\n", numIterations, numThreads);
+
+    // Generate random data using faiss::float_rand
+    std::vector<float> baseVecs(numBase * dim);
+    std::vector<float> queryVecs(numQueries * dim);
+
+    faiss::float_rand(baseVecs.data(), baseVecs.size(), 42);
+    faiss::float_rand(queryVecs.data(), queryVecs.size(), 123);
+
+    printf("Generated random vectors\n");
+
+    // Allocate per-thread result buffers
+    std::vector<std::vector<float>> threadDistances(numThreads);
+    std::vector<std::vector<int64_t>> threadIndices(numThreads);
+    for (int t = 0; t < numThreads; t++) {
+        threadDistances[t].resize(numQueries * k);
+        threadIndices[t].resize(numQueries * k);
+    }
+
+    std::atomic<int> completedIterations(0);
+    std::atomic<bool> hasCrash(false);
+
+    printf("Starting parallel knn_inner_product calls...\n");
+    auto start = std::chrono::high_resolution_clock::now();
+
+#pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        float* distances = threadDistances[tid].data();
+        int64_t* indices = threadIndices[tid].data();
+
+        for (int iter = 0; iter < numIterations && !hasCrash.load(); iter++) {
+            try {
+                faiss::knn_inner_product(
+                    queryVecs.data(),
+                    baseVecs.data(),
+                    dim,
+                    numQueries,
+                    numBase,
+                    k,
+                    distances,
+                    indices,
+                    nullptr,
+                    nullptr
+                );
+
+                int completed = completedIterations.fetch_add(1) + 1;
+                if (completed % (numThreads * 10) == 0) {
+#pragma omp critical
+                    {
+                        printf("  Completed %d / %d total calls\n",
+                               completed, numIterations * numThreads);
+                    }
+                }
+            } catch (const std::exception& e) {
+#pragma omp critical
+                {
+                    printf("Exception in thread %d: %s\n", tid, e.what());
+                    hasCrash.store(true);
+                }
+            }
+        }
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    printf("\n=======================================================\n");
+    if (hasCrash.load()) {
+        printf("TEST FAILED: Crash or exception detected!\n");
+    } else {
+        printf("TEST PASSED: No segfault detected\n");
+        printf("Total calls: %d\n", completedIterations.load());
+        printf("Time: %lld ms\n", duration.count());
+
+        // Verify results are reasonable (not NaN/inf)
+        bool resultsValid = true;
+        for (int t = 0; t < numThreads && resultsValid; t++) {
+            for (size_t i = 0; i < numQueries * k; i++) {
+                if (std::isnan(threadDistances[t][i]) || std::isinf(threadDistances[t][i])) {
+                    printf("Invalid distance found in thread %d at index %zu\n", t, i);
+                    resultsValid = false;
+                    break;
+                }
+            }
+        }
+        if (resultsValid) {
+            printf("Result validation: PASSED (no NaN/inf values)\n");
+        }
+    }
+    printf("=======================================================\n");
+}
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     backward::SignalHandling sh;
@@ -5200,6 +5312,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkKmeansDimensionsQuantization") {
         benchmark_kmeans_dimensions_quantization(input);
+    }
+    else if (run == "testKnnInnerProductParallel") {
+        test_knn_inner_product_parallel(input);
     }
     return 0;
 }
