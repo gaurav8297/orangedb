@@ -5128,7 +5128,8 @@ void test_knn_inner_product_parallel(InputParser& input) {
     const size_t dim = 128;
     const size_t k = 10;
     const int numIterations = 50;
-    omp_set_num_threads(32);
+    const int nThreads = input.getCmdOption("-nThreads").empty() ? 10 : stoi(input.getCmdOption("-nThreads"));
+    omp_set_num_threads(nThreads);
     const int numThreads = omp_get_max_threads();
 
     // Different sizes for each thread
