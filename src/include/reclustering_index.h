@@ -227,7 +227,7 @@ namespace orangedb {
 
         const float* getVectorData(vector_idx_t vectorId) const;
 
-        vector_idx_t findClosestMiniCentroid(vector_idx_t vectorId) const;
+        vector_idx_t findClosestMiniCentroid(vector_idx_t vectorId, vector_idx_t L1_ClusterId) const;
 
         vector_idx_t findClosestMegaCentroid(vector_idx_t vectorId) const;
 

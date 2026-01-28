@@ -2834,7 +2834,7 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
             auto it = vectorId_to_l1cluster.find(gt[j]);
             if (it != vectorId_to_l1cluster.end()) {
                 faiss::idx_t assigned_l1_cluster = it->second;
-                vector_idx_t closest_l1_cluster = index.findClosestMiniCentroid(gt[j]);
+                vector_idx_t closest_l1_cluster = index.findClosestMiniCentroid(gt[j], assigned_l1_cluster);
                 
                 if (closest_l1_cluster != assigned_l1_cluster) {
                     num_misassigned++;

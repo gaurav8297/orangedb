@@ -42,8 +42,8 @@ void IndexFlat::search(
         float_minheap_array_t res = {size_t(n), size_t(k), labels, distances};
         knn_inner_product(x, get_xb(), d, n, ntotal, &res, dist_modifier, reassign_modifier, sel);
     } else if (metric_type == METRIC_L2) {
-        float_maxheap_array_t res = {size_t(n), size_t(k), labels, distances};
-        knn_L2sqr(x, get_xb(), d, n, ntotal, &res, nullptr, dist_modifier, sel);
+        // Always use simple version (note: sel parameter is ignored)
+        knn_L2sqr_simple(x, get_xb(), d, n, ntotal, k, distances, labels, dist_modifier);
     } else {
         FAISS_THROW_IF_NOT(!sel); // TODO implement with selector
         knn_extra_metrics(

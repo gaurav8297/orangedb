@@ -5164,29 +5164,54 @@ namespace orangedb {
         return nullptr; // Not found
     }
 
-    vector_idx_t ReclusteringIndex::findClosestMiniCentroid(vector_idx_t vectorId) const {
+    vector_idx_t ReclusteringIndex::findClosestMiniCentroid(vector_idx_t vectorId, vector_idx_t L1_ClusterId) const {
         // Get the vector data
         const float* vectorData = getVectorData(vectorId);
         if (vectorData == nullptr) {
             return -1; // Vector not found
         }
 
-        // Find the closest mini centroid
-        auto numMiniCentroids = miniCentroids.size() / dim;
-        auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
-        dc->setQuery(vectorData);
-
-        vector_idx_t closestCentroidId = -1;
-        double minDistance = std::numeric_limits<double>::max();
-
-        for (size_t i = 0; i < numMiniCentroids; i++) {
-            double dist;
-            dc->computeDistance(i, &dist);
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestCentroidId = i;
+        // Find the mega centroid that contains the L1 cluster
+        vector_idx_t L2_clusterId = -1;
+        for (size_t megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+            const auto& miniIds = megaMiniCentroidIds[megaId];
+            if (std::find(miniIds.begin(), miniIds.end(), L1_ClusterId) != miniIds.end()) {
+                L2_clusterId = megaId;
+                break;
             }
         }
+        if (L2_clusterId == -1) {
+            return -1; // L2 cluster not found
+        }
+
+        // Find the closest mini centroid in the L2 cluster
+        const auto& miniIds = megaMiniCentroidIds[L2_clusterId];
+        if (miniIds.empty()) {
+            return -1;
+        }
+        
+        // Create a temporary index with only the relevant mini centroids
+        auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
+        faiss::IndexFlat index(dim, metric_type);
+        
+        // Extract centroids for the miniIds in this L2 cluster
+        std::vector<float> tempCentroids(miniIds.size() * dim);
+        for (size_t i = 0; i < miniIds.size(); i++) {
+            memcpy(tempCentroids.data() + i * dim, 
+                   miniCentroids.data() + miniIds[i] * dim, 
+                   dim * sizeof(float));
+        }
+        
+        index.add(miniIds.size(), tempCentroids.data());
+        
+        // Search for the closest centroid
+        std::vector<float> distances(1);
+        std::vector<int64_t> labels(1);
+        index.search(1, vectorData, 1, distances.data(), labels.data());
+        
+        // Map the result index back to the actual miniId
+        vector_idx_t closestCentroidId = miniIds[labels[0]];
+
         return closestCentroidId;
     }
 
@@ -5199,21 +5224,21 @@ namespace orangedb {
 
         // Find the closest mega centroid
         auto numMegaCentroids = megaCentroids.size() / dim;
-        auto dc = getDistanceComputer(megaCentroids.data(), numMegaCentroids);
-        dc->setQuery(vectorData);
-
-        vector_idx_t closestCentroidId = -1;
-        double minDistance = std::numeric_limits<double>::max();
-
-        for (size_t i = 0; i < numMegaCentroids; i++) {
-            double dist;
-            dc->computeDistance(i, &dist);
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestCentroidId = i;
-            }
+        if (numMegaCentroids == 0) {
+            return -1;
         }
-        return closestCentroidId;
+        
+        // Create an index with all mega centroids
+        auto metric_type = config.distanceType == L2 ? faiss::METRIC_L2 : faiss::METRIC_INNER_PRODUCT;
+        faiss::IndexFlat index(dim, metric_type);
+        index.add(numMegaCentroids, megaCentroids.data());
+        
+        // Search for the closest centroid
+        std::vector<float> distances(1);
+        std::vector<int64_t> labels(1);
+        index.search(1, vectorData, 1, distances.data(), labels.data());
+        
+        return static_cast<vector_idx_t>(labels[0]);
     }
 
     void ReclusteringIndex::analyzeQueryClusterChanges(
