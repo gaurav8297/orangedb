@@ -4267,7 +4267,7 @@ void benchmark_fixed_recall(InputParser &input) {
         
         // Write file header: hardClusterSizeLimit and num_iterations (1 initial + iterations from loop)
         int num_iterations = 1 + iterations;  // 1 initial + iterations from loop
-        int header[2] = {config.hardClusterSizeLimit, num_iterations};
+        int header[2] = {static_cast<int>(config.hardClusterSizeLimit), num_iterations};
         fwrite(header, sizeof(int), 2, fp);
         
         // Write first iteration (initial_iteration = 1) with its histogram data
