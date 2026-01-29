@@ -4223,7 +4223,21 @@ void benchmark_fixed_recall(InputParser &input) {
 
     // save to a bin file
     // header: hardClusterSizeLimit (int), num_iterations (int), then for each iteration: iteration_number (int), l1_cluster_sizes_bin (size_t array)
+<<<<<<< HEAD
     FILE* fp = fopen("cluster_sizes_histogram.bin", "wb");
+=======
+    std::string cluster_sizes_histogram_file_path;
+    if (clustering_mode == HARD_LIMIT) {
+        cluster_sizes_histogram_file_path = "cluster_sizes_histogram_hard_limit.bin";
+    } else if (clustering_mode == REBALANCE_CENTROIDS) {
+        cluster_sizes_histogram_file_path = "cluster_sizes_histogram_rebalance_centroids.bin";
+    } else if (clustering_mode == REBALANCE_VECTORS) {
+        cluster_sizes_histogram_file_path = "cluster_sizes_histogram_rebalance_vectors.bin";
+    } else if (clustering_mode == DOUBLE_KMEANS) {
+        cluster_sizes_histogram_file_path = "cluster_sizes_histogram_double_kmeans.bin";
+    }
+    FILE* fp = fopen(cluster_sizes_histogram_file_path.c_str(), "wb");
+>>>>>>> a012359 (add histogram of cluster sizes)
     if (!fp) {
         fprintf(stderr, "Failed to open file for writing\n");
         return;
@@ -4461,7 +4475,11 @@ void benchmark_fixed_recall(InputParser &input) {
 
         // continue saving to a bin file
         // append to the file
+<<<<<<< HEAD
         FILE* fp = fopen("cluster_sizes_histogram.bin", "ab");
+=======
+        FILE* fp = fopen(cluster_sizes_histogram_file_path.c_str(), "ab");
+>>>>>>> a012359 (add histogram of cluster sizes)
         // Write iteration number first
         int current_iteration = iter + 2;
         fwrite(&current_iteration, sizeof(int), 1, fp);
