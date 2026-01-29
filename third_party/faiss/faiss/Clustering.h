@@ -54,8 +54,9 @@ struct BalancedClusteringReassignModifier {
 struct LambdaBasedDistModifier : BalancedClusteringDistModifier {
     std::array<std::atomic_int64_t, MAX_VECTOR_INDEX_NUM_CLUSTERS> cluster_sizes;
     float lambda;
+    int _num_clusters;
 
-    explicit LambdaBasedDistModifier(const int num_clusters, const float _lambda) : lambda(_lambda) {
+    explicit LambdaBasedDistModifier(const int num_clusters, const float _lambda) : lambda(_lambda), _num_clusters(num_clusters) {
         FAISS_ASSERT(num_clusters <= MAX_VECTOR_INDEX_NUM_CLUSTERS);
         FAISS_ASSERT(_lambda > 0);
         reset();
@@ -70,8 +71,10 @@ struct LambdaBasedDistModifier : BalancedClusteringDistModifier {
     }
 
     void reset() override {
-        for (auto & cluster_size : cluster_sizes) {
-            cluster_size = 0;
+        // Only reset the clusters we're actually using, not the entire array
+        // This is critical for performance when MAX_VECTOR_INDEX_NUM_CLUSTERS is large
+        for (int i = 0; i < _num_clusters; i++) {
+            cluster_sizes[i] = 0;
         }
     }
 };
@@ -117,7 +120,9 @@ struct ClusterSizeCapDistModifier : BalancedClusteringDistModifier {
     }
 
     void reset() override {
-        for (int i = 0; i < cluster_sizes.size(); i++) {
+        // Only reset the clusters we're actually using, not the entire array
+        // This is critical for performance when MAX_VECTOR_INDEX_NUM_CLUSTERS is large
+        for (int i = 0; i < _num_clusters; i++) {
             cluster_sizes[i] = 0;
             cluster_weights[i] = 0.0f;
         }

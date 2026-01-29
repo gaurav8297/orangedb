@@ -412,3 +412,38 @@
   -rebalancing_ratio 0.85 \
   -save_cluster_sizes_histogram 1 \
   -use_hard_limit_in_assign 1 > test_re_2
+
+
+  ./build/release/bin/orangedb_main \
+  -run benchmarkFixedRecall \
+  -baseVectorPath /home/centos/orangedb/data/sift_bill/bigann_base.bvecs \
+  -queryVectorPath /home/centos/orangedb/data/sift_bill/bigann_query.bvecs \
+  -groundTruthPath /home/centos/orangedb/data/sift_bill/sift_gt_10M.bin \
+  -numInserts 2 \
+  -numVectors 10000000 \
+  -k 100 \
+  -numIters 4 \
+  -megaCentroidSize 1000 \
+  -miniCentroidSize 1000 \
+  -numMegaReclusterCentroids 1 \
+  -reclusterOnScore 0 \
+  -iterations 4 \
+  -numQueries 10 \
+  -readFromDisk 0 \
+  -storagePath /home/centos/orangedb/test_bin_files/reclustering_fast_index.bin \
+  -numThreads 40 \
+  -useIP 0 \
+  -quantTrainPercentage 0.0 \
+  -quantBuild 0 \
+  -nMegaRecluster 10000000 \
+  -hardClusterSizeLimit 2000 \
+  -kmeansSamplingRatio 0.2 \
+  -numFixBoundaries 0 \
+  -scoreChangeThreshold 0.01 \
+  -centroidChangeThreshold 0.01 \
+  -umap_mode 0 \
+  -clustering_mode 3 \
+  -recall_val 0.9 \
+  -rebalancing_ratio 0.85 \
+  -save_cluster_sizes_histogram 1 \
+  -use_hard_limit_in_assign 1 > test_re_2

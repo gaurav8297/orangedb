@@ -2021,7 +2021,7 @@ namespace orangedb {
     faiss::Clustering clustering2(dim, numClusters, cl);
     clustering2.centroids = rebalanced_centroids;  // Initialize with rebalanced centroids
     clustering2.niter = ceil(2 * config.nIter / 3);  // Use full k-means iterations for refinement
-    clustering2.verbose = true;  // Enable verbose to see if centroids are used
+    clustering2.verbose = false;  // Disable verbose during insertion to avoid I/O slowdown with large datasets
     
     printf("DOUBLE_KMEANS: clustering2.centroids size before train: %zu\n", clustering2.centroids.size());
     
