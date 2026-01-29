@@ -35,6 +35,7 @@
 #include "faiss/IndexPQ.h"
 #include "umappp/umappp.hpp"
 #include "knncolle/knncolle.hpp"
+#include <cblas.h>
 
 #if 0
 #include <liburing.h>
@@ -5124,6 +5125,7 @@ void test_knn_inner_product_parallel(InputParser& input) {
     printf("Testing knn_inner_product in parallel for OpenBLAS thread safety\n");
     printf("(with different data sizes, data, and queries per thread)\n");
     printf("=======================================================\n");
+    openblas_set_num_threads(1);
 
     const size_t dim = 128;
     const size_t k = 10;
@@ -5179,7 +5181,6 @@ void test_knn_inner_product_parallel(InputParser& input) {
 
     printf("Starting parallel knn_inner_product calls...\n");
     auto start = std::chrono::high_resolution_clock::now();
-
 #pragma omp parallel
     {
         int tid = omp_get_thread_num();
