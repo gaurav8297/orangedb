@@ -8,6 +8,7 @@
 
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
+#include <cstring>     // memset
 #include <omp.h>       // OpenMP parallelization
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
@@ -4201,53 +4202,75 @@ void benchmark_fixed_recall(InputParser &input) {
 
     if (save_cluster_sizes_histogram) {
         TIMER_START(save_cluster_sizes_histogram);
-        // print the L1 cluster size histogram
-        //std::vector<size_t> l2_cluster_sizes = get_l2_cluster_sizes(L2_ClusterCentroidIds);
-        l1_cluster_sizes = get_l1_cluster_sizes(L1_ClusterVectorIds);
-        // bin between 0 and HardClusterSizeLimit, at gaps of 100
-        // If hardClusterSizeLimit is 0, find the max cluster size to determine bin array size
+        // Optimized: determine bin size and compute histogram in parallel
         if (config.hardClusterSizeLimit > 0) {
             max_bin_size = config.hardClusterSizeLimit / 100 + 1;
         } else {
-            // Find maximum cluster size to determine bin array size
+            // Find maximum cluster size in parallel to determine bin array size
             size_t max_cluster_size = 0;
-            for (size_t i = 0; i < l1_cluster_sizes.size(); i++) {
-                if (l1_cluster_sizes[i] > max_cluster_size) {
-                    max_cluster_size = l1_cluster_sizes[i];
+            #pragma omp parallel for schedule(dynamic, 16) reduction(max:max_cluster_size)
+            for (size_t miniId = 0; miniId < L1_ClusterVectorIds.size(); miniId++) {
+                size_t cluster_size = L1_ClusterVectorIds[miniId].size();
+                if (cluster_size > max_cluster_size) {
+                    max_cluster_size = cluster_size;
                 }
             }
             // Use max_cluster_size to ensure we have enough bins, with a minimum of 1000
-            max_bin_size = std::max((2* max_cluster_size / 100 + 1), static_cast<size_t>(1000 / 100 + 1));
+            max_bin_size = std::max((2 * max_cluster_size / 100 + 1), static_cast<size_t>(1000 / 100 + 1));
         }
-        l1_cluster_sizes_bin.assign(max_bin_size, 0);
-        //std::vector<size_t> l2_cluster_sizes_bin(config.hardClusterSizeLimit / 100 + 1, 0);
-        for (size_t i = 0; i < l1_cluster_sizes.size(); i++) {
-            l1_cluster_sizes_bin[l1_cluster_sizes[i] / 100]++;
+        
+        // Allocate and clear bin array
+        l1_cluster_sizes_bin.resize(max_bin_size);
+        memset(l1_cluster_sizes_bin.data(), 0, max_bin_size * sizeof(size_t));
+        
+        // Parallel binning: compute sizes and bin in one pass
+        #pragma omp parallel for schedule(dynamic, 16)
+        for (size_t miniId = 0; miniId < L1_ClusterVectorIds.size(); miniId++) {
+            size_t cluster_size = L1_ClusterVectorIds[miniId].size();
+            size_t bin_idx = cluster_size / 100;
+            if (bin_idx < max_bin_size) {
+                #pragma omp atomic
+                l1_cluster_sizes_bin[bin_idx]++;
+            } else if (max_bin_size > 0) {
+                // Cap to last bin if cluster size exceeds expected range
+                #pragma omp atomic
+                l1_cluster_sizes_bin[max_bin_size - 1]++;
+            }
         }
-        //for (size_t i = 0; i < l2_cluster_sizes.size(); i++) {
-        //    l2_cluster_sizes_bin[l2_cluster_sizes[i] / 100]++;
-        //}
 
         // save to a bin file
         // header: hardClusterSizeLimit (int), num_iterations (int), then for each iteration: iteration_number (int), l1_cluster_sizes_bin (size_t array)
-        if (clustering_mode == HARD_LIMIT) {
-            cluster_sizes_histogram_file_path = "cluster_sizes_histogram_hard_limit.bin";
-        } else if (clustering_mode == REBALANCE_CENTROIDS) {
-            cluster_sizes_histogram_file_path = "cluster_sizes_histogram_rebalance_centroids.bin";
-        } else if (clustering_mode == REBALANCE_VECTORS) {
-            cluster_sizes_histogram_file_path = "cluster_sizes_histogram_rebalance_vectors.bin";
-        } else if (clustering_mode == DOUBLE_KMEANS) {
-            cluster_sizes_histogram_file_path = "cluster_sizes_histogram_double_kmeans.bin";
+        // Optimized: use switch for faster file path selection
+        switch (clustering_mode) {
+            case HARD_LIMIT:
+                cluster_sizes_histogram_file_path = "cluster_sizes_histogram_hard_limit.bin";
+                break;
+            case REBALANCE_CENTROIDS:
+                cluster_sizes_histogram_file_path = "cluster_sizes_histogram_rebalance_centroids.bin";
+                break;
+            case REBALANCE_VECTORS:
+                cluster_sizes_histogram_file_path = "cluster_sizes_histogram_rebalance_vectors.bin";
+                break;
+            case DOUBLE_KMEANS:
+                cluster_sizes_histogram_file_path = "cluster_sizes_histogram_double_kmeans.bin";
+                break;
+            default:
+                cluster_sizes_histogram_file_path = "cluster_sizes_histogram_unknown.bin";
+                break;
         }
+        
         FILE* fp = fopen(cluster_sizes_histogram_file_path.c_str(), "wb");
         if (!fp) {
             fprintf(stderr, "Failed to open file for writing\n");
             return;
         }
+        
         // Write file header: hardClusterSizeLimit and num_iterations (1 initial + iterations from loop)
-        fwrite(&config.hardClusterSizeLimit, sizeof(int), 1, fp);
         int num_iterations = 1 + iterations;  // 1 initial + iterations from loop
-        fwrite(&num_iterations, sizeof(int), 1, fp);
+        int header[2] = {config.hardClusterSizeLimit, num_iterations};
+        fwrite(header, sizeof(int), 2, fp);
+        
+        // Write first iteration (initial_iteration = 1) with its histogram data
         int initial_iteration = 1;
         fwrite(&initial_iteration, sizeof(int), 1, fp);
         fwrite(l1_cluster_sizes_bin.data(), sizeof(size_t), l1_cluster_sizes_bin.size(), fp);
@@ -4461,22 +4484,24 @@ void benchmark_fixed_recall(InputParser &input) {
 
         if (save_cluster_sizes_histogram) {
             TIMER_START(iter_save_cluster_sizes_histogram);
-            // print the L1 cluster size histogram
-            l1_cluster_sizes.clear();
-            //l2_cluster_sizes.clear();
-            l1_cluster_sizes = get_l1_cluster_sizes(L1_ClusterVectorIds);
-            //l2_cluster_sizes = get_l2_cluster_sizes(L2_ClusterCentroidIds);
+            // Optimized: combine size computation and binning in one parallel pass
+            // Clear bin array using memset (faster than assign)
+            memset(l1_cluster_sizes_bin.data(), 0, max_bin_size * sizeof(size_t));
             
-
-            // bin between 0 and HardClusterSizeLimit, at gaps of 100
-            l1_cluster_sizes_bin.assign(max_bin_size, 0);
-            //l2_cluster_sizes_bin.clear();
-            for (size_t i = 0; i < l1_cluster_sizes.size(); i++) {
-                l1_cluster_sizes_bin[l1_cluster_sizes[i] / 100]++;
+            // Parallel binning: compute sizes and bin in one pass
+            #pragma omp parallel for schedule(dynamic, 16)
+            for (size_t miniId = 0; miniId < L1_ClusterVectorIds.size(); miniId++) {
+                size_t cluster_size = L1_ClusterVectorIds[miniId].size();
+                size_t bin_idx = cluster_size / 100;
+                if (bin_idx < max_bin_size) {
+                    #pragma omp atomic
+                    l1_cluster_sizes_bin[bin_idx]++;
+                } else if (max_bin_size > 0) {
+                    // Cap to last bin if cluster size exceeds expected range
+                    #pragma omp atomic
+                    l1_cluster_sizes_bin[max_bin_size - 1]++;
+                }
             }
-            //for (size_t i = 0; i < l2_cluster_sizes.size(); i++) {
-            //    l2_cluster_sizes_bin[l2_cluster_sizes[i] / 100]++;
-            //}
 
             // continue saving to a bin file
             // append to the file
