@@ -1462,8 +1462,10 @@ namespace orangedb {
         // Use SearchParameters with dist_modifier to enforce hard limit
         faiss::SearchParameters params;
         std::unique_ptr<faiss::ClusterSizeCapDistModifier> hardLimitDistModifier;
-        hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(num_region_clusters, hardClusterSizeLimit);
-        params.dist_modifier = hardLimitDistModifier.get();
+        if (hardClusterSizeLimit > 0) {
+            hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(num_region_clusters, hardClusterSizeLimit);
+            params.dist_modifier = hardLimitDistModifier.get();
+        }
         
         temp_index.search(num_vecs, region_data.data(), 1, distances.data(), new_assignments.data(), &params);
         
@@ -1772,6 +1774,11 @@ namespace orangedb {
         faiss::MetricType metric_type,
         faiss::IndexFlat& index,
         std::unordered_set<int64_t>& all_rebalanced_clusters) {
+        
+        // Skip rebalancing if hardClusterSizeLimit is 0 (no limit means no rebalancing needed)
+        if (config.hardClusterSizeLimit == 0) {
+            return;
+        }
         
         // Find out how many new clusters are oversized 
         std::vector<std::pair<int64_t, int64_t>> clusters_to_rebalance;
@@ -2239,6 +2246,9 @@ namespace orangedb {
             distModifier = std::make_unique<faiss::LambdaBasedDistModifier>(numClusters, lambda);
             cl.dist_modifier = distModifier.get();
             printf("cl.lambda = %f\n", lambda);
+        } else {
+            // Explicitly set to nullptr to ensure it's not uninitialized
+            cl.dist_modifier = nullptr;
         }
         cl.verbose = false; // GILLI: I changed this to false to avoid printing the clustering progress
         faiss::Clustering clustering(dim, numClusters, cl);
@@ -2458,7 +2468,9 @@ namespace orangedb {
         
         faiss::SearchParameters params_next_nearest;
         std::unique_ptr<faiss::ClusterSizeCapDistModifier> hardLimitDistModifier_next_nearest;
-        hardLimitDistModifier_next_nearest = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
+        if (config.hardClusterSizeLimit > 0) {
+            hardLimitDistModifier_next_nearest = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
+        }
 
         for (int i = 0; i < n; i++) {
             // Assign current vector to nearest centroid
@@ -2972,6 +2984,8 @@ namespace orangedb {
         auto numMiniClusters = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters, L2);
         
+        // Note: miniClusteringScore size validation is done in computeOverlapScores() before parallel execution
+        
         // For each mini cluster, find the closest mini cluster in this mega cluster
         std::vector<double> approxOverlapScores(miniIds.size());
         std::vector<double> realOverlapScores(miniIds.size(), 0.0);  // Initialize to 0, only compute for worst k
@@ -2982,6 +2996,15 @@ namespace orangedb {
         // First pass: calculate all approx overlap scores
         for (size_t idx = 0; idx < miniIds.size(); idx++) {
             auto miniId = miniIds[idx];
+            
+            // Validate miniId is within bounds
+            if (static_cast<size_t>(miniId) >= miniClusteringScore.size() || miniId < 0) {
+                printf("WARNING: Invalid miniId %lld (out of bounds [0, %zu)) in calculateOverlapScoreForL2, skipping\n",
+                       miniId, miniClusteringScore.size());
+                approxOverlapScores[idx] = 0.0;
+                continue;
+            }
+            
             std::vector<std::pair<double, vector_idx_t>> overlapRatiosWithIds;
             overlapRatiosWithIds.reserve(miniIds.size() - 1);
             dc->setQuery(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
@@ -2989,6 +3012,14 @@ namespace orangedb {
                 if (j == miniId) {
                     continue;
                 }
+                
+                // Validate j is within bounds
+                if (static_cast<size_t>(j) >= miniClusteringScore.size() || j < 0) {
+                    printf("WARNING: Invalid miniId j=%lld (out of bounds [0, %zu)) in calculateOverlapScoreForL2, skipping\n",
+                           j, miniClusteringScore.size());
+                    continue;
+                }
+                
                 double dist;
                 dc->computeDistance(j, &dist);
                 auto radiusSum = std::sqrt(miniClusteringScore[j]) + std::sqrt(miniClusteringScore[miniId]);
@@ -3088,6 +3119,7 @@ namespace orangedb {
         auto numMiniClusters = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters, COSINE);
 
+        // Note: miniClusteringScore size validation is done in computeOverlapScores() before parallel execution
         // For each mini cluster, find the closest mini cluster in this mega cluster
         std::vector<double> approxOverlapScores(miniIds.size());
         std::vector<double> realOverlapScores(miniIds.size(), 0.0);  // Initialize to 0, only compute for worst k
@@ -3095,6 +3127,15 @@ namespace orangedb {
         // First pass: calculate all approx overlap scores
         for (size_t idx = 0; idx < miniIds.size(); idx++) {
             auto miniId = miniIds[idx];
+            
+            // Validate miniId is within bounds
+            if (static_cast<size_t>(miniId) >= miniClusteringScore.size() || miniId < 0) {
+                printf("WARNING: Invalid miniId %lld (out of bounds [0, %zu)) in calculateOverlapScoreForAngular, skipping\n",
+                       miniId, miniClusteringScore.size());
+                approxOverlapScores[idx] = 0.0;
+                continue;
+            }
+            
             std::vector<std::pair<double, vector_idx_t>> overlapRatiosWithIds;
             overlapRatiosWithIds.reserve(miniIds.size() - 1);
             dc->setQuery(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
@@ -3106,6 +3147,13 @@ namespace orangedb {
 
             for (const auto j : miniIds) {
                 if (j == miniId) {
+                    continue;
+                }
+                
+                // Validate j is within bounds
+                if (static_cast<size_t>(j) >= miniClusteringScore.size() || j < 0) {
+                    printf("WARNING: Invalid miniId j=%lld (out of bounds [0, %zu)) in calculateOverlapScoreForAngular, skipping\n",
+                           j, miniClusteringScore.size());
                     continue;
                 }
 
@@ -3264,6 +3312,14 @@ namespace orangedb {
         auto numMiniClusters = miniCentroids.size() / dim;
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
         double avgScore = 0.0;
+        
+        // Validate miniCentroidId is within bounds
+        if (static_cast<size_t>(miniCentroidId) >= miniClusters.size() || miniCentroidId < 0) {
+            printf("WARNING: Invalid miniCentroidId %lld (out of bounds [0, %zu)) in calculateRealOverlapScore, returning 0.0\n",
+                   miniCentroidId, miniClusters.size());
+            return 0.0;
+        }
+        
         auto &miniClusterVectors = miniClusters[miniCentroidId];
         auto miniClusterSize = miniClusterVectors.size() / dim;
         for (int i = 0; i < miniClusterSize; i++) {
@@ -3272,6 +3328,12 @@ namespace orangedb {
             dc->computeDistance(miniCentroidId, &ownDist);
             double minDistance = std::numeric_limits<double>::max();
             for (const auto &closestMiniCentroidId : closestMiniIds) {
+                // Validate closestMiniCentroidId is within bounds
+                if (static_cast<size_t>(closestMiniCentroidId) >= static_cast<size_t>(numMiniClusters) || closestMiniCentroidId < 0) {
+                    printf("WARNING: Invalid closestMiniCentroidId %lld (out of bounds [0, %d)) in calculateRealOverlapScore, skipping\n",
+                           closestMiniCentroidId, numMiniClusters);
+                    continue;
+                }
                 double dist;
                 dc->computeDistance(closestMiniCentroidId, &dist);
                 if (dist < minDistance) {
@@ -3286,8 +3348,17 @@ namespace orangedb {
 
     void ReclusteringIndex::computeOverlapScores() {
         auto numMegaCentroids = megaCentroids.size() / dim;
+        auto numMiniClusters = miniCentroids.size() / dim;
         overlapScores.resize(numMegaCentroids);
         avgRealOverlapScores.resize(numMegaCentroids);
+        
+        // Ensure miniClusteringScore is properly sized before parallel execution
+        if (miniClusteringScore.size() < static_cast<size_t>(numMiniClusters)) {
+            printf("WARNING: miniClusteringScore size (%zu) < numMiniClusters (%d) in computeOverlapScores, resizing\n",
+                   miniClusteringScore.size(), numMiniClusters);
+            miniClusteringScore.resize(numMiniClusters, 0.0);
+        }
+        
 #pragma omp parallel for
         for (auto i = 0; i < numMegaCentroids; i++) {
             if (config.distanceType == COSINE || config.distanceType == IP) {

@@ -108,3 +108,51 @@ def read_ground_truth(filepath):
     gt_data = np.fromfile(filepath, dtype=np.uint64)
     return gt_data
 
+def read_cluster_sizes_histogram(filepath):
+    """Read cluster sizes histogram file.
+    
+    Binary format:
+    - Header: hardClusterSizeLimit (int, 4 bytes), num_iterations (int, 4 bytes)
+    - For each iteration:
+      - iteration_number (int, 4 bytes)
+      - Array of size_t representing cluster sizes histogram (each size_t is 8 bytes on 64-bit)
+      - Histogram size = hardClusterSizeLimit / 100 + 1
+    
+    Args:
+        filepath: Path to the binary file
+    
+    Returns: tuple of (hard_cluster_size_limit, num_iterations, dictionary mapping iteration_number to histogram array)
+    """
+    import os
+    
+    data = {}
+    file_size = os.path.getsize(filepath)
+    
+    with open(filepath, 'rb') as f:
+        # Read file header: hardClusterSizeLimit and num_iterations
+        if f.tell() + 8 > file_size:
+            return None, None, {}
+        
+        hard_cluster_size_limit = struct.unpack('i', f.read(4))[0]
+        num_iterations = struct.unpack('i', f.read(4))[0]
+        histogram_size = hard_cluster_size_limit // 100 + 1
+        iteration_record_size = 4 + histogram_size * 8  # 4 bytes for int + histogram_size * 8 bytes for size_t array
+        
+        # Read all iterations
+        for _ in range(num_iterations):
+            # Check if we have enough bytes for a complete iteration record
+            if f.tell() + iteration_record_size > file_size:
+                break
+            
+            # Read iteration number
+            iteration_number = struct.unpack('i', f.read(4))[0]
+            
+            # Read histogram array
+            histogram = []
+            for _ in range(histogram_size):
+                cluster_size = struct.unpack('Q', f.read(8))[0]  # 'Q' is unsigned long long (8 bytes)
+                histogram.append(cluster_size)
+            
+            data[iteration_number] = histogram
+    
+    return hard_cluster_size_limit, num_iterations, data

@@ -312,7 +312,7 @@
   -numVectors 10000000 \
   -outputPath /home/centos/orangedb/umap_3D_without_clustering.bin
 
-  ./build/release/bin/orangedb_main \
+./build/release/bin/orangedb_main \
   -run benchmarkFixedRecall \
   -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs \
   -queryVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/query.fvecs \
