@@ -376,3 +376,39 @@
   -clustering_mode 3 \
   -recall_val 0.9 \
   -rebalancing_ratio 0.85 > test_re_2 2>&1  
+
+
+
+./build/release/bin/orangedb_main \
+  -run benchmarkFixedRecall \
+  -baseVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/base.fvecs \
+  -queryVectorPath /Users/gilli.hadayo/orangedb/data/siftsmall/query.fvecs \
+  -groundTruthPath /Users/gilli.hadayo/orangedb/data/siftsmall/gt.bin \
+  -numInserts 1 \
+  -numVectors 10000 \
+  -k 100 \
+  -numIters 5 \
+  -megaCentroidSize 10 \
+  -miniCentroidSize 300 \
+  -numMegaReclusterCentroids 1 \
+  -reclusterOnScore 0 \
+  -iterations 3 \
+  -numQueries 10 \
+  -readFromDisk 0 \
+  -storagePath /Users/gilli.hadayo/orangedb/test_bin_files/reclustering_index.bin \
+  -numThreads 32 \
+  -useIP 0 \
+  -quantTrainPercentage 0.0 \
+  -quantBuild 0 \
+  -nMegaRecluster 10000 \
+  -hardClusterSizeLimit 600 \
+  -kmeansSamplingRatio 0.2 \
+  -numFixBoundaries 0 \
+  -scoreChangeThreshold 0.01 \
+  -centroidChangeThreshold 0.01 \
+  -umap_mode 0 \
+  -clustering_mode 3 \
+  -recall_val 0.75 \
+  -rebalancing_ratio 0.85 \
+  -save_cluster_sizes_histogram 1 \
+  -use_hard_limit_in_assign 1 > test_re_2

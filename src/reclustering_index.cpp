@@ -1597,7 +1597,7 @@ namespace orangedb {
         std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
         faiss::SearchParameters params;
 
-        if (config.hardClusterSizeLimit > 0) {
+        if (config.hardClusterSizeLimit > 0 && config.useHardLimitInAssign) {
             hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
             params.dist_modifier = hardLimitDistModifier.get();
             printf("hard limit = %llu\n", config.hardClusterSizeLimit);
@@ -2061,7 +2061,7 @@ namespace orangedb {
     std::unique_ptr<faiss::BalancedClusteringDistModifier> hardLimitDistModifier;
     faiss::SearchParameters params;
 
-    if (config.hardClusterSizeLimit > 0) {
+    if (config.hardClusterSizeLimit > 0 && config.useHardLimitInAssign) {
         hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
         params.dist_modifier = hardLimitDistModifier.get();
         printf("hard limit = %llu\n", config.hardClusterSizeLimit);
@@ -2283,7 +2283,7 @@ namespace orangedb {
         faiss::SearchParameters params;
 
         // Only apply hard limit to L1 (vector) clustering, not L2 (centroid) clustering
-        if (config.hardClusterSizeLimit > 0 && !is_clustering_centroids) {
+        if (config.hardClusterSizeLimit > 0 && !is_clustering_centroids && config.useHardLimitInAssign) {
             hardLimitDistModifier = std::make_unique<faiss::ClusterSizeCapDistModifier>(numClusters, config.hardClusterSizeLimit);
             params.dist_modifier = hardLimitDistModifier.get();
             printf("hard limit = %llu (applied to L1 clustering)\n", config.hardClusterSizeLimit);

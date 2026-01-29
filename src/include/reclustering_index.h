@@ -77,6 +77,8 @@ namespace orangedb {
         // Clustering mode for reclustering operations
         CLUSTERING_MODE clusteringMode = HARD_LIMIT;
 
+        bool useHardLimitInAssign = false;
+
         explicit ReclusteringIndexConfig() = default;
 
         explicit ReclusteringIndexConfig(const int nIter, const int megaCentroidSize, const int miniCentroidSize,
@@ -89,7 +91,8 @@ namespace orangedb {
                                          const float scoreChangeThreshold = 0.2,
                                          const float centroidChangeThreshold = 0.6,
                                          const float overlappingScoreThreshold = 0.1,
-                                         const CLUSTERING_MODE clusteringMode = HARD_LIMIT)
+                                         const CLUSTERING_MODE clusteringMode = HARD_LIMIT,
+                                         const bool useHardLimitInAssign = false)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
@@ -97,7 +100,7 @@ namespace orangedb {
               quantizationTrainPercentage(quantizationTrainPercentage), hardClusterSizeLimit(hardClusterSizeLimit),
               kmeansSamplingRatio(kmeansSamplingRatio), scoreChangeThreshold(scoreChangeThreshold),
               centroidChangeThreshold(centroidChangeThreshold), overlappingScoreThreshold(overlappingScoreThreshold),
-              clusteringMode(clusteringMode) {
+              clusteringMode(clusteringMode), useHardLimitInAssign(useHardLimitInAssign) {
         }
     };
 
