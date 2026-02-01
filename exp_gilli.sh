@@ -419,15 +419,15 @@
   -baseVectorPath /home/centos/orangedb/data/sift_bill/bigann_base.bvecs \
   -queryVectorPath /home/centos/orangedb/data/sift_bill/bigann_query.bvecs \
   -groundTruthPath /home/centos/orangedb/data/sift_bill/sift_gt_10M.bin \
-  -numInserts 2 \
+  -numInserts 10 \
   -numVectors 10000000 \
   -k 100 \
-  -numIters 4 \
+  -numIters 15 \
   -megaCentroidSize 1000 \
   -miniCentroidSize 1000 \
   -numMegaReclusterCentroids 1 \
   -reclusterOnScore 0 \
-  -iterations 4 \
+  -iterations 5 \
   -numQueries 10 \
   -readFromDisk 0 \
   -storagePath /home/centos/orangedb/test_bin_files/reclustering_fast_index.bin \
@@ -446,4 +446,4 @@
   -recall_val 0.9 \
   -rebalancing_ratio 0.85 \
   -save_cluster_sizes_histogram 1 \
-  -use_hard_limit_in_assign 1 > test_re_2
+  -use_hard_limit_in_assign 1 > test_DKM
