@@ -4243,7 +4243,11 @@ void benchmark_fixed_recall(InputParser &input) {
         // Optimized: use switch for faster file path selection
         switch (clustering_mode) {
             case HARD_LIMIT:
-                cluster_sizes_histogram_file_path = "cluster_sizes_histogram_hard_limit.bin";
+                if (use_hard_limit_in_assign) {
+                    cluster_sizes_histogram_file_path = "cluster_sizes_histogram_hard_limit.bin";
+                } else {
+                    cluster_sizes_histogram_file_path = "cluster_sizes_histogram_no_limit.bin";
+                }
                 break;
             case REBALANCE_CENTROIDS:
                 cluster_sizes_histogram_file_path = "cluster_sizes_histogram_rebalance_centroids.bin";
@@ -4252,7 +4256,11 @@ void benchmark_fixed_recall(InputParser &input) {
                 cluster_sizes_histogram_file_path = "cluster_sizes_histogram_rebalance_vectors.bin";
                 break;
             case DOUBLE_KMEANS:
-                cluster_sizes_histogram_file_path = "cluster_sizes_histogram_double_kmeans.bin";
+                if (use_hard_limit_in_assign) {
+                    cluster_sizes_histogram_file_path = "cluster_sizes_histogram_double_kmeans.bin";
+                } else {
+                    cluster_sizes_histogram_file_path = "cluster_sizes_histogram_double_kmeans_no_limit.bin";
+                }
                 break;
             default:
                 cluster_sizes_histogram_file_path = "cluster_sizes_histogram_unknown.bin";

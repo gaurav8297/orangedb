@@ -1,0 +1,3031 @@
+
+==> ENTERING: benchmark_fixed_recall
+
+==> ENTERING: parameter_parsing
+<== EXITING: parameter_parsing (Duration: 0.000 seconds)
+
+
+==> ENTERING: load_query_vectors
+x: 0xc184e0
+align_x: 0xc19460
+<== EXITING: load_query_vectors (Duration: 0.000 seconds)
+
+
+==> ENTERING: setup_index_config
+<== EXITING: setup_index_config (Duration: 0.000 seconds)
+
+
+==> ENTERING: load_ground_truth
+<== EXITING: load_ground_truth (Duration: 0.000 seconds)
+
+
+==> ENTERING: load_base_vectors
+x: 0x7f2d01066010
+align_x: 0x7f2ce281d040
+<== EXITING: load_base_vectors (Duration: 0.075 seconds)
+
+
+==> ENTERING: insert_vectors_loop
+DOUBLE_KMEANS: Running FIRST k-means with 10 iterations on 850 clusters
+Splitting cluster 850 (size 712), into 2 clusters 
+Splitting cluster 851 (size 669), into 2 clusters 
+Splitting cluster 852 (size 618), into 2 clusters 
+Splitting cluster 853 (size 569), into 2 clusters 
+Splitting cluster 854 (size 558), into 2 clusters 
+Splitting cluster 855 (size 527), into 2 clusters 
+Splitting cluster 856 (size 485), into 2 clusters 
+Splitting cluster 857 (size 468), into 2 clusters 
+Splitting cluster 858 (size 466), into 2 clusters 
+Splitting cluster 859 (size 459), into 2 clusters 
+Splitting cluster 860 (size 451), into 2 clusters 
+Splitting cluster 861 (size 450), into 2 clusters 
+Splitting cluster 862 (size 442), into 2 clusters 
+Splitting cluster 863 (size 431), into 2 clusters 
+Splitting cluster 864 (size 419), into 2 clusters 
+Splitting cluster 865 (size 419), into 2 clusters 
+Splitting cluster 866 (size 417), into 2 clusters 
+Splitting cluster 867 (size 406), into 2 clusters 
+Splitting cluster 868 (size 394), into 2 clusters 
+Splitting cluster 869 (size 392), into 2 clusters 
+Splitting cluster 870 (size 388), into 2 clusters 
+Splitting cluster 871 (size 387), into 2 clusters 
+Splitting cluster 872 (size 387), into 2 clusters 
+Splitting cluster 873 (size 386), into 2 clusters 
+Splitting cluster 874 (size 385), into 2 clusters 
+Splitting cluster 875 (size 385), into 2 clusters 
+Splitting cluster 876 (size 371), into 2 clusters 
+Splitting cluster 877 (size 368), into 2 clusters 
+Splitting cluster 878 (size 367), into 2 clusters 
+Splitting cluster 879 (size 367), into 2 clusters 
+Splitting cluster 880 (size 366), into 2 clusters 
+Splitting cluster 881 (size 365), into 2 clusters 
+Splitting cluster 882 (size 360), into 2 clusters 
+Splitting cluster 883 (size 355), into 2 clusters 
+Splitting cluster 884 (size 346), into 2 clusters 
+Splitting cluster 885 (size 345), into 2 clusters 
+Splitting cluster 886 (size 344), into 2 clusters 
+Splitting cluster 887 (size 341), into 2 clusters 
+Splitting cluster 888 (size 341), into 2 clusters 
+Splitting cluster 889 (size 340), into 2 clusters 
+Splitting cluster 890 (size 337), into 2 clusters 
+Splitting cluster 891 (size 333), into 2 clusters 
+Splitting cluster 892 (size 331), into 2 clusters 
+Splitting cluster 893 (size 324), into 2 clusters 
+Splitting cluster 894 (size 317), into 2 clusters 
+Splitting cluster 895 (size 316), into 2 clusters 
+Splitting cluster 896 (size 314), into 2 clusters 
+Splitting cluster 897 (size 314), into 2 clusters 
+Splitting cluster 898 (size 312), into 2 clusters 
+Splitting cluster 899 (size 312), into 2 clusters 
+Splitting cluster 900 (size 311), into 2 clusters 
+Splitting cluster 901 (size 308), into 2 clusters 
+Splitting cluster 902 (size 307), into 2 clusters 
+Splitting cluster 903 (size 303), into 2 clusters 
+Splitting cluster 904 (size 302), into 2 clusters 
+Splitting cluster 905 (size 301), into 2 clusters 
+Splitting cluster 906 (size 298), into 2 clusters 
+Splitting cluster 907 (size 297), into 2 clusters 
+Splitting cluster 908 (size 297), into 2 clusters 
+Splitting cluster 909 (size 296), into 2 clusters 
+Splitting cluster 910 (size 293), into 2 clusters 
+Splitting cluster 911 (size 292), into 2 clusters 
+Splitting cluster 912 (size 291), into 2 clusters 
+Splitting cluster 913 (size 291), into 2 clusters 
+Splitting cluster 914 (size 290), into 2 clusters 
+Splitting cluster 915 (size 290), into 2 clusters 
+Splitting cluster 916 (size 290), into 2 clusters 
+Splitting cluster 917 (size 288), into 2 clusters 
+Splitting cluster 918 (size 287), into 2 clusters 
+Splitting cluster 919 (size 287), into 2 clusters 
+Splitting cluster 920 (size 287), into 2 clusters 
+Splitting cluster 921 (size 287), into 2 clusters 
+Splitting cluster 922 (size 286), into 2 clusters 
+Splitting cluster 923 (size 284), into 2 clusters 
+Splitting cluster 924 (size 283), into 2 clusters 
+Splitting cluster 925 (size 282), into 2 clusters 
+Splitting cluster 926 (size 280), into 2 clusters 
+Splitting cluster 927 (size 279), into 2 clusters 
+Splitting cluster 928 (size 278), into 2 clusters 
+Splitting cluster 929 (size 277), into 2 clusters 
+Splitting cluster 930 (size 277), into 2 clusters 
+Splitting cluster 931 (size 277), into 2 clusters 
+Splitting cluster 932 (size 276), into 2 clusters 
+Splitting cluster 933 (size 276), into 2 clusters 
+Splitting cluster 934 (size 276), into 2 clusters 
+Splitting cluster 935 (size 276), into 2 clusters 
+Splitting cluster 936 (size 275), into 2 clusters 
+Splitting cluster 937 (size 275), into 2 clusters 
+Splitting cluster 938 (size 274), into 2 clusters 
+Splitting cluster 939 (size 273), into 2 clusters 
+Splitting cluster 940 (size 273), into 2 clusters 
+Splitting cluster 941 (size 273), into 2 clusters 
+Splitting cluster 942 (size 272), into 2 clusters 
+Splitting cluster 943 (size 272), into 2 clusters 
+Splitting cluster 944 (size 271), into 2 clusters 
+Splitting cluster 945 (size 271), into 2 clusters 
+Splitting cluster 946 (size 270), into 2 clusters 
+Splitting cluster 947 (size 269), into 2 clusters 
+Splitting cluster 948 (size 268), into 2 clusters 
+Splitting cluster 949 (size 267), into 2 clusters 
+Splitting cluster 950 (size 265), into 2 clusters 
+Splitting cluster 951 (size 265), into 2 clusters 
+Splitting cluster 952 (size 264), into 2 clusters 
+Splitting cluster 953 (size 263), into 2 clusters 
+Splitting cluster 954 (size 262), into 2 clusters 
+Splitting cluster 955 (size 262), into 2 clusters 
+Splitting cluster 956 (size 261), into 2 clusters 
+Splitting cluster 957 (size 261), into 2 clusters 
+Splitting cluster 958 (size 261), into 2 clusters 
+Splitting cluster 959 (size 260), into 2 clusters 
+Splitting cluster 960 (size 260), into 2 clusters 
+Splitting cluster 961 (size 260), into 2 clusters 
+Splitting cluster 962 (size 259), into 2 clusters 
+Splitting cluster 963 (size 259), into 2 clusters 
+Splitting cluster 964 (size 259), into 2 clusters 
+Splitting cluster 965 (size 258), into 2 clusters 
+Splitting cluster 966 (size 258), into 2 clusters 
+Splitting cluster 967 (size 258), into 2 clusters 
+Splitting cluster 968 (size 257), into 2 clusters 
+Splitting cluster 969 (size 256), into 2 clusters 
+Splitting cluster 970 (size 255), into 2 clusters 
+Splitting cluster 971 (size 255), into 2 clusters 
+Splitting cluster 972 (size 254), into 2 clusters 
+Splitting cluster 973 (size 254), into 2 clusters 
+Splitting cluster 974 (size 254), into 2 clusters 
+Splitting cluster 975 (size 251), into 2 clusters 
+Splitting cluster 976 (size 249), into 2 clusters 
+Splitting cluster 977 (size 249), into 2 clusters 
+Splitting cluster 978 (size 249), into 2 clusters 
+Splitting cluster 979 (size 248), into 2 clusters 
+Splitting cluster 980 (size 248), into 2 clusters 
+Splitting cluster 981 (size 248), into 2 clusters 
+Splitting cluster 982 (size 247), into 2 clusters 
+Splitting cluster 983 (size 246), into 2 clusters 
+Splitting cluster 984 (size 246), into 2 clusters 
+Splitting cluster 985 (size 245), into 2 clusters 
+Splitting cluster 986 (size 245), into 2 clusters 
+Splitting cluster 987 (size 244), into 2 clusters 
+Splitting cluster 988 (size 243), into 2 clusters 
+Splitting cluster 989 (size 243), into 2 clusters 
+Splitting cluster 990 (size 243), into 2 clusters 
+Splitting cluster 991 (size 243), into 2 clusters 
+Splitting cluster 992 (size 242), into 2 clusters 
+Splitting cluster 993 (size 242), into 2 clusters 
+Splitting cluster 994 (size 240), into 2 clusters 
+Splitting cluster 995 (size 240), into 2 clusters 
+Splitting cluster 996 (size 238), into 2 clusters 
+Splitting cluster 997 (size 238), into 2 clusters 
+Splitting cluster 998 (size 238), into 2 clusters 
+Splitting cluster 999 (size 238), into 2 clusters 
+DOUBLE_KMEANS: After rebalancing, about to run second k-means with 1000 clusters
+DOUBLE_KMEANS: Rebalanced centroids size: 128000 (expected: 128000)
+DOUBLE_KMEANS: clustering2.centroids size before train: 128000
+DOUBLE_KMEANS: Second k-means complete, checking differences...
+DOUBLE_KMEANS: 1000/1000 centroids changed (avg L2 change: 30.723255)
+hard limit = 2000
+Warning: Cluster 402 has size 2207 greater than 2000
+Warning: Cluster 850 has size 2217 greater than 2000
+Warning: Cluster 852 has size 2283 greater than 2000
+Warning: Cluster 853 has size 2216 greater than 2000
+Warning: Cluster 854 has size 2017 greater than 2000
+
+=== AVERAGE CLUSTER SIZES BY SOURCE ===
+Original k-means (never rebalanced): 700 clusters, avg size = 954.39
+Rebalanced clusters (local k-means): 300 clusters, avg size = 1106.43
+Total clusters involved in rebalancing: 300 out of 1000
+Total oversized clusters (exceeding hard limit): 5
+<== EXITING: insert_vectors_loop (Duration: 2.431 seconds)
+
+
+==> ENTERING: flush_index_to_disk
+<== EXITING: flush_index_to_disk (Duration: 1.141 seconds)
+
+
+==> ENTERING: store_MSE_scores
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 1
+<== EXITING: store_MSE_scores (Duration: 0.004 seconds)
+
+
+==> ENTERING: initial_build_cluster_maps
+<== EXITING: initial_build_cluster_maps (Duration: 0.142 seconds)
+
+
+==> ENTERING: initial_get_fixed_recall
+<== EXITING: initial_get_fixed_recall (Duration: 0.001 seconds)
+
+
+==> ENTERING: initial_verify_recall_loop
+Query 0: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 0: GT vectors scattered across 38 L1 clusters, furthest L1 distance: 141434.360130, closest L1 distance: 76285.423529
+Query 0: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 103853.364870, closest L2 distance: 103853.364870
+Query 0: Recall: 95.000000%, distance computations: 103748, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.035 seconds)
+
+<== EXITING: get_recall (Duration: 0.035 seconds)
+
+Query 1: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 1: GT vectors scattered across 8 L1 clusters, furthest L1 distance: 125740.768824, closest L1 distance: 65634.091556
+Query 1: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 180135.333289, closest L2 distance: 180135.333289
+Query 1: Recall: 94.000000%, distance computations: 6302, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.034 seconds)
+
+<== EXITING: get_recall (Duration: 0.034 seconds)
+
+Query 2: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 2: GT vectors scattered across 13 L1 clusters, furthest L1 distance: 91827.061044, closest L1 distance: 57277.974189
+Query 2: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 119180.494253, closest L2 distance: 119180.494253
+Query 2: Recall: 95.000000%, distance computations: 12408, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.050 seconds)
+
+<== EXITING: get_recall (Duration: 0.050 seconds)
+
+Query 3: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 3: GT vectors scattered across 5 L1 clusters, furthest L1 distance: 38668.378512, closest L1 distance: 17479.645710
+Query 3: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136872.351465, closest L2 distance: 136872.351465
+Query 3: Recall: 99.000000%, distance computations: 6659, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.047 seconds)
+
+<== EXITING: get_recall (Duration: 0.047 seconds)
+
+Query 4: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 4: GT vectors scattered across 48 L1 clusters, furthest L1 distance: 160483.438810, closest L1 distance: 83731.959115
+Query 4: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 114795.397249, closest L2 distance: 114795.397249
+Query 4: Recall: 95.000000%, distance computations: 105607, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.037 seconds)
+
+<== EXITING: get_recall (Duration: 0.037 seconds)
+
+Query 5: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 5: GT vectors scattered across 4 L1 clusters, furthest L1 distance: 38578.992257, closest L1 distance: 24322.115073
+Query 5: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 122670.013236, closest L2 distance: 122670.013236
+Query 5: Recall: 97.000000%, distance computations: 5152, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.037 seconds)
+
+<== EXITING: get_recall (Duration: 0.037 seconds)
+
+Query 6: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 6: GT vectors scattered across 4 L1 clusters, furthest L1 distance: 51574.746212, closest L1 distance: 30609.563859
+Query 6: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136370.661554, closest L2 distance: 136370.661554
+Query 6: Recall: 97.000000%, distance computations: 4148, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.047 seconds)
+
+<== EXITING: get_recall (Duration: 0.047 seconds)
+
+Query 7: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 7: GT vectors scattered across 13 L1 clusters, furthest L1 distance: 137613.486334, closest L1 distance: 59448.716362
+Query 7: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143096.076049, closest L2 distance: 143096.076049
+Query 7: Recall: 95.000000%, distance computations: 12408, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.042 seconds)
+
+<== EXITING: get_recall (Duration: 0.042 seconds)
+
+Query 8: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 8: GT vectors scattered across 11 L1 clusters, furthest L1 distance: 96148.527063, closest L1 distance: 41273.674433
+Query 8: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 157678.969414, closest L2 distance: 157678.969414
+Query 8: Recall: 94.000000%, distance computations: 14538, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.021 seconds)
+
+<== EXITING: get_recall (Duration: 0.021 seconds)
+
+Query 9: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 9: GT vectors scattered across 21 L1 clusters, furthest L1 distance: 130786.608841, closest L1 distance: 74408.174437
+Query 9: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 125842.001974, closest L2 distance: 125842.001974
+Query 9: Recall: 95.000000%, distance computations: 21870, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.023 seconds)
+
+<== EXITING: get_recall (Duration: 0.023 seconds)
+
+Query 10: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 10: GT vectors scattered across 44 L1 clusters, furthest L1 distance: 159095.148113, closest L1 distance: 88806.402736
+Query 10: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 141406.392532, closest L2 distance: 141406.392532
+Query 10: Recall: 95.000000%, distance computations: 86856, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.034 seconds)
+
+<== EXITING: get_recall (Duration: 0.034 seconds)
+
+Query 11: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 11: GT vectors scattered across 16 L1 clusters, furthest L1 distance: 135425.815420, closest L1 distance: 53701.243516
+Query 11: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 137922.380259, closest L2 distance: 137922.380259
+Query 11: Recall: 94.000000%, distance computations: 20576, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.021 seconds)
+
+<== EXITING: get_recall (Duration: 0.021 seconds)
+
+Query 12: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 12: GT vectors scattered across 35 L1 clusters, furthest L1 distance: 221069.631794, closest L1 distance: 136914.810447
+Query 12: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 194119.981268, closest L2 distance: 194119.981268
+Query 12: Recall: 95.000000%, distance computations: 49990, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.032 seconds)
+
+<== EXITING: get_recall (Duration: 0.032 seconds)
+
+Query 13: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 13: GT vectors scattered across 26 L1 clusters, furthest L1 distance: 153000.553726, closest L1 distance: 68917.934545
+Query 13: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143733.878943, closest L2 distance: 143733.878943
+Query 13: Recall: 95.000000%, distance computations: 34940, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.023 seconds)
+
+<== EXITING: get_recall (Duration: 0.023 seconds)
+
+Query 14: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 14: GT vectors scattered across 8 L1 clusters, furthest L1 distance: 76983.140811, closest L1 distance: 41289.348536
+Query 14: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 121881.281629, closest L2 distance: 121881.281629
+Query 14: Recall: 95.000000%, distance computations: 7375, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.043 seconds)
+
+<== EXITING: get_recall (Duration: 0.043 seconds)
+
+Query 15: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 15: GT vectors scattered across 23 L1 clusters, furthest L1 distance: 150898.593654, closest L1 distance: 60535.773075
+Query 15: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136829.408812, closest L2 distance: 136829.408812
+Query 15: Recall: 95.000000%, distance computations: 32036, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.024 seconds)
+
+<== EXITING: get_recall (Duration: 0.024 seconds)
+
+Query 16: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 16: GT vectors scattered across 25 L1 clusters, furthest L1 distance: 119853.330071, closest L1 distance: 70087.014535
+Query 16: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 142976.000341, closest L2 distance: 142976.000341
+Query 16: Recall: 95.000000%, distance computations: 33058, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.041 seconds)
+
+<== EXITING: get_recall (Duration: 0.041 seconds)
+
+Query 17: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 17: GT vectors scattered across 21 L1 clusters, furthest L1 distance: 175233.144545, closest L1 distance: 72996.095311
+Query 17: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 167432.675554, closest L2 distance: 167432.675554
+Query 17: Recall: 95.000000%, distance computations: 37460, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.026 seconds)
+
+<== EXITING: get_recall (Duration: 0.026 seconds)
+
+Query 18: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 18: GT vectors scattered across 6 L1 clusters, furthest L1 distance: 72581.262417, closest L1 distance: 31852.904374
+Query 18: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 135365.807682, closest L2 distance: 135365.807682
+Query 18: Recall: 96.000000%, distance computations: 6371, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.051 seconds)
+
+<== EXITING: get_recall (Duration: 0.051 seconds)
+
+Query 19: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 19: GT vectors scattered across 23 L1 clusters, furthest L1 distance: 133888.112265, closest L1 distance: 73091.753121
+Query 19: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 159278.281546, closest L2 distance: 159278.281546
+Query 19: Recall: 95.000000%, distance computations: 31065, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.038 seconds)
+
+<== EXITING: get_recall (Duration: 0.038 seconds)
+
+Query 20: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 20: GT vectors scattered across 25 L1 clusters, furthest L1 distance: 156439.861444, closest L1 distance: 89195.094102
+Query 20: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 163144.805990, closest L2 distance: 163144.805990
+Query 20: Recall: 95.000000%, distance computations: 30067, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.033 seconds)
+
+<== EXITING: get_recall (Duration: 0.033 seconds)
+
+Query 21: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 21: GT vectors scattered across 12 L1 clusters, furthest L1 distance: 127384.944316, closest L1 distance: 81197.877870
+Query 21: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 117818.860061, closest L2 distance: 117818.860061
+Query 21: Recall: 96.000000%, distance computations: 20319, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.030 seconds)
+
+<== EXITING: get_recall (Duration: 0.030 seconds)
+
+Query 22: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 22: GT vectors scattered across 35 L1 clusters, furthest L1 distance: 122913.379384, closest L1 distance: 66339.762590
+Query 22: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 111317.268676, closest L2 distance: 111317.268676
+Query 22: Recall: 95.000000%, distance computations: 59776, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.031 seconds)
+
+<== EXITING: get_recall (Duration: 0.031 seconds)
+
+Query 23: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 23: GT vectors scattered across 45 L1 clusters, furthest L1 distance: 167940.947307, closest L1 distance: 89446.915614
+Query 23: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 126683.694253, closest L2 distance: 126683.694253
+Query 23: Recall: 95.000000%, distance computations: 136885, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.039 seconds)
+
+<== EXITING: get_recall (Duration: 0.039 seconds)
+
+Query 24: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 24: GT vectors scattered across 18 L1 clusters, furthest L1 distance: 138038.534691, closest L1 distance: 66282.293461
+Query 24: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 170583.757282, closest L2 distance: 170583.757282
+Query 24: Recall: 95.000000%, distance computations: 20035, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.033 seconds)
+
+<== EXITING: get_recall (Duration: 0.033 seconds)
+
+Query 25: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 25: GT vectors scattered across 26 L1 clusters, furthest L1 distance: 137758.291721, closest L1 distance: 60016.101013
+Query 25: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 111770.184980, closest L2 distance: 111770.184980
+Query 25: Recall: 95.000000%, distance computations: 43114, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.043 seconds)
+
+<== EXITING: get_recall (Duration: 0.043 seconds)
+
+Query 26: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 26: GT vectors scattered across 12 L1 clusters, furthest L1 distance: 126230.124192, closest L1 distance: 71380.422741
+Query 26: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 163620.451335, closest L2 distance: 163620.451335
+Query 26: Recall: 94.000000%, distance computations: 10411, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.038 seconds)
+
+<== EXITING: get_recall (Duration: 0.038 seconds)
+
+Query 27: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 27: GT vectors scattered across 34 L1 clusters, furthest L1 distance: 133174.722486, closest L1 distance: 74410.581835
+Query 27: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 134883.710203, closest L2 distance: 134883.710203
+Query 27: Recall: 95.000000%, distance computations: 66622, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.039 seconds)
+
+<== EXITING: get_recall (Duration: 0.039 seconds)
+
+Query 28: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 28: GT vectors scattered across 15 L1 clusters, furthest L1 distance: 119462.032005, closest L1 distance: 68185.220692
+Query 28: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 139829.888869, closest L2 distance: 139829.888869
+Query 28: Recall: 95.000000%, distance computations: 26170, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.043 seconds)
+
+<== EXITING: get_recall (Duration: 0.043 seconds)
+
+Query 29: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 29: GT vectors scattered across 15 L1 clusters, furthest L1 distance: 148130.373866, closest L1 distance: 94673.460910
+Query 29: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 173763.113875, closest L2 distance: 173763.113875
+Query 29: Recall: 96.000000%, distance computations: 13506, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.035 seconds)
+
+<== EXITING: get_recall (Duration: 0.035 seconds)
+
+<== EXITING: initial_verify_recall_loop (Duration: 1.085 seconds)
+
+Average Recall: 95.233333, Average L2 probes: 1.00, Average L1 probes: 35.10, Average Distance Computations: 35315, Avg misassigned: 0.0%
+
+==> ENTERING: save_cluster_sizes_histogram
+<== EXITING: save_cluster_sizes_histogram (Duration: 0.000 seconds)
+
+Starting reclustering iterations
+
+==> ENTERING: reclustering_iterations_loop
+
+========== Started Iteration: 0 ==========
+
+==> ENTERING: iter_store_save_scores
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 1
+ReclusteringIndex::saveOldScoreForMegaClusters
+<== EXITING: iter_store_save_scores (Duration: 0.004 seconds)
+
+
+==> ENTERING: iter_get_mega_mini_centroids
+<== EXITING: iter_get_mega_mini_centroids (Duration: 0.000 seconds)
+
+
+==> ENTERING: iter_reclusterAllMegaCentroids
+Reclustering only mega centroids with size 1
+<== EXITING: iter_reclusterAllMegaCentroids (Duration: 0.000 seconds)
+
+
+==> ENTERING: iter_store_scores_and_overlap
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 1
+ReclusteringIndex::printStats
+Number of mega clusters: 1, number of mini clusters: 1000
+L1 cluster size: Min: 294, Max: 2283, Avg: 1000
+L2 cluster size: Min: 1000, Max: 1000, Avg: 1000
+Number of mini clusters with bad silhouette score: 0 out of 1000
+Avg mega cluster score: 68890.314788
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 1 centroids: Min: 68890.314788, Max: 68890.314788, Avg: 68890.314788
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 1000 centroids: Min: 12615.806060, Max: 90550.926047, Avg: 68890.314788
+<== EXITING: iter_store_scores_and_overlap (Duration: 0.064 seconds)
+
+
+==> ENTERING: iter_reclusterInternalMegaCentroid
+Running reclusterInternalMegaCentroid on 0 with 1000000 vectors
+DOUBLE_KMEANS: Running FIRST k-means with 10 iterations on 750 clusters
+Splitting cluster 751 (size 822), into 3 clusters 
+Splitting cluster 752 (size 687), into 2 clusters 
+Splitting cluster 753 (size 626), into 2 clusters 
+Splitting cluster 754 (size 572), into 2 clusters 
+Splitting cluster 755 (size 468), into 2 clusters 
+Splitting cluster 756 (size 465), into 2 clusters 
+Splitting cluster 757 (size 457), into 2 clusters 
+Splitting cluster 758 (size 453), into 2 clusters 
+Splitting cluster 759 (size 428), into 2 clusters 
+Splitting cluster 760 (size 404), into 2 clusters 
+Splitting cluster 761 (size 403), into 2 clusters 
+Splitting cluster 762 (size 398), into 2 clusters 
+Splitting cluster 763 (size 398), into 2 clusters 
+Splitting cluster 764 (size 393), into 2 clusters 
+Splitting cluster 765 (size 389), into 2 clusters 
+Splitting cluster 766 (size 387), into 2 clusters 
+Splitting cluster 767 (size 370), into 2 clusters 
+Splitting cluster 768 (size 367), into 2 clusters 
+Splitting cluster 769 (size 365), into 2 clusters 
+Splitting cluster 770 (size 363), into 2 clusters 
+Splitting cluster 771 (size 363), into 2 clusters 
+Splitting cluster 772 (size 362), into 2 clusters 
+Splitting cluster 773 (size 361), into 2 clusters 
+Splitting cluster 774 (size 360), into 2 clusters 
+Splitting cluster 775 (size 357), into 2 clusters 
+Splitting cluster 776 (size 353), into 2 clusters 
+Splitting cluster 777 (size 351), into 2 clusters 
+Splitting cluster 778 (size 351), into 2 clusters 
+Splitting cluster 779 (size 347), into 2 clusters 
+Splitting cluster 780 (size 346), into 2 clusters 
+Splitting cluster 781 (size 343), into 2 clusters 
+Splitting cluster 782 (size 341), into 2 clusters 
+Splitting cluster 783 (size 333), into 2 clusters 
+Splitting cluster 784 (size 332), into 2 clusters 
+Splitting cluster 785 (size 329), into 2 clusters 
+Splitting cluster 786 (size 321), into 2 clusters 
+Splitting cluster 787 (size 319), into 2 clusters 
+Splitting cluster 788 (size 318), into 2 clusters 
+Splitting cluster 789 (size 316), into 2 clusters 
+Splitting cluster 790 (size 314), into 2 clusters 
+Splitting cluster 791 (size 312), into 2 clusters 
+Splitting cluster 792 (size 310), into 2 clusters 
+Splitting cluster 793 (size 309), into 2 clusters 
+Splitting cluster 794 (size 305), into 2 clusters 
+Splitting cluster 795 (size 302), into 2 clusters 
+Splitting cluster 796 (size 299), into 2 clusters 
+Splitting cluster 797 (size 298), into 2 clusters 
+Splitting cluster 798 (size 297), into 2 clusters 
+Splitting cluster 799 (size 296), into 2 clusters 
+Splitting cluster 800 (size 293), into 2 clusters 
+Splitting cluster 801 (size 292), into 2 clusters 
+Splitting cluster 802 (size 290), into 2 clusters 
+Splitting cluster 803 (size 290), into 2 clusters 
+Splitting cluster 804 (size 288), into 2 clusters 
+Splitting cluster 805 (size 287), into 2 clusters 
+Splitting cluster 806 (size 285), into 2 clusters 
+Splitting cluster 807 (size 278), into 2 clusters 
+Splitting cluster 808 (size 277), into 2 clusters 
+Splitting cluster 809 (size 276), into 2 clusters 
+Splitting cluster 810 (size 274), into 2 clusters 
+Splitting cluster 811 (size 274), into 2 clusters 
+Splitting cluster 812 (size 273), into 2 clusters 
+Splitting cluster 813 (size 272), into 2 clusters 
+Splitting cluster 814 (size 272), into 2 clusters 
+Splitting cluster 815 (size 269), into 2 clusters 
+Splitting cluster 816 (size 269), into 2 clusters 
+Splitting cluster 817 (size 269), into 2 clusters 
+Splitting cluster 818 (size 269), into 2 clusters 
+Splitting cluster 819 (size 268), into 2 clusters 
+Splitting cluster 820 (size 268), into 2 clusters 
+Splitting cluster 821 (size 267), into 2 clusters 
+Splitting cluster 822 (size 267), into 2 clusters 
+Splitting cluster 823 (size 267), into 2 clusters 
+Splitting cluster 824 (size 266), into 2 clusters 
+Splitting cluster 825 (size 264), into 2 clusters 
+Splitting cluster 826 (size 264), into 2 clusters 
+Splitting cluster 827 (size 263), into 2 clusters 
+Splitting cluster 828 (size 263), into 2 clusters 
+Splitting cluster 829 (size 262), into 2 clusters 
+Splitting cluster 830 (size 262), into 2 clusters 
+Splitting cluster 831 (size 262), into 2 clusters 
+Splitting cluster 832 (size 261), into 2 clusters 
+Splitting cluster 833 (size 260), into 2 clusters 
+Splitting cluster 834 (size 259), into 2 clusters 
+Splitting cluster 835 (size 259), into 2 clusters 
+Splitting cluster 836 (size 259), into 2 clusters 
+Splitting cluster 837 (size 259), into 2 clusters 
+Splitting cluster 838 (size 258), into 2 clusters 
+Splitting cluster 839 (size 258), into 2 clusters 
+Splitting cluster 840 (size 258), into 2 clusters 
+Splitting cluster 841 (size 258), into 2 clusters 
+Splitting cluster 842 (size 258), into 2 clusters 
+Splitting cluster 843 (size 257), into 2 clusters 
+Splitting cluster 844 (size 257), into 2 clusters 
+Splitting cluster 845 (size 256), into 2 clusters 
+Splitting cluster 846 (size 255), into 2 clusters 
+Splitting cluster 847 (size 254), into 2 clusters 
+Splitting cluster 848 (size 253), into 2 clusters 
+Splitting cluster 849 (size 253), into 2 clusters 
+Splitting cluster 850 (size 252), into 2 clusters 
+Splitting cluster 851 (size 252), into 2 clusters 
+Splitting cluster 852 (size 251), into 2 clusters 
+Splitting cluster 853 (size 251), into 2 clusters 
+Splitting cluster 854 (size 250), into 2 clusters 
+Splitting cluster 855 (size 250), into 2 clusters 
+Splitting cluster 856 (size 249), into 2 clusters 
+Splitting cluster 857 (size 248), into 2 clusters 
+Splitting cluster 858 (size 248), into 2 clusters 
+Splitting cluster 859 (size 247), into 2 clusters 
+Splitting cluster 860 (size 247), into 2 clusters 
+Splitting cluster 861 (size 247), into 2 clusters 
+Splitting cluster 862 (size 247), into 2 clusters 
+Splitting cluster 863 (size 246), into 2 clusters 
+Splitting cluster 864 (size 245), into 2 clusters 
+Splitting cluster 865 (size 244), into 2 clusters 
+Splitting cluster 866 (size 244), into 2 clusters 
+Splitting cluster 867 (size 243), into 2 clusters 
+Splitting cluster 868 (size 243), into 2 clusters 
+Splitting cluster 869 (size 243), into 2 clusters 
+Splitting cluster 870 (size 243), into 2 clusters 
+Splitting cluster 871 (size 243), into 2 clusters 
+Splitting cluster 872 (size 242), into 2 clusters 
+Splitting cluster 873 (size 242), into 2 clusters 
+Splitting cluster 874 (size 242), into 2 clusters 
+Splitting cluster 875 (size 241), into 2 clusters 
+Splitting cluster 876 (size 240), into 2 clusters 
+Splitting cluster 877 (size 240), into 2 clusters 
+Splitting cluster 878 (size 240), into 2 clusters 
+Splitting cluster 879 (size 239), into 2 clusters 
+Splitting cluster 880 (size 237), into 2 clusters 
+Splitting cluster 881 (size 237), into 2 clusters 
+Splitting cluster 882 (size 237), into 2 clusters 
+Splitting cluster 883 (size 236), into 2 clusters 
+Splitting cluster 884 (size 236), into 2 clusters 
+Splitting cluster 885 (size 236), into 2 clusters 
+Splitting cluster 886 (size 235), into 2 clusters 
+Splitting cluster 887 (size 235), into 2 clusters 
+Splitting cluster 888 (size 234), into 2 clusters 
+Splitting cluster 889 (size 234), into 2 clusters 
+Splitting cluster 890 (size 234), into 2 clusters 
+Splitting cluster 891 (size 233), into 2 clusters 
+Splitting cluster 892 (size 233), into 2 clusters 
+Splitting cluster 893 (size 233), into 2 clusters 
+Splitting cluster 894 (size 232), into 2 clusters 
+Splitting cluster 895 (size 232), into 2 clusters 
+Splitting cluster 896 (size 232), into 2 clusters 
+Splitting cluster 897 (size 232), into 2 clusters 
+Splitting cluster 898 (size 232), into 2 clusters 
+Splitting cluster 899 (size 232), into 2 clusters 
+Splitting cluster 900 (size 232), into 2 clusters 
+Splitting cluster 901 (size 231), into 2 clusters 
+Splitting cluster 902 (size 231), into 2 clusters 
+Splitting cluster 903 (size 231), into 2 clusters 
+Splitting cluster 904 (size 230), into 2 clusters 
+Splitting cluster 905 (size 230), into 2 clusters 
+Splitting cluster 906 (size 230), into 2 clusters 
+Splitting cluster 907 (size 229), into 2 clusters 
+Splitting cluster 908 (size 229), into 2 clusters 
+Splitting cluster 909 (size 229), into 2 clusters 
+Splitting cluster 910 (size 228), into 2 clusters 
+Splitting cluster 911 (size 227), into 2 clusters 
+Splitting cluster 912 (size 227), into 2 clusters 
+Splitting cluster 913 (size 226), into 2 clusters 
+Splitting cluster 914 (size 225), into 2 clusters 
+Splitting cluster 915 (size 225), into 2 clusters 
+Splitting cluster 916 (size 225), into 2 clusters 
+Splitting cluster 917 (size 225), into 2 clusters 
+Splitting cluster 918 (size 225), into 2 clusters 
+Splitting cluster 919 (size 225), into 2 clusters 
+Splitting cluster 920 (size 225), into 2 clusters 
+Splitting cluster 921 (size 225), into 2 clusters 
+Splitting cluster 922 (size 224), into 2 clusters 
+Splitting cluster 923 (size 224), into 2 clusters 
+Splitting cluster 924 (size 224), into 2 clusters 
+Splitting cluster 925 (size 224), into 2 clusters 
+Splitting cluster 926 (size 224), into 2 clusters 
+Splitting cluster 927 (size 223), into 2 clusters 
+Splitting cluster 928 (size 223), into 2 clusters 
+Splitting cluster 929 (size 223), into 2 clusters 
+Splitting cluster 930 (size 223), into 2 clusters 
+Splitting cluster 931 (size 222), into 2 clusters 
+Splitting cluster 932 (size 222), into 2 clusters 
+Splitting cluster 933 (size 222), into 2 clusters 
+Splitting cluster 934 (size 222), into 2 clusters 
+Splitting cluster 935 (size 222), into 2 clusters 
+Splitting cluster 936 (size 221), into 2 clusters 
+Splitting cluster 937 (size 221), into 2 clusters 
+Splitting cluster 938 (size 221), into 2 clusters 
+Splitting cluster 939 (size 221), into 2 clusters 
+Splitting cluster 940 (size 220), into 2 clusters 
+Splitting cluster 941 (size 220), into 2 clusters 
+Splitting cluster 942 (size 220), into 2 clusters 
+Splitting cluster 943 (size 220), into 2 clusters 
+Splitting cluster 944 (size 220), into 2 clusters 
+Splitting cluster 945 (size 219), into 2 clusters 
+Splitting cluster 946 (size 219), into 2 clusters 
+Splitting cluster 947 (size 219), into 2 clusters 
+Splitting cluster 948 (size 219), into 2 clusters 
+Splitting cluster 949 (size 219), into 2 clusters 
+Splitting cluster 950 (size 219), into 2 clusters 
+Splitting cluster 951 (size 218), into 2 clusters 
+Splitting cluster 952 (size 218), into 2 clusters 
+Splitting cluster 953 (size 218), into 2 clusters 
+Splitting cluster 954 (size 218), into 2 clusters 
+Splitting cluster 955 (size 217), into 2 clusters 
+Splitting cluster 956 (size 217), into 2 clusters 
+Splitting cluster 957 (size 217), into 2 clusters 
+Splitting cluster 958 (size 217), into 2 clusters 
+Splitting cluster 959 (size 217), into 2 clusters 
+Splitting cluster 960 (size 217), into 2 clusters 
+Splitting cluster 961 (size 216), into 2 clusters 
+Splitting cluster 962 (size 216), into 2 clusters 
+Splitting cluster 963 (size 216), into 2 clusters 
+Splitting cluster 964 (size 216), into 2 clusters 
+Splitting cluster 965 (size 216), into 2 clusters 
+Splitting cluster 966 (size 215), into 2 clusters 
+Splitting cluster 967 (size 215), into 2 clusters 
+Splitting cluster 968 (size 215), into 2 clusters 
+Splitting cluster 969 (size 215), into 2 clusters 
+Splitting cluster 970 (size 215), into 2 clusters 
+Splitting cluster 971 (size 215), into 2 clusters 
+Splitting cluster 972 (size 214), into 2 clusters 
+Splitting cluster 973 (size 214), into 2 clusters 
+Splitting cluster 974 (size 214), into 2 clusters 
+Splitting cluster 975 (size 214), into 2 clusters 
+Splitting cluster 976 (size 214), into 2 clusters 
+Splitting cluster 977 (size 214), into 2 clusters 
+Splitting cluster 978 (size 214), into 2 clusters 
+Splitting cluster 979 (size 214), into 2 clusters 
+Splitting cluster 980 (size 213), into 2 clusters 
+Splitting cluster 981 (size 213), into 2 clusters 
+Splitting cluster 982 (size 213), into 2 clusters 
+Splitting cluster 983 (size 212), into 2 clusters 
+Splitting cluster 984 (size 212), into 2 clusters 
+Splitting cluster 985 (size 211), into 2 clusters 
+Splitting cluster 986 (size 211), into 2 clusters 
+Splitting cluster 987 (size 210), into 2 clusters 
+Splitting cluster 988 (size 210), into 2 clusters 
+Splitting cluster 989 (size 210), into 2 clusters 
+Splitting cluster 990 (size 210), into 2 clusters 
+Splitting cluster 991 (size 210), into 2 clusters 
+Splitting cluster 992 (size 210), into 2 clusters 
+Splitting cluster 993 (size 209), into 2 clusters 
+Splitting cluster 994 (size 209), into 2 clusters 
+Splitting cluster 995 (size 209), into 2 clusters 
+Splitting cluster 996 (size 209), into 2 clusters 
+Splitting cluster 997 (size 209), into 2 clusters 
+Splitting cluster 998 (size 208), into 2 clusters 
+Splitting cluster 999 (size 208), into 2 clusters 
+DOUBLE_KMEANS: After rebalancing, about to run second k-means with 1000 clusters
+DOUBLE_KMEANS: Rebalanced centroids size: 128000 (expected: 128000)
+DOUBLE_KMEANS: clustering2.centroids size before train: 128000
+DOUBLE_KMEANS: Second k-means complete, checking differences...
+DOUBLE_KMEANS: 1000/1000 centroids changed (avg L2 change: 35.629372)
+hard limit = 2000
+Warning: Cluster 342 has size 2125 greater than 2000
+Warning: Cluster 750 has size 2450 greater than 2000
+Warning: Cluster 751 has size 2045 greater than 2000
+Warning: Cluster 752 has size 2333 greater than 2000
+Warning: Cluster 753 has size 2500 greater than 2000
+Warning: Cluster 754 has size 2139 greater than 2000
+Warning: Cluster 756 has size 2105 greater than 2000
+
+=== AVERAGE CLUSTER SIZES BY SOURCE ===
+Original k-means (never rebalanced): 501 clusters, avg size = 952.45
+Rebalanced clusters (local k-means): 499 clusters, avg size = 1047.74
+Total clusters involved in rebalancing: 499 out of 1000
+Total oversized clusters (exceeding hard limit): 7
+<== EXITING: iter_reclusterInternalMegaCentroid (Duration: 2.896 seconds)
+
+
+==> ENTERING: iter_rebuild_cluster_maps_2
+<== EXITING: iter_rebuild_cluster_maps_2 (Duration: 0.099 seconds)
+
+
+==> ENTERING: iter_get_fixed_recall_2
+<== EXITING: iter_get_fixed_recall_2 (Duration: 0.001 seconds)
+
+
+==> ENTERING: iter_verify_recall_loop_2
+Query 0: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 0: GT vectors scattered across 40 L1 clusters, furthest L1 distance: 128933.631765, closest L1 distance: 79182.781937
+Query 0: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 103853.364870, closest L2 distance: 103853.364870
+Query 0: Recall: 95.000000%, distance computations: 74382, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.046 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 1: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 1: GT vectors scattered across 6 L1 clusters, furthest L1 distance: 100788.000403, closest L1 distance: 68042.595629
+Query 1: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 180135.333289, closest L2 distance: 180135.333289
+Query 1: Recall: 94.000000%, distance computations: 5400, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.049 seconds)
+
+<== EXITING: get_recall (Duration: 0.049 seconds)
+
+Query 2: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 2: GT vectors scattered across 14 L1 clusters, furthest L1 distance: 103782.575820, closest L1 distance: 46859.373997
+Query 2: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 119180.494253, closest L2 distance: 119180.494253
+Query 2: Recall: 95.000000%, distance computations: 11552, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.024 seconds)
+
+<== EXITING: get_recall (Duration: 0.024 seconds)
+
+Query 3: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 3: GT vectors scattered across 2 L1 clusters, furthest L1 distance: 38277.916140, closest L1 distance: 12229.501258
+Query 3: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136872.351465, closest L2 distance: 136872.351465
+Query 3: Recall: 99.000000%, distance computations: 2421, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.020 seconds)
+
+<== EXITING: get_recall (Duration: 0.020 seconds)
+
+Query 4: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 4: GT vectors scattered across 51 L1 clusters, furthest L1 distance: 142639.859506, closest L1 distance: 80791.841330
+Query 4: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 114795.397249, closest L2 distance: 114795.397249
+Query 4: Recall: 95.000000%, distance computations: 142615, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.040 seconds)
+
+<== EXITING: get_recall (Duration: 0.040 seconds)
+
+Query 5: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 5: GT vectors scattered across 3 L1 clusters, furthest L1 distance: 39727.820796, closest L1 distance: 22935.101468
+Query 5: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 122670.013236, closest L2 distance: 122670.013236
+Query 5: Recall: 99.000000%, distance computations: 5459, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.037 seconds)
+
+<== EXITING: get_recall (Duration: 0.037 seconds)
+
+Query 6: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 6: GT vectors scattered across 5 L1 clusters, furthest L1 distance: 58594.888303, closest L1 distance: 25510.299127
+Query 6: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136370.661554, closest L2 distance: 136370.661554
+Query 6: Recall: 96.000000%, distance computations: 5497, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.020 seconds)
+
+<== EXITING: get_recall (Duration: 0.020 seconds)
+
+Query 7: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 7: GT vectors scattered across 20 L1 clusters, furthest L1 distance: 155513.285614, closest L1 distance: 74594.956923
+Query 7: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143096.076049, closest L2 distance: 143096.076049
+Query 7: Recall: 95.000000%, distance computations: 27623, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.046 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 8: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 8: GT vectors scattered across 7 L1 clusters, furthest L1 distance: 84873.158498, closest L1 distance: 35501.394959
+Query 8: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 157678.969414, closest L2 distance: 157678.969414
+Query 8: Recall: 94.000000%, distance computations: 6445, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.028 seconds)
+
+<== EXITING: get_recall (Duration: 0.028 seconds)
+
+Query 9: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 9: GT vectors scattered across 19 L1 clusters, furthest L1 distance: 130335.834854, closest L1 distance: 70145.831145
+Query 9: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 125842.001974, closest L2 distance: 125842.001974
+Query 9: Recall: 95.000000%, distance computations: 24222, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.025 seconds)
+
+<== EXITING: get_recall (Duration: 0.025 seconds)
+
+Query 10: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 10: GT vectors scattered across 47 L1 clusters, furthest L1 distance: 142276.409988, closest L1 distance: 79819.571421
+Query 10: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 141406.392532, closest L2 distance: 141406.392532
+Query 10: Recall: 95.000000%, distance computations: 71239, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.030 seconds)
+
+<== EXITING: get_recall (Duration: 0.030 seconds)
+
+Query 11: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 11: GT vectors scattered across 13 L1 clusters, furthest L1 distance: 110207.530030, closest L1 distance: 65639.217348
+Query 11: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 137922.380259, closest L2 distance: 137922.380259
+Query 11: Recall: 96.000000%, distance computations: 10581, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.031 seconds)
+
+<== EXITING: get_recall (Duration: 0.031 seconds)
+
+Query 12: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 12: GT vectors scattered across 41 L1 clusters, furthest L1 distance: 214280.852708, closest L1 distance: 136901.982975
+Query 12: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 194119.981268, closest L2 distance: 194119.981268
+Query 12: Recall: 95.000000%, distance computations: 69802, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.031 seconds)
+
+<== EXITING: get_recall (Duration: 0.031 seconds)
+
+Query 13: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 13: GT vectors scattered across 34 L1 clusters, furthest L1 distance: 139753.619579, closest L1 distance: 82535.014978
+Query 13: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143733.878943, closest L2 distance: 143733.878943
+Query 13: Recall: 95.000000%, distance computations: 48035, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.026 seconds)
+
+<== EXITING: get_recall (Duration: 0.026 seconds)
+
+Query 14: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 14: GT vectors scattered across 10 L1 clusters, furthest L1 distance: 74331.396436, closest L1 distance: 46971.262951
+Query 14: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 121881.281629, closest L2 distance: 121881.281629
+Query 14: Recall: 95.000000%, distance computations: 10675, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.037 seconds)
+
+<== EXITING: get_recall (Duration: 0.037 seconds)
+
+Query 15: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 15: GT vectors scattered across 31 L1 clusters, furthest L1 distance: 154483.008320, closest L1 distance: 72939.047833
+Query 15: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136829.408812, closest L2 distance: 136829.408812
+Query 15: Recall: 95.000000%, distance computations: 43494, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.030 seconds)
+
+<== EXITING: get_recall (Duration: 0.030 seconds)
+
+Query 16: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 16: GT vectors scattered across 25 L1 clusters, furthest L1 distance: 120086.007077, closest L1 distance: 58992.504618
+Query 16: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 142976.000341, closest L2 distance: 142976.000341
+Query 16: Recall: 95.000000%, distance computations: 28502, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.042 seconds)
+
+<== EXITING: get_recall (Duration: 0.042 seconds)
+
+Query 17: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 17: GT vectors scattered across 21 L1 clusters, furthest L1 distance: 157861.448596, closest L1 distance: 81559.892172
+Query 17: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 167432.675554, closest L2 distance: 167432.675554
+Query 17: Recall: 95.000000%, distance computations: 23519, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.022 seconds)
+
+<== EXITING: get_recall (Duration: 0.022 seconds)
+
+Query 18: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 18: GT vectors scattered across 6 L1 clusters, furthest L1 distance: 78864.368211, closest L1 distance: 44641.310905
+Query 18: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 135365.807682, closest L2 distance: 135365.807682
+Query 18: Recall: 95.000000%, distance computations: 5159, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.045 seconds)
+
+<== EXITING: get_recall (Duration: 0.045 seconds)
+
+Query 19: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 19: GT vectors scattered across 23 L1 clusters, furthest L1 distance: 143118.929563, closest L1 distance: 84873.805918
+Query 19: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 159278.281546, closest L2 distance: 159278.281546
+Query 19: Recall: 95.000000%, distance computations: 22005, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.034 seconds)
+
+<== EXITING: get_recall (Duration: 0.034 seconds)
+
+Query 20: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 20: GT vectors scattered across 29 L1 clusters, furthest L1 distance: 156167.058487, closest L1 distance: 90010.925044
+Query 20: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 163144.805990, closest L2 distance: 163144.805990
+Query 20: Recall: 95.000000%, distance computations: 49427, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.039 seconds)
+
+<== EXITING: get_recall (Duration: 0.039 seconds)
+
+Query 21: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 21: GT vectors scattered across 17 L1 clusters, furthest L1 distance: 136692.283060, closest L1 distance: 81669.049025
+Query 21: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 117818.860061, closest L2 distance: 117818.860061
+Query 21: Recall: 95.000000%, distance computations: 17294, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.035 seconds)
+
+<== EXITING: get_recall (Duration: 0.035 seconds)
+
+Query 22: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 22: GT vectors scattered across 29 L1 clusters, furthest L1 distance: 127297.513283, closest L1 distance: 65675.256719
+Query 22: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 111317.268676, closest L2 distance: 111317.268676
+Query 22: Recall: 95.000000%, distance computations: 44779, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.028 seconds)
+
+<== EXITING: get_recall (Duration: 0.028 seconds)
+
+Query 23: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 23: GT vectors scattered across 46 L1 clusters, furthest L1 distance: 150889.036507, closest L1 distance: 101743.035595
+Query 23: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 126683.694253, closest L2 distance: 126683.694253
+Query 23: Recall: 95.000000%, distance computations: 104720, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.033 seconds)
+
+<== EXITING: get_recall (Duration: 0.033 seconds)
+
+Query 24: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 24: GT vectors scattered across 16 L1 clusters, furthest L1 distance: 133900.119215, closest L1 distance: 69449.241986
+Query 24: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 170583.757282, closest L2 distance: 170583.757282
+Query 24: Recall: 95.000000%, distance computations: 11900, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.020 seconds)
+
+<== EXITING: get_recall (Duration: 0.020 seconds)
+
+Query 25: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 25: GT vectors scattered across 30 L1 clusters, furthest L1 distance: 140935.640499, closest L1 distance: 63755.502564
+Query 25: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 111770.184980, closest L2 distance: 111770.184980
+Query 25: Recall: 95.000000%, distance computations: 41452, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.037 seconds)
+
+<== EXITING: get_recall (Duration: 0.037 seconds)
+
+Query 26: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 26: GT vectors scattered across 12 L1 clusters, furthest L1 distance: 120932.016614, closest L1 distance: 68890.922643
+Query 26: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 163620.451335, closest L2 distance: 163620.451335
+Query 26: Recall: 95.000000%, distance computations: 8290, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.025 seconds)
+
+<== EXITING: get_recall (Duration: 0.025 seconds)
+
+Query 27: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 27: GT vectors scattered across 34 L1 clusters, furthest L1 distance: 139295.110843, closest L1 distance: 75264.371778
+Query 27: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 134883.710203, closest L2 distance: 134883.710203
+Query 27: Recall: 95.000000%, distance computations: 77228, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.044 seconds)
+
+<== EXITING: get_recall (Duration: 0.044 seconds)
+
+Query 28: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 28: GT vectors scattered across 13 L1 clusters, furthest L1 distance: 147074.877050, closest L1 distance: 60973.641943
+Query 28: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 139829.888869, closest L2 distance: 139829.888869
+Query 28: Recall: 96.000000%, distance computations: 19330, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.045 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 29: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 29: GT vectors scattered across 16 L1 clusters, furthest L1 distance: 156974.533834, closest L1 distance: 101873.543025
+Query 29: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 173763.113875, closest L2 distance: 173763.113875
+Query 29: Recall: 94.000000%, distance computations: 18296, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.037 seconds)
+
+<== EXITING: get_recall (Duration: 0.037 seconds)
+
+<== EXITING: iter_verify_recall_loop_2 (Duration: 1.020 seconds)
+
+Average Recall: 95.266667, Average L2 probes: 1.00, Average L1 probes: 34.07, Average Distance Computations: 34378, Avg misassigned: 0.0%
+
+==> ENTERING: iter_save_cluster_sizes_histogram
+<== EXITING: iter_save_cluster_sizes_histogram (Duration: 0.000 seconds)
+
+
+========== Started Iteration: 1 ==========
+
+==> ENTERING: iter_store_save_scores
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 1
+ReclusteringIndex::saveOldScoreForMegaClusters
+<== EXITING: iter_store_save_scores (Duration: 0.004 seconds)
+
+
+==> ENTERING: iter_get_mega_mini_centroids
+<== EXITING: iter_get_mega_mini_centroids (Duration: 0.000 seconds)
+
+
+==> ENTERING: iter_reclusterAllMegaCentroids
+Reclustering only mega centroids with size 1
+<== EXITING: iter_reclusterAllMegaCentroids (Duration: 0.000 seconds)
+
+
+==> ENTERING: iter_store_scores_and_overlap
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 1
+ReclusteringIndex::printStats
+Number of mega clusters: 1, number of mini clusters: 1000
+L1 cluster size: Min: 556, Max: 2500, Avg: 1000
+L2 cluster size: Min: 1000, Max: 1000, Avg: 1000
+Number of mini clusters with bad silhouette score: 0 out of 1000
+Avg mega cluster score: 69036.468580
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 1 centroids: Min: 69036.468580, Max: 69036.468580, Avg: 69036.468580
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 1000 centroids: Min: 14183.526096, Max: 91402.289265, Avg: 69036.468580
+<== EXITING: iter_store_scores_and_overlap (Duration: 0.063 seconds)
+
+
+==> ENTERING: iter_reclusterInternalMegaCentroid
+Running reclusterInternalMegaCentroid on 0 with 1000000 vectors
+DOUBLE_KMEANS: Running FIRST k-means with 10 iterations on 750 clusters
+Splitting cluster 751 (size 809), into 3 clusters 
+Splitting cluster 752 (size 664), into 2 clusters 
+Splitting cluster 753 (size 655), into 2 clusters 
+Splitting cluster 754 (size 556), into 2 clusters 
+Splitting cluster 755 (size 503), into 2 clusters 
+Splitting cluster 756 (size 493), into 2 clusters 
+Splitting cluster 757 (size 484), into 2 clusters 
+Splitting cluster 758 (size 454), into 2 clusters 
+Splitting cluster 759 (size 443), into 2 clusters 
+Splitting cluster 760 (size 432), into 2 clusters 
+Splitting cluster 761 (size 423), into 2 clusters 
+Splitting cluster 762 (size 408), into 2 clusters 
+Splitting cluster 763 (size 402), into 2 clusters 
+Splitting cluster 764 (size 398), into 2 clusters 
+Splitting cluster 765 (size 386), into 2 clusters 
+Splitting cluster 766 (size 385), into 2 clusters 
+Splitting cluster 767 (size 381), into 2 clusters 
+Splitting cluster 768 (size 376), into 2 clusters 
+Splitting cluster 769 (size 372), into 2 clusters 
+Splitting cluster 770 (size 367), into 2 clusters 
+Splitting cluster 771 (size 365), into 2 clusters 
+Splitting cluster 772 (size 365), into 2 clusters 
+Splitting cluster 773 (size 357), into 2 clusters 
+Splitting cluster 774 (size 356), into 2 clusters 
+Splitting cluster 775 (size 345), into 2 clusters 
+Splitting cluster 776 (size 345), into 2 clusters 
+Splitting cluster 777 (size 345), into 2 clusters 
+Splitting cluster 778 (size 344), into 2 clusters 
+Splitting cluster 779 (size 341), into 2 clusters 
+Splitting cluster 780 (size 333), into 2 clusters 
+Splitting cluster 781 (size 332), into 2 clusters 
+Splitting cluster 782 (size 329), into 2 clusters 
+Splitting cluster 783 (size 328), into 2 clusters 
+Splitting cluster 784 (size 327), into 2 clusters 
+Splitting cluster 785 (size 323), into 2 clusters 
+Splitting cluster 786 (size 322), into 2 clusters 
+Splitting cluster 787 (size 319), into 2 clusters 
+Splitting cluster 788 (size 318), into 2 clusters 
+Splitting cluster 789 (size 317), into 2 clusters 
+Splitting cluster 790 (size 316), into 2 clusters 
+Splitting cluster 791 (size 315), into 2 clusters 
+Splitting cluster 792 (size 313), into 2 clusters 
+Splitting cluster 793 (size 310), into 2 clusters 
+Splitting cluster 794 (size 308), into 2 clusters 
+Splitting cluster 795 (size 308), into 2 clusters 
+Splitting cluster 796 (size 306), into 2 clusters 
+Splitting cluster 797 (size 305), into 2 clusters 
+Splitting cluster 798 (size 304), into 2 clusters 
+Splitting cluster 799 (size 302), into 2 clusters 
+Splitting cluster 800 (size 302), into 2 clusters 
+Splitting cluster 801 (size 299), into 2 clusters 
+Splitting cluster 802 (size 297), into 2 clusters 
+Splitting cluster 803 (size 297), into 2 clusters 
+Splitting cluster 804 (size 295), into 2 clusters 
+Splitting cluster 805 (size 293), into 2 clusters 
+Splitting cluster 806 (size 292), into 2 clusters 
+Splitting cluster 807 (size 292), into 2 clusters 
+Splitting cluster 808 (size 292), into 2 clusters 
+Splitting cluster 809 (size 291), into 2 clusters 
+Splitting cluster 810 (size 288), into 2 clusters 
+Splitting cluster 811 (size 286), into 2 clusters 
+Splitting cluster 812 (size 282), into 2 clusters 
+Splitting cluster 813 (size 282), into 2 clusters 
+Splitting cluster 814 (size 281), into 2 clusters 
+Splitting cluster 815 (size 281), into 2 clusters 
+Splitting cluster 816 (size 281), into 2 clusters 
+Splitting cluster 817 (size 279), into 2 clusters 
+Splitting cluster 818 (size 278), into 2 clusters 
+Splitting cluster 819 (size 277), into 2 clusters 
+Splitting cluster 820 (size 277), into 2 clusters 
+Splitting cluster 821 (size 276), into 2 clusters 
+Splitting cluster 822 (size 275), into 2 clusters 
+Splitting cluster 823 (size 275), into 2 clusters 
+Splitting cluster 824 (size 274), into 2 clusters 
+Splitting cluster 825 (size 273), into 2 clusters 
+Splitting cluster 826 (size 273), into 2 clusters 
+Splitting cluster 827 (size 272), into 2 clusters 
+Splitting cluster 828 (size 272), into 2 clusters 
+Splitting cluster 829 (size 272), into 2 clusters 
+Splitting cluster 830 (size 271), into 2 clusters 
+Splitting cluster 831 (size 271), into 2 clusters 
+Splitting cluster 832 (size 270), into 2 clusters 
+Splitting cluster 833 (size 270), into 2 clusters 
+Splitting cluster 834 (size 270), into 2 clusters 
+Splitting cluster 835 (size 269), into 2 clusters 
+Splitting cluster 836 (size 269), into 2 clusters 
+Splitting cluster 837 (size 268), into 2 clusters 
+Splitting cluster 838 (size 265), into 2 clusters 
+Splitting cluster 839 (size 264), into 2 clusters 
+Splitting cluster 840 (size 264), into 2 clusters 
+Splitting cluster 841 (size 264), into 2 clusters 
+Splitting cluster 842 (size 264), into 2 clusters 
+Splitting cluster 843 (size 261), into 2 clusters 
+Splitting cluster 844 (size 261), into 2 clusters 
+Splitting cluster 845 (size 260), into 2 clusters 
+Splitting cluster 846 (size 258), into 2 clusters 
+Splitting cluster 847 (size 258), into 2 clusters 
+Splitting cluster 848 (size 257), into 2 clusters 
+Splitting cluster 849 (size 257), into 2 clusters 
+Splitting cluster 850 (size 256), into 2 clusters 
+Splitting cluster 851 (size 254), into 2 clusters 
+Splitting cluster 852 (size 254), into 2 clusters 
+Splitting cluster 853 (size 253), into 2 clusters 
+Splitting cluster 854 (size 253), into 2 clusters 
+Splitting cluster 855 (size 252), into 2 clusters 
+Splitting cluster 856 (size 251), into 2 clusters 
+Splitting cluster 857 (size 251), into 2 clusters 
+Splitting cluster 858 (size 250), into 2 clusters 
+Splitting cluster 859 (size 249), into 2 clusters 
+Splitting cluster 860 (size 249), into 2 clusters 
+Splitting cluster 861 (size 248), into 2 clusters 
+Splitting cluster 862 (size 248), into 2 clusters 
+Splitting cluster 863 (size 248), into 2 clusters 
+Splitting cluster 864 (size 247), into 2 clusters 
+Splitting cluster 865 (size 246), into 2 clusters 
+Splitting cluster 866 (size 246), into 2 clusters 
+Splitting cluster 867 (size 245), into 2 clusters 
+Splitting cluster 868 (size 244), into 2 clusters 
+Splitting cluster 869 (size 244), into 2 clusters 
+Splitting cluster 870 (size 244), into 2 clusters 
+Splitting cluster 871 (size 244), into 2 clusters 
+Splitting cluster 872 (size 243), into 2 clusters 
+Splitting cluster 873 (size 243), into 2 clusters 
+Splitting cluster 874 (size 243), into 2 clusters 
+Splitting cluster 875 (size 242), into 2 clusters 
+Splitting cluster 876 (size 242), into 2 clusters 
+Splitting cluster 877 (size 241), into 2 clusters 
+Splitting cluster 878 (size 241), into 2 clusters 
+Splitting cluster 879 (size 240), into 2 clusters 
+Splitting cluster 880 (size 240), into 2 clusters 
+Splitting cluster 881 (size 240), into 2 clusters 
+Splitting cluster 882 (size 240), into 2 clusters 
+Splitting cluster 883 (size 238), into 2 clusters 
+Splitting cluster 884 (size 238), into 2 clusters 
+Splitting cluster 885 (size 238), into 2 clusters 
+Splitting cluster 886 (size 237), into 2 clusters 
+Splitting cluster 887 (size 236), into 2 clusters 
+Splitting cluster 888 (size 236), into 2 clusters 
+Splitting cluster 889 (size 236), into 2 clusters 
+Splitting cluster 890 (size 236), into 2 clusters 
+Splitting cluster 891 (size 235), into 2 clusters 
+Splitting cluster 892 (size 235), into 2 clusters 
+Splitting cluster 893 (size 235), into 2 clusters 
+Splitting cluster 894 (size 234), into 2 clusters 
+Splitting cluster 895 (size 234), into 2 clusters 
+Splitting cluster 896 (size 234), into 2 clusters 
+Splitting cluster 897 (size 233), into 2 clusters 
+Splitting cluster 898 (size 233), into 2 clusters 
+Splitting cluster 899 (size 233), into 2 clusters 
+Splitting cluster 900 (size 232), into 2 clusters 
+Splitting cluster 901 (size 232), into 2 clusters 
+Splitting cluster 902 (size 232), into 2 clusters 
+Splitting cluster 903 (size 232), into 2 clusters 
+Splitting cluster 904 (size 232), into 2 clusters 
+Splitting cluster 905 (size 232), into 2 clusters 
+Splitting cluster 906 (size 232), into 2 clusters 
+Splitting cluster 907 (size 231), into 2 clusters 
+Splitting cluster 908 (size 231), into 2 clusters 
+Splitting cluster 909 (size 230), into 2 clusters 
+Splitting cluster 910 (size 230), into 2 clusters 
+Splitting cluster 911 (size 230), into 2 clusters 
+Splitting cluster 912 (size 230), into 2 clusters 
+Splitting cluster 913 (size 229), into 2 clusters 
+Splitting cluster 914 (size 228), into 2 clusters 
+Splitting cluster 915 (size 228), into 2 clusters 
+Splitting cluster 916 (size 227), into 2 clusters 
+Splitting cluster 917 (size 227), into 2 clusters 
+Splitting cluster 918 (size 227), into 2 clusters 
+Splitting cluster 919 (size 226), into 2 clusters 
+Splitting cluster 920 (size 226), into 2 clusters 
+Splitting cluster 921 (size 225), into 2 clusters 
+Splitting cluster 922 (size 225), into 2 clusters 
+Splitting cluster 923 (size 224), into 2 clusters 
+Splitting cluster 924 (size 224), into 2 clusters 
+Splitting cluster 925 (size 224), into 2 clusters 
+Splitting cluster 926 (size 223), into 2 clusters 
+Splitting cluster 927 (size 223), into 2 clusters 
+Splitting cluster 928 (size 222), into 2 clusters 
+Splitting cluster 929 (size 222), into 2 clusters 
+Splitting cluster 930 (size 221), into 2 clusters 
+Splitting cluster 931 (size 221), into 2 clusters 
+Splitting cluster 932 (size 221), into 2 clusters 
+Splitting cluster 933 (size 220), into 2 clusters 
+Splitting cluster 934 (size 220), into 2 clusters 
+Splitting cluster 935 (size 220), into 2 clusters 
+Splitting cluster 936 (size 220), into 2 clusters 
+Splitting cluster 937 (size 219), into 2 clusters 
+Splitting cluster 938 (size 219), into 2 clusters 
+Splitting cluster 939 (size 219), into 2 clusters 
+Splitting cluster 940 (size 219), into 2 clusters 
+Splitting cluster 941 (size 218), into 2 clusters 
+Splitting cluster 942 (size 218), into 2 clusters 
+Splitting cluster 943 (size 217), into 2 clusters 
+Splitting cluster 944 (size 217), into 2 clusters 
+Splitting cluster 945 (size 217), into 2 clusters 
+Splitting cluster 946 (size 217), into 2 clusters 
+Splitting cluster 947 (size 217), into 2 clusters 
+Splitting cluster 948 (size 217), into 2 clusters 
+Splitting cluster 949 (size 216), into 2 clusters 
+Splitting cluster 950 (size 216), into 2 clusters 
+Splitting cluster 951 (size 216), into 2 clusters 
+Splitting cluster 952 (size 216), into 2 clusters 
+Splitting cluster 953 (size 216), into 2 clusters 
+Splitting cluster 954 (size 216), into 2 clusters 
+Splitting cluster 955 (size 216), into 2 clusters 
+Splitting cluster 956 (size 215), into 2 clusters 
+Splitting cluster 957 (size 215), into 2 clusters 
+Splitting cluster 958 (size 215), into 2 clusters 
+Splitting cluster 959 (size 214), into 2 clusters 
+Splitting cluster 960 (size 214), into 2 clusters 
+Splitting cluster 961 (size 214), into 2 clusters 
+Splitting cluster 962 (size 214), into 2 clusters 
+Splitting cluster 963 (size 213), into 2 clusters 
+Splitting cluster 964 (size 213), into 2 clusters 
+Splitting cluster 965 (size 212), into 2 clusters 
+Splitting cluster 966 (size 212), into 2 clusters 
+Splitting cluster 967 (size 212), into 2 clusters 
+Splitting cluster 968 (size 211), into 2 clusters 
+Splitting cluster 969 (size 211), into 2 clusters 
+Splitting cluster 970 (size 211), into 2 clusters 
+Splitting cluster 971 (size 211), into 2 clusters 
+Splitting cluster 972 (size 211), into 2 clusters 
+Splitting cluster 973 (size 210), into 2 clusters 
+Splitting cluster 974 (size 210), into 2 clusters 
+Splitting cluster 975 (size 210), into 2 clusters 
+Splitting cluster 976 (size 210), into 2 clusters 
+Splitting cluster 977 (size 209), into 2 clusters 
+Splitting cluster 978 (size 209), into 2 clusters 
+Splitting cluster 979 (size 209), into 2 clusters 
+Splitting cluster 980 (size 209), into 2 clusters 
+Splitting cluster 981 (size 209), into 2 clusters 
+Splitting cluster 982 (size 209), into 2 clusters 
+Splitting cluster 983 (size 209), into 2 clusters 
+Splitting cluster 984 (size 209), into 2 clusters 
+Splitting cluster 985 (size 208), into 2 clusters 
+Splitting cluster 986 (size 208), into 2 clusters 
+Splitting cluster 987 (size 208), into 2 clusters 
+Splitting cluster 988 (size 208), into 2 clusters 
+Splitting cluster 989 (size 207), into 2 clusters 
+Splitting cluster 990 (size 207), into 2 clusters 
+Splitting cluster 991 (size 207), into 2 clusters 
+Splitting cluster 992 (size 207), into 2 clusters 
+Splitting cluster 993 (size 207), into 2 clusters 
+Splitting cluster 994 (size 207), into 2 clusters 
+Splitting cluster 995 (size 206), into 2 clusters 
+Splitting cluster 996 (size 206), into 2 clusters 
+Splitting cluster 997 (size 206), into 2 clusters 
+Splitting cluster 998 (size 206), into 2 clusters 
+Splitting cluster 999 (size 206), into 2 clusters 
+DOUBLE_KMEANS: After rebalancing, about to run second k-means with 1000 clusters
+DOUBLE_KMEANS: Rebalanced centroids size: 128000 (expected: 128000)
+DOUBLE_KMEANS: clustering2.centroids size before train: 128000
+DOUBLE_KMEANS: Second k-means complete, checking differences...
+DOUBLE_KMEANS: 1000/1000 centroids changed (avg L2 change: 35.935373)
+hard limit = 2000
+Warning: Cluster 739 has size 2234 greater than 2000
+Warning: Cluster 750 has size 2371 greater than 2000
+Warning: Cluster 753 has size 2074 greater than 2000
+Warning: Cluster 754 has size 2435 greater than 2000
+
+=== AVERAGE CLUSTER SIZES BY SOURCE ===
+Original k-means (never rebalanced): 501 clusters, avg size = 957.34
+Rebalanced clusters (local k-means): 499 clusters, avg size = 1042.83
+Total clusters involved in rebalancing: 499 out of 1000
+Total oversized clusters (exceeding hard limit): 4
+<== EXITING: iter_reclusterInternalMegaCentroid (Duration: 2.863 seconds)
+
+
+==> ENTERING: iter_rebuild_cluster_maps_2
+<== EXITING: iter_rebuild_cluster_maps_2 (Duration: 0.092 seconds)
+
+
+==> ENTERING: iter_get_fixed_recall_2
+<== EXITING: iter_get_fixed_recall_2 (Duration: 0.001 seconds)
+
+
+==> ENTERING: iter_verify_recall_loop_2
+Query 0: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 0: GT vectors scattered across 38 L1 clusters, furthest L1 distance: 127447.465873, closest L1 distance: 78477.914136
+Query 0: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 103279.734112, closest L2 distance: 103279.734112
+Query 0: Recall: 95.000000%, distance computations: 77347, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.046 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 1: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 1: GT vectors scattered across 17 L1 clusters, furthest L1 distance: 122351.964497, closest L1 distance: 78352.442228
+Query 1: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 180498.658216, closest L2 distance: 180498.658216
+Query 1: Recall: 95.000000%, distance computations: 17026, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.036 seconds)
+
+<== EXITING: get_recall (Duration: 0.036 seconds)
+
+Query 2: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 2: GT vectors scattered across 9 L1 clusters, furthest L1 distance: 94975.117242, closest L1 distance: 54210.302209
+Query 2: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 119230.812216, closest L2 distance: 119230.812216
+Query 2: Recall: 98.000000%, distance computations: 8080, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.045 seconds)
+
+<== EXITING: get_recall (Duration: 0.045 seconds)
+
+Query 3: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 3: GT vectors scattered across 3 L1 clusters, furthest L1 distance: 32946.635534, closest L1 distance: 12942.090099
+Query 3: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 137353.385438, closest L2 distance: 137353.385438
+Query 3: Recall: 95.000000%, distance computations: 3660, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.048 seconds)
+
+<== EXITING: get_recall (Duration: 0.048 seconds)
+
+Query 4: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 4: GT vectors scattered across 60 L1 clusters, furthest L1 distance: 159848.220623, closest L1 distance: 84138.735561
+Query 4: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 114835.092650, closest L2 distance: 114835.092650
+Query 4: Recall: 95.000000%, distance computations: 166943, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.043 seconds)
+
+<== EXITING: get_recall (Duration: 0.043 seconds)
+
+Query 5: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 5: GT vectors scattered across 4 L1 clusters, furthest L1 distance: 38739.409282, closest L1 distance: 22421.771995
+Query 5: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 123216.018744, closest L2 distance: 123216.018744
+Query 5: Recall: 94.000000%, distance computations: 5606, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.046 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 6: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 6: GT vectors scattered across 10 L1 clusters, furthest L1 distance: 73746.233173, closest L1 distance: 43293.074414
+Query 6: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136461.337189, closest L2 distance: 136461.337189
+Query 6: Recall: 96.000000%, distance computations: 13160, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.048 seconds)
+
+<== EXITING: get_recall (Duration: 0.048 seconds)
+
+Query 7: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 7: GT vectors scattered across 27 L1 clusters, furthest L1 distance: 144256.359887, closest L1 distance: 91440.823072
+Query 7: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143020.866118, closest L2 distance: 143020.866118
+Query 7: Recall: 95.000000%, distance computations: 35432, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.035 seconds)
+
+<== EXITING: get_recall (Duration: 0.035 seconds)
+
+Query 8: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 8: GT vectors scattered across 11 L1 clusters, furthest L1 distance: 90023.041359, closest L1 distance: 46277.959822
+Query 8: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 157473.650484, closest L2 distance: 157473.650484
+Query 8: Recall: 94.000000%, distance computations: 8833, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.033 seconds)
+
+<== EXITING: get_recall (Duration: 0.033 seconds)
+
+Query 9: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 9: GT vectors scattered across 20 L1 clusters, furthest L1 distance: 120550.232574, closest L1 distance: 72584.493409
+Query 9: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 125539.986080, closest L2 distance: 125539.986080
+Query 9: Recall: 95.000000%, distance computations: 19598, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.041 seconds)
+
+<== EXITING: get_recall (Duration: 0.041 seconds)
+
+Query 10: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 10: GT vectors scattered across 40 L1 clusters, furthest L1 distance: 148578.840663, closest L1 distance: 88726.259123
+Query 10: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 141739.173618, closest L2 distance: 141739.173618
+Query 10: Recall: 95.000000%, distance computations: 86358, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.033 seconds)
+
+<== EXITING: get_recall (Duration: 0.033 seconds)
+
+Query 11: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 11: GT vectors scattered across 17 L1 clusters, furthest L1 distance: 125378.827654, closest L1 distance: 61058.760504
+Query 11: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 138247.583828, closest L2 distance: 138247.583828
+Query 11: Recall: 95.000000%, distance computations: 18262, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.033 seconds)
+
+<== EXITING: get_recall (Duration: 0.033 seconds)
+
+Query 12: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 12: GT vectors scattered across 32 L1 clusters, furthest L1 distance: 225932.282993, closest L1 distance: 119586.229954
+Query 12: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 194203.303845, closest L2 distance: 194203.303845
+Query 12: Recall: 95.000000%, distance computations: 84614, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.030 seconds)
+
+<== EXITING: get_recall (Duration: 0.030 seconds)
+
+Query 13: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 13: GT vectors scattered across 23 L1 clusters, furthest L1 distance: 142697.299012, closest L1 distance: 68335.983850
+Query 13: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 144007.753085, closest L2 distance: 144007.753085
+Query 13: Recall: 95.000000%, distance computations: 26730, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.031 seconds)
+
+<== EXITING: get_recall (Duration: 0.031 seconds)
+
+Query 14: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 14: GT vectors scattered across 10 L1 clusters, furthest L1 distance: 67054.640272, closest L1 distance: 33966.129778
+Query 14: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 122060.249367, closest L2 distance: 122060.249367
+Query 14: Recall: 95.000000%, distance computations: 8147, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.027 seconds)
+
+<== EXITING: get_recall (Duration: 0.027 seconds)
+
+Query 15: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 15: GT vectors scattered across 30 L1 clusters, furthest L1 distance: 138121.589062, closest L1 distance: 83573.805939
+Query 15: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 135936.746086, closest L2 distance: 135936.746086
+Query 15: Recall: 94.000000%, distance computations: 41482, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.028 seconds)
+
+<== EXITING: get_recall (Duration: 0.028 seconds)
+
+Query 16: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 16: GT vectors scattered across 18 L1 clusters, furthest L1 distance: 114097.154733, closest L1 distance: 71105.701625
+Query 16: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143086.320335, closest L2 distance: 143086.320335
+Query 16: Recall: 95.000000%, distance computations: 16735, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.027 seconds)
+
+<== EXITING: get_recall (Duration: 0.027 seconds)
+
+Query 17: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 17: GT vectors scattered across 17 L1 clusters, furthest L1 distance: 165553.272049, closest L1 distance: 61667.405677
+Query 17: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 167503.342088, closest L2 distance: 167503.342088
+Query 17: Recall: 96.000000%, distance computations: 35311, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.025 seconds)
+
+<== EXITING: get_recall (Duration: 0.025 seconds)
+
+Query 18: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 18: GT vectors scattered across 7 L1 clusters, furthest L1 distance: 74456.260920, closest L1 distance: 31586.957193
+Query 18: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 135779.960985, closest L2 distance: 135779.960985
+Query 18: Recall: 95.000000%, distance computations: 5146, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.027 seconds)
+
+<== EXITING: get_recall (Duration: 0.027 seconds)
+
+Query 19: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 19: GT vectors scattered across 29 L1 clusters, furthest L1 distance: 152787.179271, closest L1 distance: 78429.719142
+Query 19: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 159543.056092, closest L2 distance: 159543.056092
+Query 19: Recall: 95.000000%, distance computations: 38458, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.042 seconds)
+
+<== EXITING: get_recall (Duration: 0.042 seconds)
+
+Query 20: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 20: GT vectors scattered across 30 L1 clusters, furthest L1 distance: 154257.962281, closest L1 distance: 85066.783203
+Query 20: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 162817.280115, closest L2 distance: 162817.280115
+Query 20: Recall: 95.000000%, distance computations: 53803, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.043 seconds)
+
+<== EXITING: get_recall (Duration: 0.043 seconds)
+
+Query 21: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 21: GT vectors scattered across 12 L1 clusters, furthest L1 distance: 132176.915526, closest L1 distance: 64442.616195
+Query 21: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 117701.311488, closest L2 distance: 117701.311488
+Query 21: Recall: 95.000000%, distance computations: 9466, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.037 seconds)
+
+<== EXITING: get_recall (Duration: 0.037 seconds)
+
+Query 22: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 22: GT vectors scattered across 34 L1 clusters, furthest L1 distance: 122878.250963, closest L1 distance: 71383.165906
+Query 22: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 111647.384138, closest L2 distance: 111647.384138
+Query 22: Recall: 95.000000%, distance computations: 48966, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.026 seconds)
+
+<== EXITING: get_recall (Duration: 0.026 seconds)
+
+Query 23: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 23: GT vectors scattered across 38 L1 clusters, furthest L1 distance: 151969.439935, closest L1 distance: 101199.610855
+Query 23: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 126684.130902, closest L2 distance: 126684.130902
+Query 23: Recall: 94.000000%, distance computations: 90827, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.030 seconds)
+
+<== EXITING: get_recall (Duration: 0.030 seconds)
+
+Query 24: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 24: GT vectors scattered across 18 L1 clusters, furthest L1 distance: 136603.642577, closest L1 distance: 81005.073142
+Query 24: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 170717.406995, closest L2 distance: 170717.406995
+Query 24: Recall: 95.000000%, distance computations: 21082, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.028 seconds)
+
+<== EXITING: get_recall (Duration: 0.028 seconds)
+
+Query 25: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 25: GT vectors scattered across 30 L1 clusters, furthest L1 distance: 141426.794477, closest L1 distance: 74888.258627
+Query 25: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 111772.265103, closest L2 distance: 111772.265103
+Query 25: Recall: 95.000000%, distance computations: 70267, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.042 seconds)
+
+<== EXITING: get_recall (Duration: 0.042 seconds)
+
+Query 26: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 26: GT vectors scattered across 15 L1 clusters, furthest L1 distance: 117926.018672, closest L1 distance: 58908.173265
+Query 26: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 164152.730631, closest L2 distance: 164152.730631
+Query 26: Recall: 94.000000%, distance computations: 11695, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.027 seconds)
+
+<== EXITING: get_recall (Duration: 0.027 seconds)
+
+Query 27: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 27: GT vectors scattered across 30 L1 clusters, furthest L1 distance: 127367.212989, closest L1 distance: 61941.626380
+Query 27: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 134660.593066, closest L2 distance: 134660.593066
+Query 27: Recall: 95.000000%, distance computations: 64351, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.041 seconds)
+
+<== EXITING: get_recall (Duration: 0.041 seconds)
+
+Query 28: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 28: GT vectors scattered across 18 L1 clusters, furthest L1 distance: 128174.773889, closest L1 distance: 60513.870094
+Query 28: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 138905.998448, closest L2 distance: 138905.998448
+Query 28: Recall: 95.000000%, distance computations: 25687, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.046 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 29: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 29: GT vectors scattered across 17 L1 clusters, furthest L1 distance: 185496.883416, closest L1 distance: 82364.427780
+Query 29: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 173808.161982, closest L2 distance: 173808.161982
+Query 29: Recall: 95.000000%, distance computations: 23558, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.036 seconds)
+
+<== EXITING: get_recall (Duration: 0.036 seconds)
+
+<== EXITING: iter_verify_recall_loop_2 (Duration: 1.097 seconds)
+
+Average Recall: 95.000000, Average L2 probes: 1.00, Average L1 probes: 37.57, Average Distance Computations: 37887, Avg misassigned: 0.0%
+
+==> ENTERING: iter_save_cluster_sizes_histogram
+<== EXITING: iter_save_cluster_sizes_histogram (Duration: 0.000 seconds)
+
+
+========== Started Iteration: 2 ==========
+
+==> ENTERING: iter_store_save_scores
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 1
+ReclusteringIndex::saveOldScoreForMegaClusters
+<== EXITING: iter_store_save_scores (Duration: 0.004 seconds)
+
+
+==> ENTERING: iter_get_mega_mini_centroids
+<== EXITING: iter_get_mega_mini_centroids (Duration: 0.000 seconds)
+
+
+==> ENTERING: iter_reclusterAllMegaCentroids
+Reclustering only mega centroids with size 1
+<== EXITING: iter_reclusterAllMegaCentroids (Duration: 0.000 seconds)
+
+
+==> ENTERING: iter_store_scores_and_overlap
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 1
+ReclusteringIndex::printStats
+Number of mega clusters: 1, number of mini clusters: 1000
+L1 cluster size: Min: 452, Max: 2435, Avg: 1000
+L2 cluster size: Min: 1000, Max: 1000, Avg: 1000
+Number of mini clusters with bad silhouette score: 0 out of 1000
+Avg mega cluster score: 68896.280526
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 1 centroids: Min: 68896.280526, Max: 68896.280526, Avg: 68896.280526
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 1000 centroids: Min: 14036.345053, Max: 90727.668316, Avg: 68896.280526
+<== EXITING: iter_store_scores_and_overlap (Duration: 0.064 seconds)
+
+
+==> ENTERING: iter_reclusterInternalMegaCentroid
+Running reclusterInternalMegaCentroid on 0 with 1000000 vectors
+DOUBLE_KMEANS: Running FIRST k-means with 10 iterations on 750 clusters
+Splitting cluster 750 (size 740), into 2 clusters 
+Splitting cluster 751 (size 615), into 2 clusters 
+Splitting cluster 752 (size 587), into 2 clusters 
+Splitting cluster 753 (size 585), into 2 clusters 
+Splitting cluster 754 (size 571), into 2 clusters 
+Splitting cluster 755 (size 541), into 2 clusters 
+Splitting cluster 756 (size 501), into 2 clusters 
+Splitting cluster 757 (size 495), into 2 clusters 
+Splitting cluster 758 (size 478), into 2 clusters 
+Splitting cluster 759 (size 464), into 2 clusters 
+Splitting cluster 760 (size 463), into 2 clusters 
+Splitting cluster 761 (size 460), into 2 clusters 
+Splitting cluster 762 (size 432), into 2 clusters 
+Splitting cluster 763 (size 423), into 2 clusters 
+Splitting cluster 764 (size 422), into 2 clusters 
+Splitting cluster 765 (size 411), into 2 clusters 
+Splitting cluster 766 (size 404), into 2 clusters 
+Splitting cluster 767 (size 388), into 2 clusters 
+Splitting cluster 768 (size 387), into 2 clusters 
+Splitting cluster 769 (size 368), into 2 clusters 
+Splitting cluster 770 (size 365), into 2 clusters 
+Splitting cluster 771 (size 365), into 2 clusters 
+Splitting cluster 772 (size 360), into 2 clusters 
+Splitting cluster 773 (size 358), into 2 clusters 
+Splitting cluster 774 (size 357), into 2 clusters 
+Splitting cluster 775 (size 356), into 2 clusters 
+Splitting cluster 776 (size 352), into 2 clusters 
+Splitting cluster 777 (size 350), into 2 clusters 
+Splitting cluster 778 (size 345), into 2 clusters 
+Splitting cluster 779 (size 338), into 2 clusters 
+Splitting cluster 780 (size 336), into 2 clusters 
+Splitting cluster 781 (size 336), into 2 clusters 
+Splitting cluster 782 (size 330), into 2 clusters 
+Splitting cluster 783 (size 327), into 2 clusters 
+Splitting cluster 784 (size 327), into 2 clusters 
+Splitting cluster 785 (size 325), into 2 clusters 
+Splitting cluster 786 (size 322), into 2 clusters 
+Splitting cluster 787 (size 321), into 2 clusters 
+Splitting cluster 788 (size 321), into 2 clusters 
+Splitting cluster 789 (size 319), into 2 clusters 
+Splitting cluster 790 (size 316), into 2 clusters 
+Splitting cluster 791 (size 313), into 2 clusters 
+Splitting cluster 792 (size 312), into 2 clusters 
+Splitting cluster 793 (size 312), into 2 clusters 
+Splitting cluster 794 (size 312), into 2 clusters 
+Splitting cluster 795 (size 312), into 2 clusters 
+Splitting cluster 796 (size 309), into 2 clusters 
+Splitting cluster 797 (size 308), into 2 clusters 
+Splitting cluster 798 (size 308), into 2 clusters 
+Splitting cluster 799 (size 306), into 2 clusters 
+Splitting cluster 800 (size 305), into 2 clusters 
+Splitting cluster 801 (size 304), into 2 clusters 
+Splitting cluster 802 (size 300), into 2 clusters 
+Splitting cluster 803 (size 299), into 2 clusters 
+Splitting cluster 804 (size 298), into 2 clusters 
+Splitting cluster 805 (size 295), into 2 clusters 
+Splitting cluster 806 (size 295), into 2 clusters 
+Splitting cluster 807 (size 291), into 2 clusters 
+Splitting cluster 808 (size 291), into 2 clusters 
+Splitting cluster 809 (size 290), into 2 clusters 
+Splitting cluster 810 (size 289), into 2 clusters 
+Splitting cluster 811 (size 289), into 2 clusters 
+Splitting cluster 812 (size 287), into 2 clusters 
+Splitting cluster 813 (size 285), into 2 clusters 
+Splitting cluster 814 (size 285), into 2 clusters 
+Splitting cluster 815 (size 284), into 2 clusters 
+Splitting cluster 816 (size 283), into 2 clusters 
+Splitting cluster 817 (size 281), into 2 clusters 
+Splitting cluster 818 (size 280), into 2 clusters 
+Splitting cluster 819 (size 279), into 2 clusters 
+Splitting cluster 820 (size 278), into 2 clusters 
+Splitting cluster 821 (size 278), into 2 clusters 
+Splitting cluster 822 (size 278), into 2 clusters 
+Splitting cluster 823 (size 277), into 2 clusters 
+Splitting cluster 824 (size 276), into 2 clusters 
+Splitting cluster 825 (size 276), into 2 clusters 
+Splitting cluster 826 (size 275), into 2 clusters 
+Splitting cluster 827 (size 274), into 2 clusters 
+Splitting cluster 828 (size 273), into 2 clusters 
+Splitting cluster 829 (size 271), into 2 clusters 
+Splitting cluster 830 (size 270), into 2 clusters 
+Splitting cluster 831 (size 269), into 2 clusters 
+Splitting cluster 832 (size 269), into 2 clusters 
+Splitting cluster 833 (size 268), into 2 clusters 
+Splitting cluster 834 (size 266), into 2 clusters 
+Splitting cluster 835 (size 266), into 2 clusters 
+Splitting cluster 836 (size 264), into 2 clusters 
+Splitting cluster 837 (size 263), into 2 clusters 
+Splitting cluster 838 (size 263), into 2 clusters 
+Splitting cluster 839 (size 262), into 2 clusters 
+Splitting cluster 840 (size 262), into 2 clusters 
+Splitting cluster 841 (size 261), into 2 clusters 
+Splitting cluster 842 (size 259), into 2 clusters 
+Splitting cluster 843 (size 258), into 2 clusters 
+Splitting cluster 844 (size 257), into 2 clusters 
+Splitting cluster 845 (size 257), into 2 clusters 
+Splitting cluster 846 (size 257), into 2 clusters 
+Splitting cluster 847 (size 257), into 2 clusters 
+Splitting cluster 848 (size 257), into 2 clusters 
+Splitting cluster 849 (size 256), into 2 clusters 
+Splitting cluster 850 (size 255), into 2 clusters 
+Splitting cluster 851 (size 255), into 2 clusters 
+Splitting cluster 852 (size 255), into 2 clusters 
+Splitting cluster 853 (size 255), into 2 clusters 
+Splitting cluster 854 (size 254), into 2 clusters 
+Splitting cluster 855 (size 254), into 2 clusters 
+Splitting cluster 856 (size 254), into 2 clusters 
+Splitting cluster 857 (size 251), into 2 clusters 
+Splitting cluster 858 (size 250), into 2 clusters 
+Splitting cluster 859 (size 250), into 2 clusters 
+Splitting cluster 860 (size 250), into 2 clusters 
+Splitting cluster 861 (size 249), into 2 clusters 
+Splitting cluster 862 (size 249), into 2 clusters 
+Splitting cluster 863 (size 245), into 2 clusters 
+Splitting cluster 864 (size 244), into 2 clusters 
+Splitting cluster 865 (size 244), into 2 clusters 
+Splitting cluster 866 (size 243), into 2 clusters 
+Splitting cluster 867 (size 243), into 2 clusters 
+Splitting cluster 868 (size 241), into 2 clusters 
+Splitting cluster 869 (size 241), into 2 clusters 
+Splitting cluster 870 (size 240), into 2 clusters 
+Splitting cluster 871 (size 240), into 2 clusters 
+Splitting cluster 872 (size 240), into 2 clusters 
+Splitting cluster 873 (size 240), into 2 clusters 
+Splitting cluster 874 (size 240), into 2 clusters 
+Splitting cluster 875 (size 240), into 2 clusters 
+Splitting cluster 876 (size 239), into 2 clusters 
+Splitting cluster 877 (size 239), into 2 clusters 
+Splitting cluster 878 (size 238), into 2 clusters 
+Splitting cluster 879 (size 237), into 2 clusters 
+Splitting cluster 880 (size 236), into 2 clusters 
+Splitting cluster 881 (size 236), into 2 clusters 
+Splitting cluster 882 (size 236), into 2 clusters 
+Splitting cluster 883 (size 235), into 2 clusters 
+Splitting cluster 884 (size 235), into 2 clusters 
+Splitting cluster 885 (size 234), into 2 clusters 
+Splitting cluster 886 (size 234), into 2 clusters 
+Splitting cluster 887 (size 234), into 2 clusters 
+Splitting cluster 888 (size 233), into 2 clusters 
+Splitting cluster 889 (size 233), into 2 clusters 
+Splitting cluster 890 (size 233), into 2 clusters 
+Splitting cluster 891 (size 233), into 2 clusters 
+Splitting cluster 892 (size 232), into 2 clusters 
+Splitting cluster 893 (size 232), into 2 clusters 
+Splitting cluster 894 (size 231), into 2 clusters 
+Splitting cluster 895 (size 231), into 2 clusters 
+Splitting cluster 896 (size 231), into 2 clusters 
+Splitting cluster 897 (size 231), into 2 clusters 
+Splitting cluster 898 (size 231), into 2 clusters 
+Splitting cluster 899 (size 230), into 2 clusters 
+Splitting cluster 900 (size 230), into 2 clusters 
+Splitting cluster 901 (size 230), into 2 clusters 
+Splitting cluster 902 (size 230), into 2 clusters 
+Splitting cluster 903 (size 228), into 2 clusters 
+Splitting cluster 904 (size 227), into 2 clusters 
+Splitting cluster 905 (size 227), into 2 clusters 
+Splitting cluster 906 (size 226), into 2 clusters 
+Splitting cluster 907 (size 226), into 2 clusters 
+Splitting cluster 908 (size 226), into 2 clusters 
+Splitting cluster 909 (size 226), into 2 clusters 
+Splitting cluster 910 (size 226), into 2 clusters 
+Splitting cluster 911 (size 226), into 2 clusters 
+Splitting cluster 912 (size 225), into 2 clusters 
+Splitting cluster 913 (size 225), into 2 clusters 
+Splitting cluster 914 (size 225), into 2 clusters 
+Splitting cluster 915 (size 225), into 2 clusters 
+Splitting cluster 916 (size 225), into 2 clusters 
+Splitting cluster 917 (size 225), into 2 clusters 
+Splitting cluster 918 (size 225), into 2 clusters 
+Splitting cluster 919 (size 224), into 2 clusters 
+Splitting cluster 920 (size 224), into 2 clusters 
+Splitting cluster 921 (size 223), into 2 clusters 
+Splitting cluster 922 (size 223), into 2 clusters 
+Splitting cluster 923 (size 223), into 2 clusters 
+Splitting cluster 924 (size 223), into 2 clusters 
+Splitting cluster 925 (size 222), into 2 clusters 
+Splitting cluster 926 (size 222), into 2 clusters 
+Splitting cluster 927 (size 222), into 2 clusters 
+Splitting cluster 928 (size 222), into 2 clusters 
+Splitting cluster 929 (size 222), into 2 clusters 
+Splitting cluster 930 (size 221), into 2 clusters 
+Splitting cluster 931 (size 221), into 2 clusters 
+Splitting cluster 932 (size 221), into 2 clusters 
+Splitting cluster 933 (size 220), into 2 clusters 
+Splitting cluster 934 (size 220), into 2 clusters 
+Splitting cluster 935 (size 220), into 2 clusters 
+Splitting cluster 936 (size 220), into 2 clusters 
+Splitting cluster 937 (size 220), into 2 clusters 
+Splitting cluster 938 (size 220), into 2 clusters 
+Splitting cluster 939 (size 219), into 2 clusters 
+Splitting cluster 940 (size 218), into 2 clusters 
+Splitting cluster 941 (size 218), into 2 clusters 
+Splitting cluster 942 (size 218), into 2 clusters 
+Splitting cluster 943 (size 218), into 2 clusters 
+Splitting cluster 944 (size 218), into 2 clusters 
+Splitting cluster 945 (size 217), into 2 clusters 
+Splitting cluster 946 (size 216), into 2 clusters 
+Splitting cluster 947 (size 216), into 2 clusters 
+Splitting cluster 948 (size 216), into 2 clusters 
+Splitting cluster 949 (size 216), into 2 clusters 
+Splitting cluster 950 (size 215), into 2 clusters 
+Splitting cluster 951 (size 215), into 2 clusters 
+Splitting cluster 952 (size 214), into 2 clusters 
+Splitting cluster 953 (size 214), into 2 clusters 
+Splitting cluster 954 (size 213), into 2 clusters 
+Splitting cluster 955 (size 213), into 2 clusters 
+Splitting cluster 956 (size 213), into 2 clusters 
+Splitting cluster 957 (size 213), into 2 clusters 
+Splitting cluster 958 (size 212), into 2 clusters 
+Splitting cluster 959 (size 212), into 2 clusters 
+Splitting cluster 960 (size 212), into 2 clusters 
+Splitting cluster 961 (size 212), into 2 clusters 
+Splitting cluster 962 (size 212), into 2 clusters 
+Splitting cluster 963 (size 212), into 2 clusters 
+Splitting cluster 964 (size 212), into 2 clusters 
+Splitting cluster 965 (size 212), into 2 clusters 
+Splitting cluster 966 (size 212), into 2 clusters 
+Splitting cluster 967 (size 212), into 2 clusters 
+Splitting cluster 968 (size 211), into 2 clusters 
+Splitting cluster 969 (size 211), into 2 clusters 
+Splitting cluster 970 (size 211), into 2 clusters 
+Splitting cluster 971 (size 211), into 2 clusters 
+Splitting cluster 972 (size 210), into 2 clusters 
+Splitting cluster 973 (size 210), into 2 clusters 
+Splitting cluster 974 (size 209), into 2 clusters 
+Splitting cluster 975 (size 209), into 2 clusters 
+Splitting cluster 976 (size 209), into 2 clusters 
+Splitting cluster 977 (size 209), into 2 clusters 
+Splitting cluster 978 (size 209), into 2 clusters 
+Splitting cluster 979 (size 209), into 2 clusters 
+Splitting cluster 980 (size 209), into 2 clusters 
+Splitting cluster 981 (size 209), into 2 clusters 
+Splitting cluster 982 (size 208), into 2 clusters 
+Splitting cluster 983 (size 208), into 2 clusters 
+Splitting cluster 984 (size 208), into 2 clusters 
+Splitting cluster 985 (size 208), into 2 clusters 
+Splitting cluster 986 (size 208), into 2 clusters 
+Splitting cluster 987 (size 208), into 2 clusters 
+Splitting cluster 988 (size 207), into 2 clusters 
+Splitting cluster 989 (size 207), into 2 clusters 
+Splitting cluster 990 (size 207), into 2 clusters 
+Splitting cluster 991 (size 207), into 2 clusters 
+Splitting cluster 992 (size 207), into 2 clusters 
+Splitting cluster 993 (size 207), into 2 clusters 
+Splitting cluster 994 (size 206), into 2 clusters 
+Splitting cluster 995 (size 206), into 2 clusters 
+Splitting cluster 996 (size 206), into 2 clusters 
+Splitting cluster 997 (size 205), into 2 clusters 
+Splitting cluster 998 (size 205), into 2 clusters 
+Splitting cluster 999 (size 205), into 2 clusters 
+DOUBLE_KMEANS: After rebalancing, about to run second k-means with 1000 clusters
+DOUBLE_KMEANS: Rebalanced centroids size: 128000 (expected: 128000)
+DOUBLE_KMEANS: clustering2.centroids size before train: 128000
+DOUBLE_KMEANS: Second k-means complete, checking differences...
+DOUBLE_KMEANS: 1000/1000 centroids changed (avg L2 change: 35.538055)
+hard limit = 2000
+Warning: Cluster 81 has size 2313 greater than 2000
+Warning: Cluster 210 has size 2929 greater than 2000
+Warning: Cluster 623 has size 2143 greater than 2000
+Warning: Cluster 753 has size 2895 greater than 2000
+Warning: Cluster 760 has size 2442 greater than 2000
+
+=== AVERAGE CLUSTER SIZES BY SOURCE ===
+Original k-means (never rebalanced): 500 clusters, avg size = 955.71
+Rebalanced clusters (local k-means): 500 clusters, avg size = 1044.29
+Total clusters involved in rebalancing: 500 out of 1000
+Total oversized clusters (exceeding hard limit): 5
+<== EXITING: iter_reclusterInternalMegaCentroid (Duration: 2.877 seconds)
+
+
+==> ENTERING: iter_rebuild_cluster_maps_2
+<== EXITING: iter_rebuild_cluster_maps_2 (Duration: 0.097 seconds)
+
+
+==> ENTERING: iter_get_fixed_recall_2
+<== EXITING: iter_get_fixed_recall_2 (Duration: 0.001 seconds)
+
+
+==> ENTERING: iter_verify_recall_loop_2
+Query 0: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 0: GT vectors scattered across 39 L1 clusters, furthest L1 distance: 138531.939744, closest L1 distance: 76745.873735
+Query 0: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 103522.974074, closest L2 distance: 103522.974074
+Query 0: Recall: 95.000000%, distance computations: 80261, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.037 seconds)
+
+<== EXITING: get_recall (Duration: 0.037 seconds)
+
+Query 1: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 1: GT vectors scattered across 8 L1 clusters, furthest L1 distance: 123444.721937, closest L1 distance: 73484.268317
+Query 1: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 180380.892078, closest L2 distance: 180380.892078
+Query 1: Recall: 95.000000%, distance computations: 6439, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.028 seconds)
+
+<== EXITING: get_recall (Duration: 0.028 seconds)
+
+Query 2: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 2: GT vectors scattered across 15 L1 clusters, furthest L1 distance: 99254.394163, closest L1 distance: 52212.101046
+Query 2: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 119280.536293, closest L2 distance: 119280.536293
+Query 2: Recall: 97.000000%, distance computations: 17551, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.041 seconds)
+
+<== EXITING: get_recall (Duration: 0.041 seconds)
+
+Query 3: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 3: GT vectors scattered across 2 L1 clusters, furthest L1 distance: 39741.996832, closest L1 distance: 11373.226066
+Query 3: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 137209.908309, closest L2 distance: 137209.908309
+Query 3: Recall: 98.000000%, distance computations: 2578, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.019 seconds)
+
+<== EXITING: get_recall (Duration: 0.019 seconds)
+
+Query 4: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 4: GT vectors scattered across 45 L1 clusters, furthest L1 distance: 154131.788050, closest L1 distance: 81443.219200
+Query 4: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 114909.877337, closest L2 distance: 114909.877337
+Query 4: Recall: 95.000000%, distance computations: 133291, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.036 seconds)
+
+<== EXITING: get_recall (Duration: 0.036 seconds)
+
+Query 5: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 5: GT vectors scattered across 3 L1 clusters, furthest L1 distance: 34636.264253, closest L1 distance: 22982.959157
+Query 5: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 122988.092043, closest L2 distance: 122988.092043
+Query 5: Recall: 98.000000%, distance computations: 5530, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.046 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 6: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 6: GT vectors scattered across 6 L1 clusters, furthest L1 distance: 57417.369890, closest L1 distance: 21272.862539
+Query 6: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136269.974502, closest L2 distance: 136269.974502
+Query 6: Recall: 97.000000%, distance computations: 6178, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.047 seconds)
+
+<== EXITING: get_recall (Duration: 0.047 seconds)
+
+Query 7: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 7: GT vectors scattered across 25 L1 clusters, furthest L1 distance: 150996.246573, closest L1 distance: 81625.810736
+Query 7: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143143.808392, closest L2 distance: 143143.808392
+Query 7: Recall: 95.000000%, distance computations: 37328, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.033 seconds)
+
+<== EXITING: get_recall (Duration: 0.033 seconds)
+
+Query 8: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 8: GT vectors scattered across 6 L1 clusters, furthest L1 distance: 79825.071124, closest L1 distance: 39232.625276
+Query 8: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 158011.551164, closest L2 distance: 158011.551164
+Query 8: Recall: 96.000000%, distance computations: 7846, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.043 seconds)
+
+<== EXITING: get_recall (Duration: 0.043 seconds)
+
+Query 9: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 9: GT vectors scattered across 21 L1 clusters, furthest L1 distance: 133931.251984, closest L1 distance: 79320.756224
+Query 9: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 125723.378600, closest L2 distance: 125723.378600
+Query 9: Recall: 95.000000%, distance computations: 25765, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.042 seconds)
+
+<== EXITING: get_recall (Duration: 0.042 seconds)
+
+Query 10: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 10: GT vectors scattered across 41 L1 clusters, furthest L1 distance: 148293.001393, closest L1 distance: 88661.763090
+Query 10: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 141661.302493, closest L2 distance: 141661.302493
+Query 10: Recall: 94.000000%, distance computations: 70559, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.030 seconds)
+
+<== EXITING: get_recall (Duration: 0.030 seconds)
+
+Query 11: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 11: GT vectors scattered across 18 L1 clusters, furthest L1 distance: 126988.618694, closest L1 distance: 65953.653106
+Query 11: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 138548.468287, closest L2 distance: 138548.468287
+Query 11: Recall: 95.000000%, distance computations: 25181, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.030 seconds)
+
+<== EXITING: get_recall (Duration: 0.030 seconds)
+
+Query 12: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 12: GT vectors scattered across 37 L1 clusters, furthest L1 distance: 253353.286822, closest L1 distance: 119732.622607
+Query 12: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 194173.618412, closest L2 distance: 194173.618412
+Query 12: Recall: 95.000000%, distance computations: 111518, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.026 seconds)
+
+<== EXITING: get_recall (Duration: 0.026 seconds)
+
+Query 13: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 13: GT vectors scattered across 27 L1 clusters, furthest L1 distance: 124899.974604, closest L1 distance: 84870.933960
+Query 13: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143544.764302, closest L2 distance: 143544.764302
+Query 13: Recall: 95.000000%, distance computations: 29118, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.033 seconds)
+
+<== EXITING: get_recall (Duration: 0.033 seconds)
+
+Query 14: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 14: GT vectors scattered across 9 L1 clusters, furthest L1 distance: 75373.945705, closest L1 distance: 45006.944557
+Query 14: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 122169.925263, closest L2 distance: 122169.925263
+Query 14: Recall: 94.000000%, distance computations: 9876, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.041 seconds)
+
+<== EXITING: get_recall (Duration: 0.041 seconds)
+
+Query 15: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 15: GT vectors scattered across 26 L1 clusters, furthest L1 distance: 157506.139213, closest L1 distance: 65921.314318
+Query 15: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 136421.055666, closest L2 distance: 136421.055666
+Query 15: Recall: 95.000000%, distance computations: 52256, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.034 seconds)
+
+<== EXITING: get_recall (Duration: 0.034 seconds)
+
+Query 16: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 16: GT vectors scattered across 21 L1 clusters, furthest L1 distance: 111754.494408, closest L1 distance: 60727.416609
+Query 16: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 143491.808250, closest L2 distance: 143491.808250
+Query 16: Recall: 95.000000%, distance computations: 25791, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.044 seconds)
+
+<== EXITING: get_recall (Duration: 0.044 seconds)
+
+Query 17: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 17: GT vectors scattered across 29 L1 clusters, furthest L1 distance: 165221.441366, closest L1 distance: 93344.677805
+Query 17: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 167536.845510, closest L2 distance: 167536.845510
+Query 17: Recall: 95.000000%, distance computations: 38219, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.027 seconds)
+
+<== EXITING: get_recall (Duration: 0.027 seconds)
+
+Query 18: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 18: GT vectors scattered across 4 L1 clusters, furthest L1 distance: 61342.425054, closest L1 distance: 37505.684245
+Query 18: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 135136.256138, closest L2 distance: 135136.256138
+Query 18: Recall: 95.000000%, distance computations: 4174, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.041 seconds)
+
+<== EXITING: get_recall (Duration: 0.041 seconds)
+
+Query 19: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 19: GT vectors scattered across 31 L1 clusters, furthest L1 distance: 152553.331692, closest L1 distance: 75814.526479
+Query 19: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 159836.571199, closest L2 distance: 159836.571199
+Query 19: Recall: 95.000000%, distance computations: 30122, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.026 seconds)
+
+<== EXITING: get_recall (Duration: 0.026 seconds)
+
+Query 20: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 20: GT vectors scattered across 22 L1 clusters, furthest L1 distance: 166426.546791, closest L1 distance: 85635.294343
+Query 20: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 163106.990951, closest L2 distance: 163106.990951
+Query 20: Recall: 95.000000%, distance computations: 38087, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.038 seconds)
+
+<== EXITING: get_recall (Duration: 0.038 seconds)
+
+Query 21: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 21: GT vectors scattered across 9 L1 clusters, furthest L1 distance: 122924.147873, closest L1 distance: 56016.791897
+Query 21: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 117779.080592, closest L2 distance: 117779.080592
+Query 21: Recall: 94.000000%, distance computations: 7204, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.048 seconds)
+
+<== EXITING: get_recall (Duration: 0.048 seconds)
+
+Query 22: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 22: GT vectors scattered across 30 L1 clusters, furthest L1 distance: 125040.671533, closest L1 distance: 62371.021724
+Query 22: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 111486.743456, closest L2 distance: 111486.743456
+Query 22: Recall: 95.000000%, distance computations: 30724, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.028 seconds)
+
+<== EXITING: get_recall (Duration: 0.028 seconds)
+
+Query 23: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 23: GT vectors scattered across 44 L1 clusters, furthest L1 distance: 182352.098192, closest L1 distance: 100334.802485
+Query 23: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 126636.056767, closest L2 distance: 126636.056767
+Query 23: Recall: 95.000000%, distance computations: 102103, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.029 seconds)
+
+<== EXITING: get_recall (Duration: 0.029 seconds)
+
+Query 24: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 24: GT vectors scattered across 22 L1 clusters, furthest L1 distance: 133949.890813, closest L1 distance: 86237.974902
+Query 24: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 170538.570874, closest L2 distance: 170538.570874
+Query 24: Recall: 94.000000%, distance computations: 21454, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.035 seconds)
+
+<== EXITING: get_recall (Duration: 0.035 seconds)
+
+Query 25: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 25: GT vectors scattered across 32 L1 clusters, furthest L1 distance: 137875.881383, closest L1 distance: 72179.438589
+Query 25: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 111500.889420, closest L2 distance: 111500.889420
+Query 25: Recall: 95.000000%, distance computations: 41423, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.044 seconds)
+
+<== EXITING: get_recall (Duration: 0.044 seconds)
+
+Query 26: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 26: GT vectors scattered across 11 L1 clusters, furthest L1 distance: 128724.169326, closest L1 distance: 67222.968388
+Query 26: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 163668.842407, closest L2 distance: 163668.842407
+Query 26: Recall: 96.000000%, distance computations: 8426, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.028 seconds)
+
+<== EXITING: get_recall (Duration: 0.028 seconds)
+
+Query 27: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 27: GT vectors scattered across 34 L1 clusters, furthest L1 distance: 127456.614828, closest L1 distance: 74366.129576
+Query 27: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 134692.042505, closest L2 distance: 134692.042505
+Query 27: Recall: 95.000000%, distance computations: 68034, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.046 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 28: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 28: GT vectors scattered across 17 L1 clusters, furthest L1 distance: 124235.758010, closest L1 distance: 68730.711801
+Query 28: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 139224.204514, closest L2 distance: 139224.204514
+Query 28: Recall: 94.000000%, distance computations: 23644, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.046 seconds)
+
+<== EXITING: get_recall (Duration: 0.046 seconds)
+
+Query 29: 
+==> ENTERING: get_recall
+
+==> ENTERING: get_recall_build_mappings
+<== EXITING: get_recall_build_mappings (Duration: 0.000 seconds)
+
+
+==> ENTERING: get_recall_search_loop
+Query 29: GT vectors scattered across 14 L1 clusters, furthest L1 distance: 161756.448340, closest L1 distance: 79628.239089
+Query 29: GT vectors scattered across 1 L2 clusters, furthest L2 distance: 173418.268967, closest L2 distance: 173418.268967
+Query 29: Recall: 95.000000%, distance computations: 12352, misassigned: 0/100 (0.0%)
+<== EXITING: get_recall_search_loop (Duration: 0.043 seconds)
+
+<== EXITING: get_recall (Duration: 0.043 seconds)
+
+<== EXITING: iter_verify_recall_loop_2 (Duration: 1.106 seconds)
+
+Average Recall: 95.233333, Average L2 probes: 1.00, Average L1 probes: 35.53, Average Distance Computations: 35767, Avg misassigned: 0.0%
+
+==> ENTERING: iter_save_cluster_sizes_histogram
+<== EXITING: iter_save_cluster_sizes_histogram (Duration: 0.000 seconds)
+
+<== EXITING: reclustering_iterations_loop (Duration: 12.362 seconds)
+
+
+==> ENTERING: final_store_and_compute
+ReclusteringIndex::storeScoreForMegaClusters
+numToCalc: 1
+ReclusteringIndex::printStats
+Number of mega clusters: 1, number of mini clusters: 1000
+L1 cluster size: Min: 584, Max: 2929, Avg: 1000
+L2 cluster size: Min: 1000, Max: 1000, Avg: 1000
+Number of mini clusters with bad silhouette score: 0 out of 1000
+Avg mega cluster score: 69013.752484
+
+=== MSE Score Statistics (L2 Clusters) ===
+MSE scores available for 1 centroids: Min: 69013.752484, Max: 69013.752484, Avg: 69013.752484
+
+=== MSE Score Statistics (L1 Clusters) ===
+MSE scores available for 1000 centroids: Min: 14036.307652, Max: 91955.834584, Avg: 69013.752484
+<== EXITING: final_store_and_compute (Duration: 0.064 seconds)
+
+
+==> ENTERING: final_flush_to_disk
+<== EXITING: final_flush_to_disk (Duration: 1.154 seconds)
+
+<== EXITING: benchmark_fixed_recall (Duration: 18.464 seconds)
+
