@@ -2000,8 +2000,7 @@ namespace orangedb {
     // Initialize the centroids
     // only the first few iterations for a decent centroid initialization
 
-    clustering.niter = ceil( 3 * (double)config.nIter / 4);
-    printf("DOUBLE_KMEANS: clustering.niter = %d\n", clustering.niter);
+    clustering.niter = ceil( 2 * (double)config.nIter / 3);
     clustering.train(n, data, index);
 
     // Track which clusters were touched by rebalancing (both original and new)
@@ -2022,8 +2021,7 @@ namespace orangedb {
     // Create a new clustering object for the second k-means run
     faiss::Clustering clustering2(dim, numClusters, cl);
     clustering2.centroids = rebalanced_centroids;  // Initialize with rebalanced centroids
-    clustering2.niter = ceil(  (double)config.nIter / 4);  // Use full k-means iterations for refinement
-    printf("DOUBLE_KMEANS: clustering2.niter = %d\n", clustering2.niter);
+    clustering2.niter = ceil( 2* (double)config.nIter / 3);  // Use full k-means iterations for refinement
     clustering2.verbose = false;  // Disable verbose during insertion to avoid I/O slowdown with large datasets
     
     printf("DOUBLE_KMEANS: clustering2.centroids size before train: %zu\n", clustering2.centroids.size());
