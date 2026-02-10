@@ -3468,6 +3468,8 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
     const float overlapScoreChangeThreshold = stof(input.getCmdOption("-overlapScoreChangeThreshold"));
     const int LshNbits = stoi(input.getCmdOption("-LshNbits"));
+    const bool useCuvsKmeans = stoi(input.getCmdOption("-useCuvsKmeans"));
+    const int cuvsGpuDevice = stoi(input.getCmdOption("-cuvsGpuDevice"));
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -3478,7 +3480,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
                                    0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio,
                                    scoreChangeThreshold, centroidChangeThreshold, 0.1, LshNbits, 20, 30,
-                                   overlapScoreChangeThreshold);
+                                   overlapScoreChangeThreshold, useCuvsKmeans, cuvsGpuDevice);
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -3651,12 +3653,12 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     // Calculate and write recall after writing overlap scores
     // Write per-query recall for the first probe combination
-    std::vector<double> queryRecalls;
-    if (!nMegaProbes.empty() && !nMiniProbes.empty()) {
-        auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes[0],
-                                 nMiniProbes[0], queryRecalls);
-    }
-    write_debug_data(&index, 0, queryRecalls);
+    // std::vector<double> queryRecalls;
+    // if (!nMegaProbes.empty() && !nMiniProbes.empty()) {
+    //     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes[0],
+    //                              nMiniProbes[0], queryRecalls);
+    // }
+    // write_debug_data(&index, 0, queryRecalls);
 
     if (useMSEToRecluster) {
         // Generate UMAP visualization with cluster assignments (before early return)
@@ -3691,12 +3693,12 @@ void benchmark_fast_reclustering(InputParser &input) {
 
         // Calculate and write recall after writing overlap scores
         // Write per-query recall for the first probe combination
-        std::vector<double> queryRecalls;
-        if (!nMegaProbes.empty() && !nMiniProbes.empty()) {
-            auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes[0],
-                                     nMiniProbes[0], queryRecalls);
-        }
-        write_debug_data(&index, iter + 1, queryRecalls);
+        // std::vector<double> queryRecalls;
+        // if (!nMegaProbes.empty() && !nMiniProbes.empty()) {
+        //     auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbes[0],
+        //                              nMiniProbes[0], queryRecalls);
+        // }
+        // write_debug_data(&index, iter + 1, queryRecalls);
 
         // Generate UMAP visualization with cluster assignments (before early return)
         if(umap_mode==LIVE_UMAP) {
@@ -5260,12 +5262,13 @@ void test_knn_inner_product_parallel(InputParser& input) {
 #ifdef CUVS_ENABLED
 void benchmark_cuvs_balanced_kmeans_wrapper(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const int clusterSize = stoi(input.getCmdOption("-clusterSize"));
     const int nIter = stoi(input.getCmdOption("-nIter"));
     const bool useIP = stoi(input.getCmdOption("-useIP"));
 
     size_t baseDimension, baseNumVectors;
-    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
     auto numClusters = baseNumVectors / clusterSize;
 
     printf("Loaded %zu vectors of dimension %zu, targeting %zu clusters\n",
@@ -5275,7 +5278,7 @@ void benchmark_cuvs_balanced_kmeans_wrapper(InputParser &input) {
     std::vector<uint32_t> labels(baseNumVectors);
 
     cuvs_kmeans_fit(baseVecs, baseNumVectors, baseDimension, numClusters, nIter, useIP,
-                    centroids.data(), labels.data());
+                    centroids.data());
 
     cuvs_kmeans_predict(baseVecs, baseNumVectors, baseDimension, centroids.data(),
                         numClusters, nIter, useIP, labels.data());

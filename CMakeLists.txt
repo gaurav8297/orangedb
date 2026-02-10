@@ -195,7 +195,7 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
 add_executable(orangedb_main ${PROJECT_SOURCE_DIR}/src/main.cpp)
 # Add executable path
-set(ORANGEDB_LINK_LIBS orangedb OpenMP::OpenMP_CXX simsimd faiss Arrow::arrow_shared Parquet::parquet_shared Backward::Interface)
+set(ORANGEDB_LINK_LIBS orangedb OpenMP::OpenMP_CXX simsimd faiss curl Arrow::arrow_shared Parquet::parquet_shared Backward::Interface)
 if(ENABLE_CUVS)
     list(APPEND ORANGEDB_LINK_LIBS cuvs::cuvs)
 endif()

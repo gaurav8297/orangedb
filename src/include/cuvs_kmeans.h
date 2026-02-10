@@ -10,7 +10,7 @@ void cuvs_kmeans_fit(
     uint32_t nIter,
     bool useIP,
     float* outCentroids,
-    uint32_t* outLabels);
+    int gpuDevice = 0);
 
 void cuvs_kmeans_predict(
     const float* hostData,
@@ -20,4 +20,5 @@ void cuvs_kmeans_predict(
     int64_t numClusters,
     uint32_t nIter,
     bool useIP,
-    uint32_t* outLabels);
+    uint32_t* outLabels,
+    int gpuDevice = 0);

@@ -72,6 +72,10 @@ namespace orangedb {
         int overlapWorstAvgCount = 30;
         // Threshold for overlap score change to trigger reclustering
         float overlapScoreChangeThreshold = 0.05;
+        // Use cuVS GPU k-means instead of Faiss CPU k-means
+        bool useCuvsKmeans = false;
+        // GPU device ID for cuVS k-means
+        int cuvsGpuDevice = 0;
 
         explicit ReclusteringIndexConfig() = default;
 
@@ -88,7 +92,9 @@ namespace orangedb {
                                          const int overlapLshBits = 8,
                                          const int overlapWorstMiniCount = 20,
                                          const int overlapWorstAvgCount = 30,
-                                         const float overlapScoreChangeThreshold = 0.05)
+                                         const float overlapScoreChangeThreshold = 0.05,
+                                         const bool useCuvsKmeans = false,
+                                         const int cuvsGpuDevice = 0)
             : nIter(nIter), megaCentroidSize(megaCentroidSize), miniCentroidSize(miniCentroidSize),
               newMiniCentroidSize(newMiniCentroidSize), lambda(lambda), searchThreshold(searchThreshold),
               distanceType(distanceType), numMegaReclusterCentroids(numMegaReclusterCentroids),
@@ -98,8 +104,8 @@ namespace orangedb {
               centroidChangeThreshold(centroidChangeThreshold), overlappingScoreThreshold(overlappingScoreThreshold),
               overlapLshBits(overlapLshBits), overlapWorstMiniCount(overlapWorstMiniCount),
               overlapWorstAvgCount(overlapWorstAvgCount),
-              overlapScoreChangeThreshold(overlapScoreChangeThreshold) {
-        }
+              overlapScoreChangeThreshold(overlapScoreChangeThreshold), useCuvsKmeans(useCuvsKmeans),
+              cuvsGpuDevice(cuvsGpuDevice) {}
     };
 
     struct SubCells {
@@ -325,13 +331,17 @@ namespace orangedb {
                                     int num_clusters,
                                     size_t sample_size = 10000);
 
-        void clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
-                                  std::vector<float> &centroids, std::vector<std::vector<float> > &clusters,
-                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds);
+        void trainKmeansCentroids(const float *data, int n, int numClusters,
+                                  std::vector<float> &centroids);
 
-        void clusterDataWithFaiss(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
-                                  std::vector<float> &centroids,
-                                  std::vector<std::vector<vector_idx_t> > &clusterVectorIds, int nClusters = -1);
+        void assignKmeansLabels(const float *data, int n, const std::vector<float> &centroids,
+                                int numClusters, std::vector<int64_t> &assign);
+
+        void kmeansClusterData(float *data, vector_idx_t *vectorIds, int n, int avgClusterSize,
+                               std::vector<float> &centroids,
+                               std::vector<std::vector<vector_idx_t> > &clusterVectorIds,
+                               std::vector<std::vector<float> > *clusters = nullptr,
+                               int nClusters = -1);
 
         // Generic clustering method
         template <typename T>
