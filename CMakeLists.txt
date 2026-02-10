@@ -1,5 +1,29 @@
 cmake_minimum_required(VERSION 3.25)
-project(OrangeDB LANGUAGES CXX C)
+
+option(ENABLE_CUVS "Enable cuVS for GPU-accelerated balanced k-means" ON)
+
+set(ORANGEDB_LANGUAGES CXX C)
+
+if(ENABLE_CUVS)
+    list(APPEND ORANGEDB_LANGUAGES CUDA)
+
+    # Fetch rapids-cmake (same version as vendored Faiss)
+    set(RAPIDS_VERSION "24.12")
+    if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/ORANGEDB_RAPIDS.cmake)
+        file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-${RAPIDS_VERSION}/RAPIDS.cmake
+                ${CMAKE_CURRENT_BINARY_DIR}/ORANGEDB_RAPIDS.cmake)
+    endif()
+    include(${CMAKE_CURRENT_BINARY_DIR}/ORANGEDB_RAPIDS.cmake)
+
+    include(rapids-cmake)
+    include(rapids-cpm)
+    include(rapids-cuda)
+    include(rapids-export)
+    include(rapids-find)
+    rapids_cuda_init_architectures(OrangeDB)
+endif()
+
+project(OrangeDB LANGUAGES ${ORANGEDB_LANGUAGES})
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
@@ -61,6 +85,11 @@ endif()
 find_package(OpenMP REQUIRED)
 find_package(Arrow CONFIG REQUIRED)
 find_package(Parquet CONFIG REQUIRED)
+
+if(ENABLE_CUVS)
+    find_package(cuvs REQUIRED)
+    add_compile_definitions(CUVS_ENABLED)
+endif()
 
 get_target_property(ARROW_INCLUDE Arrow::arrow_shared INTERFACE_INCLUDE_DIRECTORIES)
 message(STATUS "Arrow includes: ${ARROW_INCLUDE}")
@@ -155,9 +184,14 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 ## Link the liburing library
 #link_directories(${LIBURING_DIR}/lib)
 
-# Add executable path
 add_executable(orangedb_main ${PROJECT_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(orangedb_main PUBLIC orangedb OpenMP::OpenMP_CXX simsimd faiss Arrow::arrow_shared Parquet::parquet_shared Backward::Interface)
+# Add executable path
+set(ORANGEDB_LINK_LIBS orangedb OpenMP::OpenMP_CXX simsimd faiss Arrow::arrow_shared Parquet::parquet_shared Backward::Interface)
+if(ENABLE_CUVS)
+    list(APPEND ORANGEDB_LINK_LIBS cuvs::cuvs)
+endif()
+target_link_libraries(orangedb_main PUBLIC ${ORANGEDB_LINK_LIBS})
+
 target_include_directories(orangedb_main PUBLIC
         ${PROJECT_SOURCE_DIR}/src/include
         ${PROJECT_SOURCE_DIR}/third_party/spdlog

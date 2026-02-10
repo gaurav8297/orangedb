@@ -37,6 +37,10 @@
 #include "knncolle/knncolle.hpp"
 #include <cblas.h>
 
+#ifdef CUVS_ENABLED
+#include "benchmark_cuvs_kmeans.h"
+#endif
+
 #if 0
 #include <liburing.h>
 #endif
@@ -5253,6 +5257,27 @@ void test_knn_inner_product_parallel(InputParser& input) {
     printf("=======================================================\n");
 }
 
+#ifdef CUVS_ENABLED
+void benchmark_cuvs_balanced_kmeans_wrapper(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const int clusterSize = stoi(input.getCmdOption("-clusterSize"));
+    const int nIter = stoi(input.getCmdOption("-nIter"));
+    const bool useIP = stoi(input.getCmdOption("-useIP"));
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    auto numClusters = baseNumVectors / clusterSize;
+
+    printf("Loaded %zu vectors of dimension %zu, targeting %zu clusters\n",
+           baseNumVectors, baseDimension, numClusters);
+
+    benchmark_cuvs_balanced_kmeans(
+        baseVecs, baseNumVectors, baseDimension, numClusters, nIter, useIP);
+
+    delete[] baseVecs;
+}
+#endif
+
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     backward::SignalHandling sh;
@@ -5344,5 +5369,10 @@ int main(int argc, char **argv) {
     else if (run == "testKnnInnerProductParallel") {
         test_knn_inner_product_parallel(input);
     }
+#ifdef CUVS_ENABLED
+    else if (run == "benchmarkCuvsBalancedKmeans") {
+        benchmark_cuvs_balanced_kmeans_wrapper(input);
+    }
+#endif
     return 0;
 }
