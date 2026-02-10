@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 option(ENABLE_CUVS "Enable cuVS for GPU-accelerated balanced k-means" ON)
 
 set(ORANGEDB_LANGUAGES CXX C)
+set(CMAKE_CUDA_COMPILER /usr/local/cuda-12.9/bin/nvcc)
 
 if(ENABLE_CUVS)
     list(APPEND ORANGEDB_LANGUAGES CUDA)
@@ -77,7 +78,7 @@ if(APPLE)
     set(OpenMP_CXX_LIB_NAMES "omp")
     set(OpenMP_omp_LIBRARY "/opt/homebrew/opt/libomp/lib/libomp.dylib")
     include_directories("/opt/homebrew/opt/libomp/include")
-    
+
     # Add Homebrew prefix to CMAKE_PREFIX_PATH for Arrow/Parquet
     list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/apache-arrow")
 endif()
@@ -95,6 +96,11 @@ get_target_property(ARROW_INCLUDE Arrow::arrow_shared INTERFACE_INCLUDE_DIRECTOR
 message(STATUS "Arrow includes: ${ARROW_INCLUDE}")
 get_target_property(PARQUET_INCLUDE Parquet::parquet_shared INTERFACE_INCLUDE_DIRECTORIES)
 message(STATUS "Parquet includes: ${PARQUET_INCLUDE}")
+
+#if(ENABLE_CUVS)
+#    get_target_property(CUVS_INCLUDE cuvs::cuvs INTERFACE_INCLUDE_DIRECTORIES)
+#    message(STATUS "Cuvs includes: ${CUVS_INCLUDE}")
+#endif()
 
 # Global compiler flags for debug and release
 if(APPLE)
@@ -131,6 +137,9 @@ include_directories(${PROJECT_SOURCE_DIR}/third_party/iRangeGraph/include)
 include_directories(${PROJECT_SOURCE_DIR}/third_party/json/include)
 include_directories(${ARROW_INCLUDE})
 include_directories(${PARQUET_INCLUDE})
+#if(ENABLE_CUVS)
+#    include_directories(${CUVS_INCLUDE})
+#endif()
 include_directories(${PROJECT_SOURCE_DIR}/src/include)
 
 # Get the source directories for FetchContent dependencies

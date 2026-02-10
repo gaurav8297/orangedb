@@ -38,7 +38,7 @@
 #include <cblas.h>
 
 #ifdef CUVS_ENABLED
-#include "benchmark_cuvs_kmeans.h"
+#include "cuvs_kmeans.h"
 #endif
 
 #if 0
@@ -5271,8 +5271,14 @@ void benchmark_cuvs_balanced_kmeans_wrapper(InputParser &input) {
     printf("Loaded %zu vectors of dimension %zu, targeting %zu clusters\n",
            baseNumVectors, baseDimension, numClusters);
 
-    benchmark_cuvs_balanced_kmeans(
-        baseVecs, baseNumVectors, baseDimension, numClusters, nIter, useIP);
+    std::vector<float> centroids(numClusters * baseDimension);
+    std::vector<uint32_t> labels(baseNumVectors);
+
+    cuvs_kmeans_fit(baseVecs, baseNumVectors, baseDimension, numClusters, nIter, useIP,
+                    centroids.data(), labels.data());
+
+    cuvs_kmeans_predict(baseVecs, baseNumVectors, baseDimension, centroids.data(),
+                        numClusters, nIter, useIP, labels.data());
 
     delete[] baseVecs;
 }
