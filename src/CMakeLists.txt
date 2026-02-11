@@ -27,5 +27,7 @@ set(ALL_OBJECT_FILES
 #target_link_libraries(vector_index PUBLIC faiss)
 set(ORANGE_DB_INCLUDES $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> ${CMAKE_CURRENT_BINARY_DIR})
 target_include_directories(orangedb PUBLIC ORANGE_DB_INCLUDES)
+if(ENABLE_CUVS)
 target_link_libraries(orangedb PUBLIC cuvs::cuvs)
+endif()
 install(TARGETS orangedb)
