@@ -4508,6 +4508,121 @@ void test_quantization_issue(InputParser &input) {
 }
 
 /**
+ * Test scalar quantization quality using parquet files.
+ *
+ * Reads a train parquet file to train a faiss::ScalarQuantizer, then reads
+ * multiple data parquet files and query vectors. Samples random points from
+ * the data and compares actual L2 distances vs quantized-code distances from
+ * query vectors, mirroring what test_quantization_issue does but with parquet
+ * data sources.
+ *
+ * Args (via InputParser):
+ *   -trainParquetPath : directory containing train parquet file(s)
+ *   -dataParquetPath  : directory containing data parquet files
+ *   -queryVectorPath  : path to query vectors (.fvecs / .bvecs)
+ *   -nFiles           : max number of data parquet files to read
+ *   -sampleSize       : number of random points to sample for comparison
+ *   -queryIndex       : which query vector to use
+ */
+void test_quantization_parquet(InputParser &input) {
+    const std::string &trainParquetPath = input.getCmdOption("-trainParquetPath");
+    const std::string &dataParquetPath = input.getCmdOption("-dataParquetPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const int nFiles = stoi(input.getCmdOption("-nFiles"));
+    const int sampleSize = stoi(input.getCmdOption("-sampleSize"));
+    const int queryIndex = stoi(input.getCmdOption("-queryIndex"));
+
+    // ---- Step 1: Read training parquet file(s) and train the scalar quantizer ----
+    size_t trainDim, trainNumVectors;
+    float *trainVecs = readParquetDir(trainParquetPath.c_str(), &trainDim, &trainNumVectors);
+    printf("Loaded %zu training vectors of dimension %zu\n", trainNumVectors, trainDim);
+
+    faiss::ScalarQuantizer sq(trainDim, faiss::ScalarQuantizer::QT_8bit);
+    printf("Training scalar quantizer on %zu vectors of dimension %zu\n", trainNumVectors, trainDim);
+    sq.train(trainNumVectors, trainVecs);
+    delete[] trainVecs;
+
+    // ---- Step 2: Read data parquet files ----
+    std::vector<std::string> filePaths;
+    list_parquet_dir(dataParquetPath.c_str(), filePaths);
+    if (filePaths.empty()) {
+        fprintf(stderr, "No parquet files found in: %s\n", dataParquetPath.c_str());
+        exit(1);
+    }
+    int numFiles = std::min(nFiles, (int)filePaths.size());
+    std::vector<std::string> selectedPaths(filePaths.begin(), filePaths.begin() + numFiles);
+
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readParquetFiles(selectedPaths, &baseDimension, &baseNumVectors);
+    printf("Loaded %zu base vectors of dimension %zu from %d parquet files\n",
+           baseNumVectors, baseDimension, numFiles);
+    assert(baseDimension == trainDim);
+
+    // ---- Step 3: Compute SQ codes for all base vectors ----
+    std::vector<uint8_t> codes(baseNumVectors * sq.code_size);
+    printf("Computing codes for %zu base vectors\n", baseNumVectors);
+    sq.compute_codes(baseVecs, codes.data(), baseNumVectors);
+
+    // ---- Step 4: Load query vectors ----
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    assert(queryDimension == baseDimension);
+    assert((size_t)queryIndex < queryNumVectors);
+    auto queryVec = queryVecs + queryIndex * queryDimension;
+
+    // ---- Step 5: Sample random points and compare distances ----
+    RandomGenerator rg(1234);
+    std::vector<uint64_t> sampleIndices(sampleSize);
+    rg.randomPerm(baseNumVectors, sampleIndices.data(), sampleSize);
+
+    std::vector<float> actualDistances(sampleSize);
+    std::vector<float> codesDistances(sampleSize);
+    std::vector<float> itsOwnDistances(sampleSize);
+    auto dc = sq.get_distance_computer();
+
+    double distance_diff = 0;
+    double avg_its_own_diff = 0;
+    double avg_distance_from_query = 0;
+    for (int i = 0; i < sampleSize; i++) {
+        auto idx = sampleIndices[i];
+        // Actual L2 distance from query to base vector
+        actualDistances[i] = faiss::fvec_L2sqr(queryVec,
+                                                baseVecs + idx * baseDimension,
+                                                baseDimension);
+
+        // Quantized distance from query to code
+        dc->set_query(queryVec);
+        codesDistances[i] = dc->distance_to_code(codes.data() + idx * sq.code_size);
+        distance_diff += std::abs(actualDistances[i] - codesDistances[i]);
+
+        // Self-distance: base vector vs its own code (measures quantization error)
+        dc->set_query(baseVecs + idx * baseDimension);
+        itsOwnDistances[i] = dc->distance_to_code(codes.data() + idx * sq.code_size);
+        avg_its_own_diff += itsOwnDistances[i];
+        avg_distance_from_query += actualDistances[i];
+    }
+
+    printf("Average distance difference from query over %d (avg dist %f) samples: %f\n",
+           sampleSize, avg_distance_from_query / sampleSize, distance_diff / sampleSize);
+    printf("Average self-quantization error over %d samples: %f\n",
+           sampleSize, avg_its_own_diff / sampleSize);
+
+    // Write results to files for external analysis
+    writeToFile("./actual_distances_parquet.bin",
+                reinterpret_cast<uint8_t *>(actualDistances.data()),
+                actualDistances.size() * sizeof(float));
+    writeToFile("./codes_distances_parquet.bin",
+                reinterpret_cast<uint8_t *>(codesDistances.data()),
+                codesDistances.size() * sizeof(float));
+    writeToFile("./self_distances_parquet.bin",
+                reinterpret_cast<uint8_t *>(itsOwnDistances.data()),
+                itsOwnDistances.size() * sizeof(float));
+
+    free(baseVecs);
+    delete[] queryVecs;
+}
+
+/**
  * Benchmark comparing kmeans performance across different configurations:
  * - Dimensions: 1024 vs 128
  * - Scalar quantization: with vs without
@@ -5362,6 +5477,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "testQuantizationIssue") {
         test_quantization_issue(input);
+    }
+    else if (run == "testQuantizationParquet") {
+        test_quantization_parquet(input);
     }
     else if (run == "run_umap_2D_without_clustering") {
         run_umap_2D_without_clustering(input);
