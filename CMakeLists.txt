@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-option(ENABLE_CUVS "Enable cuVS for GPU-accelerated balanced k-means" ON)
+option(ENABLE_CUVS "Enable cuVS for GPU-accelerated balanced k-means" OFF)
 
 set(ORANGEDB_LANGUAGES CXX C)
 set(CMAKE_CUDA_COMPILER /usr/local/cuda-12.9/bin/nvcc)
