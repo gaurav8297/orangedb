@@ -4639,6 +4639,26 @@ void print_quantization_parquet_data(InputParser &input) {
     sq.train(actualTrainSize, trainVecs);
     delete[] trainVecs;
 
+    // Print trained SQ parameters: min, diff (vmax-vmin), max per dimension
+    // sq.trained layout for QT_8bit: [vmin_0..vmin_{d-1}, vdiff_0..vdiff_{d-1}]
+    const float *vmin = sq.trained.data();
+    const float *vdiff = sq.trained.data() + trainDim;
+    printf("min:  [");
+    for (size_t i = 0; i < trainDim; i++) {
+        printf("%s%.6f", i > 0 ? ", " : "", vmin[i]);
+    }
+    printf("]\n");
+    printf("diff: [");
+    for (size_t i = 0; i < trainDim; i++) {
+        printf("%s%.6f", i > 0 ? ", " : "", vdiff[i]);
+    }
+    printf("]\n");
+    printf("max:  [");
+    for (size_t i = 0; i < trainDim; i++) {
+        printf("%s%.6f", i > 0 ? ", " : "", vmin[i] + vdiff[i]);
+    }
+    printf("]\n");
+
     // ---- Step 2: Read data fvec file ----
     size_t baseDimension, baseNumVectors;
     float *baseVecs = readVecFile(dataPath.c_str(), &baseDimension, &baseNumVectors);
