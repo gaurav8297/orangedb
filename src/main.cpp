@@ -4622,6 +4622,96 @@ void test_quantization_parquet(InputParser &input) {
     delete[] queryVecs;
 }
 
+void print_quantization_parquet_data(InputParser &input) {
+    const std::string &trainParquetPath = input.getCmdOption("-trainParquetPath");
+    const std::string &dataPath = input.getCmdOption("-dataPath");
+    const std::string &quantizedDataPath = input.getCmdOption("-quantizedDataPath");
+    const int trainSize = stoi(input.getCmdOption("-trainSize"));
+
+    // ---- Step 1: Read training parquet file(s) and train the scalar quantizer ----
+    size_t trainDim, trainNumVectors;
+    float *trainVecs = readParquetDir(trainParquetPath.c_str(), &trainDim, &trainNumVectors);
+    printf("Loaded %zu training vectors of dimension %zu\n", trainNumVectors, trainDim);
+
+    size_t actualTrainSize = std::min((size_t)trainSize, trainNumVectors);
+    faiss::ScalarQuantizer sq(trainDim, faiss::ScalarQuantizer::QT_8bit);
+    printf("Training scalar quantizer on %zu vectors of dimension %zu\n", actualTrainSize, trainDim);
+    sq.train(actualTrainSize, trainVecs);
+    delete[] trainVecs;
+
+    // ---- Step 2: Read data fvec file ----
+    size_t baseDimension, baseNumVectors;
+    float *baseVecs = readVecFile(dataPath.c_str(), &baseDimension, &baseNumVectors);
+    printf("Loaded %zu base vectors of dimension %zu from %s\n",
+           baseNumVectors, baseDimension, dataPath.c_str());
+    assert(baseDimension == trainDim);
+
+    // ---- Step 3: Compute SQ codes for all base vectors ----
+    std::vector<uint8_t> ourCodes(baseNumVectors * sq.code_size);
+    printf("Computing codes for %zu base vectors\n", baseNumVectors);
+    sq.compute_codes(baseVecs, ourCodes.data(), baseNumVectors);
+
+    // ---- Step 4: Load pre-quantized data ----
+    size_t refDim, refNumVectors;
+    float *refVecs = readVecFile(quantizedDataPath.c_str(), &refDim, &refNumVectors);
+    printf("Loaded %zu reference quantized vectors of dimension %zu from %s\n",
+           refNumVectors, refDim, quantizedDataPath.c_str());
+    assert(refDim == baseDimension);
+
+    // ---- Step 5: Compare and print side by side ----
+    size_t compareCount = std::min(baseNumVectors, refNumVectors);
+
+    size_t totalAllMismatches = 0;
+    size_t totalInterestingDims = 0;
+    size_t totalInterestingMismatches = 0;
+    size_t vectorsWithMismatch = 0;
+
+    for (size_t vecIdx = 0; vecIdx < compareCount; vecIdx++) {
+        bool hasMismatchInInterestingDim = false;
+        int vecMismatches = 0;
+        for (size_t d = 0; d < baseDimension; d++) {
+            uint8_t ours = ourCodes[vecIdx * sq.code_size + d];
+            uint8_t ref = (uint8_t)refVecs[vecIdx * refDim + d];
+            if (ours != ref) {
+                vecMismatches++;
+                float val = baseVecs[vecIdx * baseDimension + d];
+                if (val > 1.0f || val < -1.0f) {
+                    hasMismatchInInterestingDim = true;
+                }
+            }
+        }
+        totalAllMismatches += vecMismatches;
+        if (vecMismatches > 0) vectorsWithMismatch++;
+
+        if (hasMismatchInInterestingDim) {
+            printf("\n=== Vector %zu (%d total mismatches) ===\n", vecIdx, vecMismatches);
+            printf("%-6s %-14s %-10s %-10s %-5s\n", "Dim", "ActualVal", "OurCode", "RefCode", "Match");
+            for (size_t d = 0; d < baseDimension; d++) {
+                float val = baseVecs[vecIdx * baseDimension + d];
+                if (val > 1.0f || val < -1.0f) {
+                    uint8_t ours = ourCodes[vecIdx * sq.code_size + d];
+                    uint8_t ref = (uint8_t)refVecs[vecIdx * refDim + d];
+                    totalInterestingDims++;
+                    if (ours != ref) totalInterestingMismatches++;
+                    printf("%-6zu %-14.6f %-10u %-10u %s\n",
+                           d, val, ours, ref,
+                           ours == ref ? "YES" : "NO");
+                }
+            }
+        }
+    }
+
+    printf("\n=== Summary ===\n");
+    printf("Compared %zu vectors of dimension %zu\n", compareCount, baseDimension);
+    printf("Vectors with at least one mismatch: %zu / %zu\n", vectorsWithMismatch, compareCount);
+    printf("Total dimension mismatches: %zu / %zu\n", totalAllMismatches, compareCount * baseDimension);
+    printf("Interesting dims (|val| > 1) checked: %zu, mismatches: %zu\n",
+           totalInterestingDims, totalInterestingMismatches);
+
+    free(baseVecs);
+    free(refVecs);
+}
+
 /**
  * Benchmark comparing kmeans performance across different configurations:
  * - Dimensions: 1024 vs 128
@@ -5495,6 +5585,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "testKnnInnerProductParallel") {
         test_knn_inner_product_parallel(input);
+    }
+    else if (run == "printQuantizationParquetData") {
+        print_quantization_parquet_data(input);
     }
 #ifdef CUVS_ENABLED
     else if (run == "benchmarkCuvsBalancedKmeans") {
