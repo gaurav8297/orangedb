@@ -3150,7 +3150,7 @@ namespace orangedb {
 
         // Find the min and max distance from miniAssign
         auto minDistance = std::numeric_limits<double>::max();
-        std::vector<double> distances(miniAssign.size());
+        std::vector<double> distances;
         for (auto miniId : miniAssign) {
             double dist;
             dc->computeDistance(miniId, &dist);
