@@ -35,7 +35,7 @@
 #include "faiss/IndexPQ.h"
 #include "umappp/umappp.hpp"
 #include "knncolle/knncolle.hpp"
-#include <cblas.h>
+// #include <cblas.h>
 
 #ifdef CUVS_ENABLED
 #include "cuvs_kmeans.h"
@@ -5356,7 +5356,7 @@ void test_knn_inner_product_parallel(InputParser& input) {
     printf("Testing knn_inner_product in parallel for OpenBLAS thread safety\n");
     printf("(with different data sizes, data, and queries per thread)\n");
     printf("=======================================================\n");
-    openblas_set_num_threads(1);
+    // openblas_set_num_threads(1);
 
     const size_t dim = 128;
     const size_t k = 10;

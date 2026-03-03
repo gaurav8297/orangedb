@@ -3145,14 +3145,26 @@ namespace orangedb {
         findKClosestMiniCentroids(query, nMicroProbes, megaAssign, miniAssign, stats);
         // printf("Total mini centroids to search: %zu\n", miniAssign.size());
 
-        // auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
-        // dc->setQuery(query);
-        // // Find the min and max distance from miniAssign
-        // for (auto miniId : miniAssign) {
-        //     double dist;
-        //     dc->computeDistance(miniId, &dist);
-        //     printf("Mini centroid %llu distance: %f\n", miniId, dist);
-        // }
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
+        dc->setQuery(query);
+
+        // Find the min and max distance from miniAssign
+        auto minDistance = std::numeric_limits<double>::max();
+        std::vector<double> distances(miniAssign.size());
+        for (auto miniId : miniAssign) {
+            double dist;
+            dc->computeDistance(miniId, &dist);
+            minDistance = std::min(minDistance, dist);
+            distances.push_back(dist);
+        }
+
+        // print the factor of distance against minDistance
+        for (size_t i = 0; i < miniAssign.size(); i++) {
+            auto miniId = miniAssign[i];
+            auto dist = distances[i];
+            printf("Mini centroid id: %llu, distance: %f, factor against minDistance: %f\n", miniId, dist,
+                   dist / minDistance);
+        }
 
         // Print the shilloute score for each mini centroid
         // auto num_of_negative_silhouette = 0;
