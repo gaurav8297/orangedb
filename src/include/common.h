@@ -1,10 +1,13 @@
 #pragma once
 
 #include <sys/stat.h>
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <filesystem>
 #include <sys/fcntl.h>
 #include <random>
+#include <vector>
 #include "spdlog/fmt/fmt.h"
 #include <unordered_map>
 #include <simsimd/simsimd.h>
@@ -92,8 +95,29 @@ namespace orangedb {
         return align_x;
     }
 
+    static void readBvecFileStats(const char *fName, size_t *d_out, size_t *n_out);
+
+    static float *readBvecFileChunk(
+            const char *fName,
+            size_t start_row,
+            size_t max_rows,
+            size_t *d_out,
+            size_t *n_out);
+
+    static float *readBvecTrainingSample(
+            const char *fName,
+            size_t sample_rows,
+            size_t *d_out,
+            size_t *n_out,
+            double sample_percent = 0.0,
+            size_t max_source_rows = SIZE_MAX,
+            uint64_t seed = 1234);
+
     static float *readBvecFile(const char *fName, size_t *d_out, size_t *n_out, size_t max_rows = SIZE_MAX) {
-        // Open the file in binary mode
+        return readBvecFileChunk(fName, 0, max_rows, d_out, n_out);
+    }
+
+    static void readBvecFileStats(const char *fName, size_t *d_out, size_t *n_out) {
         FILE *f = fopen(fName, "rb");
         if (!f) {
             fprintf(stderr, "could not open %s\n", fName);
@@ -101,48 +125,142 @@ namespace orangedb {
             abort();
         }
 
-        // Read the dimension (first 4 bytes are the dimension in bvecs)
         int d;
         fread(&d, 1, sizeof(int), f);
         CHECK_ARGUMENT((d > 0 && d < 1000000), "unreasonable dimension");
 
-        // Go back to the start of the file
-        fseek(f, 0, SEEK_SET);
-
-        // Get the file size to calculate the number of vectors
         struct stat st{};
         fstat(fileno(f), &st);
         size_t sz = st.st_size;
-        CHECK_ARGUMENT(sz % (4 + d * sizeof(uint8_t)) == 0, "weird file size");
+        const size_t bytes_per_vector = 4 + static_cast<size_t>(d) * sizeof(uint8_t);
+        CHECK_ARGUMENT(sz % bytes_per_vector == 0, "weird file size");
 
-        // Calculate the total number of vectors and apply the limit
-        size_t total_n = sz / (4 + d * sizeof(uint8_t)); // Total number of vectors
-        size_t n = (total_n > max_rows) ? max_rows : total_n; // Limit the number of vectors to max_rows
+        *d_out = d;
+        *n_out = sz / bytes_per_vector;
+        fclose(f);
+    }
+
+    static float *readBvecFileChunk(
+            const char *fName,
+            size_t start_row,
+            size_t max_rows,
+            size_t *d_out,
+            size_t *n_out) {
+        size_t d;
+        size_t total_n;
+        readBvecFileStats(fName, &d, &total_n);
+        CHECK_ARGUMENT(start_row <= total_n, "start row exceeds total rows");
+
+        const size_t n = std::min(max_rows, total_n - start_row);
         *d_out = d;
         *n_out = n;
+        if (n == 0) {
+            return nullptr;
+        }
 
-        // Allocate memory for the original uint8_t data (including dimension prefix)
-        auto *x = new uint8_t[n * (4 + d)];
+        FILE *f = fopen(fName, "rb");
+        if (!f) {
+            fprintf(stderr, "could not open %s\n", fName);
+            perror("");
+            abort();
+        }
+
+        const size_t bytes_per_vector = 4 + d * sizeof(uint8_t);
+        const size_t offset = start_row * bytes_per_vector;
+        CHECK_ARGUMENT(fseek(f, static_cast<long>(offset), SEEK_SET) == 0, "failed to seek in bvec file");
+
+        auto *x = new uint8_t[n * bytes_per_vector];
         printf("x: %p\n", x);
-        size_t nr = fread(x, sizeof(uint8_t), n * (4 + d), f);
-        CHECK_ARGUMENT(nr == n * (4 + d), "could not read whole file");
+        size_t nr = fread(x, sizeof(uint8_t), n * bytes_per_vector, f);
+        CHECK_ARGUMENT(nr == n * bytes_per_vector, "could not read whole chunk");
 
-        // Allocate aligned memory for the float data
         float *align_x;
         allocAligned((void **) &align_x, n * d * sizeof(float), 8 * sizeof(float));
         printf("align_x: %p\n", align_x);
 
-        // Convert uint8_t data to float and copy to aligned memory
         for (size_t i = 0; i < n; i++) {
+            const uint8_t *row = x + i * bytes_per_vector + 4;
             for (size_t j = 0; j < d; j++) {
-                align_x[i * d + j] = static_cast<float>(x[4 + i * (4 + d) + j]); // Skip first 4 bytes (dimension)
+                align_x[i * d + j] = static_cast<float>(row[j]);
             }
         }
 
-        // Free original uint8_t data
         delete[] x;
         fclose(f);
         return align_x;
+    }
+
+    static size_t resolveBvecSampleCount(size_t total_rows, size_t sample_rows, double sample_percent) {
+        if (sample_percent > 0.0) {
+            auto resolved = static_cast<size_t>(std::ceil((sample_percent / 100.0) * total_rows));
+            return std::min(total_rows, std::max<size_t>(1, resolved));
+        }
+        return std::min(total_rows, sample_rows);
+    }
+
+    static float *readBvecTrainingSample(
+            const char *fName,
+            size_t sample_rows,
+            size_t *d_out,
+            size_t *n_out,
+            double sample_percent,
+            size_t max_source_rows,
+            uint64_t seed) {
+        size_t d = 0;
+        size_t total_rows = 0;
+        readBvecFileStats(fName, &d, &total_rows);
+        total_rows = std::min(total_rows, max_source_rows);
+
+        const size_t resolved_sample_rows = resolveBvecSampleCount(total_rows, sample_rows, sample_percent);
+        *d_out = d;
+        *n_out = resolved_sample_rows;
+
+        if (resolved_sample_rows == 0 || total_rows == 0) {
+            return nullptr;
+        }
+        if (resolved_sample_rows == total_rows) {
+            return readBvecFileChunk(fName, 0, total_rows, d_out, n_out);
+        }
+
+        FILE *f = fopen(fName, "rb");
+        if (!f) {
+            fprintf(stderr, "could not open %s\n", fName);
+            perror("");
+            abort();
+        }
+
+        const size_t bytes_per_vector = 4 + d * sizeof(uint8_t);
+        std::vector<uint8_t> row(bytes_per_vector);
+        std::mt19937_64 rng(seed);
+
+        float *sampled_vecs;
+        allocAligned((void **) &sampled_vecs, resolved_sample_rows * d * sizeof(float), 8 * sizeof(float));
+
+        auto copy_row = [&](size_t sample_idx) {
+            const uint8_t *src = row.data() + 4;
+            float *dst = sampled_vecs + sample_idx * d;
+            for (size_t j = 0; j < d; j++) {
+                dst[j] = static_cast<float>(src[j]);
+            }
+        };
+
+        for (size_t row_idx = 0; row_idx < total_rows; row_idx++) {
+            size_t nr = fread(row.data(), sizeof(uint8_t), bytes_per_vector, f);
+            CHECK_ARGUMENT(nr == bytes_per_vector, "could not read whole vector");
+            if (row_idx < resolved_sample_rows) {
+                copy_row(row_idx);
+                continue;
+            }
+
+            std::uniform_int_distribution<size_t> dist(0, row_idx);
+            size_t candidate_idx = dist(rng);
+            if (candidate_idx < resolved_sample_rows) {
+                copy_row(candidate_idx);
+            }
+        }
+
+        fclose(f);
+        return sampled_vecs;
     }
 
     static void writeFvecFile(const char *fName, const float *data, size_t d, size_t n) {

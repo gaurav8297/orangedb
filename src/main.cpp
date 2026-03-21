@@ -9,6 +9,7 @@
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
 #include <cmath>       // isnan, isinf
+#include <memory>
 #include <random>      // mt19937, uniform_int_distribution
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
@@ -78,6 +79,12 @@ using namespace orangedb;
 #endif
 #include <backward.hpp>
 
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
+
 enum CLUSTER_HIRARCHY {
     C_L1,    // 0
     C_L2, // 1
@@ -110,6 +117,51 @@ public:
 private:
     std::vector<std::string> tokens;
 };
+
+static size_t get_current_rss_bytes() {
+#if defined(__APPLE__)
+    mach_task_basic_info info;
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, reinterpret_cast<task_info_t>(&info), &count) !=
+        KERN_SUCCESS) {
+        return 0;
+    }
+    return static_cast<size_t>(info.resident_size);
+#elif defined(__linux__)
+    std::ifstream statm("/proc/self/statm");
+    size_t total_pages = 0;
+    size_t resident_pages = 0;
+    statm >> total_pages >> resident_pages;
+    return resident_pages * static_cast<size_t>(sysconf(_SC_PAGESIZE));
+#else
+    return 0;
+#endif
+}
+
+static double bytes_to_mb(size_t bytes) {
+    return static_cast<double>(bytes) / (1024.0 * 1024.0);
+}
+
+static void print_memory_usage(const char *label) {
+    printf("%s RSS: %.2f MB\n", label, bytes_to_mb(get_current_rss_bytes()));
+}
+
+static std::unique_ptr<faiss::IndexIVF> create_faiss_ivf_index(
+        size_t dimension,
+        size_t num_centroids,
+        faiss::MetricType metric,
+        bool use_scalar_quantizer) {
+    auto *quantizer = new faiss::IndexFlat(dimension, metric);
+    std::unique_ptr<faiss::IndexIVF> index;
+    if (use_scalar_quantizer) {
+        index = std::make_unique<faiss::IndexIVFScalarQuantizer>(
+                quantizer, dimension, num_centroids, faiss::ScalarQuantizer::QT_8bit, metric);
+    } else {
+        index = std::make_unique<faiss::IndexIVFFlat>(quantizer, dimension, num_centroids, metric);
+    }
+    index->own_fields = true;
+    return index;
+}
 
 void exp_omp_lock() {
     omp_set_num_threads(8);
@@ -2636,6 +2688,319 @@ void benchmark_faiss_clustering(InputParser &input) {
     std::cout << "Recall: " << (recallPerQuery / k) * 100 << std::endl;
     std::cout << "Avg Distances comps: " << faiss::indexIVF_stats.ndis / queryNumVectors << std::endl;
     std::cout << "Query time: " << duration_search << " ms" << std::endl;
+}
+
+void benchmark_faiss_clustering_on_bvec(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const int numVectors = stoi(input.getCmdOption("-numVectors"));
+    const int clusterSize = stoi(input.getCmdOption("-clusterSize"));
+    const int nIter = stoi(input.getCmdOption("-nIter"));
+    const int nThreads = stoi(input.getCmdOption("-nThreads"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numQueries = stoi(input.getCmdOption("-numQueries"));
+    const size_t sampleSize = input.getCmdOption("-sampleSize").empty()
+                                      ? 0
+                                      : stoull(input.getCmdOption("-sampleSize"));
+    const double samplePercent = !input.getCmdOption("-samplePercent").empty()
+                                         ? stod(input.getCmdOption("-samplePercent"))
+                                         : (!input.getCmdOption("-samplePercentage").empty()
+                                                    ? stod(input.getCmdOption("-samplePercentage"))
+                                                    : 0.0);
+    const int nProbes = stoi(input.getCmdOption("-nProbes"));
+    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
+    const std::string &storagePath = input.getCmdOption("-storagePath");
+    const bool useIP = input.getCmdOption("-useIP").empty() ? false : stoi(input.getCmdOption("-useIP"));
+    const bool useScalarQuantizer = input.getCmdOption("-useScalarQuantizer").empty()
+                                            ? false
+                                            : stoi(input.getCmdOption("-useScalarQuantizer"));
+    const size_t addBatchSize = input.getCmdOption("-addBatchSize").empty()
+                                        ? static_cast<size_t>(250000)
+                                        : stoull(input.getCmdOption("-addBatchSize"));
+
+    CHECK_ARGUMENT(baseVectorPath.find(".bvec") != std::string::npos, "base vector path must be a .bvecs file");
+    CHECK_ARGUMENT(!storagePath.empty(), "storage path is required");
+    CHECK_ARGUMENT(sampleSize > 0 || samplePercent > 0.0, "sampleSize or samplePercent is required");
+
+    size_t baseDimension, totalBaseNumVectors;
+    readBvecFileStats(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+    totalBaseNumVectors = std::min(totalBaseNumVectors, static_cast<size_t>(numVectors));
+
+    size_t queryDimension, queryNumVectors;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
+    queryNumVectors = std::min(queryNumVectors, static_cast<size_t>(numQueries));
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+
+    auto metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+    const size_t numCentroids = std::max<size_t>(1, totalBaseNumVectors / clusterSize);
+    const size_t sampleSizeAdjusted = resolveBvecSampleCount(totalBaseNumVectors, sampleSize, samplePercent);
+    const size_t avgPointsPerCentroid = std::max<size_t>(1, sampleSizeAdjusted / numCentroids);
+
+    std::unique_ptr<faiss::IndexIVF> ownedIndex;
+    std::unique_ptr<faiss::Index> loadedIndex;
+    faiss::IndexIVF *index = nullptr;
+
+    if (!readFromDisk) {
+        ownedIndex = create_faiss_ivf_index(baseDimension, numCentroids, metric, useScalarQuantizer);
+        index = ownedIndex.get();
+        index->cp.niter = nIter;
+        index->cp.max_points_per_centroid = avgPointsPerCentroid;
+        index->cp.min_points_per_centroid = std::max<size_t>(1, avgPointsPerCentroid / 2);
+        index->cp.verbose = true;
+
+        printf("Training sample size: %zu\n", sampleSizeAdjusted);
+        if (samplePercent > 0.0) {
+            printf("Training sample percent: %.4f\n", samplePercent);
+        }
+        printf("Add batch size: %zu\n", addBatchSize);
+        printf("Index type: %s\n", useScalarQuantizer ? "IVFScalarQuantizer(QT_8bit)" : "IVFFlat");
+        printf("Code size per vector: %zu bytes\n", index->code_size);
+        print_memory_usage("Initial");
+
+        omp_set_num_threads(nThreads);
+
+        size_t sampleDim = 0;
+        size_t sampledVectors = 0;
+        float *sampleVecs = readBvecTrainingSample(
+                baseVectorPath.c_str(),
+                sampleSize,
+                &sampleDim,
+                &sampledVectors,
+                samplePercent,
+                totalBaseNumVectors);
+        CHECK_ARGUMENT(sampleDim == baseDimension, "sample dimension mismatch");
+
+        auto trainStart = std::chrono::high_resolution_clock::now();
+        index->train(sampledVectors, sampleVecs);
+        auto trainEnd = std::chrono::high_resolution_clock::now();
+        printf(
+                "Training time: %lld ms\n",
+                std::chrono::duration_cast<std::chrono::milliseconds>(trainEnd - trainStart).count());
+        std::free(sampleVecs);
+        print_memory_usage("After training");
+
+        size_t totalAdded = 0;
+        size_t batchId = 0;
+        auto addStart = std::chrono::high_resolution_clock::now();
+        while (totalAdded < totalBaseNumVectors) {
+            size_t batchDim = 0;
+            size_t batchVectors = 0;
+            const size_t rowsToRead = std::min(addBatchSize, totalBaseNumVectors - totalAdded);
+            float *batchVecs = readBvecFileChunk(
+                    baseVectorPath.c_str(), totalAdded, rowsToRead, &batchDim, &batchVectors);
+            CHECK_ARGUMENT(batchDim == baseDimension, "batch dimension mismatch");
+            index->add(batchVectors, batchVecs);
+            totalAdded += batchVectors;
+            batchId++;
+            printf("Added batch %zu with %zu vectors. Total added: %zu\n", batchId, batchVectors, totalAdded);
+            if (batchId == 1 || batchId % 10 == 0 || totalAdded == totalBaseNumVectors) {
+                print_memory_usage("After add batch");
+            }
+            std::free(batchVecs);
+        }
+        auto addEnd = std::chrono::high_resolution_clock::now();
+        printf(
+                "Adding time: %lld ms\n",
+                std::chrono::duration_cast<std::chrono::milliseconds>(addEnd - addStart).count());
+
+        faiss::write_index(index, storagePath.c_str());
+        printf("Stored index at: %s\n", storagePath.c_str());
+        if (std::filesystem::exists(storagePath)) {
+            printf("Index file size: %.2f MB\n", bytes_to_mb(std::filesystem::file_size(storagePath)));
+        }
+        print_memory_usage("After storing index");
+    } else {
+        loadedIndex.reset(faiss::read_index(storagePath.c_str()));
+        index = dynamic_cast<faiss::IndexIVF *>(loadedIndex.get());
+        CHECK_ARGUMENT(index != nullptr, "stored index is not an IVF index");
+        printf("Loaded index from: %s\n", storagePath.c_str());
+        print_memory_usage("After loading index");
+    }
+
+    index->nprobe = nProbes;
+    faiss::indexIVF_stats.reset();
+
+    std::vector<faiss::idx_t> labels(k);
+    std::vector<float> distances(k);
+    double recall = 0.0;
+
+    auto searchStart = std::chrono::high_resolution_clock::now();
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        index->search(1, queryVecs + i * baseDimension, k, distances.data(), labels.data());
+        auto *gt = gtVecs + i * k;
+        int localRecall = 0;
+        for (int j = 0; j < k; j++) {
+            if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
+                recall++;
+                localRecall++;
+            }
+        }
+        printf("Query %zu: Recall: %.2f%%\n", i, (localRecall / static_cast<double>(k)) * 100.0);
+    }
+    auto searchEnd = std::chrono::high_resolution_clock::now();
+    auto searchDuration = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart).count();
+
+    std::cout << "Total Vectors: " << queryNumVectors << std::endl;
+    std::cout << "Num of centroids: " << numCentroids << std::endl;
+    std::cout << "Recall: " << ((recall / queryNumVectors) / k) * 100 << std::endl;
+    std::cout << "Avg Distances comps: " << faiss::indexIVF_stats.ndis / queryNumVectors << std::endl;
+    std::cout << "Query time: " << searchDuration << " ms" << std::endl;
+    print_memory_usage("After queries");
+}
+
+void debug_fbin_ivf_query(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    std::string groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const size_t numVectors = input.getCmdOption("-numVectors").empty()
+                                      ? SIZE_MAX
+                                      : stoull(input.getCmdOption("-numVectors"));
+    const size_t queryIndex = stoull(input.getCmdOption("-queryIndex"));
+    const int k = stoi(input.getCmdOption("-k"));
+    const int numThreads = input.getCmdOption("-numThreads").empty() ? 1 : stoi(input.getCmdOption("-numThreads"));
+    const int nIter = input.getCmdOption("-nIter").empty() ? 10 : stoi(input.getCmdOption("-nIter"));
+    const int nProbes = stoi(input.getCmdOption("-nProbes"));
+    const double factor = input.getCmdOption("-factor").empty() ? 1.0 : stod(input.getCmdOption("-factor"));
+    const bool useIP = input.getCmdOption("-useIP").empty() ? false : stoi(input.getCmdOption("-useIP"));
+    const bool useScalarQuantizer = input.getCmdOption("-useScalarQuantizer").empty()
+                                            ? false
+                                            : stoi(input.getCmdOption("-useScalarQuantizer"));
+    size_t numCentroids = !input.getCmdOption("-numCentroids").empty()
+                                        ? stoull(input.getCmdOption("-numCentroids"))
+                                        : 0;
+    const double samplePercent = input.getCmdOption("-samplePercent").empty()
+                                         ? 0.2
+                                         : stod(input.getCmdOption("-samplePercent"));
+
+    CHECK_ARGUMENT(!baseVectorPath.empty(), "base vector path is required");
+    CHECK_ARGUMENT(!queryVectorPath.empty(), "query vector path is required");
+
+    size_t baseDimension = 0;
+    size_t totalBaseNumVectors = 0;
+    float *baseVecs = readFbinFile(baseVectorPath.c_str(), &baseDimension, &totalBaseNumVectors);
+    totalBaseNumVectors = std::min(totalBaseNumVectors, numVectors);
+    CHECK_ARGUMENT(totalBaseNumVectors > 0, "no base vectors available");
+    if (numCentroids == 0) {
+        numCentroids = std::max<size_t>(1, totalBaseNumVectors / stoi(input.getCmdOption("-clusterSize")));
+    }
+    printf("Base vectors: %zu, dimension: %zu numCentroids: %zu\n", totalBaseNumVectors, baseDimension, numCentroids);
+    CHECK_ARGUMENT(numCentroids <= totalBaseNumVectors, "numCentroids must be <= number of base vectors");
+
+    size_t queryDimension = 0;
+    size_t queryNumVectors = 0;
+    float *queryVecs = readFvecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
+    CHECK_ARGUMENT(queryIndex < queryNumVectors, "queryIndex out of range");
+
+    if (groundTruthPath.empty()) {
+        groundTruthPath = fmt::format("{}.gt_k{}.bin", queryVectorPath, k);
+    }
+
+    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
+    auto metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+    const size_t sampledTrainVectors = std::max<size_t>(
+            1, static_cast<size_t>(std::ceil(totalBaseNumVectors * samplePercent)));
+    omp_set_num_threads(numThreads);
+
+    if (!std::filesystem::exists(groundTruthPath)) {
+        printf("Ground truth not found. Computing exact GT and writing to: %s\n", groundTruthPath.c_str());
+        faiss::IndexFlat exactIndex(baseDimension, metric);
+        exactIndex.add(totalBaseNumVectors, baseVecs);
+
+        std::vector<faiss::idx_t> exactLabels(queryNumVectors * k);
+        std::vector<float> exactDistances(queryNumVectors * k);
+        exactIndex.search(queryNumVectors, queryVecs, k, exactDistances.data(), exactLabels.data());
+
+        for (size_t i = 0; i < queryNumVectors * static_cast<size_t>(k); i++) {
+            gtVecs[i] = static_cast<vector_idx_t>(exactLabels[i]);
+        }
+
+        const auto gtParent = std::filesystem::path(groundTruthPath).parent_path();
+        if (!gtParent.empty()) {
+            std::filesystem::create_directories(gtParent);
+        }
+        writeToFile(groundTruthPath, reinterpret_cast<const uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    } else {
+        loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    }
+
+    auto index = create_faiss_ivf_index(baseDimension, numCentroids, metric, useScalarQuantizer);
+    index->cp.niter = nIter;
+    index->cp.max_points_per_centroid = std::max<size_t>(1, sampledTrainVectors / numCentroids);
+    index->cp.min_points_per_centroid = std::max<size_t>(1, index->cp.max_points_per_centroid / 2);
+    index->cp.verbose = true;
+
+    auto buildStart = std::chrono::high_resolution_clock::now();
+    index->train(totalBaseNumVectors, baseVecs);
+    index->add(totalBaseNumVectors, baseVecs);
+    auto buildEnd = std::chrono::high_resolution_clock::now();
+
+    index->nprobe = nProbes;
+    faiss::indexIVF_stats.reset();
+
+    auto *queryVec = queryVecs + queryIndex * queryDimension;
+    std::vector<faiss::idx_t> labels(k);
+    std::vector<float> distances(k);
+    index->search(1, queryVec, k, distances.data(), labels.data());
+
+    auto *gt = gtVecs + queryIndex * k;
+    int hitCount = 0;
+    for (int j = 0; j < k; j++) {
+        if (std::find(gt, gt + k, labels[j]) != (gt + k)) {
+            hitCount++;
+        }
+    }
+
+    std::vector<float> centroidDists(numCentroids);
+    std::vector<faiss::idx_t> centroidIds(numCentroids);
+    index->quantizer->search(1, queryVec, numCentroids, centroidDists.data(), centroidIds.data());
+    if (useIP) {
+        for (size_t i = 0; i < numCentroids; i++) {
+            centroidDists[i] = -centroidDists[i];
+        }
+    }
+    std::sort(centroidDists.begin(), centroidDists.end());
+
+    const double minCentroidDist = centroidDists.front();
+    const double threshold = minCentroidDist + std::abs(minCentroidDist) * (factor - 1.0);
+    int centroidsWithinFactor = 0;
+    double furthestAccepted = minCentroidDist;
+    for (double dist : centroidDists) {
+        if (dist > threshold) {
+            break;
+        }
+        furthestAccepted = dist;
+        centroidsWithinFactor++;
+    }
+
+    printf("Debug IVF query\n");
+    printf("Index type: %s\n", useScalarQuantizer ? "IVFScalarQuantizer(QT_8bit)" : "IVFFlat");
+    printf("Base vectors: %zu, dimension: %zu, centroids: %zu\n", totalBaseNumVectors, baseDimension, numCentroids);
+    printf("OpenMP threads: %d\n", numThreads);
+    printf("Faiss training cap: %zu vectors (20%%)\n", sampledTrainVectors);
+    printf("Build time: %lld ms\n", std::chrono::duration_cast<std::chrono::milliseconds>(buildEnd - buildStart).count());
+    printf("Query index: %zu, nprobe: %d, factor: %.4f\n", queryIndex, nProbes, factor);
+    printf("Recall@%d: %.2f%% (%d/%d)\n", k, (hitCount / static_cast<double>(k)) * 100.0, hitCount, k);
+    printf("Average IVF distance computations: %zu\n", faiss::indexIVF_stats.ndis);
+    printf("Min centroid distance: %.6f\n", minCentroidDist);
+    printf("Centroids within factor %.4f: %d\n", factor, centroidsWithinFactor);
+    printf("Furthest accepted centroid distance: %.6f\n", furthestAccepted);
+
+    const int printK = std::min(k, 10);
+    printf("Top-%d result ids: ", printK);
+    for (int j = 0; j < printK; j++) {
+        printf("%lld ", static_cast<long long>(labels[j]));
+    }
+    printf("\n");
+    printf("Top-%d gt ids: ", printK);
+    for (int j = 0; j < printK; j++) {
+        printf("%llu ", static_cast<unsigned long long>(gt[j]));
+    }
+    printf("\n");
 }
 
 double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
@@ -5560,6 +5925,12 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkFaissClustering") {
         benchmark_faiss_clustering(input);
+    }
+    else if (run == "benchmarkFaissClusteringOnBvec") {
+        benchmark_faiss_clustering_on_bvec(input);
+    }
+    else if (run == "debugFbinIvfQuery") {
+        debug_fbin_ivf_query(input);
     }
     else if (run == "benchmarkFaissFlat") {
         benchmark_faiss_flat(input);
