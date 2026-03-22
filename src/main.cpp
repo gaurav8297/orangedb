@@ -2748,7 +2748,7 @@ void benchmark_faiss_clustering_on_bvec(InputParser &input) {
         ownedIndex = create_faiss_ivf_index(baseDimension, numCentroids, metric, useScalarQuantizer);
         index = ownedIndex.get();
         index->cp.niter = nIter;
-        index->cp.max_points_per_centroid = avgPointsPerCentroid;
+        index->cp.max_points_per_centroid = avgPointsPerCentroid + 1;
         index->cp.min_points_per_centroid = std::max<size_t>(1, avgPointsPerCentroid / 2);
         index->cp.verbose = true;
 

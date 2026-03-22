@@ -6,8 +6,10 @@
 #include <iostream>
 #include <filesystem>
 #include <sys/fcntl.h>
+#include <limits>
 #include <random>
 #include <vector>
+#include <faiss/utils/random.h>
 #include "spdlog/fmt/fmt.h"
 #include <unordered_map>
 #include <simsimd/simsimd.h>
@@ -231,7 +233,28 @@ namespace orangedb {
 
         const size_t bytes_per_vector = 4 + d * sizeof(uint8_t);
         std::vector<uint8_t> row(bytes_per_vector);
-        std::mt19937_64 rng(seed);
+        CHECK_ARGUMENT(
+                total_rows <= static_cast<size_t>(std::numeric_limits<int>::max()),
+                "faiss::rand_perm requires total_rows to fit in int");
+
+        struct SampleRowRef {
+            size_t row_idx;
+            size_t sample_idx;
+        };
+
+        std::vector<int> perm(total_rows);
+        faiss::rand_perm(perm.data(), total_rows, static_cast<int64_t>(seed));
+
+        std::vector<SampleRowRef> sampled_rows;
+        sampled_rows.reserve(resolved_sample_rows);
+        for (size_t sample_idx = 0; sample_idx < resolved_sample_rows; sample_idx++) {
+            sampled_rows.push_back(
+                    SampleRowRef{static_cast<size_t>(perm[sample_idx]), sample_idx});
+        }
+        std::sort(
+                sampled_rows.begin(),
+                sampled_rows.end(),
+                [](const SampleRowRef &lhs, const SampleRowRef &rhs) { return lhs.row_idx < rhs.row_idx; });
 
         float *sampled_vecs;
         allocAligned((void **) &sampled_vecs, resolved_sample_rows * d * sizeof(float), 8 * sizeof(float));
@@ -244,19 +267,12 @@ namespace orangedb {
             }
         };
 
-        for (size_t row_idx = 0; row_idx < total_rows; row_idx++) {
+        for (const auto &sampled_row : sampled_rows) {
+            const off_t offset = static_cast<off_t>(sampled_row.row_idx * bytes_per_vector);
+            CHECK_ARGUMENT(fseeko(f, offset, SEEK_SET) == 0, "failed to seek in bvec file");
             size_t nr = fread(row.data(), sizeof(uint8_t), bytes_per_vector, f);
             CHECK_ARGUMENT(nr == bytes_per_vector, "could not read whole vector");
-            if (row_idx < resolved_sample_rows) {
-                copy_row(row_idx);
-                continue;
-            }
-
-            std::uniform_int_distribution<size_t> dist(0, row_idx);
-            size_t candidate_idx = dist(rng);
-            if (candidate_idx < resolved_sample_rows) {
-                copy_row(candidate_idx);
-            }
+            copy_row(sampled_row.sample_idx);
         }
 
         fclose(f);
