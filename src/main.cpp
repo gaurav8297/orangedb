@@ -2905,12 +2905,11 @@ void debug_fbin_ivf_query(InputParser &input) {
     const size_t sampledTrainVectors = std::max<size_t>(
             1, static_cast<size_t>(std::ceil(totalBaseNumVectors * samplePercent)));
     omp_set_num_threads(numThreads);
+    faiss::IndexFlat exactIndex(baseDimension, metric);
+    exactIndex.add(totalBaseNumVectors, baseVecs);
 
     if (!std::filesystem::exists(groundTruthPath)) {
         printf("Ground truth not found. Computing exact GT and writing to: %s\n", groundTruthPath.c_str());
-        faiss::IndexFlat exactIndex(baseDimension, metric);
-        exactIndex.add(totalBaseNumVectors, baseVecs);
-
         std::vector<faiss::idx_t> exactLabels(queryNumVectors * k);
         std::vector<float> exactDistances(queryNumVectors * k);
         exactIndex.search(queryNumVectors, queryVecs, k, exactDistances.data(), exactLabels.data());
@@ -2946,6 +2945,14 @@ void debug_fbin_ivf_query(InputParser &input) {
     std::vector<faiss::idx_t> labels(k);
     std::vector<float> distances(k);
     index->search(1, queryVec, k, distances.data(), labels.data());
+    std::vector<faiss::idx_t> exactVectorIds(totalBaseNumVectors);
+    std::vector<float> exactVectorDists(totalBaseNumVectors);
+    exactIndex.search(1, queryVec, totalBaseNumVectors, exactVectorDists.data(), exactVectorIds.data());
+    if (useIP) {
+        for (float &dist : exactVectorDists) {
+            dist = -dist;
+        }
+    }
 
     auto *gt = gtVecs + queryIndex * k;
     int hitCount = 0;
@@ -2977,6 +2984,19 @@ void debug_fbin_ivf_query(InputParser &input) {
         centroidsWithinFactor++;
     }
 
+    const double minVectorDist = exactVectorDists.front();
+    const double maxVectorDist = exactVectorDists.back();
+    const double vectorThreshold = minVectorDist + std::abs(minVectorDist) * (factor - 1.0);
+    size_t vectorsWithinFactor = 0;
+    double furthestAcceptedVectorDist = minVectorDist;
+    for (double dist : exactVectorDists) {
+        if (dist > vectorThreshold) {
+            break;
+        }
+        furthestAcceptedVectorDist = dist;
+        vectorsWithinFactor++;
+    }
+
     printf("Debug IVF query\n");
     printf("Index type: %s\n", useScalarQuantizer ? "IVFScalarQuantizer(QT_8bit)" : "IVFFlat");
     printf("Base vectors: %zu, dimension: %zu, centroids: %zu\n", totalBaseNumVectors, baseDimension, numCentroids);
@@ -2989,6 +3009,10 @@ void debug_fbin_ivf_query(InputParser &input) {
     printf("Min centroid distance: %.6f\n", minCentroidDist);
     printf("Centroids within factor %.4f: %d\n", factor, centroidsWithinFactor);
     printf("Furthest accepted centroid distance: %.6f\n", furthestAccepted);
+    printf("Min vector distance from query: %.6f\n", minVectorDist);
+    printf("Max vector distance from query: %.6f\n", maxVectorDist);
+    printf("Vectors within factor %.4f: %zu\n", factor, vectorsWithinFactor);
+    printf("Furthest accepted vector distance: %.6f\n", furthestAcceptedVectorDist);
 
     const int printK = std::min(k, 10);
     printf("Top-%d result ids: ", printK);
