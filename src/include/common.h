@@ -427,7 +427,7 @@ namespace orangedb {
         std::shared_ptr<parquet::FileMetaData> meta = pq_reader->metadata();
         *n_out = meta->num_rows();
         const auto row_group_meta = meta->RowGroup(0);
-        *d_out = row_group_meta->ColumnChunk(2)->num_values() / row_group_meta->num_rows();
+        *d_out = row_group_meta->ColumnChunk(8)->num_values() / row_group_meta->num_rows();
         return arrow::Status::OK();
     }
 
@@ -437,7 +437,7 @@ namespace orangedb {
         ARROW_ASSIGN_OR_RAISE(reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
         std::shared_ptr<arrow::Schema> schema;
         ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
-        std::string column_name = "vector";
+        std::string column_name = "emb";
         // printf("%s\n", column_name.c_str());
         int col_index = schema->GetFieldIndex(column_name);
         printf("Reading column '%s' at index %d\n", column_name.c_str(), col_index);
