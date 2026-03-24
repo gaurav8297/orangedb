@@ -413,6 +413,7 @@ namespace orangedb {
                     file_paths.emplace_back(entry.path().string());
                 }
             }
+            std::sort(file_paths.begin(), file_paths.end());
         } catch (const std::filesystem::filesystem_error& e) {
             std::cerr << "Filesystem error: " << e.what() << '\n';
         } catch (const std::exception& e) {
