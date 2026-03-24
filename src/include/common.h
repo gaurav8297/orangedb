@@ -421,54 +421,248 @@ namespace orangedb {
         }
     }
 
-    static arrow::Status readParquetFileStats(const char *fName, size_t *d_out, size_t *n_out) {
+    static constexpr int64_t PARQUET_EMB_BATCH_SIZE = 65536;
+
+    static arrow::Result<std::unique_ptr<parquet::arrow::FileReader>> openParquetArrowReader(const char *fName) {
         ARROW_ASSIGN_OR_RAISE(auto infile, arrow::io::ReadableFile::Open(std::string(fName)));
-        std::unique_ptr<parquet::ParquetFileReader> pq_reader =
-                parquet::ParquetFileReader::Open(infile);
-        std::shared_ptr<parquet::FileMetaData> meta = pq_reader->metadata();
-        *n_out = meta->num_rows();
-        const auto row_group_meta = meta->RowGroup(0);
-        *d_out = row_group_meta->ColumnChunk(7)->num_values() / row_group_meta->num_rows();
-        return arrow::Status::OK();
+        ARROW_ASSIGN_OR_RAISE(auto reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
+        reader->set_use_threads(false);
+        return reader;
     }
 
-    static arrow::Status readParquetFile(const char *fName, float* output, size_t *n_out) {
-        ARROW_ASSIGN_OR_RAISE(auto infile, arrow::io::ReadableFile::Open(std::string(fName)));
-        std::unique_ptr<parquet::arrow::FileReader> reader;
-        ARROW_ASSIGN_OR_RAISE(reader, parquet::arrow::OpenFile(infile, arrow::default_memory_pool()));
+    static arrow::Result<int> getParquetEmbeddingColumnIndex(
+            parquet::arrow::FileReader *reader,
+            std::shared_ptr<arrow::Schema> *schema_out,
+            const std::string &column_name = "emb") {
         std::shared_ptr<arrow::Schema> schema;
         ARROW_RETURN_NOT_OK(reader->GetSchema(&schema));
-        std::string column_name = "emb";
-        // printf("%s\n", column_name.c_str());
-        int col_index = schema->GetFieldIndex(column_name);
-        printf("Reading column '%s' at index %d\n", column_name.c_str(), col_index);
+        const int col_index = schema->GetFieldIndex(column_name);
         if (col_index == -1) {
             return arrow::Status::Invalid("Column '" + column_name + "' not found");
         }
-        std::shared_ptr<arrow::Table> table;
-        ARROW_RETURN_NOT_OK(reader->ReadTable({col_index}, &table));
-        const auto& col = table->column(0);
-        *n_out = table->num_rows();
-        int64_t dst = 0;
-        for (const auto& chunk_base : col->chunks()) {
-            const auto chunk =
-                std::static_pointer_cast<arrow::FixedSizeListArray>(chunk_base);
-            const auto values =
-                std::static_pointer_cast<arrow::FloatArray>(chunk->values());
-            std::memcpy(output + dst,
-                        values->raw_values(),
-                        static_cast<size_t>(values->length()) * sizeof(float));
-            dst += values->length();
+        *schema_out = std::move(schema);
+        return col_index;
+    }
+
+    static arrow::Result<size_t> inferParquetEmbeddingDimFromArray(
+            const std::shared_ptr<arrow::Array> &array,
+            const std::string &column_name = "emb") {
+        switch (array->type_id()) {
+            case arrow::Type::FIXED_SIZE_LIST: {
+                const auto fixed_list = std::static_pointer_cast<arrow::FixedSizeListArray>(array);
+                const auto float_values = std::dynamic_pointer_cast<arrow::FloatArray>(fixed_list->values());
+                if (!float_values) {
+                    return arrow::Status::Invalid("Column '" + column_name + "' values must be float32");
+                }
+                return static_cast<size_t>(fixed_list->value_length());
+            }
+            case arrow::Type::LIST: {
+                const auto list = std::static_pointer_cast<arrow::ListArray>(array);
+                const auto float_values = std::dynamic_pointer_cast<arrow::FloatArray>(list->values());
+                if (!float_values) {
+                    return arrow::Status::Invalid("Column '" + column_name + "' values must be float32");
+                }
+                if (list->length() == 0) {
+                    return arrow::Status::Invalid("Cannot infer dimension from empty list batch");
+                }
+                return static_cast<size_t>(list->value_length(0));
+            }
+            case arrow::Type::LARGE_LIST: {
+                const auto list = std::static_pointer_cast<arrow::LargeListArray>(array);
+                const auto float_values = std::dynamic_pointer_cast<arrow::FloatArray>(list->values());
+                if (!float_values) {
+                    return arrow::Status::Invalid("Column '" + column_name + "' values must be float32");
+                }
+                if (list->length() == 0) {
+                    return arrow::Status::Invalid("Cannot infer dimension from empty large-list batch");
+                }
+                return static_cast<size_t>(list->value_length(0));
+            }
+            default:
+                return arrow::Status::Invalid(
+                        "Column '" + column_name +
+                        "' must be FixedSizeList<float>, List<float>, or LargeList<float>");
+        }
+    }
+
+    static arrow::Result<size_t> inferParquetEmbeddingDim(
+            parquet::arrow::FileReader *reader,
+            const std::shared_ptr<arrow::Schema> &schema,
+            int col_index,
+            const std::string &column_name = "emb") {
+        const auto field = schema->field(col_index);
+        if (field->type()->id() == arrow::Type::FIXED_SIZE_LIST) {
+            const auto fixed_list = std::static_pointer_cast<arrow::FixedSizeListType>(field->type());
+            if (fixed_list->value_type()->id() != arrow::Type::FLOAT) {
+                return arrow::Status::Invalid("Column '" + column_name + "' values must be float32");
+            }
+            return static_cast<size_t>(fixed_list->list_size());
+        }
+
+        reader->set_batch_size(1);
+        ARROW_ASSIGN_OR_RAISE(auto batch_reader, reader->GetRecordBatchReader({col_index}));
+        while (true) {
+            std::shared_ptr<arrow::RecordBatch> batch;
+            ARROW_RETURN_NOT_OK(batch_reader->ReadNext(&batch));
+            if (!batch) {
+                break;
+            }
+            if (batch->num_rows() == 0) {
+                continue;
+            }
+            return inferParquetEmbeddingDimFromArray(batch->column(0), column_name);
+        }
+
+        return arrow::Status::Invalid("Column '" + column_name + "' contains no rows");
+    }
+
+    static arrow::Status copyParquetEmbeddingBatch(
+            const std::shared_ptr<arrow::Array> &array,
+            float *output,
+            size_t expected_dim,
+            size_t *rows_out,
+            const std::string &column_name = "emb") {
+        *rows_out = 0;
+        CHECK_ARGUMENT(array != nullptr, "batch column array is null");
+        CHECK_ARGUMENT(array->null_count() == 0, "Parquet embedding column contains null rows");
+
+        switch (array->type_id()) {
+            case arrow::Type::FIXED_SIZE_LIST: {
+                const auto fixed_list = std::static_pointer_cast<arrow::FixedSizeListArray>(array);
+                const auto float_values = std::dynamic_pointer_cast<arrow::FloatArray>(fixed_list->values());
+                if (!float_values) {
+                    return arrow::Status::Invalid("Column '" + column_name + "' values must be float32");
+                }
+                CHECK_ARGUMENT(float_values->null_count() == 0, "Parquet embedding column contains null float values");
+                const size_t dim = static_cast<size_t>(fixed_list->value_length());
+                CHECK_ARGUMENT(dim == expected_dim, "Parquet embedding dimension mismatch");
+                const int64_t value_offset = fixed_list->value_offset(0);
+                std::memcpy(
+                        output,
+                        float_values->raw_values() + value_offset,
+                        static_cast<size_t>(fixed_list->length()) * dim * sizeof(float));
+                *rows_out = static_cast<size_t>(fixed_list->length());
+                return arrow::Status::OK();
+            }
+            case arrow::Type::LIST: {
+                const auto list = std::static_pointer_cast<arrow::ListArray>(array);
+                const auto float_values = std::dynamic_pointer_cast<arrow::FloatArray>(list->values());
+                if (!float_values) {
+                    return arrow::Status::Invalid("Column '" + column_name + "' values must be float32");
+                }
+                CHECK_ARGUMENT(float_values->null_count() == 0, "Parquet embedding column contains null float values");
+                const float *src = float_values->raw_values();
+                for (int64_t i = 0; i < list->length(); i++) {
+                    CHECK_ARGUMENT(!list->IsNull(i), "Parquet embedding column contains null rows");
+                    const size_t dim = static_cast<size_t>(list->value_length(i));
+                    CHECK_ARGUMENT(dim == expected_dim, "Parquet embedding dimension mismatch");
+                    std::memcpy(
+                            output + static_cast<size_t>(i) * expected_dim,
+                            src + list->value_offset(i),
+                            expected_dim * sizeof(float));
+                }
+                *rows_out = static_cast<size_t>(list->length());
+                return arrow::Status::OK();
+            }
+            case arrow::Type::LARGE_LIST: {
+                const auto list = std::static_pointer_cast<arrow::LargeListArray>(array);
+                const auto float_values = std::dynamic_pointer_cast<arrow::FloatArray>(list->values());
+                if (!float_values) {
+                    return arrow::Status::Invalid("Column '" + column_name + "' values must be float32");
+                }
+                CHECK_ARGUMENT(float_values->null_count() == 0, "Parquet embedding column contains null float values");
+                const float *src = float_values->raw_values();
+                for (int64_t i = 0; i < list->length(); i++) {
+                    CHECK_ARGUMENT(!list->IsNull(i), "Parquet embedding column contains null rows");
+                    const size_t dim = static_cast<size_t>(list->value_length(i));
+                    CHECK_ARGUMENT(dim == expected_dim, "Parquet embedding dimension mismatch");
+                    std::memcpy(
+                            output + static_cast<size_t>(i) * expected_dim,
+                            src + list->value_offset(i),
+                            expected_dim * sizeof(float));
+                }
+                *rows_out = static_cast<size_t>(list->length());
+                return arrow::Status::OK();
+            }
+            default:
+                return arrow::Status::Invalid(
+                        "Column '" + column_name +
+                        "' must be FixedSizeList<float>, List<float>, or LargeList<float>");
+        }
+    }
+
+    static arrow::Status readParquetFileStats(
+            const char *fName,
+            size_t *d_out,
+            size_t *n_out,
+            const std::string &column_name = "emb") {
+        ARROW_ASSIGN_OR_RAISE(auto reader, openParquetArrowReader(fName));
+        std::shared_ptr<arrow::Schema> schema;
+        ARROW_ASSIGN_OR_RAISE(
+                const int col_index,
+                getParquetEmbeddingColumnIndex(reader.get(), &schema, column_name));
+        ARROW_ASSIGN_OR_RAISE(*d_out, inferParquetEmbeddingDim(reader.get(), schema, col_index, column_name));
+        std::shared_ptr<parquet::FileMetaData> meta = reader->parquet_reader()->metadata();
+        *n_out = meta->num_rows();
+        return arrow::Status::OK();
+    }
+
+    static arrow::Status readParquetFile(
+            const char *fName,
+            float* output,
+            size_t expected_dim,
+            size_t *n_out,
+            const std::string &column_name = "emb") {
+        ARROW_ASSIGN_OR_RAISE(auto reader, openParquetArrowReader(fName));
+        std::shared_ptr<arrow::Schema> schema;
+        ARROW_ASSIGN_OR_RAISE(
+                const int col_index,
+                getParquetEmbeddingColumnIndex(reader.get(), &schema, column_name));
+        printf("Reading column '%s' at index %d\n", column_name.c_str(), col_index);
+
+        reader->set_batch_size(PARQUET_EMB_BATCH_SIZE);
+        ARROW_ASSIGN_OR_RAISE(auto batch_reader, reader->GetRecordBatchReader({col_index}));
+
+        *n_out = 0;
+        while (true) {
+            std::shared_ptr<arrow::RecordBatch> batch;
+            ARROW_RETURN_NOT_OK(batch_reader->ReadNext(&batch));
+            if (!batch) {
+                break;
+            }
+            if (batch->num_rows() == 0) {
+                continue;
+            }
+
+            size_t rows_read = 0;
+            ARROW_RETURN_NOT_OK(copyParquetEmbeddingBatch(
+                    batch->column(0),
+                    output + (*n_out) * expected_dim,
+                    expected_dim,
+                    &rows_read,
+                    column_name));
+            *n_out += rows_read;
         }
         return arrow::Status::OK();
     }
 
-    static float* readParquetFiles(const std::vector<std::string>& file_paths, size_t *d_out, size_t *n_out) {
+    static float* readParquetFiles(
+            const std::vector<std::string>& file_paths,
+            size_t *d_out,
+            size_t *n_out,
+            const std::string &column_name = "emb") {
         *n_out = 0;
         for (const auto& file_path : file_paths) {
+            size_t file_dim = 0;
             size_t total_rows = 0;
-            if (auto res = readParquetFileStats(file_path.c_str(), d_out, &total_rows); !res.ok()) {
-                throw std::runtime_error("Failed to read Parquet file stats: " + res.ToString());
+            if (auto res = readParquetFileStats(file_path.c_str(), &file_dim, &total_rows, column_name); !res.ok()) {
+                throw std::runtime_error(
+                        fmt::format("Failed to read Parquet file stats for {}: {}", file_path, res.ToString()));
+            }
+            if (*n_out == 0) {
+                *d_out = file_dim;
+            } else {
+                CHECK_ARGUMENT(*d_out == file_dim, "Parquet files have inconsistent embedding dimensions");
             }
             *n_out += total_rows;
         }
@@ -482,8 +676,10 @@ namespace orangedb {
         for (const auto& file_path : file_paths) {
             printf("Reading Parquet file: %s\n", file_path.c_str());
             size_t total_rows = 0;
-            if (auto res = readParquetFile(file_path.c_str(), buffer + idx * (*d_out), &total_rows); !res.ok()) {
-                throw std::runtime_error("Failed to read Parquet file: " + res.ToString());
+            if (auto res = readParquetFile(
+                    file_path.c_str(), buffer + idx * (*d_out), *d_out, &total_rows, column_name); !res.ok()) {
+                throw std::runtime_error(
+                        fmt::format("Failed to read Parquet file {}: {}", file_path, res.ToString()));
             }
             idx += total_rows;
         }
@@ -491,13 +687,17 @@ namespace orangedb {
         return buffer;
     }
 
-    static float* readParquetDir(const char *dir_path, size_t *d_out, size_t *n_out) {
+    static float* readParquetDir(
+            const char *dir_path,
+            size_t *d_out,
+            size_t *n_out,
+            const std::string &column_name = "emb") {
         std::vector<std::string> file_paths;
         list_parquet_dir(dir_path, file_paths);
         if (file_paths.empty()) {
             throw std::runtime_error("No Parquet files found in the directory");
         }
-        return readParquetFiles(file_paths, d_out, n_out);
+        return readParquetFiles(file_paths, d_out, n_out, column_name);
     }
 
     struct RandomGenerator {

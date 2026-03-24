@@ -4453,6 +4453,9 @@ void benchmark_faiss_flat(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
     const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
+    const std::string parquetColumnName = input.getCmdOption("-parquetColumnName").empty()
+                                                  ? "emb"
+                                                  : input.getCmdOption("-parquetColumnName");
     const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const int nThreads = stoi(input.getCmdOption("-nThreads"));
     const int k = stoi(input.getCmdOption("-k"));
@@ -4493,7 +4496,7 @@ void benchmark_faiss_flat(InputParser &input) {
             newFilePaths[i] = filePaths[i];
         }
         totalBaseNumVectors = 0;
-        float* fileData = readParquetFiles(newFilePaths, &baseDimension, &totalBaseNumVectors);
+        float* fileData = readParquetFiles(newFilePaths, &baseDimension, &totalBaseNumVectors, parquetColumnName);
         CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
         printf("Total number of vectors: %zu\n", totalBaseNumVectors);
         // Directly assign to IndexFlatIP codes without copying
