@@ -499,8 +499,10 @@ namespace orangedb {
             return static_cast<size_t>(fixed_list->list_size());
         }
 
+        std::vector<int> row_group_indices(reader->num_row_groups());
+        std::iota(row_group_indices.begin(), row_group_indices.end(), 0);
         reader->set_batch_size(1);
-        ARROW_ASSIGN_OR_RAISE(auto batch_reader, reader->GetRecordBatchReader({col_index}));
+        ARROW_ASSIGN_OR_RAISE(auto batch_reader, reader->GetRecordBatchReader(row_group_indices, {col_index}));
         while (true) {
             std::shared_ptr<arrow::RecordBatch> batch;
             ARROW_RETURN_NOT_OK(batch_reader->ReadNext(&batch));
@@ -620,8 +622,10 @@ namespace orangedb {
                 getParquetEmbeddingColumnIndex(reader.get(), &schema, column_name));
         printf("Reading column '%s' at index %d\n", column_name.c_str(), col_index);
 
+        std::vector<int> row_group_indices(reader->num_row_groups());
+        std::iota(row_group_indices.begin(), row_group_indices.end(), 0);
         reader->set_batch_size(PARQUET_EMB_BATCH_SIZE);
-        ARROW_ASSIGN_OR_RAISE(auto batch_reader, reader->GetRecordBatchReader({col_index}));
+        ARROW_ASSIGN_OR_RAISE(auto batch_reader, reader->GetRecordBatchReader(row_group_indices, {col_index}));
 
         *n_out = 0;
         while (true) {
