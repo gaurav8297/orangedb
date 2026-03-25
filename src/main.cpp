@@ -2412,7 +2412,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     faiss::IndexIVFFlat idx(&quantizer, baseDimension, numCentroids, metric);
     faiss::IndexIVFFlat* index = &idx;
     index->cp.niter = nIter;
-    index->cp.max_points_per_centroid = (sampleSizeAdjusted / numCentroids);
+    index->cp.max_points_per_centroid = (sampleSizeAdjusted / numCentroids) + 1;
     index->cp.min_points_per_centroid = (sampleSizeAdjusted / numCentroids) * 0.5;
     printf("max_points_per_centroid: %d, min_points_per_centroid: %d\n",
            index->cp.max_points_per_centroid, index->cp.min_points_per_centroid);
