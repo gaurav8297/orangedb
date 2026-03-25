@@ -3158,13 +3158,16 @@ namespace orangedb {
             distances.push_back(dist);
         }
 
+        uint32_t total_count = 0;
         // print the factor of distance against minDistance
         for (size_t i = 0; i < miniAssign.size(); i++) {
             auto miniId = miniAssign[i];
             auto dist = distances[i];
-            printf("Mini centroid id: %llu, distance: %f, factor against minDistance: %f\n", miniId, dist,
-                   dist / minDistance);
+            if (dist / minDistance < 1.9) {
+                total_count += 1;
+            }
         }
+        printf("Total mini centroids within 1.9x distance of minDistance: %u out of %zu\n", total_count, miniAssign.size());
 
         // Print the shilloute score for each mini centroid
         // auto num_of_negative_silhouette = 0;
