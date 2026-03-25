@@ -3148,26 +3148,26 @@ namespace orangedb {
         auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
         dc->setQuery(query);
 
-        // Find the min and max distance from miniAssign
-        auto minDistance = std::numeric_limits<double>::max();
-        std::vector<double> distances;
-        for (auto miniId : miniAssign) {
-            double dist;
-            dc->computeDistance(miniId, &dist);
-            minDistance = std::min(minDistance, dist);
-            distances.push_back(dist);
-        }
-
-        uint32_t total_count = 0;
-        // print the factor of distance against minDistance
-        for (size_t i = 0; i < miniAssign.size(); i++) {
-            auto miniId = miniAssign[i];
-            auto dist = distances[i];
-            if (dist / minDistance < 1.9) {
-                total_count += 1;
-            }
-        }
-        printf("Total mini centroids within 1.9x distance of minDistance: %u out of %zu\n", total_count, miniAssign.size());
+        // // Find the min and max distance from miniAssign
+        // auto minDistance = std::numeric_limits<double>::max();
+        // std::vector<double> distances;
+        // for (auto miniId : miniAssign) {
+        //     double dist;
+        //     dc->computeDistance(miniId, &dist);
+        //     minDistance = std::min(minDistance, dist);
+        //     distances.push_back(dist);
+        // }
+        //
+        // uint32_t total_count = 0;
+        // // print the factor of distance against minDistance
+        // for (size_t i = 0; i < miniAssign.size(); i++) {
+        //     auto miniId = miniAssign[i];
+        //     auto dist = distances[i];
+        //     if (dist / minDistance < 1.9) {
+        //         total_count += 1;
+        //     }
+        // }
+        // printf("Total mini centroids within 1.9x distance of minDistance: %u out of %zu\n", total_count, miniAssign.size());
 
         // Print the shilloute score for each mini centroid
         // auto num_of_negative_silhouette = 0;
