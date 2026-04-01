@@ -4940,18 +4940,19 @@ static void add_to_topk_heap(
 }
 
 static double compute_topk_match_percentage(
-        size_t k,
+        size_t exactK,
+        size_t quantizedK,
         bool useIP,
         std::vector<float> &exactDistances,
         std::vector<int64_t> &exactLabels,
         std::vector<float> &quantizedDistances,
         std::vector<int64_t> &quantizedLabels) {
     if (useIP) {
-        faiss::minheap_reorder(k, exactDistances.data(), exactLabels.data());
-        faiss::minheap_reorder(k, quantizedDistances.data(), quantizedLabels.data());
+        faiss::minheap_reorder(exactK, exactDistances.data(), exactLabels.data());
+        faiss::minheap_reorder(quantizedK, quantizedDistances.data(), quantizedLabels.data());
     } else {
-        faiss::maxheap_reorder(k, exactDistances.data(), exactLabels.data());
-        faiss::maxheap_reorder(k, quantizedDistances.data(), quantizedLabels.data());
+        faiss::maxheap_reorder(exactK, exactDistances.data(), exactLabels.data());
+        faiss::maxheap_reorder(quantizedK, quantizedDistances.data(), quantizedLabels.data());
     }
 
     std::unordered_set<int64_t> exactSet(exactLabels.begin(), exactLabels.end());
@@ -4962,7 +4963,7 @@ static double compute_topk_match_percentage(
         }
     }
 
-    return 100.0 * static_cast<double>(matches) / static_cast<double>(k);
+    return 100.0 * static_cast<double>(matches) / static_cast<double>(exactK);
 }
 
 void compute_quantized_ip_mse(InputParser &input) {
@@ -4972,6 +4973,7 @@ void compute_quantized_ip_mse(InputParser &input) {
     const std::string &queryQuantizedVectorPath = input.getCmdOption("-queryQuantizedVectorPath");
     const std::string &numQueriesArg = input.getCmdOption("-numQueries");
     const std::string &kArg = input.getCmdOption("-k");
+    const std::string &factorArg = input.getCmdOption("-factor");
     const std::string &useIPArg = input.getCmdOption("-useIP");
 
     CHECK_ARGUMENT(!baseVectorPath.empty(), "base vector path is required");
@@ -4981,9 +4983,11 @@ void compute_quantized_ip_mse(InputParser &input) {
 
     const size_t numQueries = numQueriesArg.empty() ? 10 : stoull(numQueriesArg);
     const size_t k = kArg.empty() ? 10 : stoull(kArg);
+    const double factor = factorArg.empty() ? 1.0 : stod(factorArg);
     const bool useIP = useIPArg.empty() ? true : (stoi(useIPArg) != 0);
     CHECK_ARGUMENT(numQueries > 0, "numQueries must be positive");
     CHECK_ARGUMENT(k > 0, "k must be positive");
+    CHECK_ARGUMENT(factor > 0, "factor must be positive");
     size_t baseNumVectors, baseDimension;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryNumVectors, queryDimension;
@@ -5004,6 +5008,9 @@ void compute_quantized_ip_mse(InputParser &input) {
                    "original and quantized vector dimensions do not match");
     CHECK_ARGUMENT(queryNumVectors >= numQueries, "not enough queries in query vectors");
     CHECK_ARGUMENT(k <= baseNumVectors, "k must be <= number of base vectors");
+    const size_t quantizedK = std::min(
+            baseNumVectors,
+            std::max(k, static_cast<size_t>(std::ceil(factor * static_cast<double>(k)))));
     std::vector<double> perQuerySquaredError(numQueries, 0.0);
     std::vector<double> perQueryTopKMatch(numQueries, 0.0);
 
@@ -5017,7 +5024,7 @@ void compute_quantized_ip_mse(InputParser &input) {
         std::vector<float> quantizedTopKDistances;
         std::vector<int64_t> quantizedTopKLabels;
         init_topk_heap(k, useIP, exactTopKDistances, exactTopKLabels);
-        init_topk_heap(k, useIP, quantizedTopKDistances, quantizedTopKLabels);
+        init_topk_heap(quantizedK, useIP, quantizedTopKDistances, quantizedTopKLabels);
 
         for (size_t i = 0; i < baseNumVectors; i++) {
             const float *baseVec = baseVecs + i * baseDimension;
@@ -5034,7 +5041,7 @@ void compute_quantized_ip_mse(InputParser &input) {
             querySquaredError += diff * diff;
             add_to_topk_heap(k, useIP, exactTopKDistances, exactTopKLabels, distance, i);
             add_to_topk_heap(
-                    k,
+                    quantizedK,
                     useIP,
                     quantizedTopKDistances,
                     quantizedTopKLabels,
@@ -5044,6 +5051,7 @@ void compute_quantized_ip_mse(InputParser &input) {
         perQuerySquaredError[q] = querySquaredError;
         perQueryTopKMatch[q] = compute_topk_match_percentage(
                 k,
+                quantizedK,
                 useIP,
                 exactTopKDistances,
                 exactTopKLabels,
@@ -5058,18 +5066,20 @@ void compute_quantized_ip_mse(InputParser &input) {
 
     double totalSquaredError = 0.0;
     double totalTopKMatch = 0.0;
-    printf("Computed %s MSE for %zu queries across %zu base vectors\n",
-           useIP ? "IP" : "L2", numQueries, baseNumVectors);
+    printf("Computed %s MSE for %zu queries across %zu base vectors (k=%zu, factor=%.3f, quantized_k=%zu)\n",
+           useIP ? "IP" : "L2", numQueries, baseNumVectors, k, factor, quantizedK);
     for (size_t q = 0; q < numQueries; q++) {
         double mse = perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
         totalSquaredError += perQuerySquaredError[q];
         totalTopKMatch += perQueryTopKMatch[q];
-        printf("Query %zu MSE: %.10f, top-%zu match: %.2f%%\n", q, mse, k, perQueryTopKMatch[q]);
+        printf("Query %zu MSE: %.10f, top-%zu in quantized top-%zu: %.2f%%\n",
+               q, mse, k, quantizedK, perQueryTopKMatch[q]);
     }
 
     double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
     printf("Overall MSE: %.10f\n", overallMse);
-    printf("Average top-%zu match: %.2f%%\n", k, totalTopKMatch / static_cast<double>(numQueries));
+    printf("Average top-%zu in quantized top-%zu: %.2f%%\n",
+           k, quantizedK, totalTopKMatch / static_cast<double>(numQueries));
 }
 
 void compute_rabitq_rotated_distance_mse(InputParser &input) {
@@ -5079,6 +5089,7 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
     const std::string &useCentroidsArg = input.getCmdOption("-useCentroids");
     const std::string &numQueriesArg = input.getCmdOption("-numQueries");
     const std::string &kArg = input.getCmdOption("-k");
+    const std::string &factorArg = input.getCmdOption("-factor");
     const std::string &useIPArg = input.getCmdOption("-useIP");
     const std::string &rotationSeedArg = input.getCmdOption("-rotationSeed");
     const std::string &kmeansNiterArg = input.getCmdOption("-kmeansNiter");
@@ -5093,9 +5104,11 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
 
     const bool useCentroids = stoi(useCentroidsArg) != 0;
     const bool useIP = !useIPArg.empty() && stoi(useIPArg) != 0;
+    const double factor = factorArg.empty() ? 1.0 : stod(factorArg);
     const int rotationSeed = rotationSeedArg.empty() ? 123 : stoi(rotationSeedArg);
     const int kmeansNiter = kmeansNiterArg.empty() ? 25 : stoi(kmeansNiterArg);
     const faiss::MetricType metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+    CHECK_ARGUMENT(factor > 0, "factor must be positive");
 
     size_t baseNumVectors, baseDimension;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -5113,11 +5126,14 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
     CHECK_ARGUMENT(requestedQueries <= queryNumVectors, "not enough query vectors");
     const size_t numQueries = requestedQueries;
     CHECK_ARGUMENT(k <= baseNumVectors, "k must be <= number of base vectors");
+    const size_t quantizedK = std::min(
+            baseNumVectors,
+            std::max(k, static_cast<size_t>(std::ceil(factor * static_cast<double>(k)))));
 
     printf("Loaded %zu base vectors and %zu query vectors of dimension %zu\n",
            baseNumVectors, numQueries, baseDimension);
-    printf("RaBitQ config: metric=%s nbits=%zu useCentroids=%d rotationSeed=%d\n",
-           useIP ? "ip" : "l2", nbits, useCentroids ? 1 : 0, rotationSeed);
+    printf("RaBitQ config: metric=%s nbits=%zu useCentroids=%d rotationSeed=%d factor=%.3f quantized_k=%zu\n",
+           useIP ? "ip" : "l2", nbits, useCentroids ? 1 : 0, rotationSeed, factor, quantizedK);
 
     faiss::RandomRotationMatrix rrot(static_cast<int>(baseDimension), static_cast<int>(baseDimension));
     rrot.init(rotationSeed);
@@ -5229,7 +5245,7 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
         std::vector<float> quantizedTopKDistances;
         std::vector<int64_t> quantizedTopKLabels;
         init_topk_heap(k, useIP, exactTopKDistances, exactTopKLabels);
-        init_topk_heap(k, useIP, quantizedTopKDistances, quantizedTopKLabels);
+        init_topk_heap(quantizedK, useIP, quantizedTopKDistances, quantizedTopKLabels);
 
         for (auto &cluster : clusterData) {
             if (cluster.indices.empty()) {
@@ -5261,7 +5277,7 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
                         exactDistance,
                         baseIdx);
                 add_to_topk_heap(
-                        k,
+                        quantizedK,
                         useIP,
                         quantizedTopKDistances,
                         quantizedTopKLabels,
@@ -5272,6 +5288,7 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
         perQuerySquaredError[q] = querySquaredError;
         perQueryTopKMatch[q] = compute_topk_match_percentage(
                 k,
+                quantizedK,
                 useIP,
                 exactTopKDistances,
                 exactTopKLabels,
@@ -5285,12 +5302,14 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
         const double mse = perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
         totalSquaredError += perQuerySquaredError[q];
         totalTopKMatch += perQueryTopKMatch[q];
-        printf("Query %zu MSE: %.10f, top-%zu match: %.2f%%\n", q, mse, k, perQueryTopKMatch[q]);
+        printf("Query %zu MSE: %.10f, top-%zu in quantized top-%zu: %.2f%%\n",
+               q, mse, k, quantizedK, perQueryTopKMatch[q]);
     }
 
     const double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
     printf("Overall RaBitQ rotated distance MSE: %.10f\n", overallMse);
-    printf("Average top-%zu match: %.2f%%\n", k, totalTopKMatch / static_cast<double>(numQueries));
+    printf("Average top-%zu in quantized top-%zu: %.2f%%\n",
+           k, quantizedK, totalTopKMatch / static_cast<double>(numQueries));
 
     free(baseVecs);
     free(queryVecs);
@@ -5302,6 +5321,7 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
     const std::string &nbitsArg = input.getCmdOption("-nbits");
     const std::string &numQueriesArg = input.getCmdOption("-numQueries");
     const std::string &kArg = input.getCmdOption("-k");
+    const std::string &factorArg = input.getCmdOption("-factor");
     const std::string &useIPArg = input.getCmdOption("-useIP");
 
     CHECK_ARGUMENT(!baseVectorPath.empty(), "base vector path is required");
@@ -5312,9 +5332,11 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
     CHECK_ARGUMENT(nbits == 4 || nbits == 8, "nbits must be 4 or 8");
 
     const bool useIP = !useIPArg.empty() && stoi(useIPArg) != 0;
+    const double factor = factorArg.empty() ? 1.0 : stod(factorArg);
     const faiss::MetricType metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
     const faiss::ScalarQuantizer::QuantizerType qtype =
             (nbits == 4) ? faiss::ScalarQuantizer::QT_4bit : faiss::ScalarQuantizer::QT_8bit;
+    CHECK_ARGUMENT(factor > 0, "factor must be positive");
 
     size_t baseNumVectors, baseDimension;
     float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
@@ -5330,10 +5352,14 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
     CHECK_ARGUMENT(requestedQueries <= queryNumVectors, "not enough query vectors");
     const size_t numQueries = requestedQueries;
     CHECK_ARGUMENT(k <= baseNumVectors, "k must be <= number of base vectors");
+    const size_t quantizedK = std::min(
+            baseNumVectors,
+            std::max(k, static_cast<size_t>(std::ceil(factor * static_cast<double>(k)))));
 
     printf("Loaded %zu base vectors and %zu query vectors of dimension %zu\n",
            baseNumVectors, numQueries, baseDimension);
-    printf("Scalar quantizer config: metric=%s nbits=%d\n", useIP ? "ip" : "l2", nbits);
+    printf("Scalar quantizer config: metric=%s nbits=%d factor=%.3f quantized_k=%zu\n",
+           useIP ? "ip" : "l2", nbits, factor, quantizedK);
 
     faiss::ScalarQuantizer sq(baseDimension, qtype);
     sq.train(baseNumVectors, baseVecs);
@@ -5353,7 +5379,7 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
         std::vector<float> quantizedTopKDistances;
         std::vector<int64_t> quantizedTopKLabels;
         init_topk_heap(k, useIP, exactTopKDistances, exactTopKLabels);
-        init_topk_heap(k, useIP, quantizedTopKDistances, quantizedTopKLabels);
+        init_topk_heap(quantizedK, useIP, quantizedTopKDistances, quantizedTopKLabels);
 
         std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
                 sq.get_distance_computer(metric));
@@ -5370,7 +5396,7 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
             querySquaredError += diff * diff;
             add_to_topk_heap(k, useIP, exactTopKDistances, exactTopKLabels, exactDistance, i);
             add_to_topk_heap(
-                    k,
+                    quantizedK,
                     useIP,
                     quantizedTopKDistances,
                     quantizedTopKLabels,
@@ -5381,6 +5407,7 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
         perQuerySquaredError[q] = querySquaredError;
         perQueryTopKMatch[q] = compute_topk_match_percentage(
                 k,
+                quantizedK,
                 useIP,
                 exactTopKDistances,
                 exactTopKLabels,
@@ -5394,12 +5421,14 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
         const double mse = perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
         totalSquaredError += perQuerySquaredError[q];
         totalTopKMatch += perQueryTopKMatch[q];
-        printf("Query %zu MSE: %.10f, top-%zu match: %.2f%%\n", q, mse, k, perQueryTopKMatch[q]);
+        printf("Query %zu MSE: %.10f, top-%zu in quantized top-%zu: %.2f%%\n",
+               q, mse, k, quantizedK, perQueryTopKMatch[q]);
     }
 
     const double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
     printf("Overall scalar quantizer distance MSE: %.10f\n", overallMse);
-    printf("Average top-%zu match: %.2f%%\n", k, totalTopKMatch / static_cast<double>(numQueries));
+    printf("Average top-%zu in quantized top-%zu: %.2f%%\n",
+           k, quantizedK, totalTopKMatch / static_cast<double>(numQueries));
 
     free(baseVecs);
     free(queryVecs);
