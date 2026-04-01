@@ -8,6 +8,7 @@
 
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
+#include <climits>
 #include <cmath>       // isnan, isinf
 #include <memory>
 #include <random>      // mt19937, uniform_int_distribution
@@ -16,8 +17,12 @@
 #include <fstream>
 #include <reclustering_index.h>
 #include <faiss/index_io.h>
+#include <faiss/Clustering.h>
+#include <faiss/IndexFlat.h>
+#include <faiss/VectorTransform.h>
 #include <faiss/utils/distances.h>
 #include <faiss/utils/random.h>
+#include <faiss/impl/RaBitQuantizer.h>
 #include <fastQ/scalar_8bit.h>
 #include <fastQ/pair_wise.h>
 #include "helper_ds.h"
@@ -4969,6 +4974,196 @@ void compute_quantized_ip_mse(InputParser &input) {
     printf("Overall MSE: %.10f\n", overallMse);
 }
 
+void compute_rabitq_rotated_distance_mse(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &nbitsArg = input.getCmdOption("-nbits");
+    const std::string &useCentroidsArg = input.getCmdOption("-useCentroids");
+    const std::string &numQueriesArg = input.getCmdOption("-numQueries");
+    const std::string &useIPArg = input.getCmdOption("-useIP");
+    const std::string &rotationSeedArg = input.getCmdOption("-rotationSeed");
+    const std::string &kmeansNiterArg = input.getCmdOption("-kmeansNiter");
+
+    CHECK_ARGUMENT(!baseVectorPath.empty(), "base vector path is required");
+    CHECK_ARGUMENT(!queryVectorPath.empty(), "query vector path is required");
+    CHECK_ARGUMENT(!nbitsArg.empty(), "nbits is required");
+    CHECK_ARGUMENT(!useCentroidsArg.empty(), "useCentroids is required");
+
+    const size_t nbits = stoull(nbitsArg);
+    CHECK_ARGUMENT(nbits >= 1 && nbits <= 9, "nbits must be between 1 and 9");
+
+    const bool useCentroids = stoi(useCentroidsArg) != 0;
+    const bool useIP = !useIPArg.empty() && stoi(useIPArg) != 0;
+    const int rotationSeed = rotationSeedArg.empty() ? 123 : stoi(rotationSeedArg);
+    const int kmeansNiter = kmeansNiterArg.empty() ? 25 : stoi(kmeansNiterArg);
+    const faiss::MetricType metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+
+    size_t baseNumVectors, baseDimension;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryNumVectors, queryDimension;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    CHECK_ARGUMENT(baseDimension == queryDimension, "base and query dimensions do not match");
+    CHECK_ARGUMENT(baseDimension > 0, "vector dimension must be positive");
+    CHECK_ARGUMENT(baseDimension <= static_cast<size_t>(INT_MAX), "vector dimension is too large");
+
+    const size_t requestedQueries = numQueriesArg.empty() ? queryNumVectors : stoull(numQueriesArg);
+    CHECK_ARGUMENT(requestedQueries > 0, "numQueries must be positive");
+    CHECK_ARGUMENT(requestedQueries <= queryNumVectors, "not enough query vectors");
+    const size_t numQueries = requestedQueries;
+
+    printf("Loaded %zu base vectors and %zu query vectors of dimension %zu\n",
+           baseNumVectors, numQueries, baseDimension);
+    printf("RaBitQ config: metric=%s nbits=%zu useCentroids=%d rotationSeed=%d\n",
+           useIP ? "ip" : "l2", nbits, useCentroids ? 1 : 0, rotationSeed);
+
+    faiss::RandomRotationMatrix rrot(static_cast<int>(baseDimension), static_cast<int>(baseDimension));
+    rrot.init(rotationSeed);
+
+    std::vector<float> rotatedBaseVecs(baseNumVectors * baseDimension);
+    std::vector<float> rotatedQueryVecs(numQueries * baseDimension);
+
+    printf("Applying random rotation to base and query vectors\n");
+    rrot.apply_noalloc(baseNumVectors, baseVecs, rotatedBaseVecs.data());
+    rrot.apply_noalloc(numQueries, queryVecs, rotatedQueryVecs.data());
+
+    struct ClusterCodes {
+        std::vector<size_t> indices;
+        std::vector<uint8_t> codes;
+        faiss::RaBitQuantizer quantizer;
+        const float *centroid = nullptr;
+
+        ClusterCodes(size_t dim, faiss::MetricType metricType, size_t bits)
+                : quantizer(dim, metricType, bits) {}
+    };
+
+    std::vector<ClusterCodes> clusterData;
+    std::vector<float> centroids;
+
+    if (!useCentroids) {
+        printf("Training one global RaBitQ quantizer\n");
+        clusterData.emplace_back(baseDimension, metric, nbits);
+        auto &cluster = clusterData.back();
+        cluster.indices.resize(baseNumVectors);
+        for (size_t i = 0; i < baseNumVectors; i++) {
+            cluster.indices[i] = i;
+        }
+        cluster.quantizer.train(baseNumVectors, rotatedBaseVecs.data());
+        cluster.codes.resize(baseNumVectors * cluster.quantizer.code_size);
+        cluster.quantizer.compute_codes(rotatedBaseVecs.data(), cluster.codes.data(), baseNumVectors);
+    } else {
+        const size_t vectorsPerCentroid = 2000;
+        const size_t numCentroids = std::max<size_t>(1, (baseNumVectors + vectorsPerCentroid - 1) / vectorsPerCentroid);
+
+        printf("Running kmeans with %zu centroids (%zu vectors per centroid)\n",
+               numCentroids, vectorsPerCentroid);
+        faiss::ClusteringParameters cp;
+        cp.niter = kmeansNiter;
+        cp.max_points_per_centroid = INT_MAX;
+        cp.verbose = true;
+        if (useIP) {
+            cp.spherical = true;
+        }
+
+        faiss::Clustering clustering(static_cast<int>(baseDimension), numCentroids, cp);
+        faiss::IndexFlat assigner(static_cast<faiss::idx_t>(baseDimension), metric);
+        clustering.train(baseNumVectors, rotatedBaseVecs.data(), assigner);
+        centroids = clustering.centroids;
+
+        faiss::IndexFlat centroidIndex(static_cast<faiss::idx_t>(baseDimension), metric);
+        centroidIndex.add(numCentroids, centroids.data());
+
+        std::vector<faiss::idx_t> labels(baseNumVectors);
+        std::vector<float> distances(baseNumVectors);
+        centroidIndex.search(baseNumVectors, rotatedBaseVecs.data(), 1, distances.data(), labels.data());
+
+        clusterData.reserve(numCentroids);
+        for (size_t centroidId = 0; centroidId < numCentroids; centroidId++) {
+            clusterData.emplace_back(baseDimension, metric, nbits);
+            clusterData.back().centroid = centroids.data() + centroidId * baseDimension;
+        }
+
+        for (size_t i = 0; i < baseNumVectors; i++) {
+            CHECK_ARGUMENT(labels[i] >= 0 && labels[i] < static_cast<faiss::idx_t>(numCentroids),
+                           "invalid centroid assignment");
+            clusterData[labels[i]].indices.push_back(i);
+        }
+
+        for (size_t centroidId = 0; centroidId < numCentroids; centroidId++) {
+            auto &cluster = clusterData[centroidId];
+            const auto &indices = cluster.indices;
+            if (indices.empty()) {
+                continue;
+            }
+
+            std::vector<float> clusterVecs(indices.size() * baseDimension);
+            for (size_t i = 0; i < indices.size(); i++) {
+                memcpy(clusterVecs.data() + i * baseDimension,
+                       rotatedBaseVecs.data() + indices[i] * baseDimension,
+                       baseDimension * sizeof(float));
+            }
+
+            cluster.quantizer.train(indices.size(), clusterVecs.data());
+            cluster.codes.resize(indices.size() * cluster.quantizer.code_size);
+            cluster.quantizer.compute_codes_core(
+                    clusterVecs.data(),
+                    cluster.codes.data(),
+                    indices.size(),
+                    cluster.centroid);
+        }
+    }
+
+    std::vector<double> perQuerySquaredError(numQueries, 0.0);
+
+    printf("Computing MSE over %s distances\n", useIP ? "inner product" : "L2");
+ #pragma omp parallel for
+    for (int64_t q = 0; q < static_cast<int64_t>(numQueries); q++) {
+        const float *queryVec = queryVecs + q * baseDimension;
+        const float *rotatedQueryVec = rotatedQueryVecs.data() + q * baseDimension;
+        double querySquaredError = 0.0;
+
+        for (auto &cluster : clusterData) {
+            if (cluster.indices.empty()) {
+                continue;
+            }
+
+            std::unique_ptr<faiss::FlatCodesDistanceComputer> dc(
+                    cluster.quantizer.get_distance_computer(
+                            0,
+                            cluster.centroid,
+                            false));
+            dc->set_query(rotatedQueryVec);
+
+            for (size_t i = 0; i < cluster.indices.size(); i++) {
+                const size_t baseIdx = cluster.indices[i];
+                const float *baseVec = baseVecs + baseIdx * baseDimension;
+                const double exactDistance = useIP
+                                             ? faiss::fvec_inner_product(queryVec, baseVec, baseDimension)
+                                             : faiss::fvec_L2sqr(queryVec, baseVec, baseDimension);
+                const double quantizedDistance =
+                        dc->distance_to_code(cluster.codes.data() + i * cluster.quantizer.code_size);
+                const double diff = exactDistance - quantizedDistance;
+                querySquaredError += diff * diff;
+            }
+        }
+
+        perQuerySquaredError[q] = querySquaredError;
+    }
+
+    double totalSquaredError = 0.0;
+    for (size_t q = 0; q < numQueries; q++) {
+        const double mse = perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
+        totalSquaredError += perQuerySquaredError[q];
+        printf("Query %zu MSE: %.10f\n", q, mse);
+    }
+
+    const double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
+    printf("Overall RaBitQ rotated distance MSE: %.10f\n", overallMse);
+
+    free(baseVecs);
+    free(queryVecs);
+}
+
 /**
  * Test scalar quantization quality using parquet files.
  *
@@ -6079,6 +6274,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "computeQuantizedIpMse") {
         compute_quantized_ip_mse(input);
+    }
+    else if (run == "computeRaBitQRotatedDistanceMse" || run == "computeRaBitQRotatedL2Mse") {
+        compute_rabitq_rotated_distance_mse(input);
     }
 #ifdef CUVS_ENABLED
     else if (run == "benchmarkCuvsBalancedKmeans") {
