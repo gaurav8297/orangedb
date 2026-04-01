@@ -4899,6 +4899,75 @@ void test_quantization_issue(InputParser &input) {
                 codesDistances.size() * sizeof(float));
 }
 
+void compute_quantized_ip_mse(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &baseQuantizedVectorPath = input.getCmdOption("-baseQuantizedVectorPath");
+    const std::string &queryQuantizedVectorPath = input.getCmdOption("-queryQuantizedVectorPath");
+    const std::string &numQueriesArg = input.getCmdOption("-numQueries");
+
+    CHECK_ARGUMENT(!baseVectorPath.empty(), "base vector path is required");
+    CHECK_ARGUMENT(!queryVectorPath.empty(), "query vector path is required");
+    CHECK_ARGUMENT(!baseQuantizedVectorPath.empty(), "base quantized vector path is required");
+    CHECK_ARGUMENT(!queryQuantizedVectorPath.empty(), "query quantized vector path is required");
+
+    const size_t numQueries = numQueriesArg.empty() ? 10 : stoull(numQueriesArg);
+    CHECK_ARGUMENT(numQueries > 0, "numQueries must be positive");
+    size_t baseNumVectors, baseDimension;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryNumVectors, queryDimension;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+    size_t baseQuantizedNumVectors, baseQuantizedDimension;
+    float *baseQuantizedVecs = readVecFile(baseQuantizedVectorPath.c_str(), &baseQuantizedDimension,
+                                           &baseQuantizedNumVectors);
+    size_t queryQuantizedNumVectors, queryQuantizedDimension;
+    float *queryQuantizedVecs = readVecFile(queryQuantizedVectorPath.c_str(), &queryQuantizedDimension,
+                                            &queryQuantizedNumVectors);
+
+    CHECK_ARGUMENT(baseNumVectors == baseQuantizedNumVectors, "base vector counts do not match");
+    CHECK_ARGUMENT(queryNumVectors == queryQuantizedNumVectors, "query vector counts do not match");
+    CHECK_ARGUMENT(baseDimension == queryDimension, "base and query dimensions do not match");
+    CHECK_ARGUMENT(baseQuantizedDimension == queryQuantizedDimension,
+                   "quantized base and query dimensions do not match");
+    CHECK_ARGUMENT(baseDimension == baseQuantizedDimension,
+                   "original and quantized vector dimensions do not match");
+    CHECK_ARGUMENT(queryNumVectors >= numQueries, "not enough queries in query vectors");
+    std::vector<double> perQuerySquaredError(numQueries, 0.0);
+
+    for (size_t q = 0; q < numQueries; q++) {
+        const float *queryVec = queryVecs + q * queryDimension;
+        const float *queryQuantizedVec = queryQuantizedVecs + q * queryQuantizedDimension;
+        double querySquaredError = 0.0;
+#pragma omp parallel for reduction(+:querySquaredError)
+        for (size_t i = 0; i < baseNumVectors; i++) {
+            const float *baseVec = baseVecs + i * baseDimension;
+            const float *baseQuantizedVec = baseQuantizedVecs + i * baseQuantizedDimension;
+            double distance = faiss::fvec_inner_product(queryVec, baseVec, baseDimension);
+            double quantizedDistance = faiss::fvec_inner_product(queryQuantizedVec, baseQuantizedVec,
+                                                                 baseQuantizedDimension);
+            double diff = distance - quantizedDistance;
+            querySquaredError += diff * diff;
+        }
+        perQuerySquaredError[q] = querySquaredError;
+    }
+
+    free(baseVecs);
+    free(baseQuantizedVecs);
+    free(queryVecs);
+    free(queryQuantizedVecs);
+
+    double totalSquaredError = 0.0;
+    printf("Computed IP MSE for %zu queries across %zu base vectors\n", numQueries, baseNumVectors);
+    for (size_t q = 0; q < numQueries; q++) {
+        double mse = perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
+        totalSquaredError += perQuerySquaredError[q];
+        printf("Query %zu MSE: %.10f\n", q, mse);
+    }
+
+    double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
+    printf("Overall MSE: %.10f\n", overallMse);
+}
+
 /**
  * Test scalar quantization quality using parquet files.
  *
@@ -6006,6 +6075,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "printQuantizationParquetData") {
         print_quantization_parquet_data(input);
+    }
+    else if (run == "computeQuantizedIpMse") {
+        compute_quantized_ip_mse(input);
     }
 #ifdef CUVS_ENABLED
     else if (run == "benchmarkCuvsBalancedKmeans") {
