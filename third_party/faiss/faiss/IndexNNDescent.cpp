@@ -19,6 +19,7 @@
 #include <faiss/IndexFlat.h>
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/FaissAssert.h>
+#include <faiss/impl/VisitedTable.h>
 #include <faiss/utils/distances.h>
 
 extern "C" {
@@ -65,17 +66,17 @@ DistanceComputer* storage_distance_computer(const Index* storage) {
  * IndexNNDescent implementation
  **************************************************************/
 
-IndexNNDescent::IndexNNDescent(int d, int K, MetricType metric)
-        : Index(d, metric),
-          nndescent(d, K),
+IndexNNDescent::IndexNNDescent(int d_in, int K, MetricType metric)
+        : Index(d_in, metric),
+          nndescent(d_in, K),
           own_fields(false),
           storage(nullptr) {}
 
-IndexNNDescent::IndexNNDescent(Index* storage, int K)
-        : Index(storage->d, storage->metric_type),
-          nndescent(storage->d, K),
+IndexNNDescent::IndexNNDescent(Index* storage_in, int K)
+        : Index(storage_in->d, storage_in->metric_type),
+          nndescent(storage_in->d, K),
           own_fields(false),
-          storage(storage) {}
+          storage(storage_in) {}
 
 IndexNNDescent::~IndexNNDescent() {
     if (own_fields) {
@@ -91,10 +92,6 @@ void IndexNNDescent::train(idx_t n, const float* x) {
     // nndescent structure does not require training
     storage->train(n, x);
     is_trained = true;
-}
-
-void IndexNNDescent::train(idx_t n, const void* x, NumericType numeric_type) {
-    Index::train(n, x, numeric_type);
 }
 
 void IndexNNDescent::search(
@@ -143,21 +140,10 @@ void IndexNNDescent::search(
 
     if (metric_type == METRIC_INNER_PRODUCT) {
         // we need to revert the negated distances
-        for (size_t i = 0; i < k * n; i++) {
+        for (idx_t i = 0; i < k * n; i++) {
             distances[i] = -distances[i];
         }
     }
-}
-
-void IndexNNDescent::search(
-        idx_t n,
-        const void* x,
-        NumericType numeric_type,
-        idx_t k,
-        float* distances,
-        idx_t* labels,
-        const SearchParameters* params) const {
-    Index::search(n, x, numeric_type, k, distances, labels, params);
 }
 
 void IndexNNDescent::add(idx_t n, const float* x) {
@@ -169,7 +155,7 @@ void IndexNNDescent::add(idx_t n, const float* x) {
 
     if (ntotal != 0) {
         fprintf(stderr,
-                "WARNING NNDescent doest not support dynamic insertions,"
+                "WARNING NNDescent does not support dynamic insertions,"
                 "multiple insertions would lead to re-building the index");
     }
 
@@ -178,10 +164,6 @@ void IndexNNDescent::add(idx_t n, const float* x) {
 
     std::unique_ptr<DistanceComputer> dis(storage_distance_computer(storage));
     nndescent.build(*dis, ntotal, verbose);
-}
-
-void IndexNNDescent::add(idx_t n, const void* x, NumericType numeric_type) {
-    Index::add(n, x, numeric_type);
 }
 
 void IndexNNDescent::reset() {
@@ -202,8 +184,8 @@ IndexNNDescentFlat::IndexNNDescentFlat() {
     is_trained = true;
 }
 
-IndexNNDescentFlat::IndexNNDescentFlat(int d, int M, MetricType metric)
-        : IndexNNDescent(new IndexFlat(d, metric), M) {
+IndexNNDescentFlat::IndexNNDescentFlat(int d_in, int M, MetricType metric)
+        : IndexNNDescent(new IndexFlat(d_in, metric), M) {
     own_fields = true;
     is_trained = true;
 }

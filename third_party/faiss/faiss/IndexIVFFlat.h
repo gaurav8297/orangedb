@@ -62,6 +62,38 @@ struct IndexIVFFlat : IndexIVF {
     IndexIVFFlat();
 };
 
+template <typename VectorDistance>
+struct IVFFlatScanner : InvertedListScanner {
+    VectorDistance vd;
+    using C = typename VectorDistance::C;
+
+    IVFFlatScanner(
+            const VectorDistance& vd,
+            bool store_pairs,
+            const IDSelector* sel)
+            : InvertedListScanner(store_pairs, sel), vd(vd) {
+        keep_max = vd.is_similarity;
+        code_size = vd.d * sizeof(float);
+    }
+
+    const float* xi;
+    void set_query(const float* query) override {
+        this->xi = query;
+    }
+
+    void set_list(idx_t list_no, float /* coarse_dis */) override {
+        this->list_no = list_no;
+    }
+
+    float distance_to_code(const uint8_t* code) const final;
+
+    size_t scan_codes(
+            size_t list_size,
+            const uint8_t* codes,
+            const idx_t* ids,
+            ResultHandler& handler) const override;
+};
+
 struct IndexIVFFlatDedup : IndexIVFFlat {
     /** Maps ids stored in the index to the ids of vectors that are
      *  the same. When a vector is unique, it does not appear in the
@@ -77,15 +109,9 @@ struct IndexIVFFlatDedup : IndexIVFFlat {
 
     /// also dedups the training set
     void train(idx_t n, const float* x) override;
-    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// implemented for all IndexIVF* classes
     void add_with_ids(idx_t n, const float* x, const idx_t* xids) override;
-    void add_with_ids(
-            idx_t n,
-            const void* x,
-            NumericType numeric_type,
-            const idx_t* xids) override;
 
     void search_preassigned(
             idx_t n,

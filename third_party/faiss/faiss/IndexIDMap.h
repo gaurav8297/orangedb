@@ -23,7 +23,7 @@ struct IndexIDMapTemplate : IndexT {
     using distance_t = typename IndexT::distance_t;
 
     IndexT* index = nullptr; ///! the sub-index
-    bool own_fields = false; ///! whether pointers are deleted in destructo
+    bool own_fields = false; ///! whether pointers are deleted in destructor
     std::vector<idx_t> id_map;
 
     explicit IndexIDMapTemplate(IndexT* index);
@@ -31,7 +31,7 @@ struct IndexIDMapTemplate : IndexT {
     /// @param xids if non-null, ids to store for the vectors (size n)
     void add_with_ids(idx_t n, const component_t* x, const idx_t* xids)
             override;
-    void add_with_ids(
+    void add_with_ids_ex(
             idx_t n,
             const void* x,
             NumericType numeric_type,
@@ -39,7 +39,7 @@ struct IndexIDMapTemplate : IndexT {
 
     /// this will fail. Use add_with_ids
     void add(idx_t n, const component_t* x) override;
-    void add(idx_t n, const void* x, NumericType numeric_type) override;
+    void add_ex(idx_t n, const void* x, NumericType numeric_type) override;
 
     void search(
             idx_t n,
@@ -48,7 +48,7 @@ struct IndexIDMapTemplate : IndexT {
             distance_t* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
-    void search(
+    void search_ex(
             idx_t n,
             const void* x,
             NumericType numeric_type,
@@ -58,7 +58,7 @@ struct IndexIDMapTemplate : IndexT {
             const SearchParameters* params = nullptr) const override;
 
     void train(idx_t n, const component_t* x) override;
-    void train(idx_t n, const void* x, NumericType numeric_type) override;
+    void train_ex(idx_t n, const void* x, NumericType numeric_type) override;
 
     void reset() override;
 
@@ -104,7 +104,7 @@ struct IndexIDMap2Template : IndexIDMapTemplate<IndexT> {
 
     void add_with_ids(idx_t n, const component_t* x, const idx_t* xids)
             override;
-    void add_with_ids(
+    void add_with_ids_ex(
             idx_t n,
             const void* x,
             NumericType numeric_type,
@@ -132,15 +132,17 @@ struct IDSelectorTranslated : IDSelector {
     const IDSelector* sel;
 
     IDSelectorTranslated(
-            const std::vector<int64_t>& id_map,
-            const IDSelector* sel)
-            : id_map(id_map), sel(sel) {}
+            const std::vector<int64_t>& id_map_in,
+            const IDSelector* sel_in)
+            : id_map(id_map_in), sel(sel_in) {}
 
-    IDSelectorTranslated(IndexBinaryIDMap& index_idmap, const IDSelector* sel)
-            : id_map(index_idmap.id_map), sel(sel) {}
+    IDSelectorTranslated(
+            IndexBinaryIDMap& index_idmap,
+            const IDSelector* sel_in)
+            : id_map(index_idmap.id_map), sel(sel_in) {}
 
-    IDSelectorTranslated(IndexIDMap& index_idmap, const IDSelector* sel)
-            : id_map(index_idmap.id_map), sel(sel) {}
+    IDSelectorTranslated(IndexIDMap& index_idmap, const IDSelector* sel_in)
+            : id_map(index_idmap.id_map), sel(sel_in) {}
 
     bool is_member(idx_t id) const override {
         return sel->is_member(id_map[id]);

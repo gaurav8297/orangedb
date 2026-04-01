@@ -18,15 +18,11 @@
 
 namespace faiss {
 
-IndexBinaryFlat::IndexBinaryFlat(idx_t d) : IndexBinary(d) {}
+IndexBinaryFlat::IndexBinaryFlat(idx_t d_) : IndexBinary(d_) {}
 
 void IndexBinaryFlat::add(idx_t n, const uint8_t* x) {
     xb.insert(xb.end(), x, x + n * code_size);
     ntotal += n;
-}
-
-void IndexBinaryFlat::add(idx_t n, const void* x, NumericType numeric_type) {
-    IndexBinary::add(n, x, numeric_type);
 }
 
 void IndexBinaryFlat::reset() {
@@ -79,17 +75,6 @@ void IndexBinaryFlat::search(
                     sel);
         }
     }
-}
-
-void IndexBinaryFlat::search(
-        idx_t n,
-        const void* x,
-        NumericType numeric_type,
-        idx_t k,
-        int32_t* distances,
-        idx_t* labels,
-        const SearchParameters* params) const {
-    IndexBinary::search(n, x, numeric_type, k, distances, labels, params);
 }
 
 size_t IndexBinaryFlat::remove_ids(const IDSelector& sel) {

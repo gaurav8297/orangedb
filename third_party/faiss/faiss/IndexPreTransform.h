@@ -26,7 +26,7 @@ struct IndexPreTransform : Index {
     std::vector<VectorTransform*> chain; ///! chain of transforms
     Index* index;                        ///! the sub-index
 
-    bool own_fields; ///! whether pointers are deleted in destructor
+    bool own_fields = false; ///! whether pointers are deleted in destructor
 
     explicit IndexPreTransform(Index* index);
 
@@ -38,10 +38,8 @@ struct IndexPreTransform : Index {
     void prepend_transform(VectorTransform* ltrans);
 
     void train(idx_t n, const float* x) override;
-    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     void add(idx_t n, const float* x) override;
-    void add(idx_t n, const void* x, NumericType numeric_type) override;
 
     void add_with_ids(idx_t n, const float* x, const idx_t* xids) override;
 
@@ -58,14 +56,15 @@ struct IndexPreTransform : Index {
             float* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
-    void search(
+
+    void search_subset(
             idx_t n,
-            const void* x,
-            NumericType numeric_type,
+            const float* x,
+            idx_t k_base,
+            const idx_t* base_labels,
             idx_t k,
             float* distances,
-            idx_t* labels,
-            const SearchParameters* params = nullptr) const override;
+            idx_t* labels) const override;
 
     /* range search, no attempt is done to change the radius */
     void range_search(

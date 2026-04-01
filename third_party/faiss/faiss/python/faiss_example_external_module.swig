@@ -1,5 +1,5 @@
 /**
- * Copyright (c) Meta Platforms, Inc. and its affiliates.
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
@@ -59,7 +59,7 @@ typedef uint64_t size_t;
             PyErr_SetString(PyExc_RuntimeError, e.what());
         }
         SWIG_fail;
-    } catch(std::bad_alloc & ba) {
+    } catch(std::bad_alloc&) {
         PyEval_RestoreThread(_save);
         PyErr_SetString(PyExc_MemoryError, "std::bad_alloc");
         SWIG_fail;
@@ -77,7 +77,7 @@ struct IDSelectorModulo : faiss::IDSelector {
 
     IDSelectorModulo(int mod): mod(mod) {}
 
-    bool is_member(faiss::idx_t id) const {
+    bool is_member(faiss::idx_t id) const override {
         return id % mod == 0;
     }
 

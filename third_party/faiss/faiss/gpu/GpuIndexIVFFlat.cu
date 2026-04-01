@@ -210,14 +210,6 @@ void GpuIndexIVFFlat::train(idx_t n, const float* x) {
 
     if (this->is_trained) {
         FAISS_ASSERT(index_);
-        if (should_use_cuvs(config_)) {
-            // copy the IVF centroids to the cuVS index
-            // in case it has been reset. This is because `reset` clears the
-            // cuVS index and its centroids.
-            // TODO: change this once the coarse quantizer is separated from
-            // cuVS index
-            updateQuantizer();
-        };
         return;
     }
 
@@ -322,10 +314,6 @@ void GpuIndexIVFFlat::train(idx_t n, const float* x) {
     }
 
     this->is_trained = true;
-}
-
-void GpuIndexIVFFlat::train(idx_t n, const void* x, NumericType numeric_type) {
-    GpuIndex::train(n, x, numeric_type);
 }
 
 void GpuIndexIVFFlat::setIndex_(

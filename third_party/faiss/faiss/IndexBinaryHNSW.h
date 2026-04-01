@@ -25,8 +25,8 @@ struct IndexBinaryHNSW : IndexBinary {
     HNSW hnsw;
 
     // the sequential storage
-    bool own_fields;
-    IndexBinary* storage;
+    bool own_fields = false;
+    IndexBinary* storage = nullptr;
 
     // When set to false, level 0 in the knn graph is not initialized.
     // This option is used by GpuIndexBinaryCagra::copyTo(IndexBinaryHNSW*)
@@ -36,7 +36,7 @@ struct IndexBinaryHNSW : IndexBinary {
 
     // When set to true, all neighbors in level 0 are filled up
     // to the maximum size allowed (2 * M). This option is used by
-    // IndexBinaryHHNSW to create a full base layer graph that is
+    // IndexBinaryHNSW to create a full base layer graph that is
     // used when GpuIndexBinaryCagra::copyFrom(IndexBinaryHNSW*) is called.
     bool keep_max_size_level0 = false;
 
@@ -49,11 +49,9 @@ struct IndexBinaryHNSW : IndexBinary {
     DistanceComputer* get_distance_computer() const;
 
     void add(idx_t n, const uint8_t* x) override;
-    void add(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// Trains the storage if needed
     void train(idx_t n, const uint8_t* x) override;
-    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     /// entry point for search
     void search(
@@ -63,18 +61,39 @@ struct IndexBinaryHNSW : IndexBinary {
             int32_t* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
-    void search(
-            idx_t n,
-            const void* x,
-            NumericType numeric_type,
-            idx_t k,
-            int32_t* distances,
-            idx_t* labels,
-            const SearchParameters* params = nullptr) const override;
 
     void reconstruct(idx_t key, uint8_t* recons) const override;
 
     void reset() override;
+};
+
+struct IndexBinaryHNSWCagra : IndexBinaryHNSW {
+    IndexBinaryHNSWCagra();
+    IndexBinaryHNSWCagra(int d, int M);
+
+    /// When set to true, the index is immutable.
+    /// This option is used to copy the knn graph from GpuIndexBinaryCagra
+    /// to the base level of IndexBinaryHNSWCagra without adding upper levels.
+    /// Doing so enables to search the HNSW index, but removes the
+    /// ability to add vectors.
+    bool base_level_only = false;
+
+    /// When `base_level_only` is set to `True`, the search function
+    /// searches only the base level knn graph of the HNSW index.
+    /// This parameter selects the entry point by randomly selecting
+    /// some points and using the best one.
+    int num_base_level_search_entrypoints = 32;
+
+    void add(idx_t n, const uint8_t* x) override;
+
+    /// entry point for search
+    void search(
+            idx_t n,
+            const uint8_t* x,
+            idx_t k,
+            int32_t* distances,
+            idx_t* labels,
+            const SearchParameters* params = nullptr) const override;
 };
 
 } // namespace faiss

@@ -15,6 +15,7 @@
 
 #include <faiss/impl/platform_macros.h>
 #include <faiss/utils/Heap.h>
+#include <faiss/utils/simd_levels.h>
 
 namespace faiss {
 
@@ -28,13 +29,25 @@ struct BalancedClusteringDistModifier;
 /// Squared L2 distance between two vectors
 float fvec_L2sqr(const float* x, const float* y, size_t d);
 
+template <SIMDLevel>
+float fvec_L2sqr(const float* x, const float* y, size_t d);
+
 /// inner product
+float fvec_inner_product(const float* x, const float* y, size_t d);
+
+template <SIMDLevel>
 float fvec_inner_product(const float* x, const float* y, size_t d);
 
 /// L1 distance
 float fvec_L1(const float* x, const float* y, size_t d);
 
+template <SIMDLevel>
+float fvec_L1(const float* x, const float* y, size_t d);
+
 /// infinity distance
+float fvec_Linf(const float* x, const float* y, size_t d);
+
+template <SIMDLevel>
 float fvec_Linf(const float* x, const float* y, size_t d);
 
 /// Special version of inner product that computes 4 distances
@@ -51,8 +64,34 @@ void fvec_inner_product_batch_4(
         float& dis2,
         float& dis3);
 
+template <SIMDLevel>
+void fvec_inner_product_batch_4(
+        const float* x,
+        const float* y0,
+        const float* y1,
+        const float* y2,
+        const float* y3,
+        const size_t d,
+        float& dis0,
+        float& dis1,
+        float& dis2,
+        float& dis3);
+
 /// Special version of L2sqr that computes 4 distances
 /// between x and yi, which is performance oriented.
+void fvec_L2sqr_batch_4(
+        const float* x,
+        const float* y0,
+        const float* y1,
+        const float* y2,
+        const float* y3,
+        const size_t d,
+        float& dis0,
+        float& dis1,
+        float& dis2,
+        float& dis3);
+
+template <SIMDLevel>
 void fvec_L2sqr_batch_4(
         const float* x,
         const float* y0,
@@ -94,7 +133,23 @@ void fvec_inner_products_ny(
         size_t d,
         size_t ny);
 
+template <SIMDLevel>
+void fvec_inner_products_ny(
+        float* ip, /* output inner product */
+        const float* x,
+        const float* y,
+        size_t d,
+        size_t ny);
+
 /* compute ny square L2 distance between x and a set of contiguous y vectors */
+void fvec_L2sqr_ny(
+        float* dis,
+        const float* x,
+        const float* y,
+        size_t d,
+        size_t ny);
+
+template <SIMDLevel>
 void fvec_L2sqr_ny(
         float* dis,
         const float* x,
@@ -113,9 +168,27 @@ void fvec_L2sqr_ny_transposed(
         size_t d_offset,
         size_t ny);
 
+template <SIMDLevel>
+void fvec_L2sqr_ny_transposed(
+        float* dis,
+        const float* x,
+        const float* y,
+        const float* y_sqlen,
+        size_t d,
+        size_t d_offset,
+        size_t ny);
+
 /* compute ny square L2 distance between x and a set of contiguous y vectors
    and return the index of the nearest vector.
    return 0 if ny == 0. */
+size_t fvec_L2sqr_ny_nearest(
+        float* distances_tmp_buffer,
+        const float* x,
+        const float* y,
+        size_t d,
+        size_t ny);
+
+template <SIMDLevel>
 size_t fvec_L2sqr_ny_nearest(
         float* distances_tmp_buffer,
         const float* x,
@@ -136,7 +209,20 @@ size_t fvec_L2sqr_ny_nearest_y_transposed(
         size_t d_offset,
         size_t ny);
 
+template <SIMDLevel>
+size_t fvec_L2sqr_ny_nearest_y_transposed(
+        float* distances_tmp_buffer,
+        const float* x,
+        const float* y,
+        const float* y_sqlen,
+        size_t d,
+        size_t d_offset,
+        size_t ny);
+
 /** squared norm of a vector */
+float fvec_norm_L2sqr(const float* x, size_t d);
+
+template <SIMDLevel>
 float fvec_norm_L2sqr(const float* x, size_t d);
 
 /** compute the L2 norms for a set of vectors
@@ -176,6 +262,9 @@ void inner_product_to_L2sqr(
  */
 void fvec_add(size_t d, const float* a, const float* b, float* c);
 
+template <SIMDLevel>
+void fvec_add(size_t d, const float* a, const float* b, float* c);
+
 /** compute c := a + b for a, c vectors and b a scalar
  *
  * c and a can overlap
@@ -183,6 +272,9 @@ void fvec_add(size_t d, const float* a, const float* b, float* c);
  * @param a size d
  * @param c size d
  */
+void fvec_add(size_t d, const float* a, float b, float* c);
+
+template <SIMDLevel>
 void fvec_add(size_t d, const float* a, float b, float* c);
 
 /** compute c := a - b for vectors
@@ -193,6 +285,9 @@ void fvec_add(size_t d, const float* a, float b, float* c);
  * @param b size d
  * @param c size d
  */
+void fvec_sub(size_t d, const float* a, const float* b, float* c);
+
+template <SIMDLevel>
 void fvec_sub(size_t d, const float* a, const float* b, float* c);
 
 /***************************************************************************
@@ -327,7 +422,7 @@ void knn_inner_product(
  *  vector y, for the L2 distance
  * @param x    query vectors, size nx * d
  * @param y    database vectors, size ny * d
- * @param res  result heap strcture, which also provides k. Sorted on output
+ * @param res  result heap structure, which also provides k. Sorted on output
  * @param y_norm2    (optional) norms for the y vectors (nullptr or size ny)
  * @param sel  search in this subset of vectors
  */
@@ -416,7 +511,7 @@ void knn_inner_products_by_idx(
  * @param x    query vectors, size nx * d
  * @param y    database vectors, size (max(ids) + 1) * d
  * @param subset subset of database vectors to consider, size (nx, nsubset)
- * @param res  rIDesult structure
+ * @param res  result structure
  * @param ld_subset stride for the subset array. -1: use nsubset, 0: all queries
  * process the same subset
  */
@@ -483,6 +578,16 @@ void compute_PQ_dis_tables_dsub2(
         bool is_inner_product,
         float* dis_tables);
 
+template <SIMDLevel>
+void compute_PQ_dis_tables_dsub2(
+        size_t d,
+        size_t ksub,
+        const float* centroids,
+        size_t nx,
+        const float* x,
+        bool is_inner_product,
+        float* dis_tables);
+
 /***************************************************************************
  * Templatized versions of distance functions
  ***************************************************************************/
@@ -500,9 +605,21 @@ void compute_PQ_dis_tables_dsub2(
  */
 void fvec_madd(size_t n, const float* a, float bf, const float* b, float* c);
 
+/* same statically */
+template <SIMDLevel>
+void fvec_madd(size_t n, const float* a, float bf, const float* b, float* c);
+
 /** same as fvec_madd, also return index of the min of the result table
  * @return    index of the min of table c
  */
+int fvec_madd_and_argmin(
+        size_t n,
+        const float* a,
+        float bf,
+        const float* b,
+        float* c);
+
+template <SIMDLevel>
 int fvec_madd_and_argmin(
         size_t n,
         const float* a,

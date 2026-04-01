@@ -8,13 +8,13 @@
 // -*- c++ -*-
 
 #include <faiss/Index.h>
+#include <faiss/utils/simd_levels.h>
 #include <faiss/utils/utils.h>
 
 #include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <atomic>
 
 #ifdef _MSC_VER
 #define NOMINMAX
@@ -104,7 +104,10 @@ int sgemv_(
 namespace faiss {
 
 // this will be set at load time from GPU Faiss
-std::string gpu_compile_options;
+std::string& ref_gpu_compile_options() {
+    static std::string gpu_compile_options;
+    return gpu_compile_options;
+}
 
 std::string get_compile_options() {
     std::string options;
@@ -114,19 +117,29 @@ std::string get_compile_options() {
     options += "OPTIMIZE ";
 #endif
 
-#ifdef __AVX512F__
-    options += "AVX512 ";
-#elif defined(__AVX2__)
-    options += "AVX2 ";
-#elif defined(__ARM_FEATURE_SVE)
-    options += "SVE NEON ";
-#elif defined(__aarch64__)
-    options += "NEON ";
+#ifdef FAISS_ENABLE_DD
+    // Dynamic Dispatch mode: report DD and all available SIMD levels
+    options += "DD ";
+    int supported = SIMDConfig::supported_simd_levels;
+    for (int i = 0; i < static_cast<int>(SIMDLevel::COUNT); ++i) {
+        auto level = static_cast<SIMDLevel>(i);
+        if ((supported & (1 << i)) && level != SIMDLevel::NONE) {
+            options += to_string(level) + " ";
+        }
+    }
 #else
-    options += "GENERIC ";
+    // Static mode: report the compiled-in SIMD level
+    SIMDLevel level = SIMDConfig::get_level();
+    if (level != SIMDLevel::NONE) {
+        options += to_string(level) + " ";
+    }
 #endif
 
-    options += gpu_compile_options;
+#ifdef FAISS_ENABLE_SVS
+    options += "SVS ";
+#endif
+
+    options += ref_gpu_compile_options();
 
     return options;
 }
@@ -175,7 +188,7 @@ size_t get_mem_usage_kb() {
         char buf[256];
         if (!fgets(buf, 256, f))
             break;
-        if (sscanf(buf, "VmRSS: %ld kB", &sz) == 1)
+        if (sscanf(buf, "VmRSS: %zu kB", &sz) == 1)
             break;
     }
     fclose(f);
@@ -295,7 +308,7 @@ size_t merge_result_table_with(
         std::vector<float> tmpD(k);
 
 #pragma omp for
-        for (int64_t i = 0; i < n; i++) {
+        for (int64_t i = 0; i < static_cast<int64_t>(n); i++) {
             int64_t* lI0 = I0 + i * k;
             float* lD0 = D0 + i * k;
             const int64_t* lI1 = I1 + i * k;
@@ -425,10 +438,10 @@ void bincode_hist(size_t n, size_t nbits, const uint8_t* codes, int* hist) {
     std::vector<int> accu(d * 256);
     const uint8_t* c = codes;
     for (size_t i = 0; i < n; i++)
-        for (int j = 0; j < d; j++)
+        for (size_t j = 0; j < d; j++)
             accu[j * 256 + *c++]++;
     memset(hist, 0, sizeof(*hist) * nbits);
-    for (int i = 0; i < d; i++) {
+    for (size_t i = 0; i < d; i++) {
         const int* ai = accu.data() + i * 256;
         int* hi = hist + i * 8;
         for (int j = 0; j < 256; j++)
@@ -488,7 +501,7 @@ const float* fvecs_maybe_subsample(
     std::vector<int> subset(*n);
     rand_perm(subset.data(), *n, seed);
     float* x_subset = new float[n2 * d];
-    for (int64_t i = 0; i < n2; i++)
+    for (int64_t i = 0; i < static_cast<int64_t>(n2); i++)
         memcpy(&x_subset[i * d], &x[subset[i] * size_t(d)], sizeof(x[0]) * d);
     *n = n2;
     return x_subset;
@@ -568,20 +581,15 @@ bool check_no_openmp() {
     // Check that we are not in parallel by validating that the thread ID is
     // same across all iterations.
     auto main_thread_id = std::hash<std::thread::id>()(std::this_thread::get_id());
-    std::atomic_bool failed(true);
-#pragma omp parallel for
+    int ok = 1;
+#pragma omp parallel for reduction(&:ok)
     for (auto i = 0; i < 1000000; i++) {
         auto numThreads = omp_get_num_threads();
-        if (numThreads != 1) {
-            failed = false;
-        }
         auto new_id = std::hash<std::thread::id>()(std::this_thread::get_id());
-        if (new_id != main_thread_id) {
-            failed = false;
-        }
+        ok &= (numThreads == 1) && (new_id == main_thread_id);
     }
 
-    return failed;
+    return ok != 0;
 }
 
 namespace {

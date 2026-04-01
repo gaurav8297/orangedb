@@ -36,19 +36,10 @@ struct IndexPQ : IndexFlatCodes {
     IndexPQ();
 
     void train(idx_t n, const float* x) override;
-    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     void search(
             idx_t n,
             const float* x,
-            idx_t k,
-            float* distances,
-            idx_t* labels,
-            const SearchParameters* params = nullptr) const override;
-    void search(
-            idx_t n,
-            const void* x,
-            NumericType numeric_type,
             idx_t k,
             float* distances,
             idx_t* labels,
@@ -151,7 +142,6 @@ struct MultiIndexQuantizer : Index {
             size_t nbits); ///< number of bit per subvector index
 
     void train(idx_t n, const float* x) override;
-    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     void search(
             idx_t n,
@@ -160,18 +150,9 @@ struct MultiIndexQuantizer : Index {
             float* distances,
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
-    void search(
-            idx_t n,
-            const void* x,
-            NumericType numeric_type,
-            idx_t k,
-            float* distances,
-            idx_t* labels,
-            const SearchParameters* params = nullptr) const override;
 
     /// add and reset will crash at runtime
     void add(idx_t n, const float* x) override;
-    void add(idx_t n, const void* x, NumericType numeric_type) override;
 
     void reset() override;
 
@@ -183,12 +164,12 @@ struct MultiIndexQuantizer : Index {
 // block size used in MultiIndexQuantizer::search
 FAISS_API extern int multi_index_quantizer_search_bs;
 
-/** MultiIndexQuantizer where the PQ assignmnet is performed by sub-indexes
+/** MultiIndexQuantizer where the PQ assignment is performed by sub-indexes
  */
 struct MultiIndexQuantizer2 : MultiIndexQuantizer {
     /// M Indexes on d / M dimensions
     std::vector<Index*> assign_indexes;
-    bool own_fields;
+    bool own_fields = false;
 
     MultiIndexQuantizer2(int d, size_t M, size_t nbits, Index** indexes);
 
@@ -199,19 +180,10 @@ struct MultiIndexQuantizer2 : MultiIndexQuantizer {
             Index* assign_index_1);
 
     void train(idx_t n, const float* x) override;
-    void train(idx_t n, const void* x, NumericType numeric_type) override;
 
     void search(
             idx_t n,
             const float* x,
-            idx_t k,
-            float* distances,
-            idx_t* labels,
-            const SearchParameters* params = nullptr) const override;
-    void search(
-            idx_t n,
-            const void* x,
-            NumericType numeric_type,
             idx_t k,
             float* distances,
             idx_t* labels,

@@ -34,32 +34,33 @@ if(FAISS_ENABLE_GPU)
 endif()
 
 if(FAISS_ENABLE_CUVS)
-include(cmake/thirdparty/fetch_rapids.cmake)
-include(rapids-cmake)
-include(rapids-cpm)
-include(rapids-cuda)
-include(rapids-export)
-include(rapids-find)
+  include(cmake/thirdparty/fetch_rapids.cmake)
+  include(rapids-cmake)
+  include(rapids-cpm)
+  include(rapids-cuda)
+  include(rapids-export)
+  include(rapids-find)
 
-rapids_cuda_init_architectures(faiss)
-rapids_cuda_init_architectures(pyfaiss)
-rapids_cuda_init_architectures(faiss_c_library)
+  rapids_cuda_init_architectures(faiss)
+  rapids_cuda_init_architectures(pyfaiss)
+  rapids_cuda_init_architectures(faiss_c_library)
 endif()
 
 project(faiss
-  VERSION 1.10.0
-  DESCRIPTION "A library for efficient similarity search and clustering of dense vectors."
-  HOMEPAGE_URL "https://github.com/facebookresearch/faiss"
-  LANGUAGES ${FAISS_LANGUAGES})
+        VERSION 1.14.1
+        DESCRIPTION "A library for efficient similarity search and clustering of dense vectors."
+        HOMEPAGE_URL "https://github.com/facebookresearch/faiss"
+        LANGUAGES ${FAISS_LANGUAGES})
 include(GNUInstallDirs)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 # Valid values are "generic", "avx2", "avx512", "avx512_spr", "sve".
 option(FAISS_OPT_LEVEL "" "avx512")
 option(FAISS_ENABLE_GPU "Enable support for GPU indexes." OFF)
+option(FAISS_GPU_STATIC "Link GPU libraries statically." OFF)
 option(FAISS_ENABLE_CUVS "Enable cuVS for GPU indexes." OFF)
 option(FAISS_ENABLE_ROCM "Enable ROCm for GPU indexes." OFF)
 option(FAISS_ENABLE_MKL "Enable MKL." OFF)
@@ -67,6 +68,9 @@ option(FAISS_ENABLE_PYTHON "Build Python extension." OFF)
 option(FAISS_ENABLE_C_API "Build C API." OFF)
 option(FAISS_ENABLE_EXTRAS "Build extras like benchmarks and demos" OFF)
 option(FAISS_USE_LTO "Enable Link-Time optimization" OFF)
+option(FAISS_ENABLE_SVS "Enable SVS (Intel(R) Scalable Vector Search) integration." OFF)
+set(FAISS_SVS_RUNTIME_VERSION "v0" CACHE STRING "Version of the SVS runtime API to use")
+set_property(CACHE FAISS_SVS_RUNTIME_VERSION PROPERTY STRINGS "v0")
 
 if(FAISS_ENABLE_GPU)
   if(FAISS_ENABLE_ROCM)
@@ -84,17 +88,13 @@ if(FAISS_ENABLE_GPU)
 endif()
 
 if(FAISS_ENABLE_CUVS AND NOT TARGET cuvs::cuvs)
-   find_package(cuvs)
- endif()
+  find_package(cuvs)
+endif()
 
 add_subdirectory(faiss)
 
 if(FAISS_ENABLE_GPU)
-  if(FAISS_ENABLE_ROCM)
-    add_subdirectory(faiss/gpu-rocm)
-  else()
-    add_subdirectory(faiss/gpu)
-  endif()
+  add_subdirectory(faiss/gpu)
 endif()
 
 if(FAISS_ENABLE_PYTHON)

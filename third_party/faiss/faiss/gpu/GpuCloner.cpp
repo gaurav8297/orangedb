@@ -15,6 +15,7 @@
 #include <faiss/IndexBinaryFlat.h>
 #include <faiss/IndexFlat.h>
 #if defined USE_NVIDIA_CUVS
+#include <faiss/IndexBinaryHNSW.h>
 #include <faiss/IndexHNSW.h>
 #endif
 #include <faiss/IndexIVF.h>
@@ -63,7 +64,7 @@ void ToCPUCloner::merge_index(Index* dst, Index* src, bool successive_ids) {
         FAISS_ASSERT(ifl2);
         ifl->merge_from(*ifl2, successive_ids ? ifl->ntotal : 0);
     } else {
-        FAISS_ASSERT(!"merging not implemented for this type of class");
+        FAISS_ASSERT(false && "merging not implemented for this type of class");
     }
 }
 
@@ -238,7 +239,7 @@ Index* ToGpuCloner::clone_Index(const Index* index) {
         config.device = device;
         GpuIndexCagra* res =
                 new GpuIndexCagra(provider, icg->d, icg->metric_type, config);
-        res->copyFrom(icg, icg->get_numeric_type());
+        res->copyFrom_ex(icg, icg->get_numeric_type());
         return res;
     }
 #endif
@@ -534,7 +535,7 @@ faiss::IndexBinary* index_binary_gpu_to_cpu(
     }
 #if defined USE_NVIDIA_CUVS
     else if (auto ii = dynamic_cast<const GpuIndexBinaryCagra*>(gpu_index)) {
-        IndexBinaryHNSW* ret = new IndexBinaryHNSW();
+        IndexBinaryHNSWCagra* ret = new IndexBinaryHNSWCagra();
         ii->copyTo(ret);
         return ret;
     }
@@ -555,7 +556,8 @@ faiss::IndexBinary* index_binary_cpu_to_gpu(
         return new GpuIndexBinaryFlat(provider, ii, config);
     }
 #if defined USE_NVIDIA_CUVS
-    else if (auto ii = dynamic_cast<const faiss::IndexBinaryHNSW*>(index)) {
+    else if (
+            auto ii = dynamic_cast<const faiss::IndexBinaryHNSWCagra*>(index)) {
         GpuIndexCagraConfig config;
         config.device = device;
         GpuIndexBinaryCagra* res =
