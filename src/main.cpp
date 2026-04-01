@@ -36,6 +36,7 @@
 #include "faiss/IndexPQ.h"
 #include "umappp/umappp.hpp"
 #include "knncolle/knncolle.hpp"
+#include <faiss/impl/VisitedTable.h>
 // #include <cblas.h>
 
 #ifdef CUVS_ENABLED
