@@ -5121,11 +5121,12 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
         const float *queryVec = queryVecs + q * baseDimension;
         const float *rotatedQueryVec = rotatedQueryVecs.data() + q * baseDimension;
         double querySquaredError = 0.0;
-
+        double totalSize = 0.0;
         for (auto &cluster : clusterData) {
             if (cluster.indices.empty()) {
                 continue;
             }
+            totalSize += cluster.indices.size();
 
             std::unique_ptr<faiss::FlatCodesDistanceComputer> dc(
                     cluster.quantizer.get_distance_computer(
@@ -5146,7 +5147,7 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
                 querySquaredError += diff * diff;
             }
         }
-
+        printf("Query %zu processed with total size %f\n", q, totalSize);
         perQuerySquaredError[q] = querySquaredError;
     }
 
