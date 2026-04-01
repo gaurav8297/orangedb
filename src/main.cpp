@@ -5164,6 +5164,86 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
     free(queryVecs);
 }
 
+void compute_scalar_quantizer_distance_mse(InputParser &input) {
+    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
+    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
+    const std::string &nbitsArg = input.getCmdOption("-nbits");
+    const std::string &numQueriesArg = input.getCmdOption("-numQueries");
+    const std::string &useIPArg = input.getCmdOption("-useIP");
+
+    CHECK_ARGUMENT(!baseVectorPath.empty(), "base vector path is required");
+    CHECK_ARGUMENT(!queryVectorPath.empty(), "query vector path is required");
+    CHECK_ARGUMENT(!nbitsArg.empty(), "nbits is required");
+
+    const int nbits = stoi(nbitsArg);
+    CHECK_ARGUMENT(nbits == 4 || nbits == 8, "nbits must be 4 or 8");
+
+    const bool useIP = !useIPArg.empty() && stoi(useIPArg) != 0;
+    const faiss::MetricType metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+    const faiss::ScalarQuantizer::QuantizerType qtype =
+            (nbits == 4) ? faiss::ScalarQuantizer::QT_4bit : faiss::ScalarQuantizer::QT_8bit;
+
+    size_t baseNumVectors, baseDimension;
+    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
+    size_t queryNumVectors, queryDimension;
+    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    CHECK_ARGUMENT(baseDimension == queryDimension, "base and query dimensions do not match");
+
+    const size_t requestedQueries = numQueriesArg.empty() ? queryNumVectors : stoull(numQueriesArg);
+    CHECK_ARGUMENT(requestedQueries > 0, "numQueries must be positive");
+    CHECK_ARGUMENT(requestedQueries <= queryNumVectors, "not enough query vectors");
+    const size_t numQueries = requestedQueries;
+
+    printf("Loaded %zu base vectors and %zu query vectors of dimension %zu\n",
+           baseNumVectors, numQueries, baseDimension);
+    printf("Scalar quantizer config: metric=%s nbits=%d\n", useIP ? "ip" : "l2", nbits);
+
+    faiss::ScalarQuantizer sq(baseDimension, qtype);
+    sq.train(baseNumVectors, baseVecs);
+
+    std::vector<uint8_t> codes(baseNumVectors * sq.code_size);
+    sq.compute_codes(baseVecs, codes.data(), baseNumVectors);
+
+    std::vector<double> perQuerySquaredError(numQueries, 0.0);
+
+#pragma omp parallel for
+    for (int64_t q = 0; q < static_cast<int64_t>(numQueries); q++) {
+        const float *queryVec = queryVecs + q * baseDimension;
+        double querySquaredError = 0.0;
+
+        std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
+                sq.get_distance_computer(metric));
+        dc->set_query(queryVec);
+
+        for (size_t i = 0; i < baseNumVectors; i++) {
+            const float *baseVec = baseVecs + i * baseDimension;
+            const double exactDistance = useIP
+                                         ? faiss::fvec_inner_product(queryVec, baseVec, baseDimension)
+                                         : faiss::fvec_L2sqr(queryVec, baseVec, baseDimension);
+            const double quantizedDistance =
+                    dc->distance_to_code(codes.data() + i * sq.code_size);
+            const double diff = exactDistance - quantizedDistance;
+            querySquaredError += diff * diff;
+        }
+
+        perQuerySquaredError[q] = querySquaredError;
+    }
+
+    double totalSquaredError = 0.0;
+    for (size_t q = 0; q < numQueries; q++) {
+        const double mse = perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
+        totalSquaredError += perQuerySquaredError[q];
+        printf("Query %zu MSE: %.10f\n", q, mse);
+    }
+
+    const double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
+    printf("Overall scalar quantizer distance MSE: %.10f\n", overallMse);
+
+    free(baseVecs);
+    free(queryVecs);
+}
+
 /**
  * Test scalar quantization quality using parquet files.
  *
@@ -6275,8 +6355,11 @@ int main(int argc, char **argv) {
     else if (run == "computeQuantizedIpMse") {
         compute_quantized_ip_mse(input);
     }
-    else if (run == "computeRaBitQRotatedDistanceMse" || run == "computeRaBitQRotatedL2Mse") {
+    else if (run == "computeRaBitQRotatedDistanceMse") {
         compute_rabitq_rotated_distance_mse(input);
+    }
+    else if (run == "computeScalarQuantizerDistanceMse") {
+        compute_scalar_quantizer_distance_mse(input);
     }
 #ifdef CUVS_ENABLED
     else if (run == "benchmarkCuvsBalancedKmeans") {
