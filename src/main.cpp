@@ -4966,6 +4966,539 @@ static double compute_topk_match_percentage(
     return 100.0 * static_cast<double>(matches) / static_cast<double>(exactK);
 }
 
+struct TopKHeapState {
+    std::vector<float> distances;
+    std::vector<int64_t> labels;
+};
+
+struct DistanceMseRunConfig {
+    size_t nbits = 0;
+    double factor = 1.0;
+    size_t quantizedK = 0;
+    std::vector<double> perQuerySquaredError;
+    std::vector<TopKHeapState> quantizedTopK;
+};
+
+struct NbitsRunGroup {
+    size_t nbits = 0;
+    std::vector<size_t> runIndices;
+};
+
+struct RaBitClusterCodes {
+    std::vector<size_t> indices;
+    std::vector<uint8_t> codes;
+    faiss::RaBitQuantizer quantizer;
+    const float *centroid = nullptr;
+
+    RaBitClusterCodes(size_t dim, faiss::MetricType metricType, size_t bits)
+            : quantizer(dim, metricType, bits) {}
+};
+
+struct RaBitChunkConfig {
+    size_t nbits = 0;
+    std::vector<RaBitClusterCodes> clusters;
+};
+
+struct ScalarClusterCodes {
+    std::vector<uint8_t> codes;
+    faiss::ScalarQuantizer quantizer;
+    size_t nbits = 0;
+
+    ScalarClusterCodes(size_t dim, size_t bits)
+            : quantizer(dim, bits == 4 ? faiss::ScalarQuantizer::QT_4bit : faiss::ScalarQuantizer::QT_8bit),
+              nbits(bits) {}
+};
+
+static std::vector<double> parseCommaSeparatedDoubles(const std::string &input) {
+    std::vector<double> numbers;
+    std::stringstream ss(input);
+    std::string temp;
+
+    while (std::getline(ss, temp, ',')) {
+        numbers.push_back(std::stod(temp));
+    }
+
+    return numbers;
+}
+
+static void init_topk_heaps_for_queries(
+        size_t numQueries,
+        size_t k,
+        bool useIP,
+        std::vector<TopKHeapState> &heaps) {
+    heaps.resize(numQueries);
+    for (size_t q = 0; q < numQueries; q++) {
+        init_topk_heap(k, useIP, heaps[q].distances, heaps[q].labels);
+    }
+}
+
+static size_t get_requested_vector_limit(const std::string &numVectorsArg) {
+    return numVectorsArg.empty() ? SIZE_MAX : stoull(numVectorsArg);
+}
+
+static void collect_parquet_input_files(
+        const std::string &baseVectorPath,
+        int requestedFiles,
+        size_t maxVectors,
+        const std::string &parquetColumnName,
+        std::vector<std::string> &selectedPaths,
+        size_t *baseDimension,
+        size_t *baseNumVectors) {
+    std::vector<std::string> allPaths;
+    list_parquet_dir(baseVectorPath.c_str(), allPaths);
+    CHECK_ARGUMENT(!allPaths.empty(), "no parquet files found in baseVectorPath");
+
+    const int numFiles = std::min(requestedFiles, static_cast<int>(allPaths.size()));
+    CHECK_ARGUMENT(numFiles > 0, "nFiles must be positive");
+
+    selectedPaths.clear();
+    *baseNumVectors = 0;
+    bool hasDimension = false;
+    for (int fileIdx = 0; fileIdx < numFiles; fileIdx++) {
+        size_t fileDimension = 0;
+        size_t fileVectors = 0;
+        auto status = readParquetFileStats(
+                allPaths[fileIdx].c_str(),
+                &fileDimension,
+                &fileVectors,
+                parquetColumnName);
+        CHECK_ARGUMENT(status.ok(), status.ToString().c_str());
+        if (!hasDimension) {
+            *baseDimension = fileDimension;
+            hasDimension = true;
+        } else {
+            CHECK_ARGUMENT(*baseDimension == fileDimension, "parquet file dimensions do not match");
+        }
+        if (*baseNumVectors >= maxVectors) {
+            break;
+        }
+        selectedPaths.push_back(allPaths[fileIdx]);
+        *baseNumVectors += std::min(fileVectors, maxVectors - *baseNumVectors);
+    }
+
+    CHECK_ARGUMENT(!selectedPaths.empty(), "no parquet files selected");
+}
+
+static float *read_parquet_sample_files(
+        const std::vector<std::string> &filePaths,
+        size_t numSampleFiles,
+        size_t *dimension,
+        size_t *numVectors,
+        const std::string &parquetColumnName) {
+    std::vector<std::string> samplePaths;
+    const size_t sampleFiles = std::min(numSampleFiles, filePaths.size());
+    for (size_t i = 0; i < sampleFiles; i++) {
+        samplePaths.push_back(filePaths[i]);
+    }
+    return readParquetFiles(samplePaths, dimension, numVectors, parquetColumnName);
+}
+
+static size_t resolve_train_sample_files(
+        const std::string &trainSampleFilesArg,
+        size_t defaultSampleFiles,
+        size_t maxAvailableFiles) {
+    const size_t requestedSampleFiles = trainSampleFilesArg.empty()
+                                        ? defaultSampleFiles
+                                        : stoull(trainSampleFilesArg);
+    CHECK_ARGUMENT(requestedSampleFiles > 0, "trainSampleFiles must be positive");
+    return std::min(requestedSampleFiles, maxAvailableFiles);
+}
+
+static size_t resolve_train_sample_size(
+        const std::string &trainSampleSizeArg,
+        size_t defaultSampleSize,
+        size_t maxAvailableVectors) {
+    const size_t requestedSampleSize = trainSampleSizeArg.empty()
+                                       ? defaultSampleSize
+                                       : stoull(trainSampleSizeArg);
+    CHECK_ARGUMENT(requestedSampleSize > 0, "trainSampleSize must be positive");
+    return std::min(requestedSampleSize, maxAvailableVectors);
+}
+
+static size_t get_clustering_sample_size(size_t totalVectors, size_t numCentroids) {
+    size_t sampleVectors = numCentroids * 2000;
+    sampleVectors = std::max(sampleVectors, numCentroids);
+    return std::min(totalVectors, sampleVectors);
+}
+
+static size_t get_scalar_training_sample_size(size_t totalVectors) {
+    return std::min(totalVectors, static_cast<size_t>(200000));
+}
+
+static std::vector<float> gather_indexed_vectors(
+        const float *vectors,
+        size_t dimension,
+        const std::vector<size_t> &indices) {
+    std::vector<float> gathered(indices.size() * dimension);
+    for (size_t i = 0; i < indices.size(); i++) {
+        memcpy(
+                gathered.data() + i * dimension,
+                vectors + indices[i] * dimension,
+                dimension * sizeof(float));
+    }
+    return gathered;
+}
+
+static std::vector<float> train_kmeans_centroids(
+        const float *trainVecs,
+        size_t numTrainVectors,
+        size_t dimension,
+        size_t numCentroids,
+        int kmeansNiter,
+        bool useIP) {
+    CHECK_ARGUMENT(numCentroids > 0, "numCentroids must be positive");
+    CHECK_ARGUMENT(numTrainVectors >= numCentroids, "not enough sample vectors for requested numCentroids");
+
+    faiss::ClusteringParameters cp;
+    cp.niter = kmeansNiter;
+    cp.max_points_per_centroid = INT_MAX;
+    cp.verbose = true;
+    if (useIP) {
+        cp.spherical = true;
+    }
+
+    faiss::MetricType metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+    faiss::Clustering clustering(static_cast<int>(dimension), numCentroids, cp);
+    faiss::IndexFlat assigner(static_cast<faiss::idx_t>(dimension), metric);
+    clustering.train(numTrainVectors, trainVecs, assigner);
+    return clustering.centroids;
+}
+
+static std::vector<std::vector<size_t>> assign_vectors_to_centroids(
+        const float *vectors,
+        size_t numVectors,
+        size_t dimension,
+        faiss::IndexFlat &centroidIndex,
+        size_t numCentroids) {
+    std::vector<std::vector<size_t>> assignments(numCentroids);
+    std::vector<faiss::idx_t> labels(numVectors);
+    std::vector<float> distances(numVectors);
+    centroidIndex.search(numVectors, vectors, 1, distances.data(), labels.data());
+    for (size_t i = 0; i < numVectors; i++) {
+        CHECK_ARGUMENT(labels[i] >= 0 && labels[i] < static_cast<faiss::idx_t>(numCentroids),
+                       "invalid centroid assignment");
+        assignments[labels[i]].push_back(i);
+    }
+    return assignments;
+}
+
+static std::vector<DistanceMseRunConfig> create_distance_mse_run_configs(
+        const std::vector<int> &nbitsValues,
+        const std::vector<double> &factorValues,
+        size_t baseNumVectors,
+        size_t numQueries,
+        size_t k,
+        bool useIP,
+        std::vector<NbitsRunGroup> &runGroups) {
+    std::vector<DistanceMseRunConfig> runs;
+    runGroups.clear();
+    for (size_t i = 0; i < nbitsValues.size(); i++) {
+        NbitsRunGroup group;
+        group.nbits = static_cast<size_t>(nbitsValues[i]);
+        for (size_t j = 0; j < factorValues.size(); j++) {
+            CHECK_ARGUMENT(factorValues[j] > 0, "factor must be positive");
+            DistanceMseRunConfig run;
+            run.nbits = static_cast<size_t>(nbitsValues[i]);
+            run.factor = factorValues[j];
+            run.quantizedK = std::min(
+                    baseNumVectors,
+                    std::max(k, static_cast<size_t>(std::ceil(run.factor * static_cast<double>(k)))));
+            run.perQuerySquaredError.assign(numQueries, 0.0);
+            init_topk_heaps_for_queries(numQueries, run.quantizedK, useIP, run.quantizedTopK);
+            group.runIndices.push_back(runs.size());
+            runs.push_back(std::move(run));
+        }
+        runGroups.push_back(std::move(group));
+    }
+    return runs;
+}
+
+static void print_distance_mse_results(
+        const char *label,
+        size_t baseNumVectors,
+        size_t numQueries,
+        size_t k,
+        bool useIP,
+        const std::vector<TopKHeapState> &exactTopK,
+        const std::vector<DistanceMseRunConfig> &runs) {
+    for (const auto &run : runs) {
+        double totalSquaredError = 0.0;
+        double totalTopKMatch = 0.0;
+        printf("%s config: nbits=%zu factor=%.3f quantized_k=%zu\n",
+               label,
+               run.nbits,
+               run.factor,
+               run.quantizedK);
+        for (size_t q = 0; q < numQueries; q++) {
+            std::vector<float> exactDistances = exactTopK[q].distances;
+            std::vector<int64_t> exactLabels = exactTopK[q].labels;
+            std::vector<float> quantizedDistances = run.quantizedTopK[q].distances;
+            std::vector<int64_t> quantizedLabels = run.quantizedTopK[q].labels;
+            const double topKMatch = compute_topk_match_percentage(
+                    k,
+                    run.quantizedK,
+                    useIP,
+                    exactDistances,
+                    exactLabels,
+                    quantizedDistances,
+                    quantizedLabels);
+            const double mse = run.perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
+            totalSquaredError += run.perQuerySquaredError[q];
+            totalTopKMatch += topKMatch;
+            printf("Query %zu MSE: %.10f, top-%zu in quantized top-%zu: %.2f%%\n",
+                   q,
+                   mse,
+                   k,
+                   run.quantizedK,
+                   topKMatch);
+        }
+        const double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
+        printf("Overall %s MSE (nbits=%zu factor=%.3f): %.10f\n",
+               label,
+               run.nbits,
+               run.factor,
+               overallMse);
+        printf("Average top-%zu in quantized top-%zu (nbits=%zu factor=%.3f): %.2f%%\n",
+               k,
+               run.quantizedK,
+               run.nbits,
+               run.factor,
+               totalTopKMatch / static_cast<double>(numQueries));
+    }
+}
+
+static void build_rabitq_chunk_configs(
+        const float *rotatedChunkVecs,
+        size_t chunkVectors,
+        size_t dimension,
+        faiss::MetricType metric,
+        const std::vector<int> &nbitsValues,
+        bool useCentroids,
+        const std::vector<float> &centroids,
+        faiss::IndexFlat *centroidIndex,
+        std::vector<RaBitChunkConfig> &chunkConfigs) {
+    chunkConfigs.clear();
+    std::vector<std::vector<size_t>> centroidAssignments;
+    if (useCentroids) {
+        centroidAssignments = assign_vectors_to_centroids(
+                rotatedChunkVecs,
+                chunkVectors,
+                dimension,
+                *centroidIndex,
+                centroids.size() / dimension);
+    }
+
+    for (size_t nbitsIdx = 0; nbitsIdx < nbitsValues.size(); nbitsIdx++) {
+        RaBitChunkConfig config;
+        config.nbits = static_cast<size_t>(nbitsValues[nbitsIdx]);
+        if (!useCentroids) {
+            config.clusters.emplace_back(dimension, metric, config.nbits);
+            auto &cluster = config.clusters.back();
+            cluster.indices.resize(chunkVectors);
+            for (size_t i = 0; i < chunkVectors; i++) {
+                cluster.indices[i] = i;
+            }
+            cluster.quantizer.train(chunkVectors, rotatedChunkVecs);
+            cluster.codes.resize(chunkVectors * cluster.quantizer.code_size);
+            cluster.quantizer.compute_codes(rotatedChunkVecs, cluster.codes.data(), chunkVectors);
+        } else {
+            const size_t numCentroids = centroids.size() / dimension;
+            config.clusters.reserve(numCentroids);
+            for (size_t centroidId = 0; centroidId < numCentroids; centroidId++) {
+                config.clusters.emplace_back(dimension, metric, config.nbits);
+                auto &cluster = config.clusters.back();
+                cluster.centroid = centroids.data() + centroidId * dimension;
+                cluster.indices = centroidAssignments[centroidId];
+                if (cluster.indices.empty()) {
+                    continue;
+                }
+                std::vector<float> clusterVecs = gather_indexed_vectors(
+                        rotatedChunkVecs,
+                        dimension,
+                        cluster.indices);
+                cluster.quantizer.train(cluster.indices.size(), clusterVecs.data());
+                cluster.codes.resize(cluster.indices.size() * cluster.quantizer.code_size);
+                cluster.quantizer.compute_codes_core(
+                        clusterVecs.data(),
+                        cluster.codes.data(),
+                        cluster.indices.size(),
+                        cluster.centroid);
+            }
+        }
+        chunkConfigs.push_back(std::move(config));
+    }
+}
+
+static void process_rabitq_chunk(
+        const float *chunkVecs,
+        size_t chunkVectors,
+        size_t baseOffset,
+        size_t dimension,
+        const float *queryVecs,
+        const float *rotatedQueryVecs,
+        size_t numQueries,
+        size_t k,
+        bool useIP,
+        faiss::MetricType metric,
+        faiss::RandomRotationMatrix &rotationMatrix,
+        const std::vector<int> &nbitsValues,
+        const std::vector<NbitsRunGroup> &runGroups,
+        bool useCentroids,
+        const std::vector<float> &centroids,
+        faiss::IndexFlat *centroidIndex,
+        std::vector<TopKHeapState> &exactTopK,
+        std::vector<DistanceMseRunConfig> &runs) {
+    std::vector<float> rotatedChunkVecs(chunkVectors * dimension);
+    rotationMatrix.apply_noalloc(chunkVectors, chunkVecs, rotatedChunkVecs.data());
+
+    std::vector<RaBitChunkConfig> chunkConfigs;
+    build_rabitq_chunk_configs(
+            rotatedChunkVecs.data(),
+            chunkVectors,
+            dimension,
+            metric,
+            nbitsValues,
+            useCentroids,
+            centroids,
+            centroidIndex,
+            chunkConfigs);
+
+#pragma omp parallel for
+    for (int64_t q = 0; q < static_cast<int64_t>(numQueries); q++) {
+        const float *queryVec = queryVecs + q * dimension;
+        const float *rotatedQueryVec = rotatedQueryVecs + q * dimension;
+        std::vector<float> exactChunkDistances(chunkVectors);
+
+        for (size_t i = 0; i < chunkVectors; i++) {
+            const float *baseVec = chunkVecs + i * dimension;
+            const float exactDistance = useIP
+                                        ? faiss::fvec_inner_product(queryVec, baseVec, dimension)
+                                        : faiss::fvec_L2sqr(queryVec, baseVec, dimension);
+            exactChunkDistances[i] = exactDistance;
+            add_to_topk_heap(
+                    k,
+                    useIP,
+                    exactTopK[q].distances,
+                    exactTopK[q].labels,
+                    exactDistance,
+                    static_cast<int64_t>(baseOffset + i));
+        }
+
+        for (size_t configIdx = 0; configIdx < chunkConfigs.size(); configIdx++) {
+            auto &config = chunkConfigs[configIdx];
+            for (auto &cluster : config.clusters) {
+                if (cluster.indices.empty()) {
+                    continue;
+                }
+                std::unique_ptr<faiss::FlatCodesDistanceComputer> dc(
+                        cluster.quantizer.get_distance_computer(0, cluster.centroid, false));
+                dc->set_query(rotatedQueryVec);
+                for (size_t i = 0; i < cluster.indices.size(); i++) {
+                    const size_t localIdx = cluster.indices[i];
+                    const float exactDistance = exactChunkDistances[localIdx];
+                    const float quantizedDistance =
+                            dc->distance_to_code(cluster.codes.data() + i * cluster.quantizer.code_size);
+                    const double diff = static_cast<double>(exactDistance) - static_cast<double>(quantizedDistance);
+                    for (size_t runIdx : runGroups[configIdx].runIndices) {
+                        runs[runIdx].perQuerySquaredError[q] += diff * diff;
+                        add_to_topk_heap(
+                                runs[runIdx].quantizedK,
+                                useIP,
+                                runs[runIdx].quantizedTopK[q].distances,
+                                runs[runIdx].quantizedTopK[q].labels,
+                                quantizedDistance,
+                                static_cast<int64_t>(baseOffset + localIdx));
+                    }
+                }
+            }
+        }
+    }
+}
+
+static std::vector<ScalarClusterCodes> train_scalar_quantizers(
+        const float *trainVecs,
+        size_t trainVectors,
+        size_t dimension,
+        const std::vector<int> &nbitsValues) {
+    std::vector<ScalarClusterCodes> quantizers;
+    quantizers.reserve(nbitsValues.size());
+    for (int nbits : nbitsValues) {
+        quantizers.emplace_back(dimension, static_cast<size_t>(nbits));
+        auto &sq = quantizers.back();
+        sq.quantizer.train(trainVectors, trainVecs);
+    }
+    return quantizers;
+}
+
+static void process_scalar_chunk(
+        const float *chunkVecs,
+        size_t chunkVectors,
+        size_t baseOffset,
+        size_t dimension,
+        const float *queryVecs,
+        size_t numQueries,
+        size_t k,
+        bool useIP,
+        faiss::MetricType metric,
+        const std::vector<ScalarClusterCodes> &trainedQuantizers,
+        const std::vector<NbitsRunGroup> &runGroups,
+        std::vector<TopKHeapState> &exactTopK,
+        std::vector<DistanceMseRunConfig> &runs) {
+    std::vector<ScalarClusterCodes> chunkConfigs;
+    chunkConfigs.reserve(trainedQuantizers.size());
+    for (const auto &trainedSq : trainedQuantizers) {
+        chunkConfigs.emplace_back(dimension, trainedSq.nbits);
+        auto &chunkSq = chunkConfigs.back();
+        chunkSq.quantizer = trainedSq.quantizer;
+        chunkSq.codes.resize(chunkVectors * chunkSq.quantizer.code_size);
+        chunkSq.quantizer.compute_codes(chunkVecs, chunkSq.codes.data(), chunkVectors);
+    }
+
+#pragma omp parallel for
+    for (int64_t q = 0; q < static_cast<int64_t>(numQueries); q++) {
+        const float *queryVec = queryVecs + q * dimension;
+        std::vector<float> exactChunkDistances(chunkVectors);
+
+        for (size_t i = 0; i < chunkVectors; i++) {
+            const float *baseVec = chunkVecs + i * dimension;
+            const float exactDistance = useIP
+                                        ? faiss::fvec_inner_product(queryVec, baseVec, dimension)
+                                        : faiss::fvec_L2sqr(queryVec, baseVec, dimension);
+            exactChunkDistances[i] = exactDistance;
+            add_to_topk_heap(
+                    k,
+                    useIP,
+                    exactTopK[q].distances,
+                    exactTopK[q].labels,
+                    exactDistance,
+                    static_cast<int64_t>(baseOffset + i));
+        }
+
+        for (size_t configIdx = 0; configIdx < chunkConfigs.size(); configIdx++) {
+            auto &config = chunkConfigs[configIdx];
+            std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
+                    config.quantizer.get_distance_computer(metric));
+            dc->set_query(queryVec);
+            for (size_t i = 0; i < chunkVectors; i++) {
+                const float exactDistance = exactChunkDistances[i];
+                const float quantizedDistance =
+                        dc->distance_to_code(config.codes.data() + i * config.quantizer.code_size);
+                const double diff = static_cast<double>(exactDistance) - static_cast<double>(quantizedDistance);
+                for (size_t runIdx : runGroups[configIdx].runIndices) {
+                    runs[runIdx].perQuerySquaredError[q] += diff * diff;
+                    add_to_topk_heap(
+                            runs[runIdx].quantizedK,
+                            useIP,
+                            runs[runIdx].quantizedTopK[q].distances,
+                            runs[runIdx].quantizedTopK[q].labels,
+                            quantizedDistance,
+                            static_cast<int64_t>(baseOffset + i));
+                }
+            }
+        }
+    }
+}
+
 void compute_quantized_ip_mse(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
@@ -5093,27 +5626,61 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
     const std::string &useIPArg = input.getCmdOption("-useIP");
     const std::string &rotationSeedArg = input.getCmdOption("-rotationSeed");
     const std::string &kmeansNiterArg = input.getCmdOption("-kmeansNiter");
+    const std::string &numCentroidsArg = input.getCmdOption("-numCentroids");
+    const std::string &isParquetArg = input.getCmdOption("-isParquet");
+    const std::string &nFilesArg = input.getCmdOption("-nFiles");
+    const std::string &numVectorsArg = input.getCmdOption("-numVectors");
+    const std::string &trainSampleSizeArg = input.getCmdOption("-trainSampleSize");
+    const std::string &trainSampleFilesArg = input.getCmdOption("-trainSampleFiles");
+    const std::string parquetColumnName = input.getCmdOption("-parquetColumnName").empty()
+                                                  ? "emb"
+                                                  : input.getCmdOption("-parquetColumnName");
 
     CHECK_ARGUMENT(!baseVectorPath.empty(), "base vector path is required");
     CHECK_ARGUMENT(!queryVectorPath.empty(), "query vector path is required");
     CHECK_ARGUMENT(!nbitsArg.empty(), "nbits is required");
     CHECK_ARGUMENT(!useCentroidsArg.empty(), "useCentroids is required");
 
-    const size_t nbits = stoull(nbitsArg);
-    CHECK_ARGUMENT(nbits >= 1 && nbits <= 9, "nbits must be between 1 and 9");
-
+    const std::vector<int> nbitsValues = parseCommaSeparatedIntegers(nbitsArg);
+    CHECK_ARGUMENT(!nbitsValues.empty(), "nbits must not be empty");
+    for (int nbits : nbitsValues) {
+        CHECK_ARGUMENT(nbits >= 1 && nbits <= 9, "nbits must be between 1 and 9");
+    }
     const bool useCentroids = stoi(useCentroidsArg) != 0;
     const bool useIP = !useIPArg.empty() && stoi(useIPArg) != 0;
-    const double factor = factorArg.empty() ? 1.0 : stod(factorArg);
+    const std::vector<double> factorValues = factorArg.empty()
+                                             ? std::vector<double>{1.0}
+                                             : parseCommaSeparatedDoubles(factorArg);
     const int rotationSeed = rotationSeedArg.empty() ? 123 : stoi(rotationSeedArg);
     const int kmeansNiter = kmeansNiterArg.empty() ? 25 : stoi(kmeansNiterArg);
+    const size_t numCentroids = numCentroidsArg.empty() ? 0 : stoull(numCentroidsArg);
+    const bool isParquet = !isParquetArg.empty() && stoi(isParquetArg) != 0;
+    const int requestedFiles = nFilesArg.empty() ? INT_MAX : stoi(nFilesArg);
+    const size_t requestedBaseVectors = get_requested_vector_limit(numVectorsArg);
     const faiss::MetricType metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
-    CHECK_ARGUMENT(factor > 0, "factor must be positive");
+    if (useCentroids) {
+        CHECK_ARGUMENT(numCentroids > 0, "numCentroids is required when useCentroids=1");
+    }
 
-    size_t baseNumVectors, baseDimension;
-    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryNumVectors, queryDimension;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    size_t baseNumVectors = 0;
+    size_t baseDimension = 0;
+    float *baseVecs = nullptr;
+    std::vector<std::string> parquetFilePaths;
+    if (isParquet) {
+        collect_parquet_input_files(
+                baseVectorPath,
+                requestedFiles,
+                requestedBaseVectors,
+                parquetColumnName,
+                parquetFilePaths,
+                &baseDimension,
+                &baseNumVectors);
+    } else {
+        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, requestedBaseVectors);
+    }
 
     CHECK_ARGUMENT(baseDimension == queryDimension, "base and query dimensions do not match");
     CHECK_ARGUMENT(baseDimension > 0, "vector dimension must be positive");
@@ -5126,190 +5693,152 @@ void compute_rabitq_rotated_distance_mse(InputParser &input) {
     CHECK_ARGUMENT(requestedQueries <= queryNumVectors, "not enough query vectors");
     const size_t numQueries = requestedQueries;
     CHECK_ARGUMENT(k <= baseNumVectors, "k must be <= number of base vectors");
-    const size_t quantizedK = std::min(
-            baseNumVectors,
-            std::max(k, static_cast<size_t>(std::ceil(factor * static_cast<double>(k)))));
 
     printf("Loaded %zu base vectors and %zu query vectors of dimension %zu\n",
            baseNumVectors, numQueries, baseDimension);
-    printf("RaBitQ config: metric=%s nbits=%zu useCentroids=%d rotationSeed=%d factor=%.3f quantized_k=%zu\n",
-           useIP ? "ip" : "l2", nbits, useCentroids ? 1 : 0, rotationSeed, factor, quantizedK);
+    printf("RaBitQ config: metric=%s useCentroids=%d rotationSeed=%d isParquet=%d\n",
+           useIP ? "ip" : "l2", useCentroids ? 1 : 0, rotationSeed, isParquet ? 1 : 0);
 
     faiss::RandomRotationMatrix rrot(static_cast<int>(baseDimension), static_cast<int>(baseDimension));
     rrot.init(rotationSeed);
 
-    std::vector<float> rotatedBaseVecs(baseNumVectors * baseDimension);
     std::vector<float> rotatedQueryVecs(numQueries * baseDimension);
-
-    printf("Applying random rotation to base and query vectors\n");
-    rrot.apply_noalloc(baseNumVectors, baseVecs, rotatedBaseVecs.data());
+    printf("Applying random rotation to query vectors\n");
     rrot.apply_noalloc(numQueries, queryVecs, rotatedQueryVecs.data());
 
-    struct ClusterCodes {
-        std::vector<size_t> indices;
-        std::vector<uint8_t> codes;
-        faiss::RaBitQuantizer quantizer;
-        const float *centroid = nullptr;
-
-        ClusterCodes(size_t dim, faiss::MetricType metricType, size_t bits)
-                : quantizer(dim, metricType, bits) {}
-    };
-
-    std::vector<ClusterCodes> clusterData;
     std::vector<float> centroids;
-
-    if (!useCentroids) {
-        printf("Training one global RaBitQ quantizer\n");
-        clusterData.emplace_back(baseDimension, metric, nbits);
-        auto &cluster = clusterData.back();
-        cluster.indices.resize(baseNumVectors);
-        for (size_t i = 0; i < baseNumVectors; i++) {
-            cluster.indices[i] = i;
+    std::unique_ptr<faiss::IndexFlat> centroidIndex;
+    if (useCentroids) {
+        if (isParquet) {
+            size_t sampleDimension = 0;
+            size_t sampleVectors = 0;
+            const size_t sampleFiles = resolve_train_sample_files(
+                    trainSampleFilesArg,
+                    3,
+                    parquetFilePaths.size());
+            printf("Training centroids from %zu parquet files\n", sampleFiles);
+            float *sampleVecs = read_parquet_sample_files(
+                    parquetFilePaths,
+                    sampleFiles,
+                    &sampleDimension,
+                    &sampleVectors,
+                    parquetColumnName);
+            CHECK_ARGUMENT(sampleDimension == baseDimension, "sample dimension mismatch");
+            const size_t trainVectors = resolve_train_sample_size(
+                    trainSampleSizeArg,
+                    sampleVectors,
+                    sampleVectors);
+            std::vector<float> rotatedSampleVecs(trainVectors * baseDimension);
+            rrot.apply_noalloc(trainVectors, sampleVecs, rotatedSampleVecs.data());
+            centroids = train_kmeans_centroids(
+                    rotatedSampleVecs.data(),
+                    trainVectors,
+                    baseDimension,
+                    numCentroids,
+                    kmeansNiter,
+                    useIP);
+            free(sampleVecs);
+        } else {
+            const size_t trainVectors = resolve_train_sample_size(
+                    trainSampleSizeArg,
+                    get_clustering_sample_size(baseNumVectors, numCentroids),
+                    baseNumVectors);
+            printf("Training centroids from %zu sampled vectors\n", trainVectors);
+            std::vector<float> rotatedSampleVecs(trainVectors * baseDimension);
+            rrot.apply_noalloc(trainVectors, baseVecs, rotatedSampleVecs.data());
+            centroids = train_kmeans_centroids(
+                    rotatedSampleVecs.data(),
+                    trainVectors,
+                    baseDimension,
+                    numCentroids,
+                    kmeansNiter,
+                    useIP);
         }
-        cluster.quantizer.train(baseNumVectors, rotatedBaseVecs.data());
-        cluster.codes.resize(baseNumVectors * cluster.quantizer.code_size);
-        cluster.quantizer.compute_codes(rotatedBaseVecs.data(), cluster.codes.data(), baseNumVectors);
-    } else {
-        const size_t vectorsPerCentroid = 2000;
-        const size_t numCentroids = std::max<size_t>(1, (baseNumVectors + vectorsPerCentroid - 1) / vectorsPerCentroid);
-
-        printf("Running kmeans with %zu centroids (%zu vectors per centroid)\n",
-               numCentroids, vectorsPerCentroid);
-        faiss::ClusteringParameters cp;
-        cp.niter = kmeansNiter;
-        cp.max_points_per_centroid = INT_MAX;
-        cp.verbose = true;
-        if (useIP) {
-            cp.spherical = true;
-        }
-
-        faiss::Clustering clustering(static_cast<int>(baseDimension), numCentroids, cp);
-        faiss::IndexFlat assigner(static_cast<faiss::idx_t>(baseDimension), metric);
-        clustering.train(baseNumVectors, rotatedBaseVecs.data(), assigner);
-        centroids = clustering.centroids;
-
-        faiss::IndexFlat centroidIndex(static_cast<faiss::idx_t>(baseDimension), metric);
-        centroidIndex.add(numCentroids, centroids.data());
-
-        std::vector<faiss::idx_t> labels(baseNumVectors);
-        std::vector<float> distances(baseNumVectors);
-        centroidIndex.search(baseNumVectors, rotatedBaseVecs.data(), 1, distances.data(), labels.data());
-
-        clusterData.reserve(numCentroids);
-        for (size_t centroidId = 0; centroidId < numCentroids; centroidId++) {
-            clusterData.emplace_back(baseDimension, metric, nbits);
-            clusterData.back().centroid = centroids.data() + centroidId * baseDimension;
-        }
-
-        for (size_t i = 0; i < baseNumVectors; i++) {
-            CHECK_ARGUMENT(labels[i] >= 0 && labels[i] < static_cast<faiss::idx_t>(numCentroids),
-                           "invalid centroid assignment");
-            clusterData[labels[i]].indices.push_back(i);
-        }
-
-        for (size_t centroidId = 0; centroidId < numCentroids; centroidId++) {
-            auto &cluster = clusterData[centroidId];
-            const auto &indices = cluster.indices;
-            if (indices.empty()) {
-                continue;
-            }
-
-            std::vector<float> clusterVecs(indices.size() * baseDimension);
-            for (size_t i = 0; i < indices.size(); i++) {
-                memcpy(clusterVecs.data() + i * baseDimension,
-                       rotatedBaseVecs.data() + indices[i] * baseDimension,
-                       baseDimension * sizeof(float));
-            }
-
-            cluster.quantizer.train(indices.size(), clusterVecs.data());
-            cluster.codes.resize(indices.size() * cluster.quantizer.code_size);
-            cluster.quantizer.compute_codes_core(
-                    clusterVecs.data(),
-                    cluster.codes.data(),
-                    indices.size(),
-                    cluster.centroid);
-        }
+        centroidIndex = std::make_unique<faiss::IndexFlat>(static_cast<faiss::idx_t>(baseDimension), metric);
+        centroidIndex->add(numCentroids, centroids.data());
     }
 
-    std::vector<double> perQuerySquaredError(numQueries, 0.0);
-    std::vector<double> perQueryTopKMatch(numQueries, 0.0);
-
+    std::vector<TopKHeapState> exactTopK;
+    init_topk_heaps_for_queries(numQueries, k, useIP, exactTopK);
+    std::vector<NbitsRunGroup> runGroups;
+    std::vector<DistanceMseRunConfig> runs = create_distance_mse_run_configs(
+            nbitsValues,
+            factorValues,
+            baseNumVectors,
+            numQueries,
+            k,
+            useIP,
+            runGroups);
     printf("Computing MSE over %s distances\n", useIP ? "inner product" : "L2");
-#pragma omp parallel for
-    for (int64_t q = 0; q < static_cast<int64_t>(numQueries); q++) {
-        const float *queryVec = queryVecs + q * baseDimension;
-        const float *rotatedQueryVec = rotatedQueryVecs.data() + q * baseDimension;
-        double querySquaredError = 0.0;
-        std::vector<float> exactTopKDistances;
-        std::vector<int64_t> exactTopKLabels;
-        std::vector<float> quantizedTopKDistances;
-        std::vector<int64_t> quantizedTopKLabels;
-        init_topk_heap(k, useIP, exactTopKDistances, exactTopKLabels);
-        init_topk_heap(quantizedK, useIP, quantizedTopKDistances, quantizedTopKLabels);
-
-        for (auto &cluster : clusterData) {
-            if (cluster.indices.empty()) {
-                continue;
-            }
-
-            std::unique_ptr<faiss::FlatCodesDistanceComputer> dc(
-                    cluster.quantizer.get_distance_computer(
-                            0,
-                            cluster.centroid,
-                            false));
-            dc->set_query(rotatedQueryVec);
-
-            for (size_t i = 0; i < cluster.indices.size(); i++) {
-                const size_t baseIdx = cluster.indices[i];
-                const float *baseVec = baseVecs + baseIdx * baseDimension;
-                const double exactDistance = useIP
-                                             ? faiss::fvec_inner_product(queryVec, baseVec, baseDimension)
-                                             : faiss::fvec_L2sqr(queryVec, baseVec, baseDimension);
-                const double quantizedDistance =
-                        dc->distance_to_code(cluster.codes.data() + i * cluster.quantizer.code_size);
-                const double diff = exactDistance - quantizedDistance;
-                querySquaredError += diff * diff;
-                add_to_topk_heap(
-                        k,
-                        useIP,
-                        exactTopKDistances,
-                        exactTopKLabels,
-                        exactDistance,
-                        baseIdx);
-                add_to_topk_heap(
-                        quantizedK,
-                        useIP,
-                        quantizedTopKDistances,
-                        quantizedTopKLabels,
-                        quantizedDistance,
-                        baseIdx);
-            }
+    if (isParquet) {
+        size_t processedVectors = 0;
+        for (size_t fileIdx = 0; fileIdx < parquetFilePaths.size() && processedVectors < baseNumVectors; fileIdx++) {
+            size_t fileDimension = 0;
+            size_t fileVectors = 0;
+            std::vector<std::string> singleFilePath = {parquetFilePaths[fileIdx]};
+            float *fileVecs = readParquetFiles(
+                    singleFilePath,
+                    &fileDimension,
+                    &fileVectors,
+                    parquetColumnName);
+            CHECK_ARGUMENT(fileDimension == baseDimension, "parquet file dimension mismatch");
+            const size_t vectorsToProcess = std::min(fileVectors, baseNumVectors - processedVectors);
+            printf("Processing parquet file %zu/%zu with %zu vectors\n",
+                   fileIdx + 1,
+                   parquetFilePaths.size(),
+                   vectorsToProcess);
+            process_rabitq_chunk(
+                    fileVecs,
+                    vectorsToProcess,
+                    processedVectors,
+                    baseDimension,
+                    queryVecs,
+                    rotatedQueryVecs.data(),
+                    numQueries,
+                    k,
+                    useIP,
+                    metric,
+                    rrot,
+                    nbitsValues,
+                    runGroups,
+                    useCentroids,
+                    centroids,
+                    centroidIndex.get(),
+                    exactTopK,
+                    runs);
+            processedVectors += vectorsToProcess;
+            free(fileVecs);
         }
-        perQuerySquaredError[q] = querySquaredError;
-        perQueryTopKMatch[q] = compute_topk_match_percentage(
+    } else {
+        process_rabitq_chunk(
+                baseVecs,
+                baseNumVectors,
+                0,
+                baseDimension,
+                queryVecs,
+                rotatedQueryVecs.data(),
+                numQueries,
                 k,
-                quantizedK,
                 useIP,
-                exactTopKDistances,
-                exactTopKLabels,
-                quantizedTopKDistances,
-                quantizedTopKLabels);
+                metric,
+                rrot,
+                nbitsValues,
+                runGroups,
+                useCentroids,
+                centroids,
+                centroidIndex.get(),
+                exactTopK,
+                runs);
     }
 
-    double totalSquaredError = 0.0;
-    double totalTopKMatch = 0.0;
-    for (size_t q = 0; q < numQueries; q++) {
-        const double mse = perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
-        totalSquaredError += perQuerySquaredError[q];
-        totalTopKMatch += perQueryTopKMatch[q];
-        printf("Query %zu MSE: %.10f, top-%zu in quantized top-%zu: %.2f%%\n",
-               q, mse, k, quantizedK, perQueryTopKMatch[q]);
-    }
-
-    const double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
-    printf("Overall RaBitQ rotated distance MSE: %.10f\n", overallMse);
-    printf("Average top-%zu in quantized top-%zu: %.2f%%\n",
-           k, quantizedK, totalTopKMatch / static_cast<double>(numQueries));
+    print_distance_mse_results(
+            "RaBitQ rotated distance",
+            baseNumVectors,
+            numQueries,
+            k,
+            useIP,
+            exactTopK,
+            runs);
 
     free(baseVecs);
     free(queryVecs);
@@ -5323,25 +5852,52 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
     const std::string &kArg = input.getCmdOption("-k");
     const std::string &factorArg = input.getCmdOption("-factor");
     const std::string &useIPArg = input.getCmdOption("-useIP");
+    const std::string &isParquetArg = input.getCmdOption("-isParquet");
+    const std::string &nFilesArg = input.getCmdOption("-nFiles");
+    const std::string &numVectorsArg = input.getCmdOption("-numVectors");
+    const std::string &trainSampleSizeArg = input.getCmdOption("-trainSampleSize");
+    const std::string &trainSampleFilesArg = input.getCmdOption("-trainSampleFiles");
+    const std::string parquetColumnName = input.getCmdOption("-parquetColumnName").empty()
+                                                  ? "emb"
+                                                  : input.getCmdOption("-parquetColumnName");
 
     CHECK_ARGUMENT(!baseVectorPath.empty(), "base vector path is required");
     CHECK_ARGUMENT(!queryVectorPath.empty(), "query vector path is required");
     CHECK_ARGUMENT(!nbitsArg.empty(), "nbits is required");
 
-    const int nbits = stoi(nbitsArg);
-    CHECK_ARGUMENT(nbits == 4 || nbits == 8, "nbits must be 4 or 8");
-
+    const std::vector<int> nbitsValues = parseCommaSeparatedIntegers(nbitsArg);
+    CHECK_ARGUMENT(!nbitsValues.empty(), "nbits must not be empty");
+    for (int nbits : nbitsValues) {
+        CHECK_ARGUMENT(nbits == 4 || nbits == 8, "nbits must be 4 or 8");
+    }
     const bool useIP = !useIPArg.empty() && stoi(useIPArg) != 0;
-    const double factor = factorArg.empty() ? 1.0 : stod(factorArg);
+    const std::vector<double> factorValues = factorArg.empty()
+                                             ? std::vector<double>{1.0}
+                                             : parseCommaSeparatedDoubles(factorArg);
+    const bool isParquet = !isParquetArg.empty() && stoi(isParquetArg) != 0;
+    const int requestedFiles = nFilesArg.empty() ? INT_MAX : stoi(nFilesArg);
+    const size_t requestedBaseVectors = get_requested_vector_limit(numVectorsArg);
     const faiss::MetricType metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
-    const faiss::ScalarQuantizer::QuantizerType qtype =
-            (nbits == 4) ? faiss::ScalarQuantizer::QT_4bit : faiss::ScalarQuantizer::QT_8bit;
-    CHECK_ARGUMENT(factor > 0, "factor must be positive");
 
-    size_t baseNumVectors, baseDimension;
-    float *baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors);
     size_t queryNumVectors, queryDimension;
     float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors);
+
+    size_t baseNumVectors = 0;
+    size_t baseDimension = 0;
+    float *baseVecs = nullptr;
+    std::vector<std::string> parquetFilePaths;
+    if (isParquet) {
+        collect_parquet_input_files(
+                baseVectorPath,
+                requestedFiles,
+                requestedBaseVectors,
+                parquetColumnName,
+                parquetFilePaths,
+                &baseDimension,
+                &baseNumVectors);
+    } else {
+        baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, requestedBaseVectors);
+    }
 
     CHECK_ARGUMENT(baseDimension == queryDimension, "base and query dimensions do not match");
 
@@ -5352,83 +5908,122 @@ void compute_scalar_quantizer_distance_mse(InputParser &input) {
     CHECK_ARGUMENT(requestedQueries <= queryNumVectors, "not enough query vectors");
     const size_t numQueries = requestedQueries;
     CHECK_ARGUMENT(k <= baseNumVectors, "k must be <= number of base vectors");
-    const size_t quantizedK = std::min(
-            baseNumVectors,
-            std::max(k, static_cast<size_t>(std::ceil(factor * static_cast<double>(k)))));
 
     printf("Loaded %zu base vectors and %zu query vectors of dimension %zu\n",
            baseNumVectors, numQueries, baseDimension);
-    printf("Scalar quantizer config: metric=%s nbits=%d factor=%.3f quantized_k=%zu\n",
-           useIP ? "ip" : "l2", nbits, factor, quantizedK);
+    printf("Scalar quantizer config: metric=%s isParquet=%d\n",
+           useIP ? "ip" : "l2", isParquet ? 1 : 0);
 
-    faiss::ScalarQuantizer sq(baseDimension, qtype);
-    sq.train(baseNumVectors, baseVecs);
+    std::vector<ScalarClusterCodes> trainedQuantizers;
+    if (isParquet) {
+        size_t sampleDimension = 0;
+        size_t sampleVectors = 0;
+        const size_t sampleFiles = resolve_train_sample_files(
+                trainSampleFilesArg,
+                3,
+                parquetFilePaths.size());
+        printf("Training scalar quantizers from %zu parquet files\n", sampleFiles);
+        float *sampleVecs = read_parquet_sample_files(
+                parquetFilePaths,
+                sampleFiles,
+                &sampleDimension,
+                &sampleVectors,
+                parquetColumnName);
+        CHECK_ARGUMENT(sampleDimension == baseDimension, "sample dimension mismatch");
+        const size_t trainVectors = resolve_train_sample_size(
+                trainSampleSizeArg,
+                get_scalar_training_sample_size(baseNumVectors),
+                sampleVectors);
+        trainedQuantizers = train_scalar_quantizers(
+                sampleVecs,
+                trainVectors,
+                baseDimension,
+                nbitsValues);
+        free(sampleVecs);
+    } else {
+        const size_t trainVectors = resolve_train_sample_size(
+                trainSampleSizeArg,
+                get_scalar_training_sample_size(baseNumVectors),
+                baseNumVectors);
+        printf("Training scalar quantizers from %zu sampled vectors\n", trainVectors);
+        trainedQuantizers = train_scalar_quantizers(
+                baseVecs,
+                baseNumVectors,
+                baseDimension,
+                nbitsValues);
+    }
 
-    std::vector<uint8_t> codes(baseNumVectors * sq.code_size);
-    sq.compute_codes(baseVecs, codes.data(), baseNumVectors);
+    std::vector<TopKHeapState> exactTopK;
+    init_topk_heaps_for_queries(numQueries, k, useIP, exactTopK);
+    std::vector<NbitsRunGroup> runGroups;
+    std::vector<DistanceMseRunConfig> runs = create_distance_mse_run_configs(
+            nbitsValues,
+            factorValues,
+            baseNumVectors,
+            numQueries,
+            k,
+            useIP,
+            runGroups);
 
-    std::vector<double> perQuerySquaredError(numQueries, 0.0);
-    std::vector<double> perQueryTopKMatch(numQueries, 0.0);
-
-#pragma omp parallel for
-    for (int64_t q = 0; q < static_cast<int64_t>(numQueries); q++) {
-        const float *queryVec = queryVecs + q * baseDimension;
-        double querySquaredError = 0.0;
-        std::vector<float> exactTopKDistances;
-        std::vector<int64_t> exactTopKLabels;
-        std::vector<float> quantizedTopKDistances;
-        std::vector<int64_t> quantizedTopKLabels;
-        init_topk_heap(k, useIP, exactTopKDistances, exactTopKLabels);
-        init_topk_heap(quantizedK, useIP, quantizedTopKDistances, quantizedTopKLabels);
-
-        std::unique_ptr<faiss::ScalarQuantizer::SQDistanceComputer> dc(
-                sq.get_distance_computer(metric));
-        dc->set_query(queryVec);
-
-        for (size_t i = 0; i < baseNumVectors; i++) {
-            const float *baseVec = baseVecs + i * baseDimension;
-            const double exactDistance = useIP
-                                         ? faiss::fvec_inner_product(queryVec, baseVec, baseDimension)
-                                         : faiss::fvec_L2sqr(queryVec, baseVec, baseDimension);
-            const double quantizedDistance =
-                    dc->distance_to_code(codes.data() + i * sq.code_size);
-            const double diff = exactDistance - quantizedDistance;
-            querySquaredError += diff * diff;
-            add_to_topk_heap(k, useIP, exactTopKDistances, exactTopKLabels, exactDistance, i);
-            add_to_topk_heap(
-                    quantizedK,
+    if (isParquet) {
+        size_t processedVectors = 0;
+        for (size_t fileIdx = 0; fileIdx < parquetFilePaths.size() && processedVectors < baseNumVectors; fileIdx++) {
+            size_t fileDimension = 0;
+            size_t fileVectors = 0;
+            std::vector<std::string> singleFilePath = {parquetFilePaths[fileIdx]};
+            float *fileVecs = readParquetFiles(
+                    singleFilePath,
+                    &fileDimension,
+                    &fileVectors,
+                    parquetColumnName);
+            CHECK_ARGUMENT(fileDimension == baseDimension, "parquet file dimension mismatch");
+            const size_t vectorsToProcess = std::min(fileVectors, baseNumVectors - processedVectors);
+            printf("Processing parquet file %zu/%zu with %zu vectors\n",
+                   fileIdx + 1,
+                   parquetFilePaths.size(),
+                   vectorsToProcess);
+            process_scalar_chunk(
+                    fileVecs,
+                    vectorsToProcess,
+                    processedVectors,
+                    baseDimension,
+                    queryVecs,
+                    numQueries,
+                    k,
                     useIP,
-                    quantizedTopKDistances,
-                    quantizedTopKLabels,
-                    quantizedDistance,
-                    i);
+                    metric,
+                    trainedQuantizers,
+                    runGroups,
+                    exactTopK,
+                    runs);
+            processedVectors += vectorsToProcess;
+            free(fileVecs);
         }
-
-        perQuerySquaredError[q] = querySquaredError;
-        perQueryTopKMatch[q] = compute_topk_match_percentage(
+    } else {
+        process_scalar_chunk(
+                baseVecs,
+                baseNumVectors,
+                0,
+                baseDimension,
+                queryVecs,
+                numQueries,
                 k,
-                quantizedK,
                 useIP,
-                exactTopKDistances,
-                exactTopKLabels,
-                quantizedTopKDistances,
-                quantizedTopKLabels);
+                metric,
+                trainedQuantizers,
+                runGroups,
+                exactTopK,
+                runs);
     }
 
-    double totalSquaredError = 0.0;
-    double totalTopKMatch = 0.0;
-    for (size_t q = 0; q < numQueries; q++) {
-        const double mse = perQuerySquaredError[q] / static_cast<double>(baseNumVectors);
-        totalSquaredError += perQuerySquaredError[q];
-        totalTopKMatch += perQueryTopKMatch[q];
-        printf("Query %zu MSE: %.10f, top-%zu in quantized top-%zu: %.2f%%\n",
-               q, mse, k, quantizedK, perQueryTopKMatch[q]);
-    }
-
-    const double overallMse = totalSquaredError / static_cast<double>(numQueries * baseNumVectors);
-    printf("Overall scalar quantizer distance MSE: %.10f\n", overallMse);
-    printf("Average top-%zu in quantized top-%zu: %.2f%%\n",
-           k, quantizedK, totalTopKMatch / static_cast<double>(numQueries));
+    print_distance_mse_results(
+            "scalar quantizer distance",
+            baseNumVectors,
+            numQueries,
+            k,
+            useIP,
+            exactTopK,
+            runs);
 
     free(baseVecs);
     free(queryVecs);
