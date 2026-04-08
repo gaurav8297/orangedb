@@ -5057,6 +5057,7 @@ static void collect_parquet_input_files(
     for (int fileIdx = 0; fileIdx < numFiles; fileIdx++) {
         size_t fileDimension = 0;
         size_t fileVectors = 0;
+        printf("Checking parquet file %s for dimension and vector count\n", allPaths[fileIdx].c_str());
         auto status = readParquetFileStats(
                 allPaths[fileIdx].c_str(),
                 &fileDimension,
