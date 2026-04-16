@@ -4053,7 +4053,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                     totalVectors += batchSize;
                     batchCount++;
 
-                    if (fileIdx == numFiles - 1 && batchIdx == insertsPerFile - 1) {
+                    if (fileIdx == numFiles - 2 && batchIdx == insertsPerFile - 1) {
                         // One file before last, adjust insertsPerFile to match total numInserts. Run reclustering
                         // index.storeMSEScoreForMegaClusters();
                         // index.computeOverlapScores();
