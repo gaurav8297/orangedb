@@ -4055,8 +4055,8 @@ void benchmark_fast_reclustering(InputParser &input) {
 
                     if (fileIdx == numFiles - 1 && batchIdx == insertsPerFile - 1) {
                         // One file before last, adjust insertsPerFile to match total numInserts. Run reclustering
-                        index.storeMSEScoreForMegaClusters();
-                        index.computeOverlapScores();
+                        // index.storeMSEScoreForMegaClusters();
+                        // index.computeOverlapScores();
                         // Run 6 iteration of reclustering
                         for (int iter = 0; iter < iterations; iter++) {
                             printf("Reclustering Iteration: %d\n", iter);
