@@ -154,6 +154,89 @@ static void print_memory_usage(const char *label) {
     printf("%s RSS: %.2f MB\n", label, bytes_to_mb(get_current_rss_bytes()));
 }
 
+template<typename Index_>
+int choose_umap_num_epochs(const std::optional<int>& num_epochs, const Index_ size) {
+    if (num_epochs.has_value()) {
+        return *num_epochs;
+    }
+    constexpr Index_ limit = 10000;
+    const int minimal = 200;
+    const int maximal = 300;
+    if (size <= limit) {
+        return minimal + maximal;
+    }
+    return minimal + static_cast<int>(
+        std::ceil(maximal * static_cast<double>(limit) / static_cast<double>(size)));
+}
+
+template<typename Float_>
+void fill_random_umap_embedding(
+    const std::size_t num_dim,
+    const std::size_t num_obs,
+    Float_* const embedding,
+    const double scale,
+    const umappp::RngEngine::result_type seed) {
+    umappp::RngEngine rng(seed);
+    const Float_ mult = static_cast<Float_>(scale * 2.0);
+    const Float_ shift = static_cast<Float_>(scale);
+    const std::size_t total = num_dim * num_obs;
+    for (std::size_t i = 0; i < total; ++i) {
+        embedding[i] = aarand::standard_uniform<Float_>(rng) * mult - shift;
+    }
+}
+
+template<typename Index_, typename Float_, class Matrix_ = knncolle::Matrix<Index_, Float_> >
+umappp::Status<Index_, Float_> initialize_umap_compat(
+    const std::size_t data_dim,
+    const Index_ num_obs,
+    const Float_* const data,
+    const knncolle::Builder<Index_, Float_, Float_, Matrix_>& builder,
+    const std::size_t num_dim,
+    Float_* const embedding,
+    umappp::Options options)
+{
+    const auto prebuilt = builder.build_unique(knncolle::SimpleMatrix<Index_, Float_>(data_dim, num_obs, data));
+    auto neighbors = knncolle::find_nearest_neighbors(*prebuilt, options.num_neighbors, options.num_threads);
+
+    umappp::NeighborSimilaritiesOptions<Float_> nsopt;
+    nsopt.local_connectivity = static_cast<Float_>(options.local_connectivity);
+    nsopt.bandwidth = static_cast<Float_>(options.bandwidth);
+    nsopt.num_threads = options.num_threads;
+    umappp::neighbor_similarities(neighbors, nsopt);
+    umappp::combine_neighbor_sets(neighbors, static_cast<Float_>(options.mix_ratio));
+
+    if (options.initialize_method != umappp::InitializeMethod::NONE) {
+        if (options.initialize_method == umappp::InitializeMethod::SPECTRAL) {
+            static bool warned = false;
+            if (!warned) {
+                warned = true;
+                printf("UMAP spectral initialization disabled by compatibility path; using random initialization.\n");
+            }
+        }
+        fill_random_umap_embedding<Float_>(
+            num_dim,
+            static_cast<std::size_t>(num_obs),
+            embedding,
+            options.initialize_random_scale,
+            options.initialize_seed);
+    }
+
+    if (!options.a.has_value() || !options.b.has_value()) {
+        const auto found = umappp::find_ab(options.spread, options.min_dist);
+        options.a = found.first;
+        options.b = found.second;
+    }
+
+    options.num_epochs = choose_umap_num_epochs<Index_>(options.num_epochs, num_obs);
+    return umappp::Status<Index_, Float_>(
+        umappp::similarities_to_epochs<Index_, Float_>(
+            neighbors,
+            *(options.num_epochs),
+            static_cast<Float_>(options.negative_sample_rate)),
+        std::move(options),
+        num_dim);
+}
+
 static std::unique_ptr<faiss::IndexIVF> create_faiss_ivf_index(
         size_t dimension,
         size_t num_centroids,
@@ -3232,7 +3315,7 @@ void run_umap_2D_without_clustering(InputParser &input) {
     opt.num_neighbors = 15; 
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
-    auto status = umappp::initialize(
+    auto status = initialize_umap_compat(
         (int)baseDimension, numVectors, baseVecs, builder, 2, embedding.data(), opt
     );
     status.run(embedding.data());    
@@ -3280,7 +3363,7 @@ void run_umap_3D_without_clustering(InputParser &input) {
     opt.num_neighbors = 15; 
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
-    auto status = umappp::initialize(
+    auto status = initialize_umap_compat(
         (int)baseDimension, numVectors, baseVecs, builder, 3, embedding.data(), opt
     );
     status.run(embedding.data());    
@@ -3468,7 +3551,7 @@ void run_umap_2D_with_cluster_data(
     printf("Running UMAP 2D dimensionality reduction on %d sampled vectors + %zu centroids (dim=%zu)...\n", 
            numSampledVectors, numCentroids, baseDimension);
     auto umap_start = std::chrono::high_resolution_clock::now();
-    auto status = umappp::initialize(
+    auto status = initialize_umap_compat(
         (int)baseDimension, totalVectors, allVectors.data(), builder, 2, embedding.data(), opt
     );
     status.run(embedding.data());
@@ -3730,7 +3813,7 @@ void run_umap_3D_with_cluster_data(
     
     printf("Running UMAP 3D dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
     auto umap_start = std::chrono::high_resolution_clock::now();
-    auto status = umappp::initialize(
+    auto status = initialize_umap_compat(
         dim, totalVectors, allVectors.data(), builder, 3, embedding.data(), opt
     );
     status.run(embedding.data());
