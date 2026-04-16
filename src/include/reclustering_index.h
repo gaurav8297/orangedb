@@ -328,8 +328,11 @@ namespace orangedb {
 
         void calculateOverlapScoreForL2All(int megaCentroidId);
 
-        double calculateWrongAssignmentPercentage(
-            vector_idx_t miniCentroidId, const std::vector<vector_idx_t> &candidateMiniIds);
+        void calculateWrongAssignmentPercentage(
+            vector_idx_t miniCentroidId,
+            const std::vector<vector_idx_t> &candidateMiniIds,
+            double *wrongly_assigned_percent,
+            double *avg_wrongly_assigned_relative_gap = nullptr);
 
         void resetInputBuffer();
 
@@ -613,6 +616,7 @@ namespace orangedb {
         std::vector<std::vector<float>> miniClusters;
         std::vector<double> miniClusteringScore;
         std::vector<double> wrongAssignmentScores;
+        std::vector<double> wrongAssignmentBoundaryAvgRelativeGap;
         std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
 
         // Minicluster subcells

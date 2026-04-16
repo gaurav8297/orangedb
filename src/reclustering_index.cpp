@@ -2315,45 +2315,70 @@ namespace orangedb {
         return avgScore;
     }
 
-    double ReclusteringIndex::calculateWrongAssignmentPercentage(
-        vector_idx_t miniCentroidId, const std::vector<vector_idx_t> &candidateMiniIds) {
-        auto numMiniClusters = miniCentroids.size() / dim;
-        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
-        auto &miniClusterVectors = miniClusters[miniCentroidId];
-        auto miniClusterSize = miniClusterVectors.size() / dim;
-        if (miniClusterSize == 0 || candidateMiniIds.size() <= 1) {
-            return 0.0;
+    void ReclusteringIndex::calculateWrongAssignmentPercentage(
+        vector_idx_t miniCentroidId,
+        const std::vector<vector_idx_t> &candidateMiniIds,
+        double *wrongly_assigned_percent,
+        double *avg_wrongly_assigned_relative_gap) {
+        CHECK_ARGUMENT(wrongly_assigned_percent != nullptr, "wrongly_assigned_percent pointer cannot be null");
+        CHECK_ARGUMENT(avg_wrongly_assigned_relative_gap != nullptr, "avg_wrongly_assigned_relative_gap pointer cannot be null");
+        *wrongly_assigned_percent = 0.0;
+        if (avg_wrongly_assigned_relative_gap != nullptr) {
+            *avg_wrongly_assigned_relative_gap = std::numeric_limits<double>::infinity();
         }
 
-        uint64_t wronglyAssigned = 0;
-#pragma omp parallel reduction(+:wronglyAssigned)
+        const auto &vectors = miniClusters[miniCentroidId];
+        const size_t n = vectors.size() / dim;
+        if (n == 0 || candidateMiniIds.size() <= 1) {
+            return;
+        }
+
+        const DistanceType centroidMetric =
+            (config.distanceType == COSINE || config.distanceType == IP) ? COSINE : config.distanceType;
+        const size_t numMiniClusters = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), static_cast<int>(numMiniClusters), centroidMetric);
+
+        uint64_t wrongCount = 0;
+        double relGapSum = 0.0;
+#pragma omp parallel reduction(+:wrongCount, relGapSum)
         {
-            auto localDc = dc->clone();
+            auto local = dc->clone();
 #pragma omp for schedule(static)
-            for (long long i = 0; i < static_cast<long long>(miniClusterSize); i++) {
-                localDc->setQuery(miniClusterVectors.data() + static_cast<size_t>(i) * dim);
-                double minDistance = std::numeric_limits<double>::max();
-                vector_idx_t nearestMiniId = miniCentroidId;
-                for (const auto &candidateMiniId : candidateMiniIds) {
-                    double dist;
-                    localDc->computeDistance(candidateMiniId, &dist);
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        nearestMiniId = candidateMiniId;
+            for (long long vi = 0; vi < static_cast<long long>(n); ++vi) {
+                const float *q = vectors.data() + static_cast<size_t>(vi) * dim;
+                local->setQuery(q);
+
+                double ownD = 0.0;
+                local->computeDistance(miniCentroidId, &ownD);
+
+                double bestOther = std::numeric_limits<double>::max();
+                for (vector_idx_t cid : candidateMiniIds) {
+                    if (cid == miniCentroidId) {
+                        continue;
                     }
+                    double d = 0.0;
+                    local->computeDistance(cid, &d);
+                    bestOther = std::min(bestOther, d);
                 }
-                if (nearestMiniId != miniCentroidId) {
-                    wronglyAssigned++;
+                if (bestOther < ownD) {
+                    ++wrongCount;
+                    const double denom = std::max(1e-9, std::max(std::abs(bestOther), std::abs(ownD)));
+                    relGapSum += std::abs(bestOther - ownD) / denom;
                 }
             }
         }
-        return static_cast<double>(wronglyAssigned) / static_cast<double>(miniClusterSize);
+
+        *wrongly_assigned_percent = static_cast<double>(wrongCount) / static_cast<double>(n);
+        *avg_wrongly_assigned_relative_gap =
+            (wrongCount == 0) ? std::numeric_limits<double>::infinity()
+                              : (relGapSum / static_cast<double>(wrongCount));
     }
 
     void ReclusteringIndex::computeWrongAssignmentScores() {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
         wrongAssignmentScores.assign(numMiniCentroids, 0.0);
+        wrongAssignmentBoundaryAvgRelativeGap.assign(numMiniCentroids, std::numeric_limits<double>::infinity());
         for (long long megaId = 0; megaId < static_cast<long long>(numMegaCentroids); megaId++) {
             const auto &miniIds = megaMiniCentroidIds[static_cast<size_t>(megaId)];
             if (miniIds.empty()) {
@@ -2361,10 +2386,15 @@ namespace orangedb {
             }
             if (miniIds.size() == 1) {
                 wrongAssignmentScores[miniIds[0]] = 0.0;
+                wrongAssignmentBoundaryAvgRelativeGap[miniIds[0]] = std::numeric_limits<double>::infinity();
                 continue;
             }
             for (auto miniId : miniIds) {
-                wrongAssignmentScores[miniId] = calculateWrongAssignmentPercentage(miniId, miniIds);
+                double pct = 0.0;
+                double avgRelativeGap = std::numeric_limits<double>::infinity();
+                calculateWrongAssignmentPercentage(miniId, miniIds, &pct, &avgRelativeGap);
+                wrongAssignmentScores[miniId] = pct;
+                wrongAssignmentBoundaryAvgRelativeGap[miniId] = avgRelativeGap;
             }
         }
     }
@@ -2671,6 +2701,75 @@ namespace orangedb {
                 percentile(scores, 99.0));
         };
 
+        const size_t numMini = wrongAssignmentScores.size();
+        std::vector<double> allMiniWrongPct;
+        std::vector<double> allMiniAvgRelGapFinite;
+        allMiniWrongPct.reserve(numMini);
+        allMiniAvgRelGapFinite.reserve(numMini);
+        for (size_t miniId = 0; miniId < numMini; ++miniId) {
+            allMiniWrongPct.push_back(wrongAssignmentScores[miniId]);
+            double gap = wrongAssignmentBoundaryAvgRelativeGap[miniId];
+            if (std::isfinite(gap)) {
+                allMiniAvgRelGapFinite.push_back(gap);
+            }
+        }
+
+        printf("--- All miniclusters: wrong-assignment %% (pct) ---\n");
+        printStats("GLOBAL_ALL_MINIS_WRONG_PCT", allMiniWrongPct);
+
+        printf("--- All miniclusters: avg relative gap (finite only; inf = no wrongly-assigned vectors) ---\n");
+        printStats("GLOBAL_ALL_MINIS_AVG_REL_GAP", allMiniAvgRelGapFinite);
+
+        const double p80WrongPct = percentile(allMiniWrongPct, 80.0);
+        std::vector<vector_idx_t> aboveP80MiniIds;
+        std::vector<double> aboveP80WrongPct;
+        std::vector<double> aboveP80AvgRelGapFinite;
+        aboveP80MiniIds.reserve(numMini);
+        aboveP80WrongPct.reserve(numMini);
+        aboveP80AvgRelGapFinite.reserve(numMini);
+        for (size_t miniId = 0; miniId < numMini; ++miniId) {
+            const double pct = wrongAssignmentScores[miniId];
+            if (pct <= p80WrongPct) {
+                continue;
+            }
+            const double gap = wrongAssignmentBoundaryAvgRelativeGap[miniId];
+            aboveP80MiniIds.push_back(static_cast<vector_idx_t>(miniId));
+            aboveP80WrongPct.push_back(pct);
+            if (std::isfinite(gap)) {
+                aboveP80AvgRelGapFinite.push_back(gap);
+            }
+        }
+
+        printf("--- Miniclusters with wrong pct > P80 (threshold=%.6f): count=%zu / %zu ---\n",
+               p80WrongPct, aboveP80WrongPct.size(), numMini);
+        printStats("ABOVE_P80_WRONG_PCT_SCORE", aboveP80WrongPct);
+        printStats("ABOVE_P80_AVG_REL_GAP", aboveP80AvgRelGapFinite);
+
+        constexpr int kDetailPrint = 32;
+        if (!aboveP80WrongPct.empty()) {
+            std::vector<size_t> order(aboveP80WrongPct.size());
+            std::iota(order.begin(), order.end(), 0);
+            std::partial_sort(order.begin(), order.begin() + std::min<size_t>(kDetailPrint, order.size()), order.end(),
+                              [&](size_t a, size_t b) { return aboveP80WrongPct[a] > aboveP80WrongPct[b]; });
+            const size_t nShow = std::min<size_t>(kDetailPrint, order.size());
+            printf("Top %zu minis by wrong pct above P80 (miniId, wrong_pct, avg_rel_gap):\n", nShow);
+            for (size_t r = 0; r < nShow; ++r) {
+                const size_t j = order[r];
+                const vector_idx_t miniId = aboveP80MiniIds[j];
+                const double gap = wrongAssignmentBoundaryAvgRelativeGap[static_cast<size_t>(miniId)];
+                if (std::isfinite(gap)) {
+                    printf("  mini=%llu wrong_pct=%.6f avg_rel_gap=%.6f\n",
+                           static_cast<unsigned long long>(miniId),
+                           aboveP80WrongPct[j],
+                           gap);
+                } else {
+                    printf("  mini=%llu wrong_pct=%.6f avg_rel_gap=n/a\n",
+                           static_cast<unsigned long long>(miniId),
+                           aboveP80WrongPct[j]);
+                }
+            }
+        }
+
         auto numMegaCentroids = megaCentroids.size() / dim;
         std::unordered_map<uint32_t, std::vector<double>> bucketToScores;
         std::vector<double> allWorstMiniScores;
@@ -2686,8 +2785,8 @@ namespace orangedb {
             }
         }
 
-        printf("Wrong-assignment stats over worst mini centroids\n");
-        printStats("GLOBAL", allWorstMiniScores);
+        printf("--- Worst minis per mega: wrong-assignment %% (pct) ---\n");
+        printStats("GLOBAL_WORST_MINIS_WRONG_PCT", allWorstMiniScores);
 
         std::vector<uint32_t> buckets;
         buckets.reserve(bucketToScores.size());
