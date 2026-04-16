@@ -67,7 +67,7 @@ namespace orangedb {
         // LSH bucket bits for overlap tracking
         int overlapLshBits = 8;
         // Worst mini centroids used for bucketed overlap score
-        int overlapWorstMiniCount = 20;
+        int overlapWorstMiniCount = 30;
         // Worst overlap values to average (after bucketing)
         int overlapWorstAvgCount = 30;
         // Threshold for overlap score change to trigger reclustering
@@ -174,6 +174,23 @@ namespace orangedb {
         double calculateRealOverlapScoreForAngular(vector_idx_t megaId, vector_idx_t miniCentroidId, int k = 20);
 
         void computeOverlapScores();
+
+        // Computes per-mini score as % vectors whose nearest mini centroid is not their own.
+        void computeWrongAssignmentScores();
+
+        // Builds bucket-level stats from wrong-assignment scores.
+        void updateWrongAssignmentBucketAverages(bool useAdaptiveAvg = true);
+
+        // Selects mega centroids for reclustering based on wrong-assignment bucket matching.
+        std::vector<vector_idx_t> getMegaCentroidsToReclusterByWrongAssignment(
+            float deltaPercent = 0.1f, int minTriggerCount = 2);
+
+        // Reclusters selected megas based on wrong-assignment logic.
+        void reclusterBasedOnWrongAssignment(
+            float deltaPercent = 0.1f, bool useAdaptiveAvg = true, int minTriggerCount = 2);
+
+        // Prints stats over worst-mini wrong-assignment percentages grouped by LSH bucket.
+        void printWrongAssignmentStatsForWorstMinis();
 
         void getApproxOverlapScores(const double **_overlapScores, size_t &n) const {
             *_overlapScores = approxOverlapScores.data();
@@ -306,7 +323,13 @@ namespace orangedb {
         std::vector<vector_idx_t> getWorstMiniCentroidsByRealOverlap(
             const std::vector<vector_idx_t> &miniIds, int k) const;
 
+        std::vector<vector_idx_t> getWorstMiniCentroidsByWrongAssignment(
+            const std::vector<vector_idx_t> &miniIds, int k) const;
+
         void calculateOverlapScoreForL2All(int megaCentroidId);
+
+        double calculateWrongAssignmentPercentage(
+            vector_idx_t miniCentroidId, const std::vector<vector_idx_t> &candidateMiniIds);
 
         void resetInputBuffer();
 
@@ -585,9 +608,11 @@ namespace orangedb {
         std::vector<double> approxOverlapScores;
         std::vector<double> realOverlapScores;
         std::unordered_map<uint32_t, OverlapHistory> globalBucketOverlapHistory;
+        std::unordered_map<uint32_t, double> bucketWrongAssignmentAverages;
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
         std::vector<double> miniClusteringScore;
+        std::vector<double> wrongAssignmentScores;
         std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
 
         // Minicluster subcells

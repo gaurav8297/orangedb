@@ -338,7 +338,47 @@ strace -f -e trace=clone ./build/release/bin/orangedb_main -run checkOmpThreads 
 
 ./build/release/bin/orangedb_main  -run benchmarkFastReclustering -baseVectorPath /home/centos/128_10M_syn_data/data/ -queryVectorPath /home/centos/128_10M_syn_data/queries/queries.fvecs  -groundTruthPath /home/centos/128_10M_syn_data/gt_100.bin  -k 100  -numInserts 10  -numVectors 10000000  -numIters 50  -megaCentroidSize 1000  -miniCentroidSize 1000  -iterations 3  -lambda 0  -nMegaProbes 4  -nMiniProbes 250  -numQueries 10  -readFromDisk 0  -storagePath /home/centos/960d_10M_data/reclustering_index.bin  -isParquet 0  -numMegaReclusterCentroids 1  -reclusterOnScore 0  -numThreads 32  -useIP 0  -quantTrainPercentage 0.0  -quantBuild 0  -nMegaRecluster 10000000  -nFiles 1  -hardClusterSizeLimit 0  -kmeansSamplingRatio 0.2 -numFixBoundaries 0  -scoreChangeThreshold 0.01  -centroidChangeThreshold 0.01  -useMSEToRecluster 0  -umap_mode 0  -clustering_mode 0  -rebalancing_ratio 0.85 -overlapScoreChangeThreshold 1 -LshNbits 8 -useCuvsKmeans 0 -cuvsGpuDevice 4
 
-./build/release/bin/orangedb_main -run benchmarkFastReclustering -baseVectorPath /home/centos/msmarco-v2.1-embed-english-v3/passages_parquet/ -queryVectorPath /home/centos/msmarco-v2.1-embed-english-v3/queries.fvecs -groundTruthPath /home/centos/msmarco-v2.1-embed-english-v3/gt.bin -isParquet 1 -k 100 -numInserts 101 -numVectors 200000000 -numIters 10 -megaCentroidSize 1000 -miniCentroidSize 1000 -numThreads 64 -iterations 8 -fast 0 -lambda 0 -nMegaProbes 20 -nMiniProbes 250 -numQueries 10 -numMegaReclusterCentroids 1 -reclusterOnScore 0 -readFromDisk 0 -storagePath /vast/msmarco_100M_original_clustering.bin -useIP 1 -quantTrainPercentage 0.1 -quantBuild 0 -avgSubCellSize 1000 -nMiniProbesForBadCluster 50 -nMegaRecluster 1000000000 -nFiles 5 -hardClusterSizeLimit 0 -kmeansSamplingRatio 0.2 -numFixBoundaries 10 -scoreChangeThreshold 0.25 -centroidChangeThreshold 0.7 -useMSEToRecluster 0 -umap_mode 0 -overlapScoreChangeThreshold 0.2 -LshNbits 8 -useCuvsKmeans 0 -cuvsGpuDevice 0
+./build/release/bin/orangedb_main
+  -run benchmarkFastReclustering \
+  -baseVectorPath /home/centos/msmarco-v2.1-embed-english-v3/passages_parquet/ \
+  -queryVectorPath /home/centos/msmarco-v2.1-embed-english-v3/queries.fvecs \
+  -groundTruthPath /home/centos/msmarco-v2.1-embed-english-v3/gt.bin \
+  -isParquet 1 \
+  -k 100 \
+  -numInserts 101 \
+  -numVectors 200000000 \
+  -numIters 10 \
+  -megaCentroidSize 1000 \
+  -miniCentroidSize 1000 \
+  -numThreads 32 \
+  -iterations 7 \
+  -fast 0 \
+  -lambda 0 \
+  -nMegaProbes 20 \
+  -nMiniProbes 250 \
+  -numQueries 10 \
+  -numMegaReclusterCentroids 1 \
+  -reclusterOnScore 0 \
+  -readFromDisk 0 \
+  -storagePath /vast/msmarco_100M_original_clustering.bin \
+  -useIP 1 \
+  -quantTrainPercentage 0.1 \
+  -quantBuild 0 \
+  -avgSubCellSize 1000 \
+  -nMiniProbesForBadCluster 50 \
+  -nMegaRecluster 1000000000 \
+  -nFiles 10 \
+  -hardClusterSizeLimit 0 \
+  -kmeansSamplingRatio 0.2 \
+  -numFixBoundaries 10 \
+  -scoreChangeThreshold 0.25 \
+  -centroidChangeThreshold 0.7 \
+  -useMSEToRecluster 0 \
+  -umap_mode 0 \
+  -overlapScoreChangeThreshold 0.2 \
+  -LshNbits 8 \
+  -useCuvsKmeans 0 \
+  -cuvsGpuDevice 0
 
 ./build/release/bin/orangedb_main \
     -run benchmarkFaissClustering \

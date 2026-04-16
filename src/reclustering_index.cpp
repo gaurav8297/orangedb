@@ -2315,6 +2315,56 @@ namespace orangedb {
         return avgScore;
     }
 
+    double ReclusteringIndex::calculateWrongAssignmentPercentage(
+        vector_idx_t miniCentroidId, const std::vector<vector_idx_t> &candidateMiniIds) {
+        auto numMiniClusters = miniCentroids.size() / dim;
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniClusters);
+        auto &miniClusterVectors = miniClusters[miniCentroidId];
+        auto miniClusterSize = miniClusterVectors.size() / dim;
+        if (miniClusterSize == 0 || candidateMiniIds.size() <= 1) {
+            return 0.0;
+        }
+
+        size_t wronglyAssigned = 0;
+        for (size_t i = 0; i < miniClusterSize; i++) {
+            dc->setQuery(miniClusterVectors.data() + i * dim);
+            double minDistance = std::numeric_limits<double>::max();
+            vector_idx_t nearestMiniId = miniCentroidId;
+            for (const auto &candidateMiniId : candidateMiniIds) {
+                double dist;
+                dc->computeDistance(candidateMiniId, &dist);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    nearestMiniId = candidateMiniId;
+                }
+            }
+            if (nearestMiniId != miniCentroidId) {
+                wronglyAssigned++;
+            }
+        }
+        return static_cast<double>(wronglyAssigned) / static_cast<double>(miniClusterSize);
+    }
+
+    void ReclusteringIndex::computeWrongAssignmentScores() {
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        auto numMiniCentroids = miniCentroids.size() / dim;
+        wrongAssignmentScores.assign(numMiniCentroids, 0.0);
+#pragma omp parallel for schedule(dynamic)
+        for (long long megaId = 0; megaId < static_cast<long long>(numMegaCentroids); megaId++) {
+            const auto &miniIds = megaMiniCentroidIds[static_cast<size_t>(megaId)];
+            if (miniIds.empty()) {
+                continue;
+            }
+            if (miniIds.size() == 1) {
+                wrongAssignmentScores[miniIds[0]] = 0.0;
+                continue;
+            }
+            for (auto miniId : miniIds) {
+                wrongAssignmentScores[miniId] = calculateWrongAssignmentPercentage(miniId, miniIds);
+            }
+        }
+    }
+
     void ReclusteringIndex::ensureOverlapLshIndex() {
         assert(config.overlapLshBits <= 32 && "overlapLshBits must be <= 32");
         if (overlapLshIndex) {
@@ -2354,6 +2404,26 @@ namespace orangedb {
         std::partial_sort(indices.begin(), indices.begin() + count, indices.end(),
                           [this, &miniIds](size_t a, size_t b) {
                               return realOverlapScores[miniIds[a]] < realOverlapScores[miniIds[b]];
+                          });
+        worstMiniIds.reserve(count);
+        for (int i = 0; i < count; i++) {
+            worstMiniIds.push_back(miniIds[indices[i]]);
+        }
+        return worstMiniIds;
+    }
+
+    std::vector<vector_idx_t> ReclusteringIndex::getWorstMiniCentroidsByWrongAssignment(
+        const std::vector<vector_idx_t> &miniIds, int k) const {
+        std::vector<vector_idx_t> worstMiniIds;
+        if (miniIds.empty() || k <= 0 || wrongAssignmentScores.empty()) {
+            return worstMiniIds;
+        }
+        int count = std::min(k, static_cast<int>(miniIds.size()));
+        std::vector<size_t> indices(miniIds.size());
+        std::iota(indices.begin(), indices.end(), 0);
+        std::partial_sort(indices.begin(), indices.begin() + count, indices.end(),
+                          [this, &miniIds](size_t a, size_t b) {
+                              return wrongAssignmentScores[miniIds[a]] > wrongAssignmentScores[miniIds[b]];
                           });
         worstMiniIds.reserve(count);
         for (int i = 0; i < count; i++) {
@@ -2431,6 +2501,201 @@ namespace orangedb {
             } else {
                 calculateOverlapScoreForL2All(i);
             }
+        }
+    }
+
+    void ReclusteringIndex::updateWrongAssignmentBucketAverages(bool useAdaptiveAvg) {
+        if (wrongAssignmentScores.empty()) {
+            computeWrongAssignmentScores();
+        }
+
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        std::unordered_map<uint32_t, std::vector<double>> bucketToScores;
+        for (size_t i = 0; i < numMegaCentroids; i++) {
+            auto &miniIds = megaMiniCentroidIds[i];
+            auto worstMiniIds = getWorstMiniCentroidsByWrongAssignment(
+                miniIds, config.overlapWorstMiniCount);
+            for (auto miniId : worstMiniIds) {
+                uint32_t bucket = getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
+                bucketToScores[bucket].push_back(wrongAssignmentScores[miniId]);
+            }
+        }
+
+        bucketWrongAssignmentAverages.clear();
+        bucketWrongAssignmentAverages.reserve(bucketToScores.size());
+        for (const auto &entry : bucketToScores) {
+            const auto &scores = entry.second;
+            if (scores.empty()) {
+                continue;
+            }
+            if (!useAdaptiveAvg) {
+                bucketWrongAssignmentAverages.emplace(entry.first, computeAvg(scores));
+                continue;
+            }
+
+            // Adaptive aggregation: mean + rms + sqrt-mean favors high-error buckets.
+            double sum = 0.0;
+            double sqSum = 0.0;
+            double sqrtSum = 0.0;
+            for (double score : scores) {
+                double clamped = std::max(0.0, score);
+                sum += clamped;
+                sqSum += clamped * clamped;
+                sqrtSum += std::sqrt(clamped);
+            }
+            double n = static_cast<double>(scores.size());
+            double mean = sum / n;
+            double rms = std::sqrt(sqSum / n);
+            double sqrtMean = sqrtSum / n;
+            double adaptiveAvg = (mean + rms + sqrtMean) / 3.0;
+            bucketWrongAssignmentAverages.emplace(entry.first, adaptiveAvg);
+        }
+    }
+
+    std::vector<vector_idx_t> ReclusteringIndex::getMegaCentroidsToReclusterByWrongAssignment(
+        float deltaPercent, int minTriggerCount) {
+        std::vector<vector_idx_t> megaCentroidsToRecluster;
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        if (wrongAssignmentScores.empty()) {
+            computeWrongAssignmentScores();
+        }
+        if (bucketWrongAssignmentAverages.empty()) {
+            updateWrongAssignmentBucketAverages(true);
+        }
+        if (bucketWrongAssignmentAverages.empty()) {
+            for (size_t i = 0; i < numMegaCentroids; i++) {
+                megaCentroidsToRecluster.push_back(i);
+            }
+            return megaCentroidsToRecluster;
+        }
+
+        deltaPercent = std::max(0.0f, deltaPercent);
+        minTriggerCount = std::max(1, minTriggerCount);
+
+        for (size_t i = 0; i < numMegaCentroids; i++) {
+            const auto &miniIds = megaMiniCentroidIds[i];
+            auto worstMiniIds = getWorstMiniCentroidsByWrongAssignment(
+                miniIds, config.overlapWorstMiniCount);
+            int triggerCount = 0;
+            for (auto miniId : worstMiniIds) {
+                uint32_t bucket = getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
+                auto it = bucketWrongAssignmentAverages.find(bucket);
+                if (it == bucketWrongAssignmentAverages.end()) {
+                    continue;
+                }
+                double miniScore = wrongAssignmentScores[miniId];
+                double bucketAvg = it->second;
+                double tolerance = std::max(1e-9, std::abs(bucketAvg) * static_cast<double>(deltaPercent));
+                if (std::abs(miniScore - bucketAvg) <= tolerance) {
+                    triggerCount++;
+                }
+            }
+            if (triggerCount >= minTriggerCount) {
+                megaCentroidsToRecluster.push_back(i);
+            }
+        }
+
+        printf("getMegaCentroidsToReclusterByWrongAssignment: %zu out of %zu megacentroids meet criteria\n",
+               megaCentroidsToRecluster.size(), numMegaCentroids);
+        return megaCentroidsToRecluster;
+    }
+
+    void ReclusteringIndex::reclusterBasedOnWrongAssignment(
+        float deltaPercent, bool useAdaptiveAvg, int minTriggerCount) {
+        computeWrongAssignmentScores();
+        updateWrongAssignmentBucketAverages(useAdaptiveAvg);
+        std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToReclusterByWrongAssignment(
+            deltaPercent, minTriggerCount);
+        printf("reclusterBasedOnWrongAssignment: Reclustering %zu megacentroids\n", megaClusterIds.size());
+        reclusterFastMegaCentroids(megaClusterIds);
+    }
+
+    void ReclusteringIndex::printWrongAssignmentStatsForWorstMinis() {
+        computeWrongAssignmentScores();
+
+        auto percentile = [](std::vector<double> values, double p) -> double {
+            if (values.empty()) {
+                return 0.0;
+            }
+            std::sort(values.begin(), values.end());
+            if (values.size() == 1) {
+                return values[0];
+            }
+            double clampedP = std::clamp(p, 0.0, 100.0);
+            double pos = (clampedP / 100.0) * static_cast<double>(values.size() - 1);
+            size_t lo = static_cast<size_t>(std::floor(pos));
+            size_t hi = static_cast<size_t>(std::ceil(pos));
+            double w = pos - static_cast<double>(lo);
+            return values[lo] * (1.0 - w) + values[hi] * w;
+        };
+
+        auto powerAverage = [this](const std::vector<double> &values) -> double {
+            if (values.empty()) {
+                return 0.0;
+            }
+            double p = std::max(1e-6, static_cast<double>(config.powerAvgCoefficient));
+            double sum = 0.0;
+            for (double val : values) {
+                sum += std::pow(std::max(0.0, val), p);
+            }
+            return std::pow(sum / static_cast<double>(values.size()), 1.0 / p);
+        };
+
+        auto printStats = [&](const char *label, const std::vector<double> &scores) {
+            if (scores.empty()) {
+                printf("%s: count=0\n", label);
+                return;
+            }
+            double minVal = *std::min_element(scores.begin(), scores.end());
+            double maxVal = *std::max_element(scores.begin(), scores.end());
+            double avg = computeAvg(scores);
+            double pavg = powerAverage(scores);
+            printf(
+                "%s: count=%zu avg=%.6f min=%.6f max=%.6f power_avg=%.6f P5=%.6f P10=%.6f P25=%.6f P50=%.6f P75=%.6f P90=%.6f P99=%.6f\n",
+                label,
+                scores.size(),
+                avg,
+                minVal,
+                maxVal,
+                pavg,
+                percentile(scores, 5.0),
+                percentile(scores, 10.0),
+                percentile(scores, 25.0),
+                percentile(scores, 50.0),
+                percentile(scores, 75.0),
+                percentile(scores, 90.0),
+                percentile(scores, 99.0));
+        };
+
+        auto numMegaCentroids = megaCentroids.size() / dim;
+        std::unordered_map<uint32_t, std::vector<double>> bucketToScores;
+        std::vector<double> allWorstMiniScores;
+        for (size_t i = 0; i < numMegaCentroids; i++) {
+            auto &miniIds = megaMiniCentroidIds[i];
+            auto worstMiniIds = getWorstMiniCentroidsByWrongAssignment(
+                miniIds, config.overlapWorstMiniCount);
+            for (auto miniId : worstMiniIds) {
+                uint32_t bucket = getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
+                double score = wrongAssignmentScores[miniId];
+                bucketToScores[bucket].push_back(score);
+                allWorstMiniScores.push_back(score);
+            }
+        }
+
+        printf("Wrong-assignment stats over worst mini centroids\n");
+        printStats("GLOBAL", allWorstMiniScores);
+
+        std::vector<uint32_t> buckets;
+        buckets.reserve(bucketToScores.size());
+        for (const auto &entry : bucketToScores) {
+            buckets.push_back(entry.first);
+        }
+        std::sort(buckets.begin(), buckets.end());
+
+        for (auto bucket : buckets) {
+            const auto &scores = bucketToScores[bucket];
+            std::string label = "BUCKET " + std::to_string(bucket);
+            printStats(label.c_str(), scores);
         }
     }
 

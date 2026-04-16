@@ -3828,45 +3828,71 @@ void write_debug_data(ReclusteringIndex* index, int iter,  std::vector<double> q
 }
 
 void benchmark_fast_reclustering(InputParser &input) {
-    const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
-    const std::string &queryVectorPath = input.getCmdOption("-queryVectorPath");
-    const std::string &groundTruthPath = input.getCmdOption("-groundTruthPath");
-    const bool isParquet = stoi(input.getCmdOption("-isParquet"));
-    int numInserts = stoi(input.getCmdOption("-numInserts"));
-    const int numVectors = stoi(input.getCmdOption("-numVectors"));
-    const int k = stoi(input.getCmdOption("-k"));
-    const int numIters = stoi(input.getCmdOption("-numIters"));
-    const int megaCentroidSize = stoi(input.getCmdOption("-megaCentroidSize"));
-    const int miniCentroidSize = stoi(input.getCmdOption("-miniCentroidSize"));
-    const float lambda = stof(input.getCmdOption("-lambda"));
-    const int numMegaReclusterCentroids = stoi(input.getCmdOption("-numMegaReclusterCentroids"));
-    const int reclusterOnScore = stoi(input.getCmdOption("-reclusterOnScore"));
-    auto nMegaProbes = parseCommaSeparatedIntegers(input.getCmdOption("-nMegaProbes"));
-    auto nMiniProbes = parseCommaSeparatedIntegers(input.getCmdOption("-nMiniProbes"));
-    const int iterations = stoi(input.getCmdOption("-iterations"));
-    // const bool fast = stoi(input.getCmdOption("-fast"));
-    const int numQueries = stoi(input.getCmdOption("-numQueries"));
-    const int readFromDisk = stoi(input.getCmdOption("-readFromDisk"));
-    const std::string &storagePath = input.getCmdOption("-storagePath");
-    const int numThreads = stoi(input.getCmdOption("-numThreads"));
-    const bool useIP = stoi(input.getCmdOption("-useIP"));
-    const float quantTrainPercentage = stof(input.getCmdOption("-quantTrainPercentage"));
-    const bool quantBuild = stoi(input.getCmdOption("-quantBuild"));
-    // const int avgSubCellSize = stoi(input.getCmdOption("-avgSubCellSize"));
-    auto nMiniProbesForBadCluster = parseCommaSeparatedIntegers(input.getCmdOption("-nMiniProbesForBadCluster"));
-    const int nMegaRecluster = stoi(input.getCmdOption("-nMegaRecluster"));
-    int nFiles = stoi(input.getCmdOption("-nFiles"));
-    int hardClusterSizeLimit = stoi(input.getCmdOption("-hardClusterSizeLimit"));
-    float kmeansSamplingRatio = stof(input.getCmdOption("-kmeansSamplingRatio"));
-    int numFixBoundaries = stoi(input.getCmdOption("-numFixBoundaries"));
-    float scoreChangeThreshold = stof(input.getCmdOption("-scoreChangeThreshold"));
-    float centroidChangeThreshold = stof(input.getCmdOption("-centroidChangeThreshold"));
-    const bool useMSEToRecluster = stoi(input.getCmdOption("-useMSEToRecluster"));
-    const int umap_mode = stoi(input.getCmdOption("-umap_mode"));
-    const float overlapScoreChangeThreshold = stof(input.getCmdOption("-overlapScoreChangeThreshold"));
-    const int LshNbits = stoi(input.getCmdOption("-LshNbits"));
-    const bool useCuvsKmeans = stoi(input.getCmdOption("-useCuvsKmeans"));
-    const int cuvsGpuDevice = stoi(input.getCmdOption("-cuvsGpuDevice"));
+    auto getStringOption = [&](const std::string &option, const std::string &defaultValue = "") -> std::string {
+        const auto &value = input.getCmdOption(option);
+        return value.empty() ? defaultValue : value;
+    };
+    auto getIntOption = [&](const std::string &option, int defaultValue) -> int {
+        const auto &value = input.getCmdOption(option);
+        return value.empty() ? defaultValue : stoi(value);
+    };
+    auto getFloatOption = [&](const std::string &option, float defaultValue) -> float {
+        const auto &value = input.getCmdOption(option);
+        return value.empty() ? defaultValue : stof(value);
+    };
+    auto getBoolOption = [&](const std::string &option, bool defaultValue) -> bool {
+        const auto &value = input.getCmdOption(option);
+        return value.empty() ? defaultValue : (stoi(value) != 0);
+    };
+    auto getIntListOption = [&](const std::string &option, const std::string &defaultValue) -> std::vector<int> {
+        const auto &value = input.getCmdOption(option);
+        return parseCommaSeparatedIntegers(value.empty() ? defaultValue : value);
+    };
+
+    const std::string baseVectorPath = getStringOption("-baseVectorPath");
+    const std::string queryVectorPath = getStringOption("-queryVectorPath");
+    const std::string groundTruthPath = getStringOption("-groundTruthPath");
+    if (baseVectorPath.empty() || queryVectorPath.empty() || groundTruthPath.empty()) {
+        fprintf(stderr, "benchmarkFastReclustering requires -baseVectorPath, -queryVectorPath, and -groundTruthPath\n");
+        exit(1);
+    }
+
+    const bool isParquet = getBoolOption("-isParquet", false);
+    int numInserts = getIntOption("-numInserts", 100);
+    const int numVectors = getIntOption("-numVectors", 1000000);
+    const int k = getIntOption("-k", 100);
+    const int numIters = getIntOption("-numIters", 10);
+    const int megaCentroidSize = getIntOption("-megaCentroidSize", 1000);
+    const int miniCentroidSize = getIntOption("-miniCentroidSize", 1000);
+    const float lambda = getFloatOption("-lambda", 0.0f);
+    const int numMegaReclusterCentroids = getIntOption("-numMegaReclusterCentroids", 1);
+    const int reclusterOnScore = getIntOption("-reclusterOnScore", 0);
+    auto nMegaProbes = getIntListOption("-nMegaProbes", "20");
+    auto nMiniProbes = getIntListOption("-nMiniProbes", "250");
+    const int iterations = getIntOption("-iterations", 7);
+    // const bool fast = getBoolOption("-fast", false);
+    const int numQueries = getIntOption("-numQueries", 10);
+    const int readFromDisk = getIntOption("-readFromDisk", 0);
+    const std::string storagePath = getStringOption("-storagePath", "orangedb_recluster.bin");
+    const int numThreads = getIntOption("-numThreads", std::max(1, omp_get_max_threads()));
+    const bool useIP = getBoolOption("-useIP", true);
+    const float quantTrainPercentage = getFloatOption("-quantTrainPercentage", 0.1f);
+    const bool quantBuild = getBoolOption("-quantBuild", false);
+    // const int avgSubCellSize = getIntOption("-avgSubCellSize", 1000);
+    auto nMiniProbesForBadCluster = getIntListOption("-nMiniProbesForBadCluster", "50");
+    const int nMegaRecluster = getIntOption("-nMegaRecluster", 1000000000);
+    int nFiles = getIntOption("-nFiles", 10);
+    int hardClusterSizeLimit = getIntOption("-hardClusterSizeLimit", 0);
+    float kmeansSamplingRatio = getFloatOption("-kmeansSamplingRatio", 0.2f);
+    int numFixBoundaries = getIntOption("-numFixBoundaries", 10);
+    float scoreChangeThreshold = getFloatOption("-scoreChangeThreshold", 0.25f);
+    float centroidChangeThreshold = getFloatOption("-centroidChangeThreshold", 0.7f);
+    const bool useMSEToRecluster = getBoolOption("-useMSEToRecluster", false);
+    const int umap_mode = getIntOption("-umap_mode", 0);
+    const float overlapScoreChangeThreshold = getFloatOption("-overlapScoreChangeThreshold", 0.2f);
+    const int LshNbits = getIntOption("-LshNbits", 8);
+    const bool useCuvsKmeans = getBoolOption("-useCuvsKmeans", false);
+    const int cuvsGpuDevice = getIntOption("-cuvsGpuDevice", 0);
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -4087,6 +4113,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.storeMSEScoreForMegaClusters();
         // index.computeOverlapScores();
         // index.printStats();
+        index.printWrongAssignmentStatsForWorstMinis();
 
         // Calculate and write recall after writing overlap scores
         // Write per-query recall for the first probe combination
