@@ -2325,21 +2325,26 @@ namespace orangedb {
             return 0.0;
         }
 
-        size_t wronglyAssigned = 0;
-        for (size_t i = 0; i < miniClusterSize; i++) {
-            dc->setQuery(miniClusterVectors.data() + i * dim);
-            double minDistance = std::numeric_limits<double>::max();
-            vector_idx_t nearestMiniId = miniCentroidId;
-            for (const auto &candidateMiniId : candidateMiniIds) {
-                double dist;
-                dc->computeDistance(candidateMiniId, &dist);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    nearestMiniId = candidateMiniId;
+        uint64_t wronglyAssigned = 0;
+#pragma omp parallel reduction(+:wronglyAssigned)
+        {
+            auto localDc = dc->clone();
+#pragma omp for schedule(static)
+            for (long long i = 0; i < static_cast<long long>(miniClusterSize); i++) {
+                localDc->setQuery(miniClusterVectors.data() + static_cast<size_t>(i) * dim);
+                double minDistance = std::numeric_limits<double>::max();
+                vector_idx_t nearestMiniId = miniCentroidId;
+                for (const auto &candidateMiniId : candidateMiniIds) {
+                    double dist;
+                    localDc->computeDistance(candidateMiniId, &dist);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        nearestMiniId = candidateMiniId;
+                    }
                 }
-            }
-            if (nearestMiniId != miniCentroidId) {
-                wronglyAssigned++;
+                if (nearestMiniId != miniCentroidId) {
+                    wronglyAssigned++;
+                }
             }
         }
         return static_cast<double>(wronglyAssigned) / static_cast<double>(miniClusterSize);
@@ -2349,7 +2354,6 @@ namespace orangedb {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
         wrongAssignmentScores.assign(numMiniCentroids, 0.0);
-#pragma omp parallel for schedule(dynamic)
         for (long long megaId = 0; megaId < static_cast<long long>(numMegaCentroids); megaId++) {
             const auto &miniIds = megaMiniCentroidIds[static_cast<size_t>(megaId)];
             if (miniIds.empty()) {
