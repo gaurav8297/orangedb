@@ -1,5 +1,7 @@
 #include "include/reclustering_index.h"
 
+#include <string>
+
 #include "faiss/IndexFlat.h"
 #include "faiss/IndexLSH.h"
 #include "faiss/index_io.h"
@@ -2374,6 +2376,68 @@ namespace orangedb {
                               : (relGapSum / static_cast<double>(wrongCount));
     }
 
+    WrongAssignmentBucketStats ReclusteringIndex::computeWrongAssignmentBucketStats(
+        const std::vector<double> &wrongPcts, const std::vector<double> &gapsAligned) const {
+        CHECK_ARGUMENT(!wrongPcts.empty(), "wrongPcts must be non-empty");
+        CHECK_ARGUMENT(wrongPcts.size() == gapsAligned.size(), "gapsAligned size must match wrongPcts");
+
+        WrongAssignmentBucketStats stats;
+        stats.wrong_pct_avg = computeAvg(wrongPcts);
+        double pctVar = 0.0;
+        for (double v : wrongPcts) {
+            const double d = v - stats.wrong_pct_avg;
+            pctVar += d * d;
+        }
+        pctVar /= static_cast<double>(wrongPcts.size());
+        stats.wrong_pct_std = std::sqrt(pctVar);
+
+        auto percentile = [](std::vector<double> values, double p) -> double {
+            if (values.empty()) {
+                return 0.0;
+            }
+            std::sort(values.begin(), values.end());
+            if (values.size() == 1) {
+                return values[0];
+            }
+            double clampedP = std::clamp(p, 0.0, 100.0);
+            double pos = (clampedP / 100.0) * static_cast<double>(values.size() - 1);
+            size_t lo = static_cast<size_t>(std::floor(pos));
+            size_t hi = static_cast<size_t>(std::ceil(pos));
+            double w = pos - static_cast<double>(lo);
+            return values[lo] * (1.0 - w) + values[hi] * w;
+        };
+
+        stats.wrong_pct_p90 = percentile(wrongPcts, 90.0);
+        stats.wrong_pct_p99 = percentile(wrongPcts, 99.0);
+
+        std::vector<double> gapsFinite;
+        gapsFinite.reserve(gapsAligned.size());
+        for (double g : gapsAligned) {
+            if (std::isfinite(g)) {
+                gapsFinite.push_back(g);
+            }
+        }
+        if (gapsFinite.empty()) {
+            stats.gap_avg = 0.0;
+            stats.gap_std = 0.0;
+            stats.gap_p90 = 0.0;
+            stats.gap_p99 = 0.0;
+            return stats;
+        }
+
+        stats.gap_avg = computeAvg(gapsFinite);
+        double gapVar = 0.0;
+        for (double v : gapsFinite) {
+            const double d = v - stats.gap_avg;
+            gapVar += d * d;
+        }
+        gapVar /= static_cast<double>(gapsFinite.size());
+        stats.gap_std = std::sqrt(gapVar);
+        stats.gap_p90 = percentile(gapsFinite, 90.0);
+        stats.gap_p99 = percentile(gapsFinite, 99.0);
+        return stats;
+    }
+
     void ReclusteringIndex::computeWrongAssignmentScores() {
         auto numMegaCentroids = megaCentroids.size() / dim;
         auto numMiniCentroids = miniCentroids.size() / dim;
@@ -2538,94 +2602,236 @@ namespace orangedb {
         }
     }
 
-    void ReclusteringIndex::updateWrongAssignmentBucketAverages(bool useAdaptiveAvg) {
+    void ReclusteringIndex::updateWrongAssignmentBucketAverages() {
         if (wrongAssignmentScores.empty()) {
             computeWrongAssignmentScores();
         }
 
         auto numMegaCentroids = megaCentroids.size() / dim;
-        std::unordered_map<uint32_t, std::vector<double>> bucketToScores;
+        std::unordered_map<uint32_t, std::vector<double>> bucketWrongPcts;
+        std::unordered_map<uint32_t, std::vector<double>> bucketGaps;
         for (size_t i = 0; i < numMegaCentroids; i++) {
             auto &miniIds = megaMiniCentroidIds[i];
             auto worstMiniIds = getWorstMiniCentroidsByWrongAssignment(
                 miniIds, config.overlapWorstMiniCount);
             for (auto miniId : worstMiniIds) {
                 uint32_t bucket = getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
-                bucketToScores[bucket].push_back(wrongAssignmentScores[miniId]);
+                bucketWrongPcts[bucket].push_back(wrongAssignmentScores[miniId]);
+                bucketGaps[bucket].push_back(wrongAssignmentBoundaryAvgRelativeGap[miniId]);
             }
         }
 
-        bucketWrongAssignmentAverages.clear();
-        bucketWrongAssignmentAverages.reserve(bucketToScores.size());
-        for (const auto &entry : bucketToScores) {
-            const auto &scores = entry.second;
-            if (scores.empty()) {
+        wrongAssignmentBucketCurrentStats.clear();
+        wrongAssignmentBucketCurrentStats.reserve(bucketWrongPcts.size());
+        for (const auto &entry : bucketWrongPcts) {
+            const auto &pcts = entry.second;
+            if (pcts.empty()) {
                 continue;
             }
-            if (!useAdaptiveAvg) {
-                bucketWrongAssignmentAverages.emplace(entry.first, computeAvg(scores));
-                continue;
-            }
-
-            // Adaptive aggregation: mean + rms + sqrt-mean favors high-error buckets.
-            double sum = 0.0;
-            double sqSum = 0.0;
-            double sqrtSum = 0.0;
-            for (double score : scores) {
-                double clamped = std::max(0.0, score);
-                sum += clamped;
-                sqSum += clamped * clamped;
-                sqrtSum += std::sqrt(clamped);
-            }
-            double n = static_cast<double>(scores.size());
-            double mean = sum / n;
-            double rms = std::sqrt(sqSum / n);
-            double sqrtMean = sqrtSum / n;
-            double adaptiveAvg = (mean + rms + sqrtMean) / 3.0;
-            bucketWrongAssignmentAverages.emplace(entry.first, adaptiveAvg);
+            const auto git = bucketGaps.find(entry.first);
+            CHECK_ARGUMENT(git != bucketGaps.end(), "bucket gap samples missing");
+            CHECK_ARGUMENT(git->second.size() == pcts.size(), "bucket gap sample count mismatch");
+            wrongAssignmentBucketCurrentStats.emplace(entry.first, computeWrongAssignmentBucketStats(pcts, git->second));
         }
     }
 
-    std::vector<vector_idx_t> ReclusteringIndex::getMegaCentroidsToReclusterByWrongAssignment(
-        float deltaPercent, int minTriggerCount) {
+    void ReclusteringIndex::updateWrongAssignmentBucketStability(float relativeDeltaFraction) {
+        relativeDeltaFraction = std::max(0.0f, relativeDeltaFraction);
+        for (const auto &entry : wrongAssignmentBucketCurrentStats) {
+            const uint32_t bucket = entry.first;
+            const WrongAssignmentBucketStats &cur = entry.second;
+
+            auto prevAvgIt = wrongAssignmentBucketPrevPctAvg.find(bucket);
+            auto prevStdIt = wrongAssignmentBucketPrevPctStd.find(bucket);
+            if (prevAvgIt != wrongAssignmentBucketPrevPctAvg.end()
+                && prevStdIt != wrongAssignmentBucketPrevPctStd.end()) {
+                const double dAvg = std::abs(cur.wrong_pct_avg - prevAvgIt->second);
+                const double dStd = std::abs(cur.wrong_pct_std - prevStdIt->second);
+                if (dAvg <= static_cast<double>(relativeDeltaFraction)
+                    && dStd <= static_cast<double>(relativeDeltaFraction)) {
+                    auto stableIt = wrongAssignmentBucketStableStats.find(bucket);
+                    if (stableIt == wrongAssignmentBucketStableStats.end()) {
+                        wrongAssignmentBucketStableStats.emplace(bucket, cur);
+                        printf(
+                            "updateWrongAssignmentBucketStability: bucket=%u new stable point "
+                            "(|d_avg|=%.6f |d_std|=%.6f threshold=%.6f prev_wrong_pct_avg=%.6f prev_wrong_pct_std=%.6f) "
+                            "current wrong_pct avg=%.6f std=%.6f p90=%.6f p99=%.6f "
+                            "current gap avg=%.6f std=%.6f p90=%.6f p99=%.6f\n",
+                            bucket,
+                            dAvg,
+                            dStd,
+                            static_cast<double>(relativeDeltaFraction),
+                            prevAvgIt->second,
+                            prevStdIt->second,
+                            cur.wrong_pct_avg,
+                            cur.wrong_pct_std,
+                            cur.wrong_pct_p90,
+                            cur.wrong_pct_p99,
+                            cur.gap_avg,
+                            cur.gap_std,
+                            cur.gap_p90,
+                            cur.gap_p99);
+                    } else if (cur.wrong_pct_avg < stableIt->second.wrong_pct_avg
+                               && cur.wrong_pct_std < stableIt->second.wrong_pct_std) {
+                        const WrongAssignmentBucketStats prevStable = stableIt->second;
+                        stableIt->second = cur;
+                        printf(
+                            "updateWrongAssignmentBucketStability: bucket=%u stable point refreshed "
+                            "(strictly lower wrong_pct avg & std; |d_avg|=%.6f |d_std|=%.6f threshold=%.6f "
+                            "prev_wrong_pct_avg=%.6f prev_wrong_pct_std=%.6f) "
+                            "old_stable wrong_pct avg=%.6f std=%.6f p90=%.6f p99=%.6f gap avg=%.6f std=%.6f p90=%.6f p99=%.6f "
+                            "current wrong_pct avg=%.6f std=%.6f p90=%.6f p99=%.6f gap avg=%.6f std=%.6f p90=%.6f p99=%.6f\n",
+                            bucket,
+                            dAvg,
+                            dStd,
+                            static_cast<double>(relativeDeltaFraction),
+                            prevAvgIt->second,
+                            prevStdIt->second,
+                            prevStable.wrong_pct_avg,
+                            prevStable.wrong_pct_std,
+                            prevStable.wrong_pct_p90,
+                            prevStable.wrong_pct_p99,
+                            prevStable.gap_avg,
+                            prevStable.gap_std,
+                            prevStable.gap_p90,
+                            prevStable.gap_p99,
+                            cur.wrong_pct_avg,
+                            cur.wrong_pct_std,
+                            cur.wrong_pct_p90,
+                            cur.wrong_pct_p99,
+                            cur.gap_avg,
+                            cur.gap_std,
+                            cur.gap_p90,
+                            cur.gap_p99);
+                    }
+                }
+            }
+            wrongAssignmentBucketPrevPctAvg[bucket] = cur.wrong_pct_avg;
+            wrongAssignmentBucketPrevPctStd[bucket] = cur.wrong_pct_std;
+        }
+    }
+
+    std::vector<vector_idx_t> ReclusteringIndex::getMegaCentroidsToReclusterByWrongAssignment(int minTriggerCount) {
         std::vector<vector_idx_t> megaCentroidsToRecluster;
         auto numMegaCentroids = megaCentroids.size() / dim;
+        minTriggerCount = std::max(1, minTriggerCount);
+
         if (wrongAssignmentScores.empty()) {
             computeWrongAssignmentScores();
         }
-        if (bucketWrongAssignmentAverages.empty()) {
-            updateWrongAssignmentBucketAverages(true);
+        if (wrongAssignmentBucketCurrentStats.empty()) {
+            updateWrongAssignmentBucketAverages();
         }
-        if (bucketWrongAssignmentAverages.empty()) {
+        if (wrongAssignmentBucketStableStats.empty()) {
             for (size_t i = 0; i < numMegaCentroids; i++) {
-                megaCentroidsToRecluster.push_back(i);
+                megaCentroidsToRecluster.push_back(static_cast<vector_idx_t>(i));
+                printf(
+                    "getMegaCentroidsToReclusterByWrongAssignment: mega_id=%zu selected=yes "
+                    "reason=no_stable_bucket_stats_yet (all megas recluster until bucket stability exists)\n",
+                    i);
             }
             return megaCentroidsToRecluster;
         }
 
-        deltaPercent = std::max(0.0f, deltaPercent);
-        minTriggerCount = std::max(1, minTriggerCount);
+        const int worstK = config.overlapWorstMiniCount;
 
         for (size_t i = 0; i < numMegaCentroids; i++) {
             const auto &miniIds = megaMiniCentroidIds[i];
-            auto worstMiniIds = getWorstMiniCentroidsByWrongAssignment(
-                miniIds, config.overlapWorstMiniCount);
+            auto worstMiniIds = getWorstMiniCentroidsByWrongAssignment(miniIds, worstK);
+
             int triggerCount = 0;
+            std::string worstMiniReport;
+            worstMiniReport.reserve(worstMiniIds.size() * 220 + 16);
+
+            char buf[512];
             for (auto miniId : worstMiniIds) {
-                uint32_t bucket = getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
-                auto it = bucketWrongAssignmentAverages.find(bucket);
-                if (it == bucketWrongAssignmentAverages.end()) {
+                const uint32_t bucket =
+                    getOverlapLshBucket(miniCentroids.data() + static_cast<size_t>(miniId) * dim);
+                auto stableIt = wrongAssignmentBucketStableStats.find(bucket);
+                if (stableIt == wrongAssignmentBucketStableStats.end()) {
+                    std::snprintf(
+                        buf,
+                        sizeof(buf),
+                        "[mini=%llu bucket=%u skipped=no_stable_for_bucket] ",
+                        static_cast<unsigned long long>(miniId),
+                        bucket);
+                    worstMiniReport += buf;
                     continue;
                 }
-                double miniScore = wrongAssignmentScores[miniId];
-                double bucketAvg = it->second;
-                double tolerance = std::max(1e-9, std::abs(bucketAvg) * static_cast<double>(deltaPercent));
-                if (std::abs(miniScore - bucketAvg) <= tolerance) {
-                    triggerCount++;
+                const WrongAssignmentBucketStats &st = stableIt->second;
+                const double pct = wrongAssignmentScores[miniId];
+                const double gap = wrongAssignmentBoundaryAvgRelativeGap[miniId];
+                const bool finiteGap = std::isfinite(gap);
+
+                // Thresholds use stable wrong-% and stable gap moments. Comparisons use ">" so a worst mini
+                // counts toward recluster when wrong assignment is materially above the stable bucket baseline.
+                const double thrPct1 = st.wrong_pct_avg + st.wrong_pct_std;
+                const double thrPct2 = st.wrong_pct_avg + 2.0 * st.wrong_pct_std;
+                const double thrGap = st.gap_avg + st.gap_std;
+
+                const bool cond1 = pct > thrPct1;
+                const bool cond2 = (pct > thrPct2) && finiteGap && (gap > thrGap);
+                const bool triggered = cond1 || cond2;
+                if (triggered) {
+                    ++triggerCount;
                 }
+
+                const char *triggerTag = "no";
+                if (triggered) {
+                    if (cond1 && cond2) {
+                        triggerTag = "yes(cond1_pct>avg+std_and_cond2_pct>avg+2std_gap>gap_avg+std)";
+                    } else if (cond1) {
+                        triggerTag = "yes(cond1_pct>stable_avg+stable_std)";
+                    } else {
+                        triggerTag = "yes(cond2_pct>stable_avg+2*stable_std_and_gap>stable_gap_avg+stable_gap_std)";
+                    }
+                }
+
+                std::snprintf(
+                    buf,
+                    sizeof(buf),
+                    "[mini=%llu bucket=%u wrong_pct=%.6f gap_%s=%.6g "
+                    "thr_pct1(avg+std)=%.6f thr_pct2(avg+2std)=%.6f thr_gap(gap_avg+gap_std)=%.6f "
+                    "stable_wrong_pct avg=%.6f std=%.6f p90=%.6f p99=%.6f "
+                    "stable_gap avg=%.6f std=%.6f p90=%.6f p99=%.6f "
+                    "cond1=%d cond2=%d counts_toward_trigger=%d %s] ",
+                    static_cast<unsigned long long>(miniId),
+                    bucket,
+                    pct,
+                    finiteGap ? "finite" : "nonfinite",
+                    finiteGap ? gap : 0.0,
+                    thrPct1,
+                    thrPct2,
+                    thrGap,
+                    st.wrong_pct_avg,
+                    st.wrong_pct_std,
+                    st.wrong_pct_p90,
+                    st.wrong_pct_p99,
+                    st.gap_avg,
+                    st.gap_std,
+                    st.gap_p90,
+                    st.gap_p99,
+                    cond1 ? 1 : 0,
+                    cond2 ? 1 : 0,
+                    triggered ? 1 : 0,
+                    triggerTag);
+                worstMiniReport += buf;
             }
-            if (triggerCount >= minTriggerCount) {
-                megaCentroidsToRecluster.push_back(i);
+
+            const bool selected = triggerCount >= minTriggerCount;
+            printf(
+                "getMegaCentroidsToReclusterByWrongAssignment: mega_id=%zu selected=%s "
+                "decision=%s (trigger_count=%d min_trigger_count=%d worst_k=%d) worst_minis: %s\n",
+                i,
+                selected ? "yes" : "no",
+                selected ? "trigger_count>=min_trigger_count" : "trigger_count<min_trigger_count",
+                triggerCount,
+                minTriggerCount,
+                worstK,
+                worstMiniReport.c_str());
+
+            if (selected) {
+                megaCentroidsToRecluster.push_back(static_cast<vector_idx_t>(i));
             }
         }
 
@@ -2634,12 +2840,11 @@ namespace orangedb {
         return megaCentroidsToRecluster;
     }
 
-    void ReclusteringIndex::reclusterBasedOnWrongAssignment(
-        float deltaPercent, bool useAdaptiveAvg, int minTriggerCount) {
+    void ReclusteringIndex::reclusterBasedOnWrongAssignment(float stabilityDeltaFraction, int minTriggerCount) {
         computeWrongAssignmentScores();
-        updateWrongAssignmentBucketAverages(useAdaptiveAvg);
-        std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToReclusterByWrongAssignment(
-            deltaPercent, minTriggerCount);
+        updateWrongAssignmentBucketAverages();
+        updateWrongAssignmentBucketStability(stabilityDeltaFraction);
+        std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToReclusterByWrongAssignment(minTriggerCount);
         printf("reclusterBasedOnWrongAssignment: Reclustering %zu megacentroids\n", megaClusterIds.size());
         reclusterFastMegaCentroids(megaClusterIds);
     }

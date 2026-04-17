@@ -13,6 +13,17 @@
 
 namespace orangedb {
 
+    struct WrongAssignmentBucketStats {
+        double wrong_pct_avg = 0.0;
+        double wrong_pct_std = 0.0;
+        double wrong_pct_p90 = 0.0;
+        double wrong_pct_p99 = 0.0;
+        double gap_avg = 0.0;
+        double gap_std = 0.0;
+        double gap_p90 = 0.0;
+        double gap_p99 = 0.0;
+    };
+
     struct ReclusteringIndexStats {
         // The number of distance computations
         uint64_t numDistanceCompForSearch = 0;
@@ -178,16 +189,20 @@ namespace orangedb {
         // Computes per-mini score as % vectors whose nearest mini centroid is not their own.
         void computeWrongAssignmentScores();
 
-        // Builds bucket-level stats from wrong-assignment scores.
-        void updateWrongAssignmentBucketAverages(bool useAdaptiveAvg = true);
+        // Builds bucket-level stats (avg, stdev, P90, P99) for wrong-% and finite boundary gaps
+        // over worst minis per mega, keyed by overlap LSH bucket.
+        void updateWrongAssignmentBucketAverages();
 
-        // Selects mega centroids for reclustering based on wrong-assignment bucket matching.
-        std::vector<vector_idx_t> getMegaCentroidsToReclusterByWrongAssignment(
-            float deltaPercent = 0.1f, int minTriggerCount = 2);
+        // When consecutive bucket wrong-% avg and stdev absolute change are both less than
+        // relativeDeltaFraction (same units as wrong-% and its stdev), records stable bucket stats;
+        // stable is refreshed if a later iteration has strictly lower wrong-% avg and stdev.
+        void updateWrongAssignmentBucketStability(float relativeDeltaFraction = 0.03f);
+
+        // Selects mega centroids for reclustering using stable bucket baselines (see implementation).
+        std::vector<vector_idx_t> getMegaCentroidsToReclusterByWrongAssignment(int minTriggerCount = 2);
 
         // Reclusters selected megas based on wrong-assignment logic.
-        void reclusterBasedOnWrongAssignment(
-            float deltaPercent = 0.1f, bool useAdaptiveAvg = true, int minTriggerCount = 2);
+        void reclusterBasedOnWrongAssignment(float stabilityDeltaFraction = 4.0f, int minTriggerCount = 2);
 
         // Prints stats over worst-mini wrong-assignment percentages grouped by LSH bucket.
         void printWrongAssignmentStatsForWorstMinis();
@@ -333,6 +348,9 @@ namespace orangedb {
             const std::vector<vector_idx_t> &candidateMiniIds,
             double *wrongly_assigned_percent,
             double *avg_wrongly_assigned_relative_gap = nullptr);
+
+        WrongAssignmentBucketStats computeWrongAssignmentBucketStats(
+            const std::vector<double> &wrongPcts, const std::vector<double> &gapsAligned) const;
 
         void resetInputBuffer();
 
@@ -611,7 +629,10 @@ namespace orangedb {
         std::vector<double> approxOverlapScores;
         std::vector<double> realOverlapScores;
         std::unordered_map<uint32_t, OverlapHistory> globalBucketOverlapHistory;
-        std::unordered_map<uint32_t, double> bucketWrongAssignmentAverages;
+        std::unordered_map<uint32_t, WrongAssignmentBucketStats> wrongAssignmentBucketCurrentStats;
+        std::unordered_map<uint32_t, double> wrongAssignmentBucketPrevPctAvg;
+        std::unordered_map<uint32_t, double> wrongAssignmentBucketPrevPctStd;
+        std::unordered_map<uint32_t, WrongAssignmentBucketStats> wrongAssignmentBucketStableStats;
         std::vector<float> miniCentroids;
         std::vector<std::vector<float>> miniClusters;
         std::vector<double> miniClusteringScore;

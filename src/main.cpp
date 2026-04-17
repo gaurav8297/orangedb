@@ -4062,8 +4062,8 @@ void benchmark_fast_reclustering(InputParser &input) {
                             printf("Reclustering Iteration: %d\n", iter);
                             // index.updateOverlapHistory();
                             index.reclusterAllMegaCentroids(nMegaRecluster);
-                            index.printWrongAssignmentStatsForWorstMinis();
-                            index.reclusterFast();
+                            // index.printWrongAssignmentStatsForWorstMinis();
+                            index.reclusterBasedOnWrongAssignment();
                             // index.storeMSEScoreForMegaClusters();
                             // index.computeOverlapScores();
                             // index.reclusterBasedOnOverlapHistory();
@@ -4199,7 +4199,7 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.storeMSEScoreForMegaClusters();
         // index.computeOverlapScores();
         // index.printStats();
-        index.printWrongAssignmentStatsForWorstMinis();
+        // index.printWrongAssignmentStatsForWorstMinis();
 
         // Calculate and write recall after writing overlap scores
         // Write per-query recall for the first probe combination
@@ -4232,7 +4232,8 @@ void benchmark_fast_reclustering(InputParser &input) {
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         if (numMegaReclusterCentroids == 1) {
-            index.reclusterFast();
+            // index.reclusterFast();
+            index.reclusterBasedOnWrongAssignment();
             // std::vector<vector_idx_t> megaClusterIds;
             // index.getMegaClusterIds(megaClusterIds);
             // for (auto megaClusterId : megaClusterIds) {
