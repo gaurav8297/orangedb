@@ -2789,55 +2789,26 @@ namespace orangedb {
                     ++triggerCount;
                 }
 
-                const char *triggerTag = "no";
-                if (triggered) {
-                    if (cond1 && cond2) {
-                        triggerTag = "yes(cond1_pct>avg+std_and_cond2_pct>avg+2std_gap>gap_avg+std)";
-                    } else if (cond1) {
-                        triggerTag = "yes(cond1_pct>stable_avg+stable_std)";
-                    } else {
-                        triggerTag = "yes(cond2_pct>stable_avg+2*stable_std_and_gap>stable_gap_avg+stable_gap_std)";
-                    }
-                }
-
                 std::snprintf(
                     buf,
                     sizeof(buf),
-                    "[mini=%llu bucket=%u wrong_pct=%.6f gap_%s=%.6g "
-                    "thr_pct1(avg+std)=%.6f thr_pct2(avg+2std)=%.6f thr_gap(gap_avg+gap_std)=%.6f "
-                    "stable_wrong_pct avg=%.6f std=%.6f p90=%.6f p99=%.6f "
-                    "stable_gap avg=%.6f std=%.6f p90=%.6f p99=%.6f "
-                    "cond1=%d cond2=%d counts_toward_trigger=%d %s] ",
+                    "[m=%llu b=%u pct=%.4f gap=%s c1=%d c2=%d hit=%d] ",
                     static_cast<unsigned long long>(miniId),
                     bucket,
                     pct,
-                    finiteGap ? "finite" : "nonfinite",
-                    finiteGap ? gap : 0.0,
-                    thrPct1,
-                    thrPct2,
-                    thrGap,
-                    st.wrong_pct_avg,
-                    st.wrong_pct_std,
-                    st.wrong_pct_p90,
-                    st.wrong_pct_p99,
-                    st.gap_avg,
-                    st.gap_std,
-                    st.gap_p90,
-                    st.gap_p99,
+                    finiteGap ? "finite" : "na",
                     cond1 ? 1 : 0,
                     cond2 ? 1 : 0,
-                    triggered ? 1 : 0,
-                    triggerTag);
+                    triggered ? 1 : 0);
                 worstMiniReport += buf;
             }
 
             const bool selected = triggerCount >= minTriggerCount;
             printf(
                 "getMegaCentroidsToReclusterByWrongAssignment: mega_id=%zu selected=%s "
-                "decision=%s (trigger_count=%d min_trigger_count=%d worst_k=%d) worst_minis: %s\n",
+                "trigger_count=%d/%d worst_k=%d minis=%s\n",
                 i,
                 selected ? "yes" : "no",
-                selected ? "trigger_count>=min_trigger_count" : "trigger_count<min_trigger_count",
                 triggerCount,
                 minTriggerCount,
                 worstK,
