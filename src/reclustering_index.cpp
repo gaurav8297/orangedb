@@ -2683,12 +2683,20 @@ namespace orangedb {
             double minVal = *std::min_element(scores.begin(), scores.end());
             double maxVal = *std::max_element(scores.begin(), scores.end());
             double avg = computeAvg(scores);
+            double var = 0.0;
+            for (double v : scores) {
+                const double d = v - avg;
+                var += d * d;
+            }
+            var /= static_cast<double>(scores.size());
+            const double stdev = std::sqrt(var);
             double pavg = powerAverage(scores);
             printf(
-                "%s: count=%zu avg=%.6f min=%.6f max=%.6f power_avg=%.6f P5=%.6f P10=%.6f P25=%.6f P50=%.6f P75=%.6f P90=%.6f P99=%.6f\n",
+                "%s: count=%zu avg=%.6f stdev=%.6f min=%.6f max=%.6f power_avg=%.6f P5=%.6f P10=%.6f P25=%.6f P50=%.6f P75=%.6f P90=%.6f P99=%.6f\n",
                 label,
                 scores.size(),
                 avg,
+                stdev,
                 minVal,
                 maxVal,
                 pavg,
