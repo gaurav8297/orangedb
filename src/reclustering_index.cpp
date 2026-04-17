@@ -2647,8 +2647,10 @@ namespace orangedb {
                 && prevStdIt != wrongAssignmentBucketPrevPctStd.end()) {
                 const double dAvg = std::abs(cur.wrong_pct_avg - prevAvgIt->second);
                 const double dStd = std::abs(cur.wrong_pct_std - prevStdIt->second);
-                if (dAvg <= static_cast<double>(relativeDeltaFraction)
-                    && dStd <= static_cast<double>(relativeDeltaFraction)) {
+                const bool converged = dAvg <= static_cast<double>(relativeDeltaFraction)
+                    && dStd <= static_cast<double>(relativeDeltaFraction);
+
+                if (converged) {
                     auto stableIt = wrongAssignmentBucketStableStats.find(bucket);
                     if (stableIt == wrongAssignmentBucketStableStats.end()) {
                         wrongAssignmentBucketStableStats.emplace(bucket, cur);
@@ -2671,17 +2673,28 @@ namespace orangedb {
                             cur.gap_std,
                             cur.gap_p90,
                             cur.gap_p99);
-                    } else if (cur.wrong_pct_avg < stableIt->second.wrong_pct_avg
-                               && cur.wrong_pct_std < stableIt->second.wrong_pct_std) {
+                    }
+                }
+
+                auto stableIt = wrongAssignmentBucketStableStats.find(bucket);
+                if (stableIt != wrongAssignmentBucketStableStats.end()) {
+                    const double sumCur = cur.wrong_pct_avg + cur.wrong_pct_std;
+                    const double sumStable =
+                        stableIt->second.wrong_pct_avg + stableIt->second.wrong_pct_std;
+                    if (sumCur < sumStable) {
                         const WrongAssignmentBucketStats prevStable = stableIt->second;
                         stableIt->second = cur;
                         printf(
                             "updateWrongAssignmentBucketStability: bucket=%u stable point refreshed "
-                            "(strictly lower wrong_pct avg & std; |d_avg|=%.6f |d_std|=%.6f threshold=%.6f "
+                            "(cur_wrong_pct_avg+std=%.6f < stable_wrong_pct_avg+std=%.6f; "
+                            "converged=%d |d_avg|=%.6f |d_std|=%.6f threshold=%.6f "
                             "prev_wrong_pct_avg=%.6f prev_wrong_pct_std=%.6f) "
                             "old_stable wrong_pct avg=%.6f std=%.6f p90=%.6f p99=%.6f gap avg=%.6f std=%.6f p90=%.6f p99=%.6f "
                             "current wrong_pct avg=%.6f std=%.6f p90=%.6f p99=%.6f gap avg=%.6f std=%.6f p90=%.6f p99=%.6f\n",
                             bucket,
+                            sumCur,
+                            sumStable,
+                            converged ? 1 : 0,
                             dAvg,
                             dStd,
                             static_cast<double>(relativeDeltaFraction),

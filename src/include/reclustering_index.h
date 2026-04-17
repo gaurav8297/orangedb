@@ -193,9 +193,10 @@ namespace orangedb {
         // over worst minis per mega, keyed by overlap LSH bucket.
         void updateWrongAssignmentBucketAverages();
 
-        // When consecutive bucket wrong-% avg and stdev absolute change are both less than
-        // relativeDeltaFraction (same units as wrong-% and its stdev), records stable bucket stats;
-        // stable is refreshed if a later iteration has strictly lower wrong-% avg and stdev.
+        // Records the first stable bucket snapshot when consecutive wrong-% avg and stdev absolute
+        // change are both <= relativeDeltaFraction. Stable is also refreshed whenever
+        // cur.(wrong_pct_avg + wrong_pct_std) < stable.(wrong_pct_avg + wrong_pct_std), even if
+        // that convergence condition is not met.
         void updateWrongAssignmentBucketStability(float relativeDeltaFraction = 0.03f);
 
         // Selects mega centroids for reclustering using stable bucket baselines (see implementation).
