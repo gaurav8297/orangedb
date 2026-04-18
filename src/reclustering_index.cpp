@@ -2779,8 +2779,8 @@ namespace orangedb {
                 // Thresholds use stable wrong-% and stable gap moments. Comparisons use ">" so a worst mini
                 // counts toward recluster when wrong assignment is materially above the stable bucket baseline.
                 const double thrPct1 = st.wrong_pct_avg + st.wrong_pct_std;
-                const double thrPct2 = st.wrong_pct_avg + 2.0 * st.wrong_pct_std;
-                const double thrGap = st.gap_avg + 1.5 * st.gap_std;
+                const double thrPct2 = st.wrong_pct_avg + 2.3 * st.wrong_pct_std;
+                const double thrGap = st.gap_avg + 1.7 * st.gap_std;
 
                 const bool cond1 = pct <= thrPct1;
                 const bool cond2 = (pct <= thrPct2) && finiteGap && (gap <= thrGap);

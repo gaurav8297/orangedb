@@ -9,6 +9,7 @@
 #include <stdlib.h>    // atoi, getenv
 #include <assert.h>    // assert
 #include <climits>
+#include <chrono>
 #include <cmath>       // isnan, isinf
 #include <memory>
 #include <random>      // mt19937, uniform_int_distribution
@@ -7121,6 +7122,110 @@ void test_knn_inner_product_parallel(InputParser& input) {
     printf("=======================================================\n");
 }
 
+void benchmark_rabitq_vs_scalar_quantization_cost(InputParser &input) {
+    const size_t dim = input.getCmdOption("-dim").empty() ? 768 : stoull(input.getCmdOption("-dim"));
+    const size_t numVecs =
+            input.getCmdOption("-numVecs").empty() ? 100000 : stoull(input.getCmdOption("-numVecs"));
+    const int numIters = input.getCmdOption("-n").empty() ? 5 : stoi(input.getCmdOption("-n"));
+    const int rotationSeed = input.getCmdOption("-rotationSeed").empty()
+                             ? 1234
+                             : stoi(input.getCmdOption("-rotationSeed"));
+    const size_t rabitBits = input.getCmdOption("-rabitBits").empty()
+                             ? 1
+                             : stoull(input.getCmdOption("-rabitBits"));
+    const size_t sqBits = input.getCmdOption("-sqBits").empty() ? 8 : stoull(input.getCmdOption("-sqBits"));
+    CHECK_ARGUMENT(rabitBits >= 1 && rabitBits <= 9, "rabitBits must be in [1, 9]");
+    CHECK_ARGUMENT(sqBits == 4 || sqBits == 8, "sqBits must be 4 or 8");
+    CHECK_ARGUMENT(numVecs > 0, "numVecs must be > 0");
+    CHECK_ARGUMENT(dim > 0, "dim must be > 0");
+    CHECK_ARGUMENT(numIters > 0, "n must be > 0");
+
+    printf("=======================================================\n");
+    printf("Faiss Quantization Cost (no training time)\n");
+    printf("=======================================================\n");
+    printf("Vectors: %zu x %zu\n", numVecs, dim);
+    printf("Iterations: %d\n", numIters);
+    printf("RaBitQ bits: %zu | SQ bits: %zu | rotationSeed: %d\n", rabitBits, sqBits, rotationSeed);
+    printf("Note: train() is called once but excluded from timings.\n");
+    printf("=======================================================\n");
+
+    std::vector<float> vecs(numVecs * dim);
+    std::vector<float> rotated(numVecs * dim);
+    std::vector<float> rabitDecoded(numVecs * dim);
+    std::vector<float> sqDecoded(numVecs * dim);
+    faiss::float_rand(vecs.data(), vecs.size(), 42);
+
+    faiss::RandomRotationMatrix rrot(static_cast<int>(dim), static_cast<int>(dim));
+    rrot.init(rotationSeed);
+
+    faiss::RaBitQuantizer rabitq(dim, faiss::METRIC_L2, rabitBits);
+    faiss::ScalarQuantizer sq(
+            dim,
+            sqBits == 4 ? faiss::ScalarQuantizer::QT_4bit : faiss::ScalarQuantizer::QT_8bit);
+
+    rabitq.train(numVecs, vecs.data());
+    sq.train(numVecs, vecs.data());
+
+    std::vector<uint8_t> rabitCodes(rabitq.code_size * numVecs);
+    std::vector<uint8_t> sqCodes(sq.code_size * numVecs);
+
+    double rotationMs = 0.0;
+    double rabitEncodeMs = 0.0;
+    double rabitDecodeMs = 0.0;
+    double sqEncodeMs = 0.0;
+    double sqDecodeMs = 0.0;
+    volatile double checksum = 0.0;
+
+    for (int iter = 0; iter < numIters; iter++) {
+        auto t0 = std::chrono::high_resolution_clock::now();
+        rrot.apply_noalloc(numVecs, vecs.data(), rotated.data());
+        auto t1 = std::chrono::high_resolution_clock::now();
+        rotationMs += std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+        rabitq.compute_codes(rotated.data(), rabitCodes.data(), numVecs);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        rabitEncodeMs += std::chrono::duration<double, std::milli>(t2 - t1).count();
+
+        rabitq.decode(rabitCodes.data(), rabitDecoded.data(), numVecs);
+        auto t3 = std::chrono::high_resolution_clock::now();
+        rabitDecodeMs += std::chrono::duration<double, std::milli>(t3 - t2).count();
+
+        sq.compute_codes(vecs.data(), sqCodes.data(), numVecs);
+        auto t4 = std::chrono::high_resolution_clock::now();
+        sqEncodeMs += std::chrono::duration<double, std::milli>(t4 - t3).count();
+
+        sq.decode(sqCodes.data(), sqDecoded.data(), numVecs);
+        auto t5 = std::chrono::high_resolution_clock::now();
+        sqDecodeMs += std::chrono::duration<double, std::milli>(t5 - t4).count();
+
+        const size_t idxA = (static_cast<size_t>(iter) * 131) % rabitDecoded.size();
+        const size_t idxB = (static_cast<size_t>(iter) * 97) % sqDecoded.size();
+        checksum += static_cast<double>(rabitDecoded[idxA]);
+        checksum += static_cast<double>(sqDecoded[idxB]);
+    }
+
+    const double totalVecOps = static_cast<double>(numVecs) * static_cast<double>(numIters);
+    auto printStage = [totalVecOps](const char *label, double ms) {
+        const double avgMs = ms / totalVecOps;
+        const double vecsPerSec = (ms <= 0.0) ? 0.0 : (totalVecOps * 1000.0 / ms);
+        printf(
+                "%-30s total=%10.3f ms avg=%10.6f ms/vec throughput=%10.3f M vec/s\n",
+                label,
+                ms,
+                avgMs,
+                vecsPerSec / 1e6);
+    };
+
+    printf("Code sizes: RaBitQ=%zu bytes/vector, SQ=%zu bytes/vector\n", rabitq.code_size, sq.code_size);
+    printStage("RaBitQ rotation", rotationMs);
+    printStage("RaBitQ compute_codes", rabitEncodeMs);
+    printStage("RaBitQ decode", rabitDecodeMs);
+    printStage("SQ compute_codes", sqEncodeMs);
+    printStage("SQ decode", sqDecodeMs);
+    printf("checksum=%.6f\n", static_cast<double>(checksum));
+    printf("=======================================================\n");
+}
+
 #ifdef CUVS_ENABLED
 void benchmark_cuvs_balanced_kmeans_wrapper(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
@@ -7260,6 +7365,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "computeScalarQuantizerDistanceMse") {
         compute_scalar_quantizer_distance_mse(input);
+    }
+    else if (run == "benchmarkRaBitQScalarQuantizationCost") {
+        benchmark_rabitq_vs_scalar_quantization_cost(input);
     }
 #ifdef CUVS_ENABLED
     else if (run == "benchmarkCuvsBalancedKmeans") {
