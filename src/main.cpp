@@ -950,48 +950,48 @@ void writeToFile(const std::string &path, const uint8_t *data, size_t size) {
 
 void writeNestedVectorToFile(const std::string &path, const std::vector<std::vector<vector_idx_t>> &data) {
     std::ofstream outputFile(path, std::ios::binary);
-    
+
     // Write number of outer vectors
     uint64_t numOuter = data.size();
     outputFile.write(reinterpret_cast<const char *>(&numOuter), sizeof(uint64_t));
-    
+
     // Write each inner vector
     for (const auto &inner : data) {
         // Write size of inner vector
         uint64_t innerSize = inner.size();
         outputFile.write(reinterpret_cast<const char *>(&innerSize), sizeof(uint64_t));
-        
+
         // Write inner vector data
         if (innerSize > 0) {
             outputFile.write(reinterpret_cast<const char *>(inner.data()), innerSize * sizeof(vector_idx_t));
         }
     }
-    
+
     outputFile.close();
 }
 
 void loadNestedVectorFromFile(const std::string &path, std::vector<std::vector<vector_idx_t>> &data) {
     std::ifstream inputFile(path, std::ios::binary);
-    
+
     // Read number of outer vectors
     uint64_t numOuter;
     inputFile.read(reinterpret_cast<char *>(&numOuter), sizeof(uint64_t));
-    
+
     data.resize(numOuter);
-    
+
     // Read each inner vector
     for (uint64_t i = 0; i < numOuter; i++) {
         // Read size of inner vector
         uint64_t innerSize;
         inputFile.read(reinterpret_cast<char *>(&innerSize), sizeof(uint64_t));
-        
+
         // Read inner vector data
         data[i].resize(innerSize);
         if (innerSize > 0) {
             inputFile.read(reinterpret_cast<char *>(data[i].data()), innerSize * sizeof(vector_idx_t));
         }
     }
-    
+
     inputFile.close();
 }
 
@@ -2455,7 +2455,7 @@ void benchmark_faiss_clustering(InputParser &input) {
     std::vector<std::string> filePaths;
 
     float *baseVecs = nullptr;
-    
+
     // Get file information first
     if (isParquet) {
         list_parquet_dir(baseVectorPath.c_str(), filePaths);
@@ -2513,11 +2513,11 @@ void benchmark_faiss_clustering(InputParser &input) {
 
     if (!readFromDisk) {
         omp_set_num_threads(nThreads);
-        
+
         // Phase 1: Train index with sample data
         printf("Phase 1: Training index with sample of %zu vectors\n", sampleSizeAdjusted);
         float *sampleVecs = nullptr;
-        
+
         if (isParquet) {
             // Read first few parquet files for training sample
             std::vector<std::string> sampleFilePaths;
@@ -2534,13 +2534,13 @@ void benchmark_faiss_clustering(InputParser &input) {
             size_t actualSampleDim, actualSampleVectors;
             sampleVecs = readParquetFiles(sampleFilePaths, &actualSampleDim, &actualSampleVectors);
             actualSampleVectors = std::min(actualSampleVectors, sampleSizeAdjusted);
-            
+
             auto trainStart = std::chrono::high_resolution_clock::now();
             index->train(actualSampleVectors, sampleVecs);
             auto trainEnd = std::chrono::high_resolution_clock::now();
             auto trainDuration = std::chrono::duration_cast<std::chrono::milliseconds>(trainEnd - trainStart);
             printf("Training time: %lld ms\n", trainDuration.count());
-            
+
             delete[] sampleVecs; // Free sample data
         } else {
             auto trainStart = std::chrono::high_resolution_clock::now();
@@ -2549,54 +2549,54 @@ void benchmark_faiss_clustering(InputParser &input) {
             auto trainDuration = std::chrono::duration_cast<std::chrono::milliseconds>(trainEnd - trainStart);
             printf("Training time: %lld ms\n", trainDuration.count());
         }
-        
+
         // // Save trained index
         // std::string trainedIndexPath = storagePath + "_trained";
         // faiss::write_index(index, trainedIndexPath.c_str());
         // printf("Saved trained index to: %s\n", trainedIndexPath.c_str());
-        
+
         // Phase 2: Add all data in batches
         printf("Phase 2: Adding all data in batches\n");
         size_t totalAdded = 0;
         auto addStart = std::chrono::high_resolution_clock::now();
-        
+
         if (isParquet) {
             // Process parquet files in batches of 10 files
             const size_t filesPerBatch = 10;
             size_t numBatches = (filePaths.size() + filesPerBatch - 1) / filesPerBatch;
-            
+
             for (size_t batchIdx = 0; batchIdx < numBatches; batchIdx++) {
                 std::vector<std::string> batchPaths;
                 size_t startIdx = batchIdx * filesPerBatch;
                 size_t endIdx = std::min(startIdx + filesPerBatch, filePaths.size());
-                
+
                 // Collect files for this batch
                 for (size_t i = startIdx; i < endIdx; i++) {
                     batchPaths.push_back(filePaths[i]);
                 }
-                
+
                 size_t batchDim, batchVectors;
                 float *batchData = readParquetFiles(batchPaths, &batchDim, &batchVectors);
-                
-                printf("Adding batch %zu/%zu (%zu files: %zu-%zu) with %zu vectors\n", 
+
+                printf("Adding batch %zu/%zu (%zu files: %zu-%zu) with %zu vectors\n",
                        batchIdx + 1, numBatches, batchPaths.size(), startIdx, endIdx - 1, batchVectors);
                 index->add(batchVectors, batchData);
                 totalAdded += batchVectors;
-                
+
                 delete[] batchData; // Free batch data immediately
-                
+
                 if (totalAdded >= totalBaseNumVectors) break;
             }
         } else {
             // For non-parquet files, add in chunks
             index->add(totalBaseNumVectors, baseVecs);
         }
-        
+
         auto addEnd = std::chrono::high_resolution_clock::now();
         auto addDuration = std::chrono::duration_cast<std::chrono::milliseconds>(addEnd - addStart);
         printf("Adding time: %lld ms\n", addDuration.count());
         printf("Total vectors added: %zu\n", totalAdded);
-        
+
         printf("Writing final index to disk: %s\n", storagePath.c_str());
         faiss::write_index(index, storagePath.c_str());
     } else {
@@ -3297,40 +3297,40 @@ void read_and_write_chunk(InputParser &input) {
 }
 
 void run_umap_2D_without_clustering(InputParser &input) {
-    
+
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const std::string &outputPath = input.getCmdOption("-outputPath");
     size_t baseDimension, baseNumVectors;
     float* baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
- 
+
     using namespace orangedb;
-  
+
     // K-NN
-    std::vector<float> embedding(numVectors * 2);   
+    std::vector<float> embedding(numVectors * 2);
     auto metric = std::make_shared<knncolle::EuclideanDistance<float, float>>();
     knncolle::VptreeBuilder<int, float, float> builder(metric);
-    
+
     // UMAP
     umappp::Options opt;
-    opt.num_neighbors = 15; 
+    opt.num_neighbors = 15;
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
     auto status = initialize_umap_compat(
         (int)baseDimension, numVectors, baseVecs, builder, 2, embedding.data(), opt
     );
-    status.run(embedding.data());    
-    
+    status.run(embedding.data());
+
     // Binary output
     FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
-    
+
     // header
     fwrite(&numVectors, sizeof(int), 1, fp);
-    
+
     // vectors
     for (int i = 0; i < numVectors; ++i) {
         float umap_1 = embedding[i*2];
@@ -3338,47 +3338,47 @@ void run_umap_2D_without_clustering(InputParser &input) {
         fwrite(&umap_1, sizeof(float), 1, fp);
         fwrite(&umap_2, sizeof(float), 1, fp);
         fwrite(&i, sizeof(int), 1, fp);
-    }    
+    }
     fclose(fp);
     printf("UMAP projection of the dataset (without clustering) is written to %s\n", outputPath.c_str());
     printf("Binary format: num_vectors (int), then for each vector: UMAP_1 (float), UMAP_2 (float), row_id (int)\n");
 }
 
 void run_umap_3D_without_clustering(InputParser &input) {
-    
+
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
     const int numVectors = stoi(input.getCmdOption("-numVectors"));
     const std::string &outputPath = input.getCmdOption("-outputPath");
     size_t baseDimension, baseNumVectors;
     float* baseVecs = readVecFile(baseVectorPath.c_str(), &baseDimension, &baseNumVectors, numVectors);
- 
+
     using namespace orangedb;
-  
+
     // K-NN
-    std::vector<float> embedding(numVectors * 3);   
+    std::vector<float> embedding(numVectors * 3);
     auto metric = std::make_shared<knncolle::EuclideanDistance<float, float>>();
     knncolle::VptreeBuilder<int, float, float> builder(metric);
-    
+
     // UMAP
     umappp::Options opt;
-    opt.num_neighbors = 15; 
+    opt.num_neighbors = 15;
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
     auto status = initialize_umap_compat(
         (int)baseDimension, numVectors, baseVecs, builder, 3, embedding.data(), opt
     );
-    status.run(embedding.data());    
-    
+    status.run(embedding.data());
+
     // Binary output
     FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
-    
+
     // header
     fwrite(&numVectors, sizeof(int), 1, fp);
-    
+
     // vectors
     for (int i = 0; i < numVectors; ++i) {
         float umap_1 = embedding[i*3];
@@ -3388,7 +3388,7 @@ void run_umap_3D_without_clustering(InputParser &input) {
         fwrite(&umap_2, sizeof(float), 1, fp);
         fwrite(&umap_3, sizeof(float), 1, fp);
         fwrite(&i, sizeof(int), 1, fp);
-    }    
+    }
     fclose(fp);
     printf("UMAP projection of the dataset (without clustering) is written to %s\n", outputPath.c_str());
     printf("Binary format: num_vectors (int), then for each vector: UMAP_1 (float), UMAP_2 (float), UMAP_3 (float), row_id (int)\n");
@@ -3396,15 +3396,15 @@ void run_umap_3D_without_clustering(InputParser &input) {
 
 void run_umap_2D_with_cluster_data(
     const orangedb::ReclusteringIndex& index,
-    float* baseVecs, 
-    int numVectors, 
+    float* baseVecs,
+    int numVectors,
     size_t baseDimension,
     const std::string& outputPath,
     int hirarchyLevel,
     int sampleSize = 100000  // Default sample size to reduce UMAP cost
 ) {
     using namespace orangedb;
-    
+
     // Early validation
     if (baseDimension == 0) {
         printf("Error: baseDimension is 0, skipping UMAP 2D\n");
@@ -3418,19 +3418,19 @@ void run_umap_2D_with_cluster_data(
         printf("Error: numVectors is %d, skipping UMAP 2D\n", numVectors);
         return;
     }
-    
-    std::unordered_map<vector_idx_t, int> vectorToCluster;  
+
+    std::unordered_map<vector_idx_t, int> vectorToCluster;
     const float* centroids = nullptr;
     size_t numCentroids = 0;
-    
-    // Cluster Hirarchy 
+
+    // Cluster Hirarchy
     if (hirarchyLevel == C_L2) {
         std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
         std::vector<std::vector<vector_idx_t>> L2_CentroidIds;
         index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
         index.getMegaMiniCentroids(&L2_CentroidIds);
         index.getMegaCentroids(&centroids,numCentroids);
-        
+
         for (size_t L2_ClusterId = 0; L2_ClusterId < L2_CentroidIds.size(); ++L2_ClusterId) {
             for (auto L1_ClusterId : L2_CentroidIds[L2_ClusterId]) {
                 if (L1_ClusterId < L1_ClusterVectorIds.size()) {
@@ -3445,7 +3445,7 @@ void run_umap_2D_with_cluster_data(
         std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
         index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
         index.getMiniCentroids(&centroids,numCentroids);
-        
+
         for (size_t L1_clusterId = 0; L1_clusterId < L1_ClusterVectorIds.size(); ++L1_clusterId) {
             for (auto vectorId : L1_ClusterVectorIds[L1_clusterId]) {
                 vectorToCluster[vectorId] = (int)L1_clusterId;
@@ -3458,7 +3458,7 @@ void run_umap_2D_with_cluster_data(
     }
     printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());
     printf("Number of centroids: %zu\n", numCentroids);
-    
+
     // Subsample vectors to reduce UMAP computation cost
     std::vector<vector_idx_t> sampledVectorIds;
     if (sampleSize > 0 && sampleSize < numVectors) {
@@ -3467,16 +3467,16 @@ void run_umap_2D_with_cluster_data(
         for (const auto& [vecId, clusterId] : vectorToCluster) {
             clusterToVectors[clusterId].push_back(vecId);
         }
-        
+
         // Calculate samples per cluster (proportional to cluster size)
         int totalAssigned = (int)vectorToCluster.size();
         RandomGenerator rng(42);  // Fixed seed for reproducibility
-        
+
         for (auto& [clusterId, vecIds] : clusterToVectors) {
             // Proportional sampling: each cluster gets samples proportional to its size
             int clusterSampleSize = std::max(1, (int)(((double)vecIds.size() / totalAssigned) * sampleSize));
             clusterSampleSize = std::min(clusterSampleSize, (int)vecIds.size());
-            
+
             // Use randomPerm to get random indices
             std::vector<uint64_t> perm(clusterSampleSize);
             rng.randomPerm(vecIds.size(), perm.data(), clusterSampleSize);
@@ -3484,42 +3484,42 @@ void run_umap_2D_with_cluster_data(
                 sampledVectorIds.push_back(vecIds[perm[i]]);
             }
         }
-        printf("Subsampled %zu vectors from %d total (requested sample size: %d)\n", 
+        printf("Subsampled %zu vectors from %d total (requested sample size: %d)\n",
                sampledVectorIds.size(), numVectors, sampleSize);
     } else {
         // No subsampling, use all vectors
         for (const auto& [vecId, clusterId] : vectorToCluster) {
             sampledVectorIds.push_back(vecId);
         }
-        printf("Using all %zu vectors (no subsampling, sampleSize=%d, numVectors=%d)\n", 
+        printf("Using all %zu vectors (no subsampling, sampleSize=%d, numVectors=%d)\n",
                sampledVectorIds.size(), sampleSize, numVectors);
     }
-    
+
     int numSampledVectors = (int)sampledVectorIds.size();
     int totalVectors = numSampledVectors + (int)numCentroids;
-    
+
     if (numSampledVectors == 0) {
         printf("Warning: No vectors to process for UMAP 2D\n");
         return;
     }
-    
+
     std::vector<float> allVectors(totalVectors * baseDimension);
-    
+
     // Copy sampled vectors
     for (int i = 0; i < numSampledVectors; ++i) {
         vector_idx_t origId = sampledVectorIds[i];
-        std::memcpy(allVectors.data() + i * baseDimension, 
-                    baseVecs + origId * baseDimension, 
+        std::memcpy(allVectors.data() + i * baseDimension,
+                    baseVecs + origId * baseDimension,
                     baseDimension * sizeof(float));
     }
-    
+
     // Copy centroids
     if (centroids && numCentroids > 0) {
-        std::memcpy(allVectors.data() + numSampledVectors * baseDimension, 
-                    centroids, 
+        std::memcpy(allVectors.data() + numSampledVectors * baseDimension,
+                    centroids,
                     numCentroids * baseDimension * sizeof(float));
     }
-    
+
     // Check for NaN/Inf values in the data
     int nanCount = 0, infCount = 0;
     for (size_t i = 0; i < allVectors.size(); ++i) {
@@ -3530,26 +3530,26 @@ void run_umap_2D_with_cluster_data(
         printf("Warning: Data contains %d NaN and %d Inf values, skipping UMAP 2D\n", nanCount, infCount);
         return;
     }
-    
+
     std::vector<float> embedding(totalVectors * 2);
-    
+
     // K-NN
     auto metric = std::make_shared<knncolle::EuclideanDistance<float, float>>();
     knncolle::VptreeBuilder<int, float, float> builder(metric);
-    
+
     // UMAP
     umappp::Options opt;
-    opt.num_neighbors = 15; 
+    opt.num_neighbors = 15;
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
-    
+
     // Ensure we have enough vectors for UMAP (need at least num_neighbors + 1)
     if (totalVectors <= opt.num_neighbors) {
         printf("Skipping UMAP 2D: not enough vectors (%d) for num_neighbors (%d)\n", totalVectors, opt.num_neighbors);
         return;
     }
-    
-    printf("Running UMAP 2D dimensionality reduction on %d sampled vectors + %zu centroids (dim=%zu)...\n", 
+
+    printf("Running UMAP 2D dimensionality reduction on %d sampled vectors + %zu centroids (dim=%zu)...\n",
            numSampledVectors, numCentroids, baseDimension);
     auto umap_start = std::chrono::high_resolution_clock::now();
     auto status = initialize_umap_compat(
@@ -3559,17 +3559,17 @@ void run_umap_2D_with_cluster_data(
     auto umap_end = std::chrono::high_resolution_clock::now();
     auto umap_duration = std::chrono::duration_cast<std::chrono::milliseconds>(umap_end - umap_start).count();
     printf("UMAP 2D took %ld ms (%.2f seconds)\n", umap_duration, umap_duration / 1000.0);
-    
+
     // Binary output
     FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
-    
+
     // header
     fwrite(&totalVectors, sizeof(int), 1, fp);
-    
+
     // sampled vectors
     for (int i = 0; i < numSampledVectors; ++i) {
         vector_idx_t origId = sampledVectorIds[i];
@@ -3586,7 +3586,7 @@ void run_umap_2D_with_cluster_data(
         fwrite(&clusterId, sizeof(int), 1, fp);
         fwrite(&isCentroid, sizeof(int), 1, fp);
     }
-    
+
     // centroids
     for (size_t i = 0; i < numCentroids; ++i) {
         int idx = numSampledVectors + i;
@@ -3599,7 +3599,7 @@ void run_umap_2D_with_cluster_data(
         fwrite(&clusterId, sizeof(int), 1, fp);
         fwrite(&isCentroid, sizeof(int), 1, fp);
     }
-    
+
     fclose(fp);
     printf("UMAP visualization with clusters written to %s\n", outputPath.c_str());
     printf("Binary format: num_records (int), then for each record: UMAP_1 (float), UMAP_2 (float), Cluster_ID (int), Is_Centroid (int, 0=vector, 1=centroid)\n");
@@ -3607,23 +3607,23 @@ void run_umap_2D_with_cluster_data(
 
 void save_clustering_data(
     const orangedb::ReclusteringIndex& index,
-    float* baseVecs, 
-    int numVectors, 
+    float* baseVecs,
+    int numVectors,
     size_t baseDimension,
     const std::string& outputPath,
     int hirarchyLevel
 ) {
     using namespace orangedb;
-    
-    std::unordered_map<vector_idx_t, int> vectorToCluster;  
-    
-    // Cluster Hirarchy 
+
+    std::unordered_map<vector_idx_t, int> vectorToCluster;
+
+    // Cluster Hirarchy
     if (hirarchyLevel == C_L2) {
         std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
         std::vector<std::vector<vector_idx_t>> L2_CentroidIds;
         index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
         index.getMegaMiniCentroids(&L2_CentroidIds);
-        
+
         for (size_t L2_ClusterId = 0; L2_ClusterId < L2_CentroidIds.size(); ++L2_ClusterId) {
             for (auto L1_ClusterId : L2_CentroidIds[L2_ClusterId]) {
                 if (L1_ClusterId < L1_ClusterVectorIds.size()) {
@@ -3637,7 +3637,7 @@ void save_clustering_data(
     else if (hirarchyLevel == C_L1) {
         std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
         index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
-        
+
         for (size_t L1_clusterId = 0; L1_clusterId < L1_ClusterVectorIds.size(); ++L1_clusterId) {
             for (auto vectorId : L1_ClusterVectorIds[L1_clusterId]) {
                 vectorToCluster[vectorId] = (int)L1_clusterId;
@@ -3648,7 +3648,7 @@ void save_clustering_data(
         printf("Invalid hirarchy level: %d\n", hirarchyLevel);
         return;
     }
-    printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());       
+    printf("Total vectors assigned to clusters: %zu\n", vectorToCluster.size());
 
     // Save clustering data to bin
     FILE* fp = fopen(outputPath.c_str(), "wb");
@@ -3656,11 +3656,11 @@ void save_clustering_data(
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
-    
+
     // header
     int numRecords = (int)vectorToCluster.size();
     fwrite(&numRecords, sizeof(int), 1, fp);
-    
+
     // ROW_ID, Cluster_ID
     for (auto it = vectorToCluster.begin(); it != vectorToCluster.end(); ++it) {
         int rowId = it->first;
@@ -3682,24 +3682,24 @@ void run_umap_3D_with_cluster_data(
     int numThreads = 32
 ) {
     using namespace orangedb;
-    
+
     int dim = index.getDim();
     if (dim <= 0) {
         printf("Error: dimension is %d, skipping UMAP 3D\n", dim);
         return;
     }
-    
-    std::unordered_map<vector_idx_t, int> vectorToCluster;      
+
+    std::unordered_map<vector_idx_t, int> vectorToCluster;
     const float* centroids = nullptr;
     size_t numCentroids = 0;
-    
+
     if (hirarchyLevel == C_L2) {
         std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
         std::vector<std::vector<vector_idx_t>> L2_CentroidIds;
         index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
         index.getMegaMiniCentroids(&L2_CentroidIds);
         index.getMegaCentroids(&centroids,numCentroids);
-        
+
         for (size_t L2_ClusterId = 0; L2_ClusterId < L2_CentroidIds.size(); ++L2_ClusterId) {
             for (auto L1_ClusterId : L2_CentroidIds[L2_ClusterId]) {
                 if (L1_ClusterId < L1_ClusterVectorIds.size()) {
@@ -3714,7 +3714,7 @@ void run_umap_3D_with_cluster_data(
         std::vector<std::vector<vector_idx_t>> L1_ClusterVectorIds;
         index.getMiniClusterVectorIds(&L1_ClusterVectorIds);
         index.getMiniCentroids(&centroids,numCentroids);
-        
+
         for (size_t L1_clusterId = 0; L1_clusterId < L1_ClusterVectorIds.size(); ++L1_clusterId) {
             for (auto vectorId : L1_ClusterVectorIds[L1_clusterId]) {
                 vectorToCluster[vectorId] = (int)L1_clusterId;
@@ -3725,11 +3725,11 @@ void run_umap_3D_with_cluster_data(
         printf("Invalid hirarchy level: %d\n", hirarchyLevel);
         return;
     }
-    
+
     int numVectors = (int)vectorToCluster.size();
     printf("Total vectors assigned to clusters: %d\n", numVectors);
     printf("Number of centroids: %zu\n", numCentroids);
-    
+
     // Subsample vectors to reduce UMAP computation cost
     std::vector<vector_idx_t> sampledVectorIds;
     if (sampleSize > 0 && sampleSize < numVectors) {
@@ -3738,16 +3738,16 @@ void run_umap_3D_with_cluster_data(
         for (const auto& [vecId, clusterId] : vectorToCluster) {
             clusterToVectors[clusterId].push_back(vecId);
         }
-        
+
         // Calculate samples per cluster (proportional to cluster size)
         int totalAssigned = numVectors;
         RandomGenerator rng(42);  // Fixed seed for reproducibility
-        
+
         for (auto& [clusterId, vecIds] : clusterToVectors) {
             // Proportional sampling: each cluster gets samples proportional to its size
             int clusterSampleSize = std::max(1, (int)(((double)vecIds.size() / totalAssigned) * sampleSize));
             clusterSampleSize = std::min(clusterSampleSize, (int)vecIds.size());
-            
+
             // Use randomPerm to get random indices
             std::vector<uint64_t> perm(clusterSampleSize);
             rng.randomPerm(vecIds.size(), perm.data(), clusterSampleSize);
@@ -3755,27 +3755,27 @@ void run_umap_3D_with_cluster_data(
                 sampledVectorIds.push_back(vecIds[perm[i]]);
             }
         }
-        printf("Subsampled %zu vectors from %d total (requested sample size: %d)\n", 
+        printf("Subsampled %zu vectors from %d total (requested sample size: %d)\n",
                sampledVectorIds.size(), numVectors, sampleSize);
     } else {
         // No subsampling, use all vectors
         for (const auto& [vecId, clusterId] : vectorToCluster) {
             sampledVectorIds.push_back(vecId);
         }
-        printf("Using all %zu vectors (no subsampling, sampleSize=%d, numVectors=%d)\n", 
+        printf("Using all %zu vectors (no subsampling, sampleSize=%d, numVectors=%d)\n",
                sampledVectorIds.size(), sampleSize, numVectors);
     }
-    
+
     int numSampledVectors = (int)sampledVectorIds.size();
     int totalVectors = numSampledVectors + (int)numCentroids;
-    
+
     if (numSampledVectors == 0) {
         printf("Warning: No vectors to process for UMAP 3D\n");
         return;
     }
-    
+
     std::vector<float> allVectors(totalVectors * dim);
-    
+
     // Copy sampled vectors from index
     for (int i = 0; i < numSampledVectors; ++i) {
         vector_idx_t origId = sampledVectorIds[i];
@@ -3786,32 +3786,32 @@ void run_umap_3D_with_cluster_data(
         }
         std::memcpy(allVectors.data() + i * dim, vecData, dim * sizeof(float));
     }
-    
+
     // Copy centroids
     if (centroids && numCentroids > 0) {
-        std::memcpy(allVectors.data() + numSampledVectors * dim, 
-                    centroids, 
+        std::memcpy(allVectors.data() + numSampledVectors * dim,
+                    centroids,
                     numCentroids * dim * sizeof(float));
     }
     std::vector<float> embedding(totalVectors * 3);
-    
+
     // K-NN
     auto metric = std::make_shared<knncolle::EuclideanDistance<float, float>>();
     knncolle::VptreeBuilder<int, float, float> builder(metric);
-    
+
     // UMAP
     umappp::Options opt;
-    opt.num_neighbors = 15; 
+    opt.num_neighbors = 15;
     opt.min_dist = 0.1;
     opt.num_epochs = 500;
     opt.num_threads = numThreads;
-    
+
     // Ensure we have enough vectors for UMAP (need at least num_neighbors + 1)
     if (totalVectors <= opt.num_neighbors) {
         printf("Skipping UMAP 3D: not enough vectors (%d) for num_neighbors (%d)\n", totalVectors, opt.num_neighbors);
         return;
     }
-    
+
     printf("Running UMAP 3D dimensionality reduction on %d sampled vectors + %zu centroids...\n", numSampledVectors, numCentroids);
     auto umap_start = std::chrono::high_resolution_clock::now();
     auto status = initialize_umap_compat(
@@ -3821,17 +3821,17 @@ void run_umap_3D_with_cluster_data(
     auto umap_end = std::chrono::high_resolution_clock::now();
     auto umap_duration = std::chrono::duration_cast<std::chrono::milliseconds>(umap_end - umap_start).count();
     printf("UMAP 3D took %ld ms (%.2f seconds)\n", umap_duration, umap_duration / 1000.0);
-    
+
     // Binary output
     FILE* fp = fopen(outputPath.c_str(), "wb");
     if (!fp) {
         fprintf(stderr, "Failed to open file %s for writing\n", outputPath.c_str());
         return;
     }
-    
+
     // header
     fwrite(&totalVectors, sizeof(int), 1, fp);
-    
+
     // sampled vectors
     for (int i = 0; i < numSampledVectors; ++i) {
         vector_idx_t origId = sampledVectorIds[i];
@@ -3850,7 +3850,7 @@ void run_umap_3D_with_cluster_data(
         fwrite(&clusterId, sizeof(int), 1, fp);
         fwrite(&isCentroid, sizeof(int), 1, fp);
     }
-    
+
     // centroids
     for (size_t i = 0; i < numCentroids; ++i) {
         int idx = numSampledVectors + i;
@@ -3865,7 +3865,7 @@ void run_umap_3D_with_cluster_data(
         fwrite(&clusterId, sizeof(int), 1, fp);
         fwrite(&isCentroid, sizeof(int), 1, fp);
     }
-    
+
     fclose(fp);
     printf("UMAP 3D visualization with clusters written to %s\n", outputPath.c_str());
 }
@@ -4026,29 +4026,29 @@ void benchmark_fast_reclustering(InputParser &input) {
             // Calculate how many batch inserts per file
             int insertsPerFile = std::max(1, numInserts / numFiles);
             int totalBatches = numFiles * insertsPerFile;
-            printf("Reading %d parquet files with %d batch inserts per file (total %d batches)\n", 
+            printf("Reading %d parquet files with %d batch inserts per file (total %d batches)\n",
                    numFiles, insertsPerFile, totalBatches);
-            
+
             size_t totalVectors = 0;
             int batchCount = 0;
             for (int fileIdx = 0; fileIdx < numFiles; fileIdx++) {
                 printf("Processing parquet file %d/%d: %s\n", fileIdx + 1, numFiles, filePaths[fileIdx].c_str());
-                
+
                 // Read single file
                 std::vector<std::string> paths = {filePaths[fileIdx]};
                 size_t fileNumVectors;
                 auto data = readParquetFiles(paths, &baseDimension, &fileNumVectors);
-                
+
                 // Split file data into insertsPerFile batches
                 size_t vectorsPerBatch = fileNumVectors / insertsPerFile;
                 for (int batchIdx = 0; batchIdx < insertsPerFile; batchIdx++) {
                     size_t batchStart = batchIdx * vectorsPerBatch;
                     size_t batchEnd = (batchIdx == insertsPerFile - 1) ? fileNumVectors : (batchIdx + 1) * vectorsPerBatch;
                     size_t batchSize = batchEnd - batchStart;
-                    
-                    printf("  Batch %d/%d: inserting vectors [%zu, %zu) (%zu vectors)\n", 
+
+                    printf("  Batch %d/%d: inserting vectors [%zu, %zu) (%zu vectors)\n",
                            batchIdx + 1, insertsPerFile, batchStart, batchEnd, batchSize);
-                    
+
                     // Insert batch (offset into data array)
                     index.naiveInsert(data + batchStart * baseDimension, batchSize);
                     totalVectors += batchSize;
@@ -4183,7 +4183,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 printf("\n=== saving clustering data ===\n");
                 save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l2.bin", C_L2);
                 save_clustering_data(index, baseVecs, (int)baseNumVectors, baseDimension, "clustering_data_l1.bin", C_L1);
-            } 
+            }
         } else {
             printf("Skipping UMAP visualization\n");
         }
@@ -4709,18 +4709,18 @@ void benchmark_balanced_clustering(InputParser &input) {
             histogram[assignment[i]]++;
         }
     }
-    
+
     int min_cluster_size = *std::min_element(histogram.begin(), histogram.end());
     int max_cluster_size = *std::max_element(histogram.begin(), histogram.end());
     double avg_cluster_size = static_cast<double>(baseNumVectors) / numCentroids;
-    
+
     double sum_squared_diff = 0.0;
     for (int count : histogram) {
         double diff = count - avg_cluster_size;
         sum_squared_diff += diff * diff;
     }
     double std_dev = std::sqrt(sum_squared_diff / numCentroids);
-    
+
     printf("Assignment histogram statistics:\n");
     printf("  Min cluster size: %d\n", min_cluster_size);
     printf("  Max cluster size: %d\n", max_cluster_size);
@@ -7134,6 +7134,7 @@ void benchmark_rabitq_vs_scalar_quantization_cost(InputParser &input) {
                              ? 1
                              : stoull(input.getCmdOption("-rabitBits"));
     const size_t sqBits = input.getCmdOption("-sqBits").empty() ? 8 : stoull(input.getCmdOption("-sqBits"));
+    const size_t numThreads = input.getCmdOption("-nThreads").empty() ? 32 : stoull(input.getCmdOption("-nThreads"));
     CHECK_ARGUMENT(rabitBits >= 1 && rabitBits <= 9, "rabitBits must be in [1, 9]");
     CHECK_ARGUMENT(sqBits == 4 || sqBits == 8, "sqBits must be 4 or 8");
     CHECK_ARGUMENT(numVecs > 0, "numVecs must be > 0");
@@ -7145,10 +7146,11 @@ void benchmark_rabitq_vs_scalar_quantization_cost(InputParser &input) {
     printf("=======================================================\n");
     printf("Vectors: %zu x %zu\n", numVecs, dim);
     printf("Iterations: %d\n", numIters);
+    printf("Num threads: %zu\n", numThreads);
     printf("RaBitQ bits: %zu | SQ bits: %zu | rotationSeed: %d\n", rabitBits, sqBits, rotationSeed);
     printf("Note: train() is called once but excluded from timings.\n");
     printf("=======================================================\n");
-
+    omp_set_num_threads(static_cast<int>(numThreads));
     std::vector<float> vecs(numVecs * dim);
     std::vector<float> rotated(numVecs * dim);
     std::vector<float> rabitDecoded(numVecs * dim);
