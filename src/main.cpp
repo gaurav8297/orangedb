@@ -3161,6 +3161,8 @@ struct AdaptiveMiniProbeStats {
     double avgMiniProbe = 0.0;
     double avgMegaProbe = 0.0;
     double avgDistanceComputation = 0.0;
+    size_t numUnreachable = 0;
+    size_t numCounted = 0;
 };
 
 AdaptiveMiniProbeStats get_recall_with_adaptive_mini_probes(ReclusteringIndex &index, float *queryVecs,
@@ -3174,42 +3176,44 @@ AdaptiveMiniProbeStats get_recall_with_adaptive_mini_probes(ReclusteringIndex &i
     CHECK_ARGUMENT(nMaxMiniProbes >= nMinMiniProbes, "nMaxMiniProbes should be >= nMinMiniProbes");
     CHECK_ARGUMENT(maxRecallPercent >= minRecallPercent, "maxRecallPercent should be >= minRecallPercent");
 
-    const double targetRecallPercent = (minRecallPercent + maxRecallPercent) / 2.0;
-
     ReclusteringIndexStats stats;
     double totalRecallPercent = 0.0;
     double totalMiniProbe = 0.0;
     double totalMegaProbe = 0.0;
+    double totalDistanceComp = 0.0;
+    size_t numCounted = 0;
+    size_t numUnreachable = 0;
 
     printf("Adaptive mini-probe tuning started. nMegaProbe: %d, nMiniProbe range: [%d, %d], "
            "target recall range: [%.2f%%, %.2f%%], step: %d\n",
            nMegaProbe, nMinMiniProbes, nMaxMiniProbes, minRecallPercent, maxRecallPercent, miniProbeStep);
 
-    for (size_t i = 0; i < queryNumVectors; i++) {
-        auto clampProbe = [&](int probe) {
-            return std::max(nMinMiniProbes, std::min(probe, nMaxMiniProbes));
-        };
-        auto alignProbeToStep = [&](int probe) {
-            probe = clampProbe(probe);
-            const int delta = probe - nMinMiniProbes;
-            const int lower = nMinMiniProbes + (delta / miniProbeStep) * miniProbeStep;
-            const int upper = clampProbe(lower + miniProbeStep);
-            if (upper == lower) {
-                return lower;
-            }
-            return (probe - lower <= upper - probe) ? lower : upper;
-        };
+    auto clampProbe = [&](int probe) {
+        return std::max(nMinMiniProbes, std::min(probe, nMaxMiniProbes));
+    };
+    auto alignProbeToStep = [&](int probe) {
+        probe = clampProbe(probe);
+        const int delta = probe - nMinMiniProbes;
+        const int lower = nMinMiniProbes + (delta / miniProbeStep) * miniProbeStep;
+        const int upper = clampProbe(lower + miniProbeStep);
+        if (upper == lower) {
+            return lower;
+        }
+        return (probe - lower <= upper - probe) ? lower : upper;
+    };
 
-        int bestMiniProbe = nMinMiniProbes;
-        double bestRecallPercent = -1.0;
-        double bestRecallDistance = std::numeric_limits<double>::max();
-        bool foundInRange = false;
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        int chosenMiniProbe = -1;
+        double chosenRecallPercent = -1.0;
+        uint64_t chosenDistComp = 0;
 
         auto evaluateProbe = [&](int miniProbe) {
             miniProbe = alignProbeToStep(miniProbe);
 
+            uint64_t distBefore = stats.numDistanceCompForSearch;
             std::priority_queue<NodeDistCloser> results;
             index.search(queryVecs + i * queryDimension, k, results, nMegaProbe, miniProbe, stats);
+            uint64_t distDelta = stats.numDistanceCompForSearch - distBefore;
 
             auto gt = gtVecs + i * k;
             double localRecallPercent = 0.0;
@@ -3222,86 +3226,99 @@ AdaptiveMiniProbeStats get_recall_with_adaptive_mini_probes(ReclusteringIndex &i
             }
             localRecallPercent = (localRecallPercent / static_cast<double>(k)) * 100.0;
 
-            double currentRecallDistance = std::abs(localRecallPercent - targetRecallPercent);
-            if (currentRecallDistance < bestRecallDistance ||
-                (currentRecallDistance == bestRecallDistance && miniProbe < bestMiniProbe)) {
-                bestRecallDistance = currentRecallDistance;
-                bestRecallPercent = localRecallPercent;
-                bestMiniProbe = miniProbe;
-            }
-
-            if (localRecallPercent >= minRecallPercent && localRecallPercent <= maxRecallPercent) {
-                foundInRange = true;
-            }
-            return localRecallPercent;
+            return std::make_pair(localRecallPercent, distDelta);
         };
 
         int low = alignProbeToStep(nMinMiniProbes);
         int high = alignProbeToStep(nMaxMiniProbes);
 
-        double lowRecallPercent = evaluateProbe(low);
-        if (lowRecallPercent >= minRecallPercent) {
-            totalRecallPercent += bestRecallPercent;
-            totalMiniProbe += bestMiniProbe;
-            totalMegaProbe += nMegaProbe;
-            printf("Query %zu: min nMiniProbe=%d already achieved recall=%.2f%% (>= %.2f%%), stopping early\n",
-                   i, bestMiniProbe, bestRecallPercent, minRecallPercent);
-            continue;
+        auto [lowRecall, lowDist] = evaluateProbe(low);
+        if (lowRecall >= minRecallPercent && lowRecall <= maxRecallPercent) {
+            chosenMiniProbe = low;
+            chosenRecallPercent = lowRecall;
+            chosenDistComp = lowDist;
+            printf("Query %zu: min nMiniProbe=%d achieved recall=%.2f%% within range, stopping early\n",
+                   i, chosenMiniProbe, chosenRecallPercent);
+        } else if (lowRecall > maxRecallPercent) {
+            chosenMiniProbe = low;
+            chosenRecallPercent = lowRecall;
+            chosenDistComp = lowDist;
+            printf("Query %zu: min nMiniProbe=%d already overshoots recall=%.2f%% (> %.2f%%), using min\n",
+                   i, chosenMiniProbe, chosenRecallPercent, maxRecallPercent);
+        } else {
+            auto [highRecall, highDist] = (high != low) ? evaluateProbe(high) : std::make_pair(lowRecall, lowDist);
+
+            if (highRecall < minRecallPercent) {
+                numUnreachable++;
+                printf("Query %zu: unreachable - max nMiniProbe=%d recall=%.2f%% still below min %.2f%%, skipping\n",
+                       i, high, highRecall, minRecallPercent);
+                continue;
+            }
+
+            if (highRecall >= minRecallPercent && highRecall <= maxRecallPercent) {
+                chosenMiniProbe = high;
+                chosenRecallPercent = highRecall;
+                chosenDistComp = highDist;
+            }
+
+            while (chosenMiniProbe == -1 && (high - low) > miniProbeStep) {
+                int mid = alignProbeToStep(low + ((high - low) / 2));
+                if (mid == low) {
+                    mid = alignProbeToStep(low + miniProbeStep);
+                }
+                if (mid == high) {
+                    mid = alignProbeToStep(high - miniProbeStep);
+                }
+
+                auto [midRecall, midDist] = evaluateProbe(mid);
+
+                if (midRecall >= minRecallPercent && midRecall <= maxRecallPercent) {
+                    chosenMiniProbe = mid;
+                    chosenRecallPercent = midRecall;
+                    chosenDistComp = midDist;
+                    break;
+                }
+
+                if (midRecall < minRecallPercent) {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+
+            if (chosenMiniProbe == -1) {
+                auto [finalRecall, finalDist] = evaluateProbe(high);
+                chosenMiniProbe = high;
+                chosenRecallPercent = finalRecall;
+                chosenDistComp = finalDist;
+            }
+
+            printf("Query %zu: tuned nMiniProbe=%d, recall=%.2f%%\n",
+                   i, chosenMiniProbe, chosenRecallPercent);
         }
 
-        if (high != low) {
-            evaluateProbe(high);
-        }
-
-        while (!foundInRange && low <= high) {
-            if (high - low <= miniProbeStep) {
-                break;
-            }
-
-            int mid = alignProbeToStep(low + ((high - low) / 2));
-            double midRecallPercent = evaluateProbe(mid);
-
-            if (midRecallPercent >= minRecallPercent && midRecallPercent <= maxRecallPercent) {
-                foundInRange = true;
-                break;
-            }
-
-            if (midRecallPercent < minRecallPercent) {
-                low = alignProbeToStep(mid + miniProbeStep);
-            } else if (midRecallPercent > maxRecallPercent) {
-                high = alignProbeToStep(mid - miniProbeStep);
-            } else {
-                break;
-            }
-
-            if (low == high) {
-                evaluateProbe(low);
-                break;
-            }
-        }
-
-        evaluateProbe(low);
-        evaluateProbe(high);
-        evaluateProbe(bestMiniProbe - miniProbeStep);
-        evaluateProbe(bestMiniProbe + miniProbeStep);
-
-        totalRecallPercent += bestRecallPercent;
-        totalMiniProbe += bestMiniProbe;
+        totalRecallPercent += chosenRecallPercent;
+        totalMiniProbe += chosenMiniProbe;
         totalMegaProbe += nMegaProbe;
-        printf("Query %zu: tuned nMiniProbe=%d, recall=%.2f%%\n", i, bestMiniProbe, bestRecallPercent);
+        totalDistanceComp += static_cast<double>(chosenDistComp);
+        numCounted++;
     }
 
     AdaptiveMiniProbeStats adaptiveStats;
-    adaptiveStats.avgRecallPercent = totalRecallPercent / static_cast<double>(queryNumVectors);
-    adaptiveStats.avgMiniProbe = totalMiniProbe / static_cast<double>(queryNumVectors);
-    adaptiveStats.avgMegaProbe = totalMegaProbe / static_cast<double>(queryNumVectors);
-    adaptiveStats.avgDistanceComputation = static_cast<double>(stats.numDistanceCompForSearch) /
-                                           static_cast<double>(queryNumVectors);
+    adaptiveStats.numUnreachable = numUnreachable;
+    adaptiveStats.numCounted = numCounted;
+    if (numCounted > 0) {
+        adaptiveStats.avgRecallPercent = totalRecallPercent / static_cast<double>(numCounted);
+        adaptiveStats.avgMiniProbe = totalMiniProbe / static_cast<double>(numCounted);
+        adaptiveStats.avgMegaProbe = totalMegaProbe / static_cast<double>(numCounted);
+        adaptiveStats.avgDistanceComputation = totalDistanceComp / static_cast<double>(numCounted);
+    }
 
     printf("Adaptive mini-probe summary -> Avg Recall: %.2f%%, Avg nMiniProbe: %.2f, Avg nMegaProbe: %.2f, "
-           "Avg Distance Computation: %.2f\n",
+           "Avg Distance Computation: %.2f, Counted: %zu/%zu, Unreachable: %zu\n",
            adaptiveStats.avgRecallPercent, adaptiveStats.avgMiniProbe, adaptiveStats.avgMegaProbe,
-           adaptiveStats.avgDistanceComputation);
+           adaptiveStats.avgDistanceComputation, adaptiveStats.numCounted, queryNumVectors,
+           adaptiveStats.numUnreachable);
 
     return adaptiveStats;
 }
