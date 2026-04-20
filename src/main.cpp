@@ -4309,10 +4309,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.computeOverlapScores();
     index.printStats();
 
-    printf("Running adaptive recall evaluation before reclustering iterations\n");
-    get_recall_with_adaptive_mini_probes(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, fixedNMegaProbe,
-                                         nMinMiniProbes, nMaxMiniProbes, minRecallRange, maxRecallRange,
-                                         miniProbeStep);
+    // printf("Running adaptive recall evaluation before reclustering iterations\n");
+    // get_recall_with_adaptive_mini_probes(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, fixedNMegaProbe,
+    //                                      nMinMiniProbes, nMaxMiniProbes, minRecallRange, maxRecallRange,
+    //                                      miniProbeStep);
 
     // Calculate and write recall after writing overlap scores
     // Write per-query recall for the first probe combination
@@ -4432,10 +4432,6 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.quantizeVectors();
         // index.fixBoundaryMiniCentroidsV2();
         // index.storeScoreForMegaClusters();
-        printf("Running adaptive recall evaluation after iteration %d\n", iter);
-        get_recall_with_adaptive_mini_probes(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                                             fixedNMegaProbe, nMinMiniProbes, nMaxMiniProbes, minRecallRange,
-                                             maxRecallRange, miniProbeStep);
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
         // index.storeMSEScoreForMegaClusters();
@@ -4443,9 +4439,13 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.printStats();
 
     }
+    printf("Running adaptive recall evaluation in the end\n");
+    get_recall_with_adaptive_mini_probes(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                         fixedNMegaProbe, nMinMiniProbes, nMaxMiniProbes, minRecallRange,
+                                         maxRecallRange, miniProbeStep);
     // index.storeMSEScoreForMegaClusters();
     // index.computeOverlapScores();
-    index.printStats();
+    // index.printStats();
     if (iterations > 0) {
         // index.storeScoreForMegaClusters();
         // index.printStats();
