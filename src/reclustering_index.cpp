@@ -2769,6 +2769,7 @@ namespace orangedb {
                         static_cast<unsigned long long>(miniId),
                         bucket);
                     worstMiniReport += buf;
+                    ++triggerCount;
                     continue;
                 }
                 const WrongAssignmentBucketStats &st = stableIt->second;
