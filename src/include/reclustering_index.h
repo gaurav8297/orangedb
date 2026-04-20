@@ -203,7 +203,7 @@ namespace orangedb {
         std::vector<vector_idx_t> getMegaCentroidsToReclusterByWrongAssignment(int minTriggerCount = 2);
 
         // Reclusters selected megas based on wrong-assignment logic.
-        void reclusterBasedOnWrongAssignment(float stabilityDeltaFraction = 0.04f, int minTriggerCount = 4);
+        void reclusterBasedOnWrongAssignment(float stabilityDeltaFraction = 0.04f, int minTriggerCount = 5);
 
         // Prints stats over worst-mini wrong-assignment percentages grouped by LSH bucket.
         void printWrongAssignmentStatsForWorstMinis();
