@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include "hnsw.h"
 #include "spdlog/fmt/fmt.h"
@@ -3155,6 +3156,156 @@ double get_recall(ReclusteringIndex &index, float *queryVecs, size_t queryDimens
     return recall / queryNumVectors;
 }
 
+struct AdaptiveMiniProbeStats {
+    double avgRecallPercent = 0.0;
+    double avgMiniProbe = 0.0;
+    double avgMegaProbe = 0.0;
+    double avgDistanceComputation = 0.0;
+};
+
+AdaptiveMiniProbeStats get_recall_with_adaptive_mini_probes(ReclusteringIndex &index, float *queryVecs,
+                                                            size_t queryDimension, size_t queryNumVectors, int k,
+                                                            vector_idx_t *gtVecs, int nMegaProbe, int nMinMiniProbes,
+                                                            int nMaxMiniProbes, double minRecallPercent,
+                                                            double maxRecallPercent, int miniProbeStep = 5) {
+    CHECK_ARGUMENT(queryNumVectors > 0, "queryNumVectors should be > 0");
+    CHECK_ARGUMENT(miniProbeStep > 0, "miniProbeStep should be > 0");
+    CHECK_ARGUMENT(nMinMiniProbes > 0, "nMinMiniProbes should be > 0");
+    CHECK_ARGUMENT(nMaxMiniProbes >= nMinMiniProbes, "nMaxMiniProbes should be >= nMinMiniProbes");
+    CHECK_ARGUMENT(maxRecallPercent >= minRecallPercent, "maxRecallPercent should be >= minRecallPercent");
+
+    const double targetRecallPercent = (minRecallPercent + maxRecallPercent) / 2.0;
+
+    ReclusteringIndexStats stats;
+    double totalRecallPercent = 0.0;
+    double totalMiniProbe = 0.0;
+    double totalMegaProbe = 0.0;
+
+    printf("Adaptive mini-probe tuning started. nMegaProbe: %d, nMiniProbe range: [%d, %d], "
+           "target recall range: [%.2f%%, %.2f%%], step: %d\n",
+           nMegaProbe, nMinMiniProbes, nMaxMiniProbes, minRecallPercent, maxRecallPercent, miniProbeStep);
+
+    for (size_t i = 0; i < queryNumVectors; i++) {
+        auto clampProbe = [&](int probe) {
+            return std::max(nMinMiniProbes, std::min(probe, nMaxMiniProbes));
+        };
+        auto alignProbeToStep = [&](int probe) {
+            probe = clampProbe(probe);
+            const int delta = probe - nMinMiniProbes;
+            const int lower = nMinMiniProbes + (delta / miniProbeStep) * miniProbeStep;
+            const int upper = clampProbe(lower + miniProbeStep);
+            if (upper == lower) {
+                return lower;
+            }
+            return (probe - lower <= upper - probe) ? lower : upper;
+        };
+
+        int bestMiniProbe = nMinMiniProbes;
+        double bestRecallPercent = -1.0;
+        double bestRecallDistance = std::numeric_limits<double>::max();
+        bool foundInRange = false;
+
+        auto evaluateProbe = [&](int miniProbe) {
+            miniProbe = alignProbeToStep(miniProbe);
+
+            std::priority_queue<NodeDistCloser> results;
+            index.search(queryVecs + i * queryDimension, k, results, nMegaProbe, miniProbe, stats);
+
+            auto gt = gtVecs + i * k;
+            double localRecallPercent = 0.0;
+            while (!results.empty()) {
+                auto res = results.top();
+                results.pop();
+                if (std::find(gt, gt + k, res.id) != (gt + k)) {
+                    localRecallPercent++;
+                }
+            }
+            localRecallPercent = (localRecallPercent / static_cast<double>(k)) * 100.0;
+
+            double currentRecallDistance = std::abs(localRecallPercent - targetRecallPercent);
+            if (currentRecallDistance < bestRecallDistance ||
+                (currentRecallDistance == bestRecallDistance && miniProbe < bestMiniProbe)) {
+                bestRecallDistance = currentRecallDistance;
+                bestRecallPercent = localRecallPercent;
+                bestMiniProbe = miniProbe;
+            }
+
+            if (localRecallPercent >= minRecallPercent && localRecallPercent <= maxRecallPercent) {
+                foundInRange = true;
+            }
+            return localRecallPercent;
+        };
+
+        int low = alignProbeToStep(nMinMiniProbes);
+        int high = alignProbeToStep(nMaxMiniProbes);
+
+        double lowRecallPercent = evaluateProbe(low);
+        if (lowRecallPercent >= minRecallPercent) {
+            totalRecallPercent += bestRecallPercent;
+            totalMiniProbe += bestMiniProbe;
+            totalMegaProbe += nMegaProbe;
+            printf("Query %zu: min nMiniProbe=%d already achieved recall=%.2f%% (>= %.2f%%), stopping early\n",
+                   i, bestMiniProbe, bestRecallPercent, minRecallPercent);
+            continue;
+        }
+
+        if (high != low) {
+            evaluateProbe(high);
+        }
+
+        while (!foundInRange && low <= high) {
+            if (high - low <= miniProbeStep) {
+                break;
+            }
+
+            int mid = alignProbeToStep(low + ((high - low) / 2));
+            double midRecallPercent = evaluateProbe(mid);
+
+            if (midRecallPercent >= minRecallPercent && midRecallPercent <= maxRecallPercent) {
+                foundInRange = true;
+                break;
+            }
+
+            if (midRecallPercent < minRecallPercent) {
+                low = alignProbeToStep(mid + miniProbeStep);
+            } else if (midRecallPercent > maxRecallPercent) {
+                high = alignProbeToStep(mid - miniProbeStep);
+            } else {
+                break;
+            }
+
+            if (low == high) {
+                evaluateProbe(low);
+                break;
+            }
+        }
+
+        evaluateProbe(low);
+        evaluateProbe(high);
+        evaluateProbe(bestMiniProbe - miniProbeStep);
+        evaluateProbe(bestMiniProbe + miniProbeStep);
+
+        totalRecallPercent += bestRecallPercent;
+        totalMiniProbe += bestMiniProbe;
+        totalMegaProbe += nMegaProbe;
+        printf("Query %zu: tuned nMiniProbe=%d, recall=%.2f%%\n", i, bestMiniProbe, bestRecallPercent);
+    }
+
+    AdaptiveMiniProbeStats adaptiveStats;
+    adaptiveStats.avgRecallPercent = totalRecallPercent / static_cast<double>(queryNumVectors);
+    adaptiveStats.avgMiniProbe = totalMiniProbe / static_cast<double>(queryNumVectors);
+    adaptiveStats.avgMegaProbe = totalMegaProbe / static_cast<double>(queryNumVectors);
+    adaptiveStats.avgDistanceComputation = static_cast<double>(stats.numDistanceCompForSearch) /
+                                           static_cast<double>(queryNumVectors);
+
+    printf("Adaptive mini-probe summary -> Avg Recall: %.2f%%, Avg nMiniProbe: %.2f, Avg nMegaProbe: %.2f, "
+           "Avg Distance Computation: %.2f\n",
+           adaptiveStats.avgRecallPercent, adaptiveStats.avgMiniProbe, adaptiveStats.avgMegaProbe,
+           adaptiveStats.avgDistanceComputation);
+
+    return adaptiveStats;
+}
+
 double get_recall_with_bad_clusters(ReclusteringIndex &index, float *queryVecs, size_t queryDimension,
                                     size_t queryNumVectors, int k,
                                     vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes,
@@ -3953,6 +4104,14 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int reclusterOnScore = getIntOption("-reclusterOnScore", 0);
     auto nMegaProbes = getIntListOption("-nMegaProbes", "20");
     auto nMiniProbes = getIntListOption("-nMiniProbes", "250");
+    const int fixedNMegaProbe = getIntOption("-fixedNMegaProbe", nMegaProbes.empty() ? 20 : nMegaProbes[0]);
+    const int nMinMiniProbes = getIntOption("-nMinMiniProbes",
+                                            nMiniProbes.empty() ? 5 : *std::min_element(nMiniProbes.begin(), nMiniProbes.end()));
+    const int nMaxMiniProbes = getIntOption("-nMaxMiniProbes",
+                                            nMiniProbes.empty() ? 250 : *std::max_element(nMiniProbes.begin(), nMiniProbes.end()));
+    const double minRecallRange = getFloatOption("-minRecallRange", 75.0f);
+    const double maxRecallRange = getFloatOption("-maxRecallRange", 85.0f);
+    const int miniProbeStep = getIntOption("-miniProbeStep", 5);
     const int iterations = getIntOption("-iterations", 7);
     // const bool fast = getBoolOption("-fast", false);
     const int numQueries = getIntOption("-numQueries", 10);
@@ -4150,16 +4309,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.computeOverlapScores();
     index.printStats();
 
-    std::vector<std::vector<double>> prevRecallValues;
-    for (auto nMegaProbe : nMegaProbes) {
-        for (auto nMiniProbe : nMiniProbes) {
-            std::vector<double> recallValues;
-            auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                    nMiniProbe, recallValues);
-            printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe, nMiniProbe, recall, 0.0f);
-            prevRecallValues.push_back(std::move(recallValues));
-        }
-    }
+    printf("Running adaptive recall evaluation before reclustering iterations\n");
+    get_recall_with_adaptive_mini_probes(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, fixedNMegaProbe,
+                                         nMinMiniProbes, nMaxMiniProbes, minRecallRange, maxRecallRange,
+                                         miniProbeStep);
 
     // Calculate and write recall after writing overlap scores
     // Write per-query recall for the first probe combination
@@ -4279,20 +4432,10 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.quantizeVectors();
         // index.fixBoundaryMiniCentroidsV2();
         // index.storeScoreForMegaClusters();
-        prevRecallValues.clear();
-        for (auto nMegaProbe : nMegaProbes) {
-            for (auto nMiniProbe : nMiniProbes) {
-                std::vector<double> queryRecalls;
-                auto recall = get_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, nMegaProbe,
-                                        nMiniProbe, queryRecalls);
-                // auto recallWithBadClusters = get_recall_with_bad_clusters(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
-                //                                       nMegaProbe,
-                //                                       nMiniProbe, 5, false);
-                prevRecallValues.push_back(std::move(queryRecalls));
-                printf("nMegaProbes: %d, nMiniProbes: %d, Recall: %f, Recall with bad clusters: %f\n", nMegaProbe,
-                       nMiniProbe, recall, 0.0f);
-            }
-        }
+        printf("Running adaptive recall evaluation after iteration %d\n", iter);
+        get_recall_with_adaptive_mini_probes(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
+                                             fixedNMegaProbe, nMinMiniProbes, nMaxMiniProbes, minRecallRange,
+                                             maxRecallRange, miniProbeStep);
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
         //                              nMegaProbes, nMiniProbes);
         // index.storeMSEScoreForMegaClusters();
