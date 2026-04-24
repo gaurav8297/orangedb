@@ -7388,6 +7388,96 @@ void benchmark_rabitq_vs_scalar_quantization_cost(InputParser &input) {
     printf("=======================================================\n");
 }
 
+void benchmark_parallel_knn_l2sqr_same_data(InputParser &input) {
+    const size_t xSize = input.getCmdOption("-xSize").empty() ? 1024 : stoull(input.getCmdOption("-xSize"));
+    const size_t ySize = input.getCmdOption("-ySize").empty() ? 512 : stoull(input.getCmdOption("-ySize"));
+    const size_t dim = input.getCmdOption("-dim").empty() ? 128 : stoull(input.getCmdOption("-dim"));
+    const size_t numThreads =
+            input.getCmdOption("-nThreads").empty() ? 8 : stoull(input.getCmdOption("-nThreads"));
+    const size_t numIterations = input.getCmdOption("-n").empty() ? 50 : stoull(input.getCmdOption("-n"));
+    const size_t k = 10;
+
+    CHECK_ARGUMENT(xSize > 0, "xSize must be > 0");
+    CHECK_ARGUMENT(ySize > 0, "ySize must be > 0");
+    CHECK_ARGUMENT(dim > 0, "dim must be > 0");
+    CHECK_ARGUMENT(numThreads > 0, "nThreads must be > 0");
+    CHECK_ARGUMENT(numIterations > 0, "n must be > 0");
+    CHECK_ARGUMENT(k <= ySize, "k must be <= ySize");
+
+    omp_set_num_threads(static_cast<int>(numThreads));
+
+    // Allocate all buffers once. Threads share x/y and write to dedicated output slices.
+    std::vector<float> x(xSize * dim);
+    std::vector<float> y(ySize * dim);
+    std::vector<float> allDistances(numThreads * xSize * k);
+    std::vector<int64_t> allIndices(numThreads * xSize * k);
+    faiss::float_rand(x.data(), x.size(), 123);
+    faiss::float_rand(y.data(), y.size(), 456);
+
+    size_t rssStart = get_current_rss_bytes();
+    size_t rssMin = rssStart;
+    size_t rssMax = rssStart;
+
+    auto start = std::chrono::high_resolution_clock::now();
+#pragma omp parallel
+    {
+        const size_t tid = static_cast<size_t>(omp_get_thread_num());
+        float *distances = allDistances.data() + tid * xSize * k;
+        int64_t *indices = allIndices.data() + tid * xSize * k;
+        size_t threadRssMin = rssStart;
+        size_t threadRssMax = rssStart;
+
+        for (size_t iter = 0; iter < numIterations; iter++) {
+            faiss::knn_L2sqr(
+                    x.data(),
+                    y.data(),
+                    dim,
+                    xSize,
+                    ySize,
+                    k,
+                    distances,
+                    indices,
+                    nullptr,
+                    nullptr,
+                    nullptr);
+            const size_t rssNow = get_current_rss_bytes();
+            threadRssMin = std::min(threadRssMin, rssNow);
+            threadRssMax = std::max(threadRssMax, rssNow);
+        }
+
+#pragma omp critical
+        {
+            rssMin = std::min(rssMin, threadRssMin);
+            rssMax = std::max(rssMax, threadRssMax);
+        }
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    const double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+    const size_t rssEnd = get_current_rss_bytes();
+
+    volatile double checksum = 0.0;
+    checksum += allDistances[0];
+    checksum += static_cast<double>(allIndices[0]);
+
+    printf("=======================================================\n");
+    printf("Parallel knn_L2sqr benchmark (shared input data)\n");
+    printf("xSize=%zu ySize=%zu dim=%zu k=%zu nThreads=%zu iterations=%zu\n",
+           xSize,
+           ySize,
+           dim,
+           k,
+           numThreads,
+           numIterations);
+    printf("time_total=%.3f ms time_per_iter=%.3f ms\n", totalMs, totalMs / static_cast<double>(numIterations));
+    printf("rss_start=%.2f MB rss_min=%.2f MB rss_max=%.2f MB rss_end=%.2f MB\n",
+           bytes_to_mb(rssStart),
+           bytes_to_mb(rssMin),
+           bytes_to_mb(rssMax),
+           bytes_to_mb(rssEnd));
+    printf("checksum=%.6f\n", static_cast<double>(checksum));
+    printf("=======================================================\n");
+}
+
 #ifdef CUVS_ENABLED
 void benchmark_cuvs_balanced_kmeans_wrapper(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
@@ -7530,6 +7620,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkRaBitQScalarQuantizationCost") {
         benchmark_rabitq_vs_scalar_quantization_cost(input);
+    }
+    else if (run == "benchmarkParallelKnnL2sqr") {
+        benchmark_parallel_knn_l2sqr_same_data(input);
     }
 #ifdef CUVS_ENABLED
     else if (run == "benchmarkCuvsBalancedKmeans") {
