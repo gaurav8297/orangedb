@@ -92,6 +92,8 @@ using namespace orangedb;
 #if defined(__APPLE__)
 #include <mach/mach.h>
 #elif defined(__linux__)
+#include <pthread.h>
+#include <sched.h>
 #include <unistd.h>
 #endif
 
@@ -7392,8 +7394,10 @@ void benchmark_parallel_knn_l2sqr_same_data(InputParser &input) {
     const size_t xSize = input.getCmdOption("-xSize").empty() ? 1024 : stoull(input.getCmdOption("-xSize"));
     const size_t ySize = input.getCmdOption("-ySize").empty() ? 512 : stoull(input.getCmdOption("-ySize"));
     const size_t dim = input.getCmdOption("-dim").empty() ? 128 : stoull(input.getCmdOption("-dim"));
-    const size_t numThreads =
-            input.getCmdOption("-nThreads").empty() ? 8 : stoull(input.getCmdOption("-nThreads"));
+    const size_t availableCpus = std::max<size_t>(1, static_cast<size_t>(omp_get_num_procs()));
+    const size_t numThreads = input.getCmdOption("-nThreads").empty()
+                                      ? std::max<size_t>(1, availableCpus / 2)
+                                      : stoull(input.getCmdOption("-nThreads"));
     const size_t numIterations = input.getCmdOption("-n").empty() ? 50 : stoull(input.getCmdOption("-n"));
     const size_t k = 10;
 
@@ -7403,6 +7407,7 @@ void benchmark_parallel_knn_l2sqr_same_data(InputParser &input) {
     CHECK_ARGUMENT(numThreads > 0, "nThreads must be > 0");
     CHECK_ARGUMENT(numIterations > 0, "n must be > 0");
     CHECK_ARGUMENT(k <= ySize, "k must be <= ySize");
+    CHECK_ARGUMENT(numThreads <= availableCpus, "nThreads must be <= available logical CPUs");
 
     omp_set_num_threads(static_cast<int>(numThreads));
 
@@ -7414,46 +7419,129 @@ void benchmark_parallel_knn_l2sqr_same_data(InputParser &input) {
     faiss::float_rand(x.data(), x.size(), 123);
     faiss::float_rand(y.data(), y.size(), 456);
 
-    size_t rssStart = get_current_rss_bytes();
-    size_t rssMin = rssStart;
-    size_t rssMax = rssStart;
+    std::vector<int> cpuOrder(availableCpus);
+    for (size_t i = 0; i < availableCpus; ++i) {
+        cpuOrder[i] = static_cast<int>(i);
+    }
+    std::mt19937 rng(std::random_device{}());
+    std::shuffle(cpuOrder.begin(), cpuOrder.end(), rng);
 
-    auto start = std::chrono::high_resolution_clock::now();
-#pragma omp parallel
-    {
-        const size_t tid = static_cast<size_t>(omp_get_thread_num());
-        float *distances = allDistances.data() + tid * xSize * k;
-        int64_t *indices = allIndices.data() + tid * xSize * k;
-        size_t threadRssMin = rssStart;
-        size_t threadRssMax = rssStart;
+    std::vector<int> pass1CpuIds(numThreads);
+    for (size_t i = 0; i < numThreads; ++i) {
+        pass1CpuIds[i] = cpuOrder[i];
+    }
 
-        for (size_t iter = 0; iter < numIterations; iter++) {
-            faiss::knn_L2sqr(
-                    x.data(),
-                    y.data(),
-                    dim,
-                    xSize,
-                    ySize,
-                    k,
-                    distances,
-                    indices,
-                    nullptr,
-                    nullptr,
-                    nullptr);
-            const size_t rssNow = get_current_rss_bytes();
-            threadRssMin = std::min(threadRssMin, rssNow);
-            threadRssMax = std::max(threadRssMax, rssNow);
+    std::vector<int> pass2CpuIds;
+    pass2CpuIds.reserve(numThreads);
+    for (size_t i = numThreads; i < availableCpus; ++i) {
+        pass2CpuIds.push_back(cpuOrder[i]);
+    }
+    if (pass2CpuIds.size() < numThreads) {
+        std::vector<int> reusedPass1CpuIds = pass1CpuIds;
+        std::shuffle(reusedPass1CpuIds.begin(), reusedPass1CpuIds.end(), rng);
+        pass2CpuIds.insert(pass2CpuIds.end(),
+                           reusedPass1CpuIds.begin(),
+                           reusedPass1CpuIds.begin() + static_cast<std::ptrdiff_t>(numThreads - pass2CpuIds.size()));
+    }
+
+    struct ParallelKnnPassResult {
+        double totalMs;
+        size_t rssStart;
+        size_t rssMin;
+        size_t rssMax;
+        size_t rssEnd;
+    };
+
+    auto runPass = [&](const char *passLabel, const std::vector<int> &cpuIds) {
+        const size_t rssStart = get_current_rss_bytes();
+        size_t rssMin = rssStart;
+        size_t rssMax = rssStart;
+#ifdef __linux__
+        bool affinityFailed = false;
+        size_t failedTid = 0;
+        int failedCpu = -1;
+#endif
+
+        printf("%s: scheduling %zu threads on CPUs:", passLabel, cpuIds.size());
+        for (size_t i = 0; i < cpuIds.size(); ++i) {
+            printf(" %d", cpuIds[i]);
         }
+        printf("\n");
+
+        auto start = std::chrono::high_resolution_clock::now();
+#pragma omp parallel
+        {
+            const size_t tid = static_cast<size_t>(omp_get_thread_num());
+            float *distances = allDistances.data() + tid * xSize * k;
+            int64_t *indices = allIndices.data() + tid * xSize * k;
+            size_t threadRssMin = rssStart;
+            size_t threadRssMax = rssStart;
+
+#ifdef __linux__
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(cpuIds[tid], &cpuset);
+            if (pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) != 0) {
+#pragma omp critical
+                {
+                    if (!affinityFailed) {
+                        affinityFailed = true;
+                        failedTid = tid;
+                        failedCpu = cpuIds[tid];
+                    }
+                }
+            } else if (tid < 4) {
+#pragma omp critical
+                {
+                    printf("%s: thread %zu pinned to CPU %d\n", passLabel, tid, cpuIds[tid]);
+                }
+            }
+#endif
+
+            for (size_t iter = 0; iter < numIterations; iter++) {
+                faiss::knn_L2sqr(
+                        x.data(),
+                        y.data(),
+                        dim,
+                        xSize,
+                        ySize,
+                        k,
+                        distances,
+                        indices,
+                        nullptr,
+                        nullptr,
+                        nullptr);
+                const size_t rssNow = get_current_rss_bytes();
+                threadRssMin = std::min(threadRssMin, rssNow);
+                threadRssMax = std::max(threadRssMax, rssNow);
+            }
 
 #pragma omp critical
-        {
-            rssMin = std::min(rssMin, threadRssMin);
-            rssMax = std::max(rssMax, threadRssMax);
+            {
+                rssMin = std::min(rssMin, threadRssMin);
+                rssMax = std::max(rssMax, threadRssMax);
+            }
         }
-    }
-    auto end = std::chrono::high_resolution_clock::now();
-    const double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
-    const size_t rssEnd = get_current_rss_bytes();
+        auto end = std::chrono::high_resolution_clock::now();
+
+#ifdef __linux__
+        if (affinityFailed) {
+            printf("%s: affinity setup failed for thread %zu on CPU %d\n", passLabel, failedTid, failedCpu);
+        }
+        CHECK_ARGUMENT(!affinityFailed, "Failed to set thread affinity for benchmark worker");
+#endif
+
+        return ParallelKnnPassResult{
+                .totalMs = std::chrono::duration<double, std::milli>(end - start).count(),
+                .rssStart = rssStart,
+                .rssMin = rssMin,
+                .rssMax = rssMax,
+                .rssEnd = get_current_rss_bytes(),
+        };
+    };
+
+    const ParallelKnnPassResult pass1 = runPass("pass1", pass1CpuIds);
+    const ParallelKnnPassResult pass2 = runPass("pass2", pass2CpuIds);
 
     volatile double checksum = 0.0;
     checksum += allDistances[0];
@@ -7461,19 +7549,35 @@ void benchmark_parallel_knn_l2sqr_same_data(InputParser &input) {
 
     printf("=======================================================\n");
     printf("Parallel knn_L2sqr benchmark (shared input data)\n");
-    printf("xSize=%zu ySize=%zu dim=%zu k=%zu nThreads=%zu iterations=%zu\n",
+    printf("xSize=%zu ySize=%zu dim=%zu k=%zu nThreads=%zu logicalCPUs=%zu iterations=%zu\n",
            xSize,
            ySize,
            dim,
            k,
            numThreads,
+           availableCpus,
            numIterations);
-    printf("time_total=%.3f ms time_per_iter=%.3f ms\n", totalMs, totalMs / static_cast<double>(numIterations));
-    printf("rss_start=%.2f MB rss_min=%.2f MB rss_max=%.2f MB rss_end=%.2f MB\n",
-           bytes_to_mb(rssStart),
-           bytes_to_mb(rssMin),
-           bytes_to_mb(rssMax),
-           bytes_to_mb(rssEnd));
+#ifdef __linux__
+    printf("pass1=random affinity set A pass2=leftover CPUs plus random CPUs from pass1 if needed\n");
+#else
+    printf("pass1/pass2 run without affinity pinning on this platform\n");
+#endif
+    printf("pass1 time_total=%.3f ms time_per_iter=%.3f ms\n",
+           pass1.totalMs,
+           pass1.totalMs / static_cast<double>(numIterations));
+    printf("pass1 rss_start=%.2f MB rss_min=%.2f MB rss_max=%.2f MB rss_end=%.2f MB\n",
+           bytes_to_mb(pass1.rssStart),
+           bytes_to_mb(pass1.rssMin),
+           bytes_to_mb(pass1.rssMax),
+           bytes_to_mb(pass1.rssEnd));
+    printf("pass2 time_total=%.3f ms time_per_iter=%.3f ms\n",
+           pass2.totalMs,
+           pass2.totalMs / static_cast<double>(numIterations));
+    printf("pass2 rss_start=%.2f MB rss_min=%.2f MB rss_max=%.2f MB rss_end=%.2f MB\n",
+           bytes_to_mb(pass2.rssStart),
+           bytes_to_mb(pass2.rssMin),
+           bytes_to_mb(pass2.rssMax),
+           bytes_to_mb(pass2.rssEnd));
     printf("checksum=%.6f\n", static_cast<double>(checksum));
     printf("=======================================================\n");
 }
