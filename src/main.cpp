@@ -270,6 +270,7 @@ void benchmark_unique_ptr_rss(InputParser &input) {
         std::unique_ptr<float[]> allocation(new float[newAllocSize]);
         touch_allocation_pages(allocation.get(), newAllocSize);
     }
+    print_memory_usage("RSS after newAllocSize");
 
 #pragma omp parallel
     {
@@ -306,6 +307,7 @@ void benchmark_unique_ptr_rss(InputParser &input) {
         std::unique_ptr<float[]> allocation(new float[newAllocSize]);
         touch_allocation_pages(allocation.get(), newAllocSize);
     }
+    print_memory_usage("RSS after newAllocSize");
 
     printf("Elapsed time: %lld ms\n", static_cast<long long>(durationMs.count()));
     printf("=======================================================\n");
