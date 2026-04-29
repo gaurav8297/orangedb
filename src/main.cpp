@@ -259,7 +259,37 @@ void benchmark_unique_ptr_rss(InputParser &input) {
     const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     print_memory_usage("RSS after loop");
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 50; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        print_memory_usage("RSS after sleep");
+    }
+
+#pragma omp parallel
+    {
+#pragma omp for schedule(static)
+        for (size_t iter = 0; iter < numIterations; ++iter) {
+            {
+                std::unique_ptr<float[]> allocation(new float[elementsPerAllocation]);
+                touch_allocation_pages(allocation.get(), elementsPerAllocation);
+            }
+
+            const size_t completed = completedIterations.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (completed % reportEvery == 0 || completed == numIterations) {
+                const size_t rssBytes = get_current_rss_bytes();
+                const int threadId = omp_get_thread_num();
+#pragma omp critical
+                {
+                    printf("[iter=%zu/%zu thread=%d] RSS: %.2f MB\n",
+                           completed,
+                           numIterations,
+                           threadId,
+                           bytes_to_mb(rssBytes));
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < 50; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
         print_memory_usage("RSS after sleep");
     }
