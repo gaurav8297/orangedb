@@ -258,6 +258,12 @@ void benchmark_unique_ptr_rss(InputParser &input) {
     const auto end = std::chrono::high_resolution_clock::now();
     const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     print_memory_usage("RSS after loop");
+
+    for (int i = 0; i < 10; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        print_memory_usage("RSS after sleep");
+    }
+
     printf("Elapsed time: %lld ms\n", static_cast<long long>(durationMs.count()));
     printf("=======================================================\n");
 }
