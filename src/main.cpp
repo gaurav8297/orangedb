@@ -264,10 +264,11 @@ void benchmark_unique_ptr_rss(InputParser &input) {
         print_memory_usage("RSS after sleep");
     }
 
+    auto newAllocSize = static_cast<int>(elementsPerAllocation * 5.5);
     // Final allocation to see if RSS can grow after sleep
     {
-        std::unique_ptr<float[]> allocation(new float[elementsPerAllocation * 5.5]);
-        touch_allocation_pages(allocation.get(), elementsPerAllocation * 5.5);
+        std::unique_ptr<float[]> allocation(new float[newAllocSize]);
+        touch_allocation_pages(allocation.get(), newAllocSize);
     }
 
 #pragma omp parallel
@@ -302,8 +303,8 @@ void benchmark_unique_ptr_rss(InputParser &input) {
 
     // Final allocation to see if RSS can grow after sleep
     {
-        std::unique_ptr<float[]> allocation(new float[elementsPerAllocation * 5.5]);
-        touch_allocation_pages(allocation.get(), elementsPerAllocation * 5.5);
+        std::unique_ptr<float[]> allocation(new float[newAllocSize]);
+        touch_allocation_pages(allocation.get(), newAllocSize);
     }
 
     printf("Elapsed time: %lld ms\n", static_cast<long long>(durationMs.count()));
