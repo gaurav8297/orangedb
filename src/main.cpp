@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <iostream>
 #include "hnsw.h"
 #include "spdlog/fmt/fmt.h"
@@ -12,6 +13,7 @@
 #include <climits>
 #include <chrono>
 #include <cmath>       // isnan, isinf
+#include <limits>
 #include <memory>
 #include <random>      // mt19937, uniform_int_distribution
 #include <unordered_set>
@@ -91,11 +93,14 @@ using namespace orangedb;
 
 #if defined(__APPLE__)
 #include <mach/mach.h>
+#include <unistd.h>
 #elif defined(__linux__)
 #include <pthread.h>
 #include <sched.h>
 #include <unistd.h>
 #endif
+
+#include <omp.h>
 
 enum CLUSTER_HIRARCHY {
     C_L1,    // 0
@@ -156,6 +161,105 @@ static double bytes_to_mb(size_t bytes) {
 
 static void print_memory_usage(const char *label) {
     printf("%s RSS: %.2f MB\n", label, bytes_to_mb(get_current_rss_bytes()));
+}
+
+static size_t get_page_size_bytes() {
+    const long pageSize = sysconf(_SC_PAGESIZE);
+    return pageSize > 0 ? static_cast<size_t>(pageSize) : 4096;
+}
+
+static void touch_allocation_pages(float *data, size_t count) {
+    if (count == 0) {
+        return;
+    }
+
+    const size_t floatsPerPage = std::max<size_t>(1, get_page_size_bytes() / sizeof(float));
+    for (size_t i = 0; i < count; i += floatsPerPage) {
+        data[i] = static_cast<float>(i);
+    }
+    data[count - 1] = static_cast<float>(count - 1);
+}
+
+void benchmark_unique_ptr_rss(InputParser &input) {
+    const std::string &xStr = input.getCmdOption("-x");
+    const std::string &yStr = input.getCmdOption("-y");
+    const std::string &nStr = input.getCmdOption("-n");
+    const std::string &numThreadsStr = input.getCmdOption("-nThreads");
+
+    if (xStr.empty() || yStr.empty() || nStr.empty() || numThreadsStr.empty()) {
+        printf("Usage: -run benchmarkUniquePtrRss -x <x> -y <y> -n <numIterations> -nThreads <numThreads>\n");
+        return;
+    }
+
+    const size_t x = static_cast<size_t>(std::stoull(xStr));
+    const size_t y = static_cast<size_t>(std::stoull(yStr));
+    const size_t numIterations = static_cast<size_t>(std::stoull(nStr));
+    const int numThreads = std::stoi(numThreadsStr);
+    constexpr size_t reportEvery = 1000;
+
+    if (x == 0 || y == 0 || numIterations == 0 || numThreads <= 0) {
+        printf("Expected positive values for -x, -y, -n, and -nThreads\n");
+        return;
+    }
+
+    if (x > std::numeric_limits<size_t>::max() / y) {
+        printf("Allocation size overflow for x=%zu and y=%zu\n", x, y);
+        return;
+    }
+
+    const size_t elementsPerAllocation = x * y;
+    if (elementsPerAllocation > std::numeric_limits<size_t>::max() / sizeof(float)) {
+        printf("Byte size overflow for x=%zu and y=%zu\n", x, y);
+        return;
+    }
+
+    const size_t bytesPerAllocation = elementsPerAllocation * sizeof(float);
+    std::atomic<size_t> completedIterations{0};
+
+    printf("=======================================================\n");
+    printf("Running unique_ptr RSS benchmark\n");
+    printf("x=%zu y=%zu elementsPerAllocation=%zu bytesPerAllocation=%.2f MB n=%zu nThreads=%d\n",
+           x,
+           y,
+           elementsPerAllocation,
+           bytes_to_mb(bytesPerAllocation),
+           numIterations,
+           numThreads);
+    print_memory_usage("RSS before loop");
+
+    omp_set_num_threads(numThreads);
+    const auto start = std::chrono::high_resolution_clock::now();
+
+#pragma omp parallel
+    {
+#pragma omp for schedule(static)
+        for (size_t iter = 0; iter < numIterations; ++iter) {
+            {
+                std::unique_ptr<float[]> allocation(new float[elementsPerAllocation]);
+                touch_allocation_pages(allocation.get(), elementsPerAllocation);
+            }
+
+            const size_t completed = completedIterations.fetch_add(1, std::memory_order_relaxed) + 1;
+            if (completed % reportEvery == 0 || completed == numIterations) {
+                const size_t rssBytes = get_current_rss_bytes();
+                const int threadId = omp_get_thread_num();
+#pragma omp critical
+                {
+                    printf("[iter=%zu/%zu thread=%d] RSS: %.2f MB\n",
+                           completed,
+                           numIterations,
+                           threadId,
+                           bytes_to_mb(rssBytes));
+                }
+            }
+        }
+    }
+
+    const auto end = std::chrono::high_resolution_clock::now();
+    const auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    print_memory_usage("RSS after loop");
+    printf("Elapsed time: %lld ms\n", static_cast<long long>(durationMs.count()));
+    printf("=======================================================\n");
 }
 
 template<typename Index_>
@@ -7727,6 +7831,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkParallelKnnL2sqr") {
         benchmark_parallel_knn_l2sqr_same_data(input);
+    }
+    else if (run == "benchmarkUniquePtrRss") {
+        benchmark_unique_ptr_rss(input);
     }
 #ifdef CUVS_ENABLED
     else if (run == "benchmarkCuvsBalancedKmeans") {
