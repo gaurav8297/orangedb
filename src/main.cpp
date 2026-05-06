@@ -7737,6 +7737,227 @@ void benchmark_parallel_knn_l2sqr_same_data(InputParser &input) {
     printf("=======================================================\n");
 }
 
+struct ChunkedParallelIndexFlat : faiss::IndexFlat {
+    explicit ChunkedParallelIndexFlat(
+            faiss::idx_t dimension,
+            faiss::MetricType metric,
+            size_t maxParallelism,
+            size_t distanceComputationsPerThread)
+            : faiss::IndexFlat(dimension, metric),
+              maxParallelism_(std::max<size_t>(1, maxParallelism)),
+              distanceComputationsPerThread_(std::max<size_t>(1, distanceComputationsPerThread)) {}
+
+    void search(
+            faiss::idx_t n,
+            const float *x,
+            faiss::idx_t k,
+            float *distances,
+            faiss::idx_t *labels,
+            const faiss::SearchParameters *params = nullptr) const override {
+        CHECK_ARGUMENT(k > 0, "k must be > 0");
+
+        if (params != nullptr && params->sel != nullptr) {
+            faiss::IndexFlat::search(n, x, k, distances, labels, params);
+            return;
+        }
+
+        if (metric_type != faiss::METRIC_L2 && metric_type != faiss::METRIC_INNER_PRODUCT) {
+            faiss::IndexFlat::search(n, x, k, distances, labels, params);
+            return;
+        }
+
+        const size_t numQueries = static_cast<size_t>(n);
+        const size_t topK = static_cast<size_t>(k);
+        const size_t numBase = static_cast<size_t>(ntotal);
+        const size_t dimension = static_cast<size_t>(d);
+        const bool useIP = metric_type == faiss::METRIC_INNER_PRODUCT;
+        faiss::BalancedClusteringDistModifier *distModifier = params ? params->dist_modifier : nullptr;
+        const float worstDistance = useIP
+                                    ? -std::numeric_limits<float>::infinity()
+                                    : std::numeric_limits<float>::infinity();
+
+        std::fill(distances, distances + numQueries * topK, worstDistance);
+        std::fill(labels, labels + numQueries * topK, static_cast<faiss::idx_t>(-1));
+
+        if (numQueries == 0 || numBase == 0) {
+            return;
+        }
+
+        // Match VastIndexFlat's approach: split query rows across workers, while
+        // each worker searches the full centroid table into its output slice.
+        const size_t cappedComputations = numQueries > std::numeric_limits<size_t>::max() / numBase
+                                          ? std::numeric_limits<size_t>::max()
+                                          : numQueries * numBase;
+        size_t parallelism = cappedComputations / distanceComputationsPerThread_;
+        parallelism = std::max<size_t>(1, std::min(maxParallelism_, parallelism));
+        parallelism = std::min(parallelism, numQueries);
+        const size_t chunkSize = numQueries / parallelism;
+        const float *baseVectors = get_xb();
+
+#pragma omp parallel for num_threads(static_cast<int>(parallelism)) schedule(static)
+        for (int64_t chunkIdSigned = 0; chunkIdSigned < static_cast<int64_t>(parallelism); chunkIdSigned++) {
+            const size_t chunkId = static_cast<size_t>(chunkIdSigned);
+            const size_t queryBegin = chunkId * chunkSize;
+            const size_t queryEnd = (chunkId == parallelism - 1) ? numQueries : std::min(queryBegin + chunkSize, numQueries);
+            const size_t actualChunkSize = queryEnd - queryBegin;
+            const float *chunkQueries = x + queryBegin * dimension;
+            float *chunkDistances = distances + queryBegin * topK;
+            faiss::idx_t *chunkLabels = labels + queryBegin * topK;
+
+            if (useIP) {
+                faiss::knn_inner_product(
+                        chunkQueries,
+                        baseVectors,
+                        dimension,
+                        actualChunkSize,
+                        numBase,
+                        topK,
+                        chunkDistances,
+                        chunkLabels,
+                        distModifier,
+                        nullptr);
+            } else {
+                faiss::knn_L2sqr(
+                        chunkQueries,
+                        baseVectors,
+                        dimension,
+                        actualChunkSize,
+                        numBase,
+                        topK,
+                        chunkDistances,
+                        chunkLabels,
+                        nullptr,
+                        distModifier,
+                        nullptr);
+            }
+        }
+    }
+
+private:
+    size_t maxParallelism_;
+    size_t distanceComputationsPerThread_;
+};
+
+void benchmark_kmeans_memory_chunked_parallel_flat(InputParser &input) {
+    const std::string &numVectorsArg = input.getCmdOption("-numVectors");
+    const std::string &numCentroidsArg = input.getCmdOption("-numCentroids");
+    const std::string &dimensionArg = input.getCmdOption("-dim");
+
+    if (numVectorsArg.empty() || numCentroidsArg.empty() || dimensionArg.empty()) {
+        printf("Usage: -run benchmarkKmeansMemoryChunkedParallelFlat -numVectors <n> -numCentroids <k> -dim <d> "
+               "[-nIter 25] [-nThreads 32] [-dcBatchSize 20000] [-runs 2] [-useIP 0] [-seed 1234]\n");
+        return;
+    }
+
+    const size_t numVectors = std::stoull(numVectorsArg);
+    const size_t numCentroids = std::stoull(numCentroidsArg);
+    const size_t dimension = std::stoull(dimensionArg);
+    const int nIter = input.getCmdOption("-nIter").empty() ? 10 : std::stoi(input.getCmdOption("-nIter"));
+    const size_t numThreads = input.getCmdOption("-nThreads").empty() ? 32 : std::stoull(input.getCmdOption("-nThreads"));
+    const size_t dcBatchSize = input.getCmdOption("-dcBatchSize").empty()
+                               ? 20000
+                               : std::stoull(input.getCmdOption("-dcBatchSize"));
+    const size_t numRuns = input.getCmdOption("-runs").empty() ? 2 : std::stoull(input.getCmdOption("-runs"));
+    const int seed = input.getCmdOption("-seed").empty() ? 1234 : std::stoi(input.getCmdOption("-seed"));
+    const bool useIP = !input.getCmdOption("-useIP").empty() && std::stoi(input.getCmdOption("-useIP")) != 0;
+
+    CHECK_ARGUMENT(numVectors > 0, "numVectors must be > 0");
+    CHECK_ARGUMENT(numCentroids > 0, "numCentroids must be > 0");
+    CHECK_ARGUMENT(dimension > 0, "dim must be > 0");
+    CHECK_ARGUMENT(numCentroids <= numVectors, "numCentroids must be <= numVectors");
+    CHECK_ARGUMENT(numThreads > 0, "nThreads must be > 0");
+    CHECK_ARGUMENT(dcBatchSize > 0, "dcBatchSize must be > 0");
+    CHECK_ARGUMENT(numRuns > 0, "runs must be > 0");
+    CHECK_ARGUMENT(nIter > 0, "nIter must be > 0");
+    CHECK_ARGUMENT(dimension <= static_cast<size_t>(std::numeric_limits<int>::max()), "dim must fit in int");
+    CHECK_ARGUMENT(numCentroids <= static_cast<size_t>(std::numeric_limits<int>::max()), "numCentroids must fit in int");
+    CHECK_ARGUMENT(numVectors <= static_cast<size_t>(std::numeric_limits<faiss::idx_t>::max()), "numVectors too large");
+    CHECK_ARGUMENT(numVectors <= std::numeric_limits<size_t>::max() / dimension, "numVectors * dim overflow");
+
+    const size_t totalValues = numVectors * dimension;
+    CHECK_ARGUMENT(totalValues <= std::numeric_limits<size_t>::max() / sizeof(float), "data byte size overflow");
+
+    printf("=======================================================\n");
+    printf("Kmeans RSS benchmark with chunked parallel IndexFlat\n");
+    printf("vectors=%zu centroids=%zu dim=%zu nIter=%d nThreads=%zu dcBatchSize=%zu runs=%zu metric=%s seed=%d\n",
+           numVectors,
+           numCentroids,
+           dimension,
+           nIter,
+           numThreads,
+           dcBatchSize,
+           numRuns,
+           useIP ? "IP" : "L2",
+           seed);
+    printf("=======================================================\n");
+    print_memory_usage("Initial");
+
+    std::vector<float> data(totalValues);
+    faiss::float_rand(data.data(), data.size(), seed);
+    if (useIP) {
+        normalize_vectors(data.data(), static_cast<int>(dimension), numVectors, data.data());
+    }
+    print_memory_usage("After random vector generation");
+
+    const faiss::MetricType metric = useIP ? faiss::METRIC_INNER_PRODUCT : faiss::METRIC_L2;
+    volatile double centroidChecksum = 0.0;
+
+    for (size_t runId = 0; runId < numRuns; runId++) {
+        const size_t rssBefore = get_current_rss_bytes();
+        printf("\nRun %zu/%zu\n", runId + 1, numRuns);
+        printf("Before kmeans RSS: %.2f MB\n", bytes_to_mb(rssBefore));
+
+        size_t rssAfterTrain = 0;
+        double elapsedMs = 0.0;
+        size_t iterationsCompleted = 0;
+        float finalObjective = 0.0f;
+
+        {
+            faiss::ClusteringParameters cp;
+            cp.niter = nIter;
+            cp.verbose = true;
+            cp.seed = seed + static_cast<int>(runId);
+            cp.max_points_per_centroid = INT_MAX;
+            if (useIP) {
+                cp.spherical = true;
+            }
+
+            faiss::Clustering clustering(static_cast<int>(dimension), static_cast<int>(numCentroids), cp);
+            ChunkedParallelIndexFlat assigner(static_cast<faiss::idx_t>(dimension), metric, numThreads, dcBatchSize);
+
+            const auto start = std::chrono::high_resolution_clock::now();
+            clustering.train(static_cast<faiss::idx_t>(numVectors), data.data(), assigner);
+            const auto end = std::chrono::high_resolution_clock::now();
+            elapsedMs = std::chrono::duration<double, std::milli>(end - start).count();
+            rssAfterTrain = get_current_rss_bytes();
+            iterationsCompleted = clustering.iteration_stats.size();
+            if (!clustering.iteration_stats.empty()) {
+                finalObjective = clustering.iteration_stats.back().obj;
+            }
+            if (!clustering.centroids.empty()) {
+                centroidChecksum += clustering.centroids.front();
+                centroidChecksum += clustering.centroids.back();
+            }
+        }
+
+        const size_t rssAfterCleanup = get_current_rss_bytes();
+        printf("After kmeans RSS: %.2f MB (delta from before: %.2f MB)\n",
+               bytes_to_mb(rssAfterTrain),
+               bytes_to_mb(rssAfterTrain) - bytes_to_mb(rssBefore));
+        printf("After kmeans object cleanup RSS: %.2f MB (delta from before: %.2f MB)\n",
+               bytes_to_mb(rssAfterCleanup),
+               bytes_to_mb(rssAfterCleanup) - bytes_to_mb(rssBefore));
+        printf("Training time: %.3f ms, iterations: %zu, final objective: %.6f\n",
+               elapsedMs,
+               iterationsCompleted,
+               finalObjective);
+    }
+
+    printf("\nchecksum=%.6f\n", static_cast<double>(centroidChecksum));
+    print_memory_usage("Final");
+    printf("=======================================================\n");
+}
+
 #ifdef CUVS_ENABLED
 void benchmark_cuvs_balanced_kmeans_wrapper(InputParser &input) {
     const std::string &baseVectorPath = input.getCmdOption("-baseVectorPath");
@@ -7882,6 +8103,9 @@ int main(int argc, char **argv) {
     }
     else if (run == "benchmarkParallelKnnL2sqr") {
         benchmark_parallel_knn_l2sqr_same_data(input);
+    }
+    else if (run == "benchmarkKmeansMemoryChunkedParallelFlat") {
+        benchmark_kmeans_memory_chunked_parallel_flat(input);
     }
     else if (run == "benchmarkUniquePtrRss") {
         benchmark_unique_ptr_rss(input);
