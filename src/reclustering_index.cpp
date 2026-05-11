@@ -2799,7 +2799,7 @@ namespace orangedb {
                     pct,
                     thrPct2,
                     gap,
-                    thrGap
+                    thrGap,
                     finiteGap ? "finite" : "na",
                     cond1 ? 1 : 0,
                     cond2 ? 1 : 0,
