@@ -2793,10 +2793,13 @@ namespace orangedb {
                 std::snprintf(
                     buf,
                     sizeof(buf),
-                    "[m=%llu b=%u pct=%.4f gap=%s c1=%d c2=%d hit=%d] ",
+                    "[m=%llu b=%u pct=%.4f<%.4f gap=%.4f<%.4f gap=%s c1=%d c2=%d hit=%d] ",
                     static_cast<unsigned long long>(miniId),
                     bucket,
                     pct,
+                    thrPct2,
+                    gap,
+                    thrGap
                     finiteGap ? "finite" : "na",
                     cond1 ? 1 : 0,
                     cond2 ? 1 : 0,
