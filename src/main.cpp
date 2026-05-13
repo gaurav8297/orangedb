@@ -4265,6 +4265,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         fprintf(stderr, "benchmarkFastReclustering requires -baseVectorPath, -queryVectorPath, and -groundTruthPath\n");
         exit(1);
     }
+    const std::string parquetColumnName = input.getCmdOption("-parquetColumnName").empty()
+                                              ? "emb"
+                                              : input.getCmdOption("-parquetColumnName");
 
     const bool isParquet = getBoolOption("-isParquet", false);
     int numInserts = getIntOption("-numInserts", 100);
@@ -4345,7 +4348,8 @@ void benchmark_fast_reclustering(InputParser &input) {
                 fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
                 exit(1);
             }
-            auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &baseNumVectors);
+            auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &baseNumVectors,
+                                               parquetColumnName);
             if (!status.ok()) {
                 fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
                 exit(1);
@@ -4371,7 +4375,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                 // Read single file
                 std::vector<std::string> paths = {filePaths[fileIdx]};
                 size_t fileNumVectors;
-                auto data = readParquetFiles(paths, &baseDimension, &fileNumVectors);
+                auto data = readParquetFiles(paths, &baseDimension, &fileNumVectors, parquetColumnName);
 
                 // Split file data into insertsPerFile batches
                 size_t vectorsPerBatch = fileNumVectors / insertsPerFile;
