@@ -400,3 +400,6 @@ strace -f -e trace=clone ./build/release/bin/orangedb_main -run checkOmpThreads 
     -factor 2 \
     -readFromDisk 0 \
     -storagePath /vast/data/faiss_ivf_flat_index.bin
+
+
+./build/release/bin/orangedb_main -run benchmarkFastReclustering -baseVectorPath /home/centos/msmarco_v2_1_embed_english_v3/passages_parquet/ -queryVectorPath /home/centos/msmarco_v2_1_embed_english_v3/queries.fvecs -groundTruthPath /home/centos/msmarco_v2_1_embed_english_v3/gt_10.bin -isParquet 1 -k 100 -numInserts 20 -numVectors 20000000 -numIters 10 -megaCentroidSize 1000 -miniCentroidSize 1000 -numThreads 40 -iterations 8 -fast 0 -lambda 0 -nMegaProbes 30 -nMiniProbes 1000,3000 -numQueries 50 -numMegaReclusterCentroids 1 -reclusterOnScore 0 -readFromDisk 0 -storagePath /vast/data/msmarco_10M_clustering.bin -useIP 1 -quantTrainPercentage 0.1 -quantBuild 0 -avgSubCellSize 1000 -nMiniProbesForBadCluster 50 -nMegaRecluster 1000000000 -nFiles 10 -hardClusterSizeLimit 0 -kmeansSamplingRatio 0.2 -numFixBoundaries 10 -scoreChangeThreshold 0.25 -centroidChangeThreshold 0.7 -useMSEToRecluster 0 -umap_mode 0 -overlapScoreChangeThreshold 0.2 -LshNbits 1 -useCuvsKmeans 0 -cuvsGpuDevice 0 > msmarco_10_files.out

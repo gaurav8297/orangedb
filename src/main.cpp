@@ -4310,6 +4310,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int LshNbits = getIntOption("-LshNbits", 8);
     const bool useCuvsKmeans = getBoolOption("-useCuvsKmeans", false);
     const int cuvsGpuDevice = getIntOption("-cuvsGpuDevice", 0);
+    const bool enableStoppingCondition = getBoolOption("-enableStoppingCondition", true);
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -4387,7 +4388,7 @@ void benchmark_fast_reclustering(InputParser &input) {
                     totalVectors += batchSize;
                     batchCount++;
 
-                    if (fileIdx == numFiles - 2 && batchIdx == insertsPerFile - 1) {
+                    if (enableStoppingCondition && fileIdx == numFiles - 2 && batchIdx == insertsPerFile - 1) {
                         // One file before last, adjust insertsPerFile to match total numInserts. Run reclustering
                         // index.storeMSEScoreForMegaClusters();
                         // index.computeOverlapScores();
@@ -4560,8 +4561,11 @@ void benchmark_fast_reclustering(InputParser &input) {
         // quantizedRecall = get_quantized_recall(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,
                                              // nMegaProbes, nMiniProbes);
         if (numMegaReclusterCentroids == 1) {
-            // index.reclusterFast();
-            index.reclusterBasedOnWrongAssignment();
+            if (enableStoppingCondition) {
+                index.reclusterBasedOnWrongAssignment();
+            } else {
+                index.reclusterFast();
+            }
             // std::vector<vector_idx_t> megaClusterIds;
             // index.getMegaClusterIds(megaClusterIds);
             // for (auto megaClusterId : megaClusterIds) {
