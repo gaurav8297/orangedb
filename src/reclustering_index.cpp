@@ -1623,6 +1623,18 @@ namespace orangedb {
             }
         }
 
+        std::unordered_map<vector_idx_t, vector_idx_t> oldVectorToMini;
+        for (const auto oldMiniId : oldMiniClusterIds) {
+            if (oldMiniId >= miniClusterVectorIds.size()) {
+                continue;
+            }
+            const auto &vectorIds = miniClusterVectorIds[oldMiniId];
+            oldVectorToMini.reserve(oldVectorToMini.size() + vectorIds.size());
+            for (const auto vectorId : vectorIds) {
+                oldVectorToMini[vectorId] = oldMiniId;
+            }
+        }
+
         // Copy the mini centroids, clusters and vector ids and fix the miniClusterIds
         std::unordered_map<vector_idx_t, vector_idx_t> newToOldCentroidIdMap;
         auto newMiniCentroidsSize = newMiniCentroids.size() / dim;
@@ -1725,6 +1737,9 @@ namespace orangedb {
                 id = newToOldCentroidIdMap[id];
             }
         }
+
+        updateMovementCountsForNewMiniAssignments(
+            oldVectorToMini, newMiniClusterVectorIds, newToOldCentroidIdMap);
 
         // Copy the mega clusters
         return appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
@@ -2834,6 +2849,154 @@ namespace orangedb {
         updateWrongAssignmentBucketStability(stabilityDeltaFraction);
         std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToReclusterByWrongAssignment(minTriggerCount);
         printf("reclusterBasedOnWrongAssignment: Reclustering %zu megacentroids\n", megaClusterIds.size());
+        reclusterFastMegaCentroids(megaClusterIds);
+    }
+
+    void ReclusteringIndex::ensureVectorMovementCountsSize(vector_idx_t vectorId) {
+        const size_t requiredSize = static_cast<size_t>(vectorId) + 1;
+        if (vectorMovementCounts.size() < requiredSize) {
+            vectorMovementCounts.resize(requiredSize, 0);
+        }
+    }
+
+    void ReclusteringIndex::updateMovementCountsForNewMiniAssignments(
+        const std::unordered_map<vector_idx_t, vector_idx_t> &oldVectorToMini,
+        const std::vector<std::vector<vector_idx_t>> &newMiniClusterVectorIds,
+        const std::unordered_map<vector_idx_t, vector_idx_t> &newToOldCentroidIdMap) {
+        const int saturation = std::max(1, config.movementSaturationCount);
+        size_t movedCount = 0;
+        size_t saturatedCount = 0;
+        std::vector<size_t> newCountHistogram(static_cast<size_t>(saturation) + 1, 0);
+        for (size_t newMiniId = 0; newMiniId < newMiniClusterVectorIds.size(); newMiniId++) {
+            auto mappedIt = newToOldCentroidIdMap.find(static_cast<vector_idx_t>(newMiniId));
+            if (mappedIt == newToOldCentroidIdMap.end()) {
+                continue;
+            }
+            const vector_idx_t actualMiniId = mappedIt->second;
+            for (const auto vectorId : newMiniClusterVectorIds[newMiniId]) {
+                auto oldIt = oldVectorToMini.find(vectorId);
+                if (oldIt == oldVectorToMini.end() || oldIt->second == actualMiniId) {
+                    continue;
+                }
+                ensureVectorMovementCountsSize(vectorId);
+                auto &count = vectorMovementCounts[static_cast<size_t>(vectorId)];
+                if (count < saturation) {
+                    ++count;
+                }
+                if (count >= saturation) {
+                    ++saturatedCount;
+                }
+                ++newCountHistogram[std::min(static_cast<int>(count), saturation)];
+                ++movedCount;
+            }
+        }
+        printf("updateMovementCountsForNewMiniAssignments: moved=%zu saturated_after_move=%zu saturation=%d",
+               movedCount, saturatedCount, saturation);
+        for (size_t i = 0; i < newCountHistogram.size(); i++) {
+            printf(" count%zu=%zu", i, newCountHistogram[i]);
+        }
+        printf("\n");
+    }
+
+    double ReclusteringIndex::getMovementWeight(uint8_t count) const {
+        const int saturation = std::max(1, config.movementSaturationCount);
+        const int clampedCount = std::min(static_cast<int>(count), saturation);
+        if (clampedCount == 0) {
+            return std::numeric_limits<double>::infinity();
+        }
+        if (clampedCount >= saturation) {
+            return 0.0;
+        }
+        const double decay = std::clamp(static_cast<double>(config.movementScoreDecay), 0.0, 1.0);
+        return static_cast<double>(config.movementScoreScale)
+            * std::pow(decay, static_cast<double>(clampedCount - 1));
+    }
+
+    double ReclusteringIndex::computeMiniMovementScore(vector_idx_t miniId) const {
+        if (miniId >= miniClusterVectorIds.size()) {
+            return 0.0;
+        }
+        const auto &vectorIds = miniClusterVectorIds[miniId];
+        if (vectorIds.empty()) {
+            return 0.0;
+        }
+        double score = 0.0;
+        for (const auto vectorId : vectorIds) {
+            const uint8_t count = static_cast<size_t>(vectorId) < vectorMovementCounts.size()
+                                      ? vectorMovementCounts[static_cast<size_t>(vectorId)]
+                                      : 0;
+            const double weight = getMovementWeight(count);
+            if (!std::isfinite(weight)) {
+                return weight;
+            }
+            score += weight;
+        }
+        return score / static_cast<double>(vectorIds.size());
+    }
+
+    std::vector<vector_idx_t> ReclusteringIndex::getMegaCentroidsToReclusterByMovementScore() const {
+        std::vector<vector_idx_t> megaCentroidsToRecluster;
+        const int minBadMinis = std::max(1, config.movementMinBadMinis);
+        const double threshold = static_cast<double>(config.movementScoreThreshold);
+        const int saturation = std::max(1, config.movementSaturationCount);
+        for (size_t megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
+            int badMiniCount = 0;
+            size_t megaVectorCount = 0;
+            for (const auto miniId : megaMiniCentroidIds[megaId]) {
+                const double miniScore = computeMiniMovementScore(miniId);
+                const size_t miniSize = miniId < miniClusterVectorIds.size() ? miniClusterVectorIds[miniId].size() : 0;
+                megaVectorCount += miniSize;
+                if (miniScore > threshold) {
+                    ++badMiniCount;
+                    std::vector<size_t> histogram(static_cast<size_t>(saturation) + 1, 0);
+                    if (miniId < miniClusterVectorIds.size()) {
+                        for (const auto vectorId : miniClusterVectorIds[miniId]) {
+                            const uint8_t count = static_cast<size_t>(vectorId) < vectorMovementCounts.size()
+                                                      ? vectorMovementCounts[static_cast<size_t>(vectorId)]
+                                                      : 0;
+                            histogram[std::min(static_cast<int>(count), saturation)]++;
+                        }
+                    }
+                    printf("movementScore bad_mini: mega_id=%zu mini_id=%llu size=%zu score=%.6f threshold=%.6f",
+                           megaId,
+                           static_cast<unsigned long long>(miniId),
+                           miniSize,
+                           miniScore,
+                           threshold);
+                    for (size_t i = 0; i < histogram.size(); i++) {
+                        printf(" count%zu=%zu", i, histogram[i]);
+                    }
+                    printf("\n");
+                }
+            }
+            const bool selected = badMiniCount >= minBadMinis;
+            printf(
+                "getMegaCentroidsToReclusterByMovementScore: mega_id=%zu selected=%s bad_minis=%d/%d total_minis=%zu total_vectors=%zu threshold=%.6f\n",
+                megaId,
+                selected ? "yes" : "no",
+                badMiniCount,
+                minBadMinis,
+                megaMiniCentroidIds[megaId].size(),
+                megaVectorCount,
+                threshold);
+            if (selected) {
+                megaCentroidsToRecluster.push_back(static_cast<vector_idx_t>(megaId));
+            }
+        }
+        printf("getMegaCentroidsToReclusterByMovementScore: %zu out of %zu megacentroids meet criteria\n",
+               megaCentroidsToRecluster.size(), megaMiniCentroidIds.size());
+        return megaCentroidsToRecluster;
+    }
+
+    void ReclusteringIndex::reclusterBasedOnMovementScore() {
+        printf("reclusterBasedOnMovementScore: saturation=%d scale=%.6f decay=%.6f threshold=%.6f min_bad_minis=%d\n",
+               config.movementSaturationCount,
+               config.movementScoreScale,
+               config.movementScoreDecay,
+               config.movementScoreThreshold,
+               config.movementMinBadMinis);
+        std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToReclusterByMovementScore();
+        printf("reclusterBasedOnMovementScore: Reclustering %zu megacentroids\n", megaClusterIds.size());
         reclusterFastMegaCentroids(megaClusterIds);
     }
 
@@ -4506,6 +4669,27 @@ namespace orangedb {
             out.write(reinterpret_cast<const char *>(&entry.second.count), sizeof(entry.second.count));
         }
 
+        // Write optional movement-score stopping state.
+        constexpr uint64_t movementStateMagic = 0x4f44424d4f564531ULL; // "ODBMOVE1"
+        out.write(reinterpret_cast<const char *>(&movementStateMagic), sizeof(movementStateMagic));
+        out.write(reinterpret_cast<const char *>(&config.movementSaturationCount), sizeof(config.movementSaturationCount));
+        out.write(reinterpret_cast<const char *>(&config.movementScoreDecay), sizeof(config.movementScoreDecay));
+        out.write(reinterpret_cast<const char *>(&config.movementScoreScale), sizeof(config.movementScoreScale));
+        out.write(reinterpret_cast<const char *>(&config.movementScoreThreshold), sizeof(config.movementScoreThreshold));
+        out.write(reinterpret_cast<const char *>(&config.movementMinBadMinis), sizeof(config.movementMinBadMinis));
+        size_t movementCountSize = std::max(vectorMovementCounts.size(), size);
+        out.write(reinterpret_cast<const char *>(&movementCountSize), sizeof(movementCountSize));
+        if (movementCountSize > 0) {
+            if (!vectorMovementCounts.empty()) {
+                out.write(reinterpret_cast<const char *>(vectorMovementCounts.data()),
+                          vectorMovementCounts.size() * sizeof(uint8_t));
+            }
+            const uint8_t zeroCount = 0;
+            for (size_t i = vectorMovementCounts.size(); i < movementCountSize; i++) {
+                out.write(reinterpret_cast<const char *>(&zeroCount), sizeof(zeroCount));
+            }
+        }
+
         // Write stats
         out.write(reinterpret_cast<const char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
         out.write(reinterpret_cast<const char *>(&stats.totalQueries), sizeof(stats.totalQueries));
@@ -4707,13 +4891,34 @@ namespace orangedb {
             globalBucketOverlapHistory.emplace(bucket, history);
         }
 
-        // Read stats
-        in.read(reinterpret_cast<char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
+        // Read optional movement-score stopping state, then stats. Older files start stats here.
+        constexpr uint64_t movementStateMagic = 0x4f44424d4f564531ULL; // "ODBMOVE1"
+        uint64_t statsOrMagic = 0;
+        in.read(reinterpret_cast<char *>(&statsOrMagic), sizeof(statsOrMagic));
+        if (statsOrMagic == movementStateMagic) {
+            in.read(reinterpret_cast<char *>(&config.movementSaturationCount), sizeof(config.movementSaturationCount));
+            in.read(reinterpret_cast<char *>(&config.movementScoreDecay), sizeof(config.movementScoreDecay));
+            in.read(reinterpret_cast<char *>(&config.movementScoreScale), sizeof(config.movementScoreScale));
+            in.read(reinterpret_cast<char *>(&config.movementScoreThreshold), sizeof(config.movementScoreThreshold));
+            in.read(reinterpret_cast<char *>(&config.movementMinBadMinis), sizeof(config.movementMinBadMinis));
+            size_t movementCountSize = 0;
+            in.read(reinterpret_cast<char *>(&movementCountSize), sizeof(movementCountSize));
+            vectorMovementCounts.resize(movementCountSize);
+            if (movementCountSize > 0) {
+                in.read(reinterpret_cast<char *>(vectorMovementCounts.data()), movementCountSize * sizeof(uint8_t));
+            }
+            in.read(reinterpret_cast<char *>(&stats.numDistanceCompForSearch), sizeof(stats.numDistanceCompForSearch));
+        } else {
+            stats.numDistanceCompForSearch = statsOrMagic;
+        }
         in.read(reinterpret_cast<char *>(&stats.totalQueries), sizeof(stats.totalQueries));
         in.read(reinterpret_cast<char *>(&stats.numDistanceCompForRecluster), sizeof(stats.numDistanceCompForRecluster));
         in.read(reinterpret_cast<char *>(&stats.totalReclusters), sizeof(stats.totalReclusters));
         in.read(reinterpret_cast<char *>(&stats.totalDataWrittenBySystem), sizeof(stats.totalDataWrittenBySystem));
         in.read(reinterpret_cast<char *>(&stats.totalDataWrittenByUser), sizeof(stats.totalDataWrittenByUser));
+        if (vectorMovementCounts.size() < size) {
+            vectorMovementCounts.resize(size, 0);
+        }
         in.close();
     }
 

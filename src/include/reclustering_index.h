@@ -83,6 +83,12 @@ namespace orangedb {
         int overlapWorstAvgCount = 30;
         // Threshold for overlap score change to trigger reclustering
         float overlapScoreChangeThreshold = 0.05;
+        // Movement-count stopping parameters
+        int movementSaturationCount = 5;
+        float movementScoreDecay = 0.4;
+        float movementScoreScale = 2.5;
+        float movementScoreThreshold = 0.05;
+        int movementMinBadMinis = 5;
         // Use cuVS GPU k-means instead of Faiss CPU k-means
         bool useCuvsKmeans = false;
         // GPU device ID for cuVS k-means
@@ -204,6 +210,9 @@ namespace orangedb {
 
         // Reclusters selected megas based on wrong-assignment logic.
         void reclusterBasedOnWrongAssignment(float stabilityDeltaFraction = 0.04f, int minTriggerCount = 5);
+
+        // Reclusters selected megas based on saturated vector movement counts.
+        void reclusterBasedOnMovementScore();
 
         // Prints stats over worst-mini wrong-assignment percentages grouped by LSH bucket.
         void printWrongAssignmentStatsForWorstMinis();
@@ -352,6 +361,19 @@ namespace orangedb {
 
         WrongAssignmentBucketStats computeWrongAssignmentBucketStats(
             const std::vector<double> &wrongPcts, const std::vector<double> &gapsAligned) const;
+
+        void ensureVectorMovementCountsSize(vector_idx_t vectorId);
+
+        void updateMovementCountsForNewMiniAssignments(
+            const std::unordered_map<vector_idx_t, vector_idx_t> &oldVectorToMini,
+            const std::vector<std::vector<vector_idx_t>> &newMiniClusterVectorIds,
+            const std::unordered_map<vector_idx_t, vector_idx_t> &newToOldCentroidIdMap);
+
+        double getMovementWeight(uint8_t count) const;
+
+        double computeMiniMovementScore(vector_idx_t miniId) const;
+
+        std::vector<vector_idx_t> getMegaCentroidsToReclusterByMovementScore() const;
 
         void resetInputBuffer();
 
@@ -640,6 +662,7 @@ namespace orangedb {
         std::vector<double> wrongAssignmentScores;
         std::vector<double> wrongAssignmentBoundaryAvgRelativeGap;
         std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
+        std::vector<uint8_t> vectorMovementCounts;
 
         // Minicluster subcells
         std::vector<SubCells> miniClusterSubCells;

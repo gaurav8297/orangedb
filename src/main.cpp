@@ -4314,6 +4314,12 @@ void benchmark_fast_reclustering(InputParser &input) {
     const bool useCuvsKmeans = getBoolOption("-useCuvsKmeans", false);
     const int cuvsGpuDevice = getIntOption("-cuvsGpuDevice", 0);
     const bool enableStoppingCondition = getBoolOption("-enableStoppingCondition", true);
+    const std::string stoppingConditionStrategy = getStringOption("-stoppingConditionStrategy", "wrongAssignment");
+    const int movementSaturationCount = getIntOption("-movementSaturationCount", 5);
+    const float movementScoreDecay = getFloatOption("-movementScoreDecay", 0.4f);
+    const float movementScoreScale = getFloatOption("-movementScoreScale", 2.5f);
+    const float movementScoreThreshold = getFloatOption("-movementScoreThreshold", 0.05f);
+    const int movementMinBadMinis = getIntOption("-movementMinBadMinis", 5);
     omp_set_num_threads(numThreads);
 
     size_t queryDimension, queryNumVectors;
@@ -4325,6 +4331,11 @@ void benchmark_fast_reclustering(InputParser &input) {
                                    0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio,
                                    scoreChangeThreshold, centroidChangeThreshold, 0.1, LshNbits, 20, 30,
                                    overlapScoreChangeThreshold, useCuvsKmeans, cuvsGpuDevice);
+    config.movementSaturationCount = movementSaturationCount;
+    config.movementScoreDecay = movementScoreDecay;
+    config.movementScoreScale = movementScoreScale;
+    config.movementScoreThreshold = movementScoreThreshold;
+    config.movementMinBadMinis = movementMinBadMinis;
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
     loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
@@ -4339,6 +4350,21 @@ void benchmark_fast_reclustering(InputParser &input) {
     if (readFromDisk) {
         index = ReclusteringIndex(storagePath, &rng);
         index.config.overlapScoreChangeThreshold = overlapScoreChangeThreshold;
+        if (!input.getCmdOption("-movementSaturationCount").empty()) {
+            index.config.movementSaturationCount = movementSaturationCount;
+        }
+        if (!input.getCmdOption("-movementScoreDecay").empty()) {
+            index.config.movementScoreDecay = movementScoreDecay;
+        }
+        if (!input.getCmdOption("-movementScoreScale").empty()) {
+            index.config.movementScoreScale = movementScoreScale;
+        }
+        if (!input.getCmdOption("-movementScoreThreshold").empty()) {
+            index.config.movementScoreThreshold = movementScoreThreshold;
+        }
+        if (!input.getCmdOption("-movementMinBadMinis").empty()) {
+            index.config.movementMinBadMinis = movementMinBadMinis;
+        }
     } else {
         // Read dataset
         std::vector<std::string> filePaths;
@@ -4402,7 +4428,11 @@ void benchmark_fast_reclustering(InputParser &input) {
                             // index.updateOverlapHistory();
                             index.reclusterAllMegaCentroids(nMegaRecluster);
                             // index.printWrongAssignmentStatsForWorstMinis();
-                            index.reclusterBasedOnWrongAssignment();
+                            if (stoppingConditionStrategy == "movement") {
+                                index.reclusterBasedOnMovementScore();
+                            } else {
+                                index.reclusterBasedOnWrongAssignment();
+                            }
                             // index.storeMSEScoreForMegaClusters();
                             // index.computeOverlapScores();
                             // index.reclusterBasedOnOverlapHistory();
@@ -4566,7 +4596,11 @@ void benchmark_fast_reclustering(InputParser &input) {
                                              // nMegaProbes, nMiniProbes);
         if (numMegaReclusterCentroids == 1) {
             if (enableStoppingCondition) {
-                index.reclusterBasedOnWrongAssignment();
+                if (stoppingConditionStrategy == "movement") {
+                    index.reclusterBasedOnMovementScore();
+                } else {
+                    index.reclusterBasedOnWrongAssignment();
+                }
             } else {
                 index.reclusterFast();
             }
