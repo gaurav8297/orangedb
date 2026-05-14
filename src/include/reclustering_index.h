@@ -84,10 +84,9 @@ namespace orangedb {
         // Threshold for overlap score change to trigger reclustering
         float overlapScoreChangeThreshold = 0.05;
         // Movement-count stopping parameters
-        int movementSaturationCount = 5;
-        float movementScoreDecay = 0.4;
-        float movementScoreScale = 2.5;
-        float movementScoreThreshold = 0.05;
+        float movementMinTolerancePercent = 5.0;
+        float movementMaxTolerancePercent = 80.0;
+        int movementToleranceParts = 3;
         int movementMinBadMinis = 5;
         // Use cuVS GPU k-means instead of Faiss CPU k-means
         bool useCuvsKmeans = false;

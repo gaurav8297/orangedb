@@ -4315,10 +4315,9 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int cuvsGpuDevice = getIntOption("-cuvsGpuDevice", 0);
     const bool enableStoppingCondition = getBoolOption("-enableStoppingCondition", true);
     const std::string stoppingConditionStrategy = getStringOption("-stoppingConditionStrategy", "wrongAssignment");
-    const int movementSaturationCount = getIntOption("-movementSaturationCount", 5);
-    const float movementScoreDecay = getFloatOption("-movementScoreDecay", 0.4f);
-    const float movementScoreScale = getFloatOption("-movementScoreScale", 2.5f);
-    const float movementScoreThreshold = getFloatOption("-movementScoreThreshold", 0.05f);
+    const int movementToleranceParts = getIntOption("-movementToleranceParts", 3);
+    const float movementMinTolerancePercent = getFloatOption("-movementMinTolerancePercent", 5.0f);
+    const float movementMaxTolerancePercent = getFloatOption("-movementMaxTolerancePercent", 80.0f);
     const int movementMinBadMinis = getIntOption("-movementMinBadMinis", 5);
     omp_set_num_threads(numThreads);
 
@@ -4331,10 +4330,9 @@ void benchmark_fast_reclustering(InputParser &input) {
                                    0, 0, quantTrainPercentage, hardClusterSizeLimit, kmeansSamplingRatio,
                                    scoreChangeThreshold, centroidChangeThreshold, 0.1, LshNbits, 20, 30,
                                    overlapScoreChangeThreshold, useCuvsKmeans, cuvsGpuDevice);
-    config.movementSaturationCount = movementSaturationCount;
-    config.movementScoreDecay = movementScoreDecay;
-    config.movementScoreScale = movementScoreScale;
-    config.movementScoreThreshold = movementScoreThreshold;
+    config.movementMinTolerancePercent = movementMinTolerancePercent;
+    config.movementMaxTolerancePercent = movementMaxTolerancePercent;
+    config.movementToleranceParts = movementToleranceParts;
     config.movementMinBadMinis = movementMinBadMinis;
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
     auto *gtVecs = new vector_idx_t[queryNumVectors * k];
@@ -4350,17 +4348,14 @@ void benchmark_fast_reclustering(InputParser &input) {
     if (readFromDisk) {
         index = ReclusteringIndex(storagePath, &rng);
         index.config.overlapScoreChangeThreshold = overlapScoreChangeThreshold;
-        if (!input.getCmdOption("-movementSaturationCount").empty()) {
-            index.config.movementSaturationCount = movementSaturationCount;
+        if (!input.getCmdOption("-movementMinTolerancePercent").empty()) {
+            index.config.movementMinTolerancePercent = movementMinTolerancePercent;
         }
-        if (!input.getCmdOption("-movementScoreDecay").empty()) {
-            index.config.movementScoreDecay = movementScoreDecay;
+        if (!input.getCmdOption("-movementMaxTolerancePercent").empty()) {
+            index.config.movementMaxTolerancePercent = movementMaxTolerancePercent;
         }
-        if (!input.getCmdOption("-movementScoreScale").empty()) {
-            index.config.movementScoreScale = movementScoreScale;
-        }
-        if (!input.getCmdOption("-movementScoreThreshold").empty()) {
-            index.config.movementScoreThreshold = movementScoreThreshold;
+        if (!input.getCmdOption("-movementToleranceParts").empty()) {
+            index.config.movementToleranceParts = movementToleranceParts;
         }
         if (!input.getCmdOption("-movementMinBadMinis").empty()) {
             index.config.movementMinBadMinis = movementMinBadMinis;

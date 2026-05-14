@@ -2863,8 +2863,8 @@ namespace orangedb {
         const std::unordered_map<vector_idx_t, vector_idx_t> &oldVectorToMini,
         const std::vector<std::vector<vector_idx_t>> &newMiniClusterVectorIds,
         const std::unordered_map<vector_idx_t, vector_idx_t> &newToOldCentroidIdMap) {
-        const int saturation = std::max(1, config.movementSaturationCount);
-        size_t movedCount = 0;
+        const int saturation = std::max(1, config.movementToleranceParts) + 1;
+        size_t updatedCount = 0;
         size_t saturatedCount = 0;
         std::vector<size_t> newCountHistogram(static_cast<size_t>(saturation) + 1, 0);
         for (size_t newMiniId = 0; newMiniId < newMiniClusterVectorIds.size(); newMiniId++) {
@@ -2872,10 +2872,9 @@ namespace orangedb {
             if (mappedIt == newToOldCentroidIdMap.end()) {
                 continue;
             }
-            const vector_idx_t actualMiniId = mappedIt->second;
             for (const auto vectorId : newMiniClusterVectorIds[newMiniId]) {
                 auto oldIt = oldVectorToMini.find(vectorId);
-                if (oldIt == oldVectorToMini.end() || oldIt->second == actualMiniId) {
+                if (oldIt == oldVectorToMini.end()) {
                     continue;
                 }
                 ensureVectorMovementCountsSize(vectorId);
@@ -2887,11 +2886,11 @@ namespace orangedb {
                     ++saturatedCount;
                 }
                 ++newCountHistogram[std::min(static_cast<int>(count), saturation)];
-                ++movedCount;
+                ++updatedCount;
             }
         }
-        printf("updateMovementCountsForNewMiniAssignments: moved=%zu saturated_after_move=%zu saturation=%d",
-               movedCount, saturatedCount, saturation);
+        printf("updateMovementCountsForNewMiniAssignments: updated=%zu saturated_after_update=%zu saturation=%d",
+               updatedCount, saturatedCount, saturation);
         for (size_t i = 0; i < newCountHistogram.size(); i++) {
             printf(" count%zu=%zu", i, newCountHistogram[i]);
         }
@@ -2899,17 +2898,22 @@ namespace orangedb {
     }
 
     double ReclusteringIndex::getMovementWeight(uint8_t count) const {
-        const int saturation = std::max(1, config.movementSaturationCount);
-        const int clampedCount = std::min(static_cast<int>(count), saturation);
-        if (clampedCount == 0) {
+        const int toleranceParts = std::max(1, config.movementToleranceParts);
+        const int clampedCount = static_cast<int>(count);
+        if (clampedCount <= 0) {
             return std::numeric_limits<double>::infinity();
         }
-        if (clampedCount >= saturation) {
+        if (clampedCount > toleranceParts) {
             return 0.0;
         }
-        const double decay = std::clamp(static_cast<double>(config.movementScoreDecay), 0.0, 1.0);
-        return static_cast<double>(config.movementScoreScale)
-            * std::pow(decay, static_cast<double>(clampedCount - 1));
+        const double minTolerance =
+            std::max(1e-9, static_cast<double>(config.movementMinTolerancePercent) / 100.0);
+        const double maxTolerance =
+            std::max(minTolerance, static_cast<double>(config.movementMaxTolerancePercent) / 100.0);
+        const double exponent =
+            toleranceParts == 1 ? 0.0 : static_cast<double>(clampedCount - 1) / static_cast<double>(toleranceParts - 1);
+        const double toleratedFraction = minTolerance * std::pow(maxTolerance / minTolerance, exponent);
+        return minTolerance / toleratedFraction;
     }
 
     double ReclusteringIndex::computeMiniMovementScore(vector_idx_t miniId) const {
@@ -2937,8 +2941,9 @@ namespace orangedb {
     std::vector<vector_idx_t> ReclusteringIndex::getMegaCentroidsToReclusterByMovementScore() const {
         std::vector<vector_idx_t> megaCentroidsToRecluster;
         const int minBadMinis = std::max(1, config.movementMinBadMinis);
-        const double threshold = static_cast<double>(config.movementScoreThreshold);
-        const int saturation = std::max(1, config.movementSaturationCount);
+        const double threshold =
+            std::max(1e-9, static_cast<double>(config.movementMinTolerancePercent) / 100.0);
+        const int saturation = std::max(1, config.movementToleranceParts) + 1;
         for (size_t megaId = 0; megaId < megaMiniCentroidIds.size(); megaId++) {
             int badMiniCount = 0;
             size_t megaVectorCount = 0;
@@ -2989,11 +2994,12 @@ namespace orangedb {
     }
 
     void ReclusteringIndex::reclusterBasedOnMovementScore() {
-        printf("reclusterBasedOnMovementScore: saturation=%d scale=%.6f decay=%.6f threshold=%.6f min_bad_minis=%d\n",
-               config.movementSaturationCount,
-               config.movementScoreScale,
-               config.movementScoreDecay,
-               config.movementScoreThreshold,
+        printf("reclusterBasedOnMovementScore: saturation=%d min_tolerance_percent=%.6f max_tolerance_percent=%.6f tolerance_parts=%d threshold=%.6f min_bad_minis=%d\n",
+               std::max(1, config.movementToleranceParts) + 1,
+               config.movementMinTolerancePercent,
+               config.movementMaxTolerancePercent,
+               config.movementToleranceParts,
+               std::max(1e-9, static_cast<double>(config.movementMinTolerancePercent) / 100.0),
                config.movementMinBadMinis);
         std::vector<vector_idx_t> megaClusterIds = getMegaCentroidsToReclusterByMovementScore();
         printf("reclusterBasedOnMovementScore: Reclustering %zu megacentroids\n", megaClusterIds.size());
@@ -4672,10 +4678,9 @@ namespace orangedb {
         // Write optional movement-score stopping state.
         constexpr uint64_t movementStateMagic = 0x4f44424d4f564531ULL; // "ODBMOVE1"
         out.write(reinterpret_cast<const char *>(&movementStateMagic), sizeof(movementStateMagic));
-        out.write(reinterpret_cast<const char *>(&config.movementSaturationCount), sizeof(config.movementSaturationCount));
-        out.write(reinterpret_cast<const char *>(&config.movementScoreDecay), sizeof(config.movementScoreDecay));
-        out.write(reinterpret_cast<const char *>(&config.movementScoreScale), sizeof(config.movementScoreScale));
-        out.write(reinterpret_cast<const char *>(&config.movementScoreThreshold), sizeof(config.movementScoreThreshold));
+        out.write(reinterpret_cast<const char *>(&config.movementMinTolerancePercent), sizeof(config.movementMinTolerancePercent));
+        out.write(reinterpret_cast<const char *>(&config.movementMaxTolerancePercent), sizeof(config.movementMaxTolerancePercent));
+        out.write(reinterpret_cast<const char *>(&config.movementToleranceParts), sizeof(config.movementToleranceParts));
         out.write(reinterpret_cast<const char *>(&config.movementMinBadMinis), sizeof(config.movementMinBadMinis));
         size_t movementCountSize = std::max(vectorMovementCounts.size(), size);
         out.write(reinterpret_cast<const char *>(&movementCountSize), sizeof(movementCountSize));
@@ -4896,10 +4901,9 @@ namespace orangedb {
         uint64_t statsOrMagic = 0;
         in.read(reinterpret_cast<char *>(&statsOrMagic), sizeof(statsOrMagic));
         if (statsOrMagic == movementStateMagic) {
-            in.read(reinterpret_cast<char *>(&config.movementSaturationCount), sizeof(config.movementSaturationCount));
-            in.read(reinterpret_cast<char *>(&config.movementScoreDecay), sizeof(config.movementScoreDecay));
-            in.read(reinterpret_cast<char *>(&config.movementScoreScale), sizeof(config.movementScoreScale));
-            in.read(reinterpret_cast<char *>(&config.movementScoreThreshold), sizeof(config.movementScoreThreshold));
+            in.read(reinterpret_cast<char *>(&config.movementMinTolerancePercent), sizeof(config.movementMinTolerancePercent));
+            in.read(reinterpret_cast<char *>(&config.movementMaxTolerancePercent), sizeof(config.movementMaxTolerancePercent));
+            in.read(reinterpret_cast<char *>(&config.movementToleranceParts), sizeof(config.movementToleranceParts));
             in.read(reinterpret_cast<char *>(&config.movementMinBadMinis), sizeof(config.movementMinBadMinis));
             size_t movementCountSize = 0;
             in.read(reinterpret_cast<char *>(&movementCountSize), sizeof(movementCountSize));
