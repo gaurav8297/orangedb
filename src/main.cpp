@@ -4290,6 +4290,10 @@ void benchmark_fast_reclustering(InputParser &input) {
     const double maxRecallRange = getFloatOption("-maxRecallRange", 85.0f);
     const int miniProbeStep = getIntOption("-miniProbeStep", 5);
     const int iterations = getIntOption("-iterations", 7);
+    const int initialInsertPercent = getIntOption("-initialInsertPercent", 50);
+    const int incrementalInsertPercent = getIntOption("-incrementalInsertPercent", 10);
+    const int reclusterCycles = getIntOption("-reclusterCycles", iterations);
+    const int finalReclusterCycles = getIntOption("-finalReclusterCycles", iterations);
     // const bool fast = getBoolOption("-fast", false);
     const int numQueries = getIntOption("-numQueries", 10);
     const int readFromDisk = getIntOption("-readFromDisk", 0);
@@ -4340,6 +4344,55 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     RandomGenerator rng(1234);
     ReclusteringIndex index(queryDimension, config, &rng);
+    if (initialInsertPercent <= 0 || initialInsertPercent >= 100 ||
+        incrementalInsertPercent <= 0 || reclusterCycles < 0 || finalReclusterCycles < 0) {
+        fprintf(stderr, "Invalid reclustering schedule config\n");
+        exit(1);
+    }
+    auto getReclusterTargets = [&](size_t totalVectorCount) -> std::vector<size_t> {
+        std::vector<size_t> targets;
+        for (int percent = initialInsertPercent; percent < 100; percent += incrementalInsertPercent) {
+            size_t target = std::min(totalVectorCount,
+                                     (size_t)std::ceil((double)totalVectorCount * percent / 100.0));
+            if (target > 0 && target < totalVectorCount &&
+                (targets.empty() || target > targets.back())) {
+                targets.push_back(target);
+            }
+        }
+        return targets;
+    };
+    auto runScheduledReclusterCycles = [&](int cycles) {
+        for (int iter = 0; iter < cycles; iter++) {
+            printf("Reclustering Iteration: %d\n", iter);
+            if (useMSEToRecluster) {
+                index.storeMSEScoreForMegaClusters();
+                index.saveOldScoreForMegaClusters();
+                index.reclusterAllMegaCentroids(nMegaRecluster);
+                index.storeMSEScoreForMegaClusters();
+                index.reclusterBasedOnMSEScore();
+            } else {
+                index.reclusterAllMegaCentroids(nMegaRecluster);
+                if (numMegaReclusterCentroids == 1) {
+                    if (enableStoppingCondition) {
+                        if (stoppingConditionStrategy == "movement") {
+                            index.reclusterBasedOnMovementScore();
+                        } else {
+                            index.reclusterBasedOnWrongAssignment();
+                        }
+                    } else {
+                        index.reclusterFast();
+                    }
+                } else {
+                    if (reclusterOnScore) {
+                        index.reclusterBasedOnScore(numMegaReclusterCentroids);
+                    } else {
+                        index.reclusterFull(numMegaReclusterCentroids);
+                    }
+                }
+            }
+            printf("Reclustering Iteration %d completed\n", iter);
+        }
+    };
 
     size_t baseDimension = queryDimension;
     size_t baseNumVectors = 0;
@@ -4381,111 +4434,124 @@ void benchmark_fast_reclustering(InputParser &input) {
         baseNumVectors = std::min(baseNumVectors, (size_t) numVectors);
         assert(baseDimension == queryDimension);
         if (isParquet) {
-            auto numFiles = std::min(nFiles, (int)filePaths.size());
-            // Calculate how many batch inserts per file
-            int insertsPerFile = std::max(1, numInserts / numFiles);
-            int totalBatches = numFiles * insertsPerFile;
-            printf("Reading %d parquet files with %d batch inserts per file (total %d batches)\n",
-                   numFiles, insertsPerFile, totalBatches);
+            int numFiles = std::min(nFiles, (int)filePaths.size());
+            std::vector<size_t> fileVectorCounts(numFiles, 0);
+            baseNumVectors = 0;
+            for (int fileIdx = 0; fileIdx < numFiles && baseNumVectors < (size_t)numVectors; fileIdx++) {
+                size_t fileDimension = 0;
+                size_t fileNumVectors = 0;
+                auto status = readParquetFileStats(filePaths[fileIdx].c_str(), &fileDimension, &fileNumVectors,
+                                                   parquetColumnName);
+                if (!status.ok()) {
+                    fprintf(stderr, "Failed to read parquet file stats: %s\n", status.ToString().c_str());
+                    exit(1);
+                }
+                assert(fileDimension == baseDimension);
+                fileVectorCounts[fileIdx] = std::min(fileNumVectors, (size_t)numVectors - baseNumVectors);
+                baseNumVectors += fileVectorCounts[fileIdx];
+            }
+
+            auto reclusterTargets = getReclusterTargets(baseNumVectors);
+
+            printf("Reading %d parquet files, target vectors: %zu, recluster targets: %zu\n",
+                   numFiles, baseNumVectors, reclusterTargets.size());
 
             size_t totalVectors = 0;
-            int batchCount = 0;
-            for (int fileIdx = 0; fileIdx < numFiles; fileIdx++) {
+            size_t nextReclusterTarget = 0;
+            for (int fileIdx = 0; fileIdx < numFiles && totalVectors < baseNumVectors; fileIdx++) {
+                if (fileVectorCounts[fileIdx] == 0) {
+                    continue;
+                }
                 printf("Processing parquet file %d/%d: %s\n", fileIdx + 1, numFiles, filePaths[fileIdx].c_str());
 
-                // Read single file
                 std::vector<std::string> paths = {filePaths[fileIdx]};
                 size_t fileNumVectors;
                 auto data = readParquetFiles(paths, &baseDimension, &fileNumVectors, parquetColumnName);
-
-                // Split file data into insertsPerFile batches
-                size_t vectorsPerBatch = fileNumVectors / insertsPerFile;
-                for (int batchIdx = 0; batchIdx < insertsPerFile; batchIdx++) {
-                    size_t batchStart = batchIdx * vectorsPerBatch;
-                    size_t batchEnd = (batchIdx == insertsPerFile - 1) ? fileNumVectors : (batchIdx + 1) * vectorsPerBatch;
-                    size_t batchSize = batchEnd - batchStart;
-
-                    printf("  Batch %d/%d: inserting vectors [%zu, %zu) (%zu vectors)\n",
-                           batchIdx + 1, insertsPerFile, batchStart, batchEnd, batchSize);
-
-                    // Insert batch (offset into data array)
-                    index.naiveInsert(data + batchStart * baseDimension, batchSize);
-                    totalVectors += batchSize;
-                    batchCount++;
-
-                    if (enableStoppingCondition && fileIdx == numFiles - 2 && batchIdx == insertsPerFile - 1) {
-                        // One file before last, adjust insertsPerFile to match total numInserts. Run reclustering
-                        // index.storeMSEScoreForMegaClusters();
-                        // index.computeOverlapScores();
-                        // Run 6 iteration of reclustering
-                        for (int iter = 0; iter < iterations; iter++) {
-                            printf("Reclustering Iteration: %d\n", iter);
-                            // index.updateOverlapHistory();
-                            index.reclusterAllMegaCentroids(nMegaRecluster);
-                            // index.printWrongAssignmentStatsForWorstMinis();
-                            if (stoppingConditionStrategy == "movement") {
-                                index.reclusterBasedOnMovementScore();
-                            } else {
-                                index.reclusterBasedOnWrongAssignment();
-                            }
-                            // index.storeMSEScoreForMegaClusters();
-                            // index.computeOverlapScores();
-                            // index.reclusterBasedOnOverlapHistory();
-                            // index.printStats();
-                            printf("Reclustering Iteration %d completed\n", iter);
+                size_t fileOffset = 0;
+                const size_t fileVectorsToInsert = std::min(fileVectorCounts[fileIdx], fileNumVectors);
+                while (fileOffset < fileVectorsToInsert) {
+                    size_t insertCount = fileVectorsToInsert - fileOffset;
+                    bool shouldRecluster = false;
+                    while (nextReclusterTarget < reclusterTargets.size() &&
+                           reclusterTargets[nextReclusterTarget] <= totalVectors) {
+                        nextReclusterTarget++;
+                    }
+                    if (nextReclusterTarget < reclusterTargets.size()) {
+                        size_t vectorsToTarget = reclusterTargets[nextReclusterTarget] - totalVectors;
+                        if (insertCount >= vectorsToTarget) {
+                            insertCount = vectorsToTarget;
+                            shouldRecluster = true;
                         }
-                        printf("=== Reclustering completed after batch %d ===\n", batchCount);
+                    }
+
+                    printf("  Inserting vectors [%zu, %zu) from file (%zu vectors)\n",
+                           fileOffset, fileOffset + insertCount, insertCount);
+                    index.naiveInsert(data + fileOffset * baseDimension, insertCount);
+                    fileOffset += insertCount;
+                    totalVectors += insertCount;
+
+                    if (shouldRecluster) {
+                        printf("=== Inserted %zu/%zu parquet vectors - Running %d recluster cycles ===\n",
+                               totalVectors, baseNumVectors, reclusterCycles);
+                        runScheduledReclusterCycles(reclusterCycles);
+                        nextReclusterTarget++;
                     }
                 }
                 delete[] data;
             }
-            printf("Total vectors inserted: %zu in %d batches\n", totalVectors, batchCount);
+            printf("Total vectors inserted: %zu\n", totalVectors);
         } else {
             if (quantBuild) {
                 index.trainQuant(baseVecs, baseNumVectors);
             }
-            printf("Building index with realtime reclustering\n");
+            printf("Building index with scheduled reclustering\n");
             auto chunkSize = baseNumVectors / numInserts;
             printf("Chunk size: %lu\n", chunkSize);
-            auto startReclusterPoint = (numInserts / 2) - 1;
+            auto reclusterTargets = getReclusterTargets(baseNumVectors);
+            size_t nextReclusterTarget = 0;
+            size_t totalVectors = 0;
             for (long i = 0; i < numInserts; i++) {
                 auto start = i * chunkSize;
                 auto end = (i + 1) * chunkSize;
                 if (i == (numInserts - 1)) {
                     end = baseNumVectors;
                 }
-                printf("processing chunk: %d, start: %lu, end: %lu\n", i, start, end);
-                if (quantBuild) {
-                    index.naiveInsertQuant(baseVecs + start * baseDimension, end - start);
-                } else {
-                    index.naiveInsert(baseVecs + start * baseDimension, end - start);
-                }
-
-                // Recluster after 50 inserts, then every 2 inserts thereafter
-                bool should_recluster = false;
-                if (i == startReclusterPoint) {
-                    // After 50 inserts (0-indexed, so i == 49)
-                    printf("=== Completed %ld inserts - Running reclustering ===\n", i + 1);
-                    should_recluster = true;
-                } else if (i > startReclusterPoint && (i - startReclusterPoint) % 2 == 0) {
-                    // Every 2 inserts after the 50th (i.e., at 51, 53, 55, ...)
-                    printf("=== Completed %ld inserts - Running reclustering ===\n", i + 1);
-                    should_recluster = true;
-                }
-
-                if (useMSEToRecluster && should_recluster) {
-                    for (int iter = 0; iter < iterations; iter++) {
-                        printf("Reclustering Iteration: %d\n", iter);
-                        index.storeMSEScoreForMegaClusters();
-                        index.saveOldScoreForMegaClusters();
-                        index.reclusterAllMegaCentroids(nMegaRecluster);
-                        index.storeMSEScoreForMegaClusters();
-                        index.reclusterBasedOnMSEScore();
-                        printf("Reclustering Iteration %d completed\n", iter);
+                printf("processing chunk: %ld, start: %lu, end: %lu\n", i, start, end);
+                size_t chunkOffset = start;
+                while (chunkOffset < end) {
+                    size_t insertCount = end - chunkOffset;
+                    bool shouldRecluster = false;
+                    while (nextReclusterTarget < reclusterTargets.size() &&
+                           reclusterTargets[nextReclusterTarget] <= totalVectors) {
+                        nextReclusterTarget++;
                     }
-                    printf("=== Reclustering completed ===\n");
+                    if (nextReclusterTarget < reclusterTargets.size()) {
+                        size_t vectorsToTarget = reclusterTargets[nextReclusterTarget] - totalVectors;
+                        if (insertCount >= vectorsToTarget) {
+                            insertCount = vectorsToTarget;
+                            shouldRecluster = true;
+                        }
+                    }
+
+                    printf("  Inserting vectors [%zu, %zu) (%zu vectors)\n",
+                           chunkOffset, chunkOffset + insertCount, insertCount);
+                    if (quantBuild) {
+                        index.naiveInsertQuant(baseVecs + chunkOffset * baseDimension, insertCount);
+                    } else {
+                        index.naiveInsert(baseVecs + chunkOffset * baseDimension, insertCount);
+                    }
+                    chunkOffset += insertCount;
+                    totalVectors += insertCount;
+
+                    if (shouldRecluster) {
+                        printf("=== Inserted %zu/%zu vectors - Running %d recluster cycles ===\n",
+                               totalVectors, baseNumVectors, reclusterCycles);
+                        runScheduledReclusterCycles(reclusterCycles);
+                        nextReclusterTarget++;
+                    }
                 }
             }
+            printf("Total vectors inserted: %zu\n", totalVectors);
         }
         printf("Writing index to disk\n");
         index.flush_to_disk(storagePath);
@@ -4550,7 +4616,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto track_query_id = 0;
     // index.flush_to_disk(storagePath);
     // index.storeMSEScoreForMegaClusters();
-    for (int iter = 0; iter < iterations; iter++) {
+    for (int iter = 0; iter < finalReclusterCycles; iter++) {
         printf("Started Iteration: %d\n", iter);
         // index.updateOverlapHistory();
         index.reclusterAllMegaCentroids(nMegaRecluster);
@@ -4657,7 +4723,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.storeMSEScoreForMegaClusters();
     // index.computeOverlapScores();
     // index.printStats();
-    if (iterations > 0) {
+    if (finalReclusterCycles > 0) {
         // index.storeScoreForMegaClusters();
         // index.printStats();
         printf("Flushing to disk\n");
