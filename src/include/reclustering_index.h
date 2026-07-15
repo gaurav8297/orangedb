@@ -326,6 +326,20 @@ namespace orangedb {
         void getMiniClusterVectorIds(std::vector<std::vector<vector_idx_t>> *_miniClusterVectorIds) const {
             *_miniClusterVectorIds = miniClusterVectorIds;
         }
+
+        void resetReclusterReadSamples() {
+            reclusterReadSamples.clear();
+            reclusterReadUnassignedVectors = 0;
+            collectReclusterReadSamples = true;
+        }
+
+        const std::vector<size_t> &getReclusterReadSamples() const {
+            return reclusterReadSamples;
+        }
+
+        size_t getReclusterReadUnassignedVectors() const {
+            return reclusterReadUnassignedVectors;
+        }
         
         int getDim() const {
             return dim;
@@ -762,6 +776,9 @@ namespace orangedb {
         std::vector<double> wrongAssignmentBoundaryAvgRelativeGap;
         std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
         std::vector<uint8_t> vectorMovementCounts;
+        std::vector<size_t> reclusterReadSamples;
+        size_t reclusterReadUnassignedVectors = 0;
+        bool collectReclusterReadSamples = false;
         std::vector<double> miniRmsRadius;
         std::vector<double> miniP75Radius;
         std::vector<double> miniP95Radius;

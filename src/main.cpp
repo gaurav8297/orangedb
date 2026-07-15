@@ -4456,6 +4456,52 @@ void write_debug_data(ReclusteringIndex* index, int iter,  std::vector<double> q
     }
 }
 
+static std::vector<std::string> select_reclustering_parquet_files(
+        const std::string &directoryList, const std::string &singleDirectory, int nFiles, uint32_t seed) {
+    const auto directories = parseCommaSeparated(directoryList.empty() ? singleDirectory : directoryList);
+    std::vector<std::string> filePaths;
+    std::unordered_set<std::string> seen;
+    for (const auto &directory : directories) {
+        std::vector<std::string> directoryFiles;
+        list_parquet_dir(directory.c_str(), directoryFiles);
+        for (auto &path : directoryFiles) {
+            if (seen.insert(path).second) {
+                filePaths.push_back(std::move(path));
+            }
+        }
+    }
+    CHECK_ARGUMENT(!filePaths.empty(), "no parquet files found in baseVectorPaths");
+    CHECK_ARGUMENT(nFiles > 0, "nFiles must be positive");
+    std::mt19937 generator(seed);
+    std::shuffle(filePaths.begin(), filePaths.end(), generator);
+    filePaths.resize(std::min(filePaths.size(), static_cast<size_t>(nFiles)));
+    return filePaths;
+}
+
+static void print_recluster_read_stats(
+        const ReclusteringIndex &index, const char *phase, int iteration) {
+    auto samples = index.getReclusterReadSamples();
+    std::sort(samples.begin(), samples.end());
+    uint64_t totalReads = 0;
+    for (const auto reads : samples) {
+        totalReads += reads;
+    }
+    if (samples.empty()) {
+        printf("RECLUSTER_READ_STATS phase=%s iteration=%d centroids=0 total_reads=0 avg=0 "
+               "p50=0 p95=0 p99=0 max=0 unassigned_vectors=%zu\n",
+               phase, iteration, index.getReclusterReadUnassignedVectors());
+        return;
+    }
+    const size_t p50 = samples[(50 * samples.size() + 99) / 100 - 1];
+    const size_t p95 = samples[(95 * samples.size() + 99) / 100 - 1];
+    const size_t p99 = samples[(99 * samples.size() + 99) / 100 - 1];
+    printf("RECLUSTER_READ_STATS phase=%s iteration=%d centroids=%zu total_reads=%llu avg=%.3f "
+           "p50=%zu p95=%zu p99=%zu max=%zu unassigned_vectors=%zu\n",
+           phase, iteration, samples.size(), static_cast<unsigned long long>(totalReads),
+           static_cast<double>(totalReads) / samples.size(), p50, p95, p99, samples.back(),
+           index.getReclusterReadUnassignedVectors());
+}
+
 void benchmark_fast_reclustering(InputParser &input) {
     auto getStringOption = [&](const std::string &option, const std::string &defaultValue = "") -> std::string {
         const auto &value = input.getCmdOption(option);
@@ -4479,9 +4525,15 @@ void benchmark_fast_reclustering(InputParser &input) {
     };
 
     const std::string baseVectorPath = getStringOption("-baseVectorPath");
+    const std::string baseVectorPaths = getStringOption("-baseVectorPaths");
     const std::string queryVectorPath = getStringOption("-queryVectorPath");
     const std::string groundTruthPath = getStringOption("-groundTruthPath");
-    if (baseVectorPath.empty() || queryVectorPath.empty() || groundTruthPath.empty()) {
+    const bool measureReclusterReads = getBoolOption("-measureReclusterReads", false);
+    if (baseVectorPath.empty() && baseVectorPaths.empty()) {
+        fprintf(stderr, "benchmarkFastReclustering requires -baseVectorPath or -baseVectorPaths\n");
+        exit(1);
+    }
+    if (!measureReclusterReads && (baseVectorPath.empty() || queryVectorPath.empty() || groundTruthPath.empty())) {
         fprintf(stderr, "benchmarkFastReclustering requires -baseVectorPath, -queryVectorPath, and -groundTruthPath\n");
         exit(1);
     }
@@ -4490,8 +4542,12 @@ void benchmark_fast_reclustering(InputParser &input) {
                                               : input.getCmdOption("-parquetColumnName");
 
     const bool isParquet = getBoolOption("-isParquet", false);
+    if (measureReclusterReads && !isParquet) {
+        fprintf(stderr, "-measureReclusterReads requires -isParquet 1\n");
+        exit(1);
+    }
     int numInserts = getIntOption("-numInserts", 100);
-    const int numVectors = getIntOption("-numVectors", 1000000);
+    const int numVectors = getIntOption("-numVectors", measureReclusterReads ? INT_MAX : 1000000);
     const int k = getIntOption("-k", 100);
     const int numIters = getIntOption("-numIters", 10);
     const int megaCentroidSize = getIntOption("-megaCentroidSize", 1000);
@@ -4517,14 +4573,14 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int incrementalInsertPercent = getIntOption("-incrementalInsertPercent", 10);
     const int reclusterCycles = getIntOption("-reclusterCycles", iterations);
     const int finalReclusterCycles = getIntOption("-finalReclusterCycles", iterations);
-    const bool disableScheduledRecluster = getBoolOption("-disableScheduledRecluster", false);
+    const bool disableScheduledRecluster = getBoolOption("-disableScheduledRecluster", measureReclusterReads);
     // const bool fast = getBoolOption("-fast", false);
     const int numQueries = getIntOption("-numQueries", 10);
     const int readFromDisk = getIntOption("-readFromDisk", 0);
     const std::string storagePath = getStringOption("-storagePath", "orangedb_recluster.bin");
     const bool measureRecallFluctuation = getBoolOption("-measureRecallFluctuation", false);
     const bool dynamicRecallOnly = getBoolOption("-dynamicRecallOnly", false);
-    const bool disableFinalFlush = getBoolOption("-disableFinalFlush", false);
+    const bool disableFinalFlush = getBoolOption("-disableFinalFlush", measureReclusterReads);
     const int recallWarmupIterations = getIntOption("-recallWarmupIterations", 3);
     auto parseDoubleList = [](const std::string &value) {
         std::vector<double> values;
@@ -4606,6 +4662,9 @@ void benchmark_fast_reclustering(InputParser &input) {
     auto nMiniProbesForBadCluster = getIntListOption("-nMiniProbesForBadCluster", "50");
     const int nMegaRecluster = getIntOption("-nMegaRecluster", 1000000000);
     int nFiles = getIntOption("-nFiles", 10);
+    const int parquetBatchSize = getIntOption("-parquetBatchSize", 500000);
+    const uint32_t parquetSelectionSeed =
+        static_cast<uint32_t>(getIntOption("-parquetSelectionSeed", 1234));
     int hardClusterSizeLimit = getIntOption("-hardClusterSizeLimit", 0);
     float kmeansSamplingRatio = getFloatOption("-kmeansSamplingRatio", 0.2f);
     int numFixBoundaries = getIntOption("-numFixBoundaries", 10);
@@ -4617,7 +4676,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int LshNbits = getIntOption("-LshNbits", 8);
     const bool useCuvsKmeans = getBoolOption("-useCuvsKmeans", false);
     const int cuvsGpuDevice = getIntOption("-cuvsGpuDevice", 0);
-    const bool enableStoppingCondition = getBoolOption("-enableStoppingCondition", true);
+    const bool enableStoppingCondition = getBoolOption("-enableStoppingCondition", !measureReclusterReads);
     const std::string stoppingConditionStrategy = getStringOption("-stoppingConditionStrategy", "wrongAssignment");
     const int movementToleranceParts = getIntOption("-movementToleranceParts", 3);
     const float movementMinTolerancePercent = getFloatOption("-movementMinTolerancePercent", 5.0f);
@@ -4625,9 +4684,27 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int movementMinBadMinis = getIntOption("-movementMinBadMinis", 5);
     omp_set_num_threads(numThreads);
 
-    size_t queryDimension, queryNumVectors;
-    float *queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
-    queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
+    CHECK_ARGUMENT(parquetBatchSize > 0, "parquetBatchSize must be positive");
+    std::vector<std::string> selectedMetricParquetPaths;
+    size_t queryDimension = 0;
+    size_t queryNumVectors = 0;
+    float *queryVecs = nullptr;
+    if (measureReclusterReads) {
+        selectedMetricParquetPaths = select_reclustering_parquet_files(
+            baseVectorPaths, baseVectorPath, nFiles, parquetSelectionSeed);
+        size_t ignoredVectorCount = 0;
+        auto status = readParquetFileStats(selectedMetricParquetPaths.front().c_str(), &queryDimension,
+                                           &ignoredVectorCount, parquetColumnName);
+        CHECK_ARGUMENT(status.ok(), status.ToString().c_str());
+        printf("Selected %zu parquet files with seed %u\n",
+               selectedMetricParquetPaths.size(), parquetSelectionSeed);
+        for (const auto &path : selectedMetricParquetPaths) {
+            printf("SELECTED_PARQUET_FILE path=%s\n", path.c_str());
+        }
+    } else {
+        queryVecs = readVecFile(queryVectorPath.c_str(), &queryDimension, &queryNumVectors, numQueries);
+        queryNumVectors = std::min(queryNumVectors, (size_t) numQueries);
+    }
 
     DistanceType distanceType = useIP ? IP : L2;
     ReclusteringIndexConfig config(numIters, megaCentroidSize, miniCentroidSize, 0, lambda, 0.4, distanceType,
@@ -4639,8 +4716,12 @@ void benchmark_fast_reclustering(InputParser &input) {
     config.movementToleranceParts = movementToleranceParts;
     config.movementMinBadMinis = movementMinBadMinis;
     // CHECK_ARGUMENT(baseDimension == queryDimension, "Base and query dimensions are not same");
-    auto *gtVecs = new vector_idx_t[queryNumVectors * k];
-    loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs), queryNumVectors * k * sizeof(vector_idx_t));
+    vector_idx_t *gtVecs = nullptr;
+    if (!measureReclusterReads) {
+        gtVecs = new vector_idx_t[queryNumVectors * k];
+        loadFromFile(groundTruthPath, reinterpret_cast<uint8_t *>(gtVecs),
+                     queryNumVectors * k * sizeof(vector_idx_t));
+    }
 
     RandomGenerator rng(1234);
     ReclusteringIndex index(queryDimension, config, &rng);
@@ -4667,6 +4748,9 @@ void benchmark_fast_reclustering(InputParser &input) {
     auto runScheduledReclusterCycles = [&](int cycles) {
         for (int iter = 0; iter < cycles; iter++) {
             printf("Reclustering Iteration: %d\n", iter);
+            if (measureReclusterReads) {
+                index.resetReclusterReadSamples();
+            }
             if (useMSEToRecluster) {
                 index.storeMSEScoreForMegaClusters();
                 index.saveOldScoreForMegaClusters();
@@ -4692,6 +4776,9 @@ void benchmark_fast_reclustering(InputParser &input) {
                         index.reclusterFull(numMegaReclusterCentroids);
                     }
                 }
+            }
+            if (measureReclusterReads) {
+                print_recluster_read_stats(index, "scheduled", iter);
             }
             printf("Reclustering Iteration %d completed\n", iter);
         }
@@ -4816,9 +4903,13 @@ void benchmark_fast_reclustering(InputParser &input) {
         // Read dataset
         std::vector<std::string> filePaths;
         if (isParquet) {
-            list_parquet_dir(baseVectorPath.c_str(), filePaths);
+            if (measureReclusterReads) {
+                filePaths = selectedMetricParquetPaths;
+            } else {
+                list_parquet_dir(baseVectorPath.c_str(), filePaths);
+            }
             if (filePaths.empty()) {
-                fprintf(stderr, "No parquet files found in the directory: %s\n", baseVectorPath.c_str());
+                fprintf(stderr, "No parquet files found\n");
                 exit(1);
             }
             auto status = readParquetFileStats(filePaths.at(0).c_str(), &baseDimension, &baseNumVectors,
@@ -4869,7 +4960,8 @@ void benchmark_fast_reclustering(InputParser &input) {
                 size_t fileOffset = 0;
                 const size_t fileVectorsToInsert = std::min(fileVectorCounts[fileIdx], fileNumVectors);
                 while (fileOffset < fileVectorsToInsert) {
-                    size_t insertCount = fileVectorsToInsert - fileOffset;
+                    size_t insertCount = std::min(
+                        fileVectorsToInsert - fileOffset, static_cast<size_t>(parquetBatchSize));
                     bool shouldRecluster = false;
                     while (nextReclusterTarget < reclusterTargets.size() &&
                            reclusterTargets[nextReclusterTarget] <= totalVectors) {
@@ -4952,8 +5044,10 @@ void benchmark_fast_reclustering(InputParser &input) {
             }
             printf("Total vectors inserted: %zu\n", totalVectors);
         }
-        printf("Writing index to disk\n");
-        index.flush_to_disk(storagePath);
+        if (!measureReclusterReads) {
+            printf("Writing index to disk\n");
+            index.flush_to_disk(storagePath);
+        }
     }
     // index.quantizeVectors();
 
@@ -5024,12 +5118,18 @@ void benchmark_fast_reclustering(InputParser &input) {
                                            std::max(finalReclusterCycles - 1, 0));
     for (int iter = 0; iter < finalReclusterCycles; iter++) {
         printf("Started Iteration: %d\n", iter);
+        if (measureReclusterReads) {
+            index.resetReclusterReadSamples();
+        }
         const bool measureThisIteration = measureRecallFluctuation && iter >= measuredIteration;
         // index.updateOverlapHistory();
         if (measureThisIteration) {
             recordRecallSnapshot(iter, "before_iteration", 0, -1);
             reclusterL2sOneByOne(iter);
             recordRecallSnapshot(iter, "after_iteration", 0, -1);
+            if (measureReclusterReads) {
+                print_recluster_read_stats(index, "final", iter);
+            }
             continue;
         }
         index.reclusterAllMegaCentroids(nMegaRecluster);
@@ -5119,6 +5219,9 @@ void benchmark_fast_reclustering(InputParser &input) {
                 index.reclusterFull(numMegaReclusterCentroids);
             }
         }
+        if (measureReclusterReads) {
+            print_recluster_read_stats(index, "final", iter);
+        }
         // index.quantizeVectors();
         // index.fixBoundaryMiniCentroidsV2();
         // index.storeScoreForMegaClusters();
@@ -5128,6 +5231,9 @@ void benchmark_fast_reclustering(InputParser &input) {
         // index.storeScoreForMegaClusters();
         // index.printStats();
 
+    }
+    if (measureReclusterReads) {
+        return;
     }
     printf("Running adaptive recall evaluation in the end\n");
     get_recall_with_adaptive_mini_probes(index, queryVecs, queryDimension, queryNumVectors, k, gtVecs,

@@ -2876,10 +2876,17 @@ namespace orangedb {
             if (mappedIt == newToOldCentroidIdMap.end()) {
                 continue;
             }
+            std::unordered_set<vector_idx_t> sourceMiniIds;
             for (const auto vectorId : newMiniClusterVectorIds[newMiniId]) {
                 auto oldIt = oldVectorToMini.find(vectorId);
                 if (oldIt == oldVectorToMini.end()) {
+                    if (collectReclusterReadSamples) {
+                        ++reclusterReadUnassignedVectors;
+                    }
                     continue;
+                }
+                if (collectReclusterReadSamples) {
+                    sourceMiniIds.insert(oldIt->second);
                 }
                 ensureVectorMovementCountsSize(vectorId);
                 auto &count = vectorMovementCounts[static_cast<size_t>(vectorId)];
@@ -2891,6 +2898,9 @@ namespace orangedb {
                 }
                 ++newCountHistogram[std::min(static_cast<int>(count), saturation)];
                 ++updatedCount;
+            }
+            if (collectReclusterReadSamples && !newMiniClusterVectorIds[newMiniId].empty()) {
+                reclusterReadSamples.push_back(sourceMiniIds.size());
             }
         }
         printf("updateMovementCountsForNewMiniAssignments: updated=%zu saturated_after_update=%zu saturation=%d",
