@@ -1742,7 +1742,9 @@ namespace orangedb {
             oldVectorToMini, newMiniClusterVectorIds, newToOldCentroidIdMap);
 
         // Copy the mega clusters
-        return appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
+        auto updatedMegaCentroids = appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
+        invalidateMiniRadiusStats();
+        return updatedMegaCentroids;
     }
 
     std::vector<vector_idx_t> ReclusteringIndex::appendOrMergeCentroidsQuant(
@@ -1844,7 +1846,9 @@ namespace orangedb {
         }
 
         // Copy the mega clusters
-        return appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
+        auto updatedMegaCentroids = appendOrMergeMegaCentroids(oldMegaCentroids, newMegaCentroids, miniCentroidIds);
+        invalidateMiniRadiusStats();
+        return updatedMegaCentroids;
     }
 
     void ReclusteringIndex::storeScoreForMegaClusters(int n) {
@@ -3866,6 +3870,839 @@ namespace orangedb {
         stats.totalDataWrittenByUser += n * dim * sizeof(float);
     }
 
+    namespace {
+        struct DynamicMiniCandidate {
+            vector_idx_t id = INVALID_VECTOR_ID;
+            double raw_distance = 0.0;
+            double metric_distance = 0.0;
+            double radius = 0.0;
+            double raw_overlap = 0.0;
+            double probability = 0.0;
+            double log_overlap_volume = -std::numeric_limits<double>::infinity();
+            double l1_coverage_score = -std::numeric_limits<double>::infinity();
+            double l1_cap_height_score = 0.0;
+            int raw_rank = -1;
+            bool selected = false;
+        };
+
+        int clampMiniProbeCount(int probeCount, int minMiniProbes, int maxMiniProbes, int availableCount) {
+            if (availableCount <= 0) {
+                return 0;
+            }
+            const int clampedMax = std::min(maxMiniProbes, availableCount);
+            const int clampedMin = std::min(std::max(minMiniProbes, 1), clampedMax);
+            return std::max(clampedMin, std::min(probeCount, clampedMax));
+        }
+
+        bool usesAngularGeometry(DistanceType distanceType) {
+            return distanceType == IP || distanceType == COSINE;
+        }
+
+        double clampCosine(double value) {
+            return std::clamp(value, -1.0, 1.0);
+        }
+
+        double angularDistanceFromRawDistance(DistanceType distanceType, double rawDistance) {
+            if (distanceType == COSINE) {
+                return std::acos(clampCosine(1.0 - rawDistance));
+            }
+            if (distanceType == IP) {
+                return std::acos(clampCosine(-rawDistance));
+            }
+            return std::max(0.0, rawDistance);
+        }
+
+        double angularDistanceBetween(const float *lhs, const float *rhs, size_t dim) {
+            double dot = 0.0;
+            double lhsNormSq = 0.0;
+            double rhsNormSq = 0.0;
+            for (size_t i = 0; i < dim; i++) {
+                const double a = static_cast<double>(lhs[i]);
+                const double b = static_cast<double>(rhs[i]);
+                dot += a * b;
+                lhsNormSq += a * a;
+                rhsNormSq += b * b;
+            }
+            if (lhsNormSq <= 0.0 || rhsNormSq <= 0.0) {
+                return std::acos(-1.0);
+            }
+            return std::acos(clampCosine(dot / (std::sqrt(lhsNormSq) * std::sqrt(rhsNormSq))));
+        }
+
+        double metricDistanceForRadius(DistanceType distanceType, double rawDistance) {
+            if (distanceType == L2) {
+                return std::sqrt(std::max(0.0, rawDistance));
+            }
+            if (usesAngularGeometry(distanceType)) {
+                return angularDistanceFromRawDistance(distanceType, rawDistance);
+            }
+            return std::max(0.0, rawDistance);
+        }
+
+        double currentQueryRadius(const std::priority_queue<NodeDistCloser> &results, int k, DistanceType distanceType) {
+            if (results.size() < static_cast<size_t>(k) || results.empty()) {
+                return std::numeric_limits<double>::infinity();
+            }
+            return metricDistanceForRadius(distanceType, results.top().dist);
+        }
+
+        double currentHeapRadius(const std::priority_queue<NodeDistCloser> &results, int k,
+                                 DistanceType distanceType) {
+            if (k <= 0 || results.size() < static_cast<size_t>(k) || results.empty()) {
+                return std::numeric_limits<double>::infinity();
+            }
+            return metricDistanceForRadius(distanceType, results.top().dist);
+        }
+
+        vector_idx_t currentHeapWorstId(const std::priority_queue<NodeDistCloser> &results, int k) {
+            if (k <= 0 || results.size() < static_cast<size_t>(k) || results.empty()) {
+                return INVALID_VECTOR_ID;
+            }
+            return results.top().id;
+        }
+
+        NodeDistCloser heapWorstForK(std::priority_queue<NodeDistCloser> results, int k) {
+            if (k <= 0 || results.size() < static_cast<size_t>(k) || results.empty()) {
+                return NodeDistCloser();
+            }
+            std::vector<NodeDistCloser> entries;
+            entries.reserve(results.size());
+            while (!results.empty()) {
+                entries.push_back(results.top());
+                results.pop();
+            }
+            std::sort(entries.begin(), entries.end(), [](const auto &lhs, const auto &rhs) {
+                if (lhs.dist != rhs.dist) {
+                    return lhs.dist < rhs.dist;
+                }
+                return lhs.id < rhs.id;
+            });
+            return entries[static_cast<size_t>(k - 1)];
+        }
+
+        double heapRadiusForK(const std::priority_queue<NodeDistCloser> &results, int k,
+                              DistanceType distanceType) {
+            const auto node = heapWorstForK(results, k);
+            if (node.id == INVALID_VECTOR_ID) {
+                return std::numeric_limits<double>::infinity();
+            }
+            return metricDistanceForRadius(distanceType, node.dist);
+        }
+
+        vector_idx_t heapWorstIdForK(const std::priority_queue<NodeDistCloser> &results, int k) {
+            return heapWorstForK(results, k).id;
+        }
+
+        struct DynamicStopHeapState {
+            double multiplier = 1.0;
+            int heapK = 0;
+            int heapStableBatches = 0;
+            int combinedStableBatches = 0;
+            bool heapRuleHasStopped = false;
+            bool combinedRuleHasStopped = false;
+            double previousRadius = std::numeric_limits<double>::infinity();
+            double currentRadius = std::numeric_limits<double>::infinity();
+            vector_idx_t previousWorstId = INVALID_VECTOR_ID;
+            vector_idx_t currentWorstId = INVALID_VECTOR_ID;
+        };
+
+        std::vector<DynamicStopHeapState> makeStopHeapStates(uint16_t k,
+                                                             const DynamicMiniProbeConfig &probeConfig) {
+            std::vector<double> multipliers = probeConfig.stopHeapMultipliers.empty()
+                                                  ? std::vector<double>{probeConfig.stopHeapMultiplier}
+                                                  : probeConfig.stopHeapMultipliers;
+            std::sort(multipliers.begin(), multipliers.end());
+            multipliers.erase(std::unique(multipliers.begin(), multipliers.end()), multipliers.end());
+
+            std::vector<DynamicStopHeapState> states;
+            states.reserve(multipliers.size());
+            for (double multiplier : multipliers) {
+                DynamicStopHeapState state;
+                state.multiplier = std::max(1.0, multiplier);
+                state.heapK = std::max(static_cast<int>(k),
+                                       static_cast<int>(std::ceil(static_cast<double>(k) * state.multiplier)));
+                states.push_back(state);
+            }
+            return states;
+        }
+
+        int maxStopHeapK(const std::vector<DynamicStopHeapState> &states, uint16_t k) {
+            int maxK = static_cast<int>(k);
+            for (const auto &state : states) {
+                maxK = std::max(maxK, state.heapK);
+            }
+            return maxK;
+        }
+
+        void setPreviousStopHeapState(DynamicStopHeapState &state,
+                                      const std::priority_queue<NodeDistCloser> &heapResults,
+                                      DistanceType distanceType) {
+            state.previousRadius = heapRadiusForK(heapResults, state.heapK, distanceType);
+            state.previousWorstId = heapWorstIdForK(heapResults, state.heapK);
+        }
+
+        bool updateCurrentStopHeapState(DynamicStopHeapState &state,
+                                        const std::priority_queue<NodeDistCloser> &heapResults,
+                                        DistanceType distanceType,
+                                        bool thresholdRuleReached) {
+            state.currentRadius = heapRadiusForK(heapResults, state.heapK, distanceType);
+            state.currentWorstId = heapWorstIdForK(heapResults, state.heapK);
+            const bool heapStable = state.previousWorstId != INVALID_VECTOR_ID &&
+                                    state.previousWorstId == state.currentWorstId;
+            state.heapStableBatches = heapStable ? state.heapStableBatches + 1 : 0;
+            if (thresholdRuleReached) {
+                state.combinedStableBatches = heapStable ? state.combinedStableBatches + 1 : 0;
+            }
+            return heapStable;
+        }
+
+        double relativeDelta(double previous, double current) {
+            if (!std::isfinite(previous) || previous <= 0.0) {
+                return 0.0;
+            }
+            return std::abs(previous - current) / previous;
+        }
+
+        double distanceFactorThreshold(double bestDistance, double factor, DistanceType distanceType) {
+            const double clampedFactor = std::max(1.0, factor);
+            if (usesAngularGeometry(distanceType)) {
+                return bestDistance + std::abs(bestDistance) * (clampedFactor - 1.0);
+            }
+            return bestDistance * clampedFactor;
+        }
+
+        struct CentroidDistanceBoundary {
+            double bestRawDistance = std::numeric_limits<double>::infinity();
+            double remainingMinRawDistance = std::numeric_limits<double>::infinity();
+            double factorBoundary = std::numeric_limits<double>::infinity();
+        };
+
+        CentroidDistanceBoundary centroidDistanceBoundary(const std::vector<DynamicMiniCandidate> &candidates,
+                                                          DistanceType distanceType) {
+            CentroidDistanceBoundary boundary;
+            for (const auto &candidate : candidates) {
+                boundary.bestRawDistance = std::min(boundary.bestRawDistance, candidate.raw_distance);
+                if (!candidate.selected) {
+                    boundary.remainingMinRawDistance = std::min(boundary.remainingMinRawDistance, candidate.raw_distance);
+                }
+            }
+            if (!std::isfinite(boundary.bestRawDistance) || !std::isfinite(boundary.remainingMinRawDistance)) {
+                return boundary;
+            }
+            if (usesAngularGeometry(distanceType)) {
+                const double denom = std::abs(boundary.bestRawDistance);
+                boundary.factorBoundary = denom > 1e-12
+                                             ? 1.0 + (boundary.remainingMinRawDistance - boundary.bestRawDistance) / denom
+                                             : std::numeric_limits<double>::infinity();
+            } else {
+                boundary.factorBoundary = boundary.bestRawDistance > 1e-12
+                                             ? boundary.remainingMinRawDistance / boundary.bestRawDistance
+                                             : std::numeric_limits<double>::infinity();
+            }
+            return boundary;
+        }
+
+        int percentGrowthBatchSize(const std::vector<DynamicMiniCandidate*> &remaining,
+                                   int remainingBudget,
+                                   const DynamicMiniProbeConfig &probeConfig) {
+            if (remaining.empty() || remainingBudget <= 0) {
+                return 0;
+            }
+            const int maxBatchSize = std::max(1, probeConfig.batchSize);
+            const int step = std::max(1, probeConfig.growthBatchStep);
+            const int maxSelectable = std::min({maxBatchSize, remainingBudget, static_cast<int>(remaining.size())});
+            const double startDistance = remaining.front()->raw_distance;
+            const double denom = std::max(std::abs(startDistance), 1e-12);
+            const double targetGrowth = std::max(0.0, probeConfig.distanceFactor);
+
+            for (int batchSize = std::min(step, maxSelectable); batchSize < maxSelectable; batchSize += step) {
+                const double nextDistance = remaining[batchSize]->raw_distance;
+                const double growth = (nextDistance - startDistance) / denom;
+                if (growth >= targetGrowth) {
+                    return batchSize;
+                }
+            }
+            return maxSelectable;
+        }
+
+        double oldRadiusOverlapScore(double centerDistance, double queryRadius, double radius) {
+            if (!std::isfinite(queryRadius)) {
+                return 1.0;
+            }
+            if (radius <= 0.0) {
+                return 0.0;
+            }
+            const double overlapWidth = queryRadius + radius - centerDistance;
+            if (overlapWidth <= 0.0) {
+                return 0.0;
+            }
+            return overlapWidth / (1e-9 + radius);
+        }
+
+        double l1CoverageScoreFromLogVolume(int dim, double logOverlapVolume, double radius) {
+            const double l1LogVolume = hypersphereLogVolume(dim, radius);
+            if (!std::isfinite(logOverlapVolume) || !std::isfinite(l1LogVolume)) {
+                return -std::numeric_limits<double>::infinity();
+            }
+            return logOverlapVolume - l1LogVolume;
+        }
+
+        double l1CapHeightScore(double centerDistance, double queryRadius, double radius) {
+            if (!std::isfinite(queryRadius)) {
+                return 1.0;
+            }
+            if (radius <= 0.0 || queryRadius <= 0.0) {
+                return 0.0;
+            }
+            if (centerDistance >= queryRadius + radius) {
+                return 0.0;
+            }
+            if (centerDistance + radius <= queryRadius) {
+                return 1.0;
+            }
+            if (centerDistance <= 0.0) {
+                return queryRadius >= radius ? 1.0 : std::max(0.0, queryRadius / radius);
+            }
+
+            const double x = (centerDistance * centerDistance - queryRadius * queryRadius + radius * radius) /
+                             (2.0 * centerDistance);
+            const double capHeight = radius - x;
+            return std::clamp(capHeight / radius, 0.0, 1.0);
+        }
+
+        double l1AngularCapScore(double centerDistance, double queryRadius, double radius,
+                                 DynamicMiniProbeStats *stats = nullptr) {
+            if (!std::isfinite(queryRadius)) {
+                return 1.0;
+            }
+            if (radius <= 0.0 || queryRadius <= 0.0) {
+                if (stats != nullptr) {
+                    stats->angular_cap_disjoint_count++;
+                }
+                return 0.0;
+            }
+
+            const double gamma = std::clamp(centerDistance, 0.0, std::acos(-1.0));
+            const double alphaQ = std::clamp(queryRadius, 0.0, std::acos(-1.0));
+            const double alphaL1 = std::clamp(radius, 0.0, std::acos(-1.0));
+            if (gamma >= alphaL1 + alphaQ) {
+                if (stats != nullptr) {
+                    stats->angular_cap_disjoint_count++;
+                }
+                return 0.0;
+            }
+            if (gamma + alphaL1 <= alphaQ) {
+                if (stats != nullptr) {
+                    stats->angular_cap_full_l1_count++;
+                }
+                return 1.0;
+            }
+            if (gamma + alphaQ <= alphaL1) {
+                if (stats != nullptr) {
+                    stats->angular_cap_query_inside_l1_count++;
+                }
+                return std::clamp(alphaQ / alphaL1, 0.0, 1.0);
+            }
+            if (gamma <= 0.0 || alphaL1 <= 0.0) {
+                if (stats != nullptr) {
+                    if (alphaQ >= alphaL1) {
+                        stats->angular_cap_full_l1_count++;
+                    } else {
+                        stats->angular_cap_query_inside_l1_count++;
+                    }
+                }
+                return alphaQ >= alphaL1 ? 1.0 : std::clamp(alphaQ / alphaL1, 0.0, 1.0);
+            }
+
+            const double denom = std::sin(gamma) * std::sin(alphaL1);
+            if (std::abs(denom) <= 1e-12) {
+                if (stats != nullptr) {
+                    stats->angular_cap_disjoint_count++;
+                }
+                return 0.0;
+            }
+            const double cosPhi = (std::cos(alphaQ) - std::cos(gamma) * std::cos(alphaL1)) / denom;
+            const double phi = std::acos(clampCosine(cosPhi));
+            if (stats != nullptr) {
+                stats->angular_cap_partial_count++;
+            }
+            return std::clamp(phi / alphaL1, 0.0, 1.0);
+        }
+
+        double l1CapScore(DistanceType distanceType, double centerDistance, double queryRadius, double radius,
+                          DynamicMiniProbeStats *stats = nullptr) {
+            if (usesAngularGeometry(distanceType)) {
+                return l1AngularCapScore(centerDistance, queryRadius, radius, stats);
+            }
+            return l1CapHeightScore(centerDistance, queryRadius, radius);
+        }
+
+        bool thresholdRuleSatisfied(const std::vector<DynamicMiniCandidate> &candidates, double queryRadius,
+                                    DynamicMiniProbeOrderingKind orderingKind, double thresholdFactor,
+                                    DistanceType distanceType) {
+            const double factor = std::max(1.0, thresholdFactor);
+            if (orderingKind == DynamicMiniProbeOrderingKind::CentroidDistance) {
+                double minDistance = std::numeric_limits<double>::infinity();
+                double remainingMinDistance = std::numeric_limits<double>::infinity();
+                for (const auto &candidate : candidates) {
+                    minDistance = std::min(minDistance, candidate.raw_distance);
+                    if (!candidate.selected) {
+                        remainingMinDistance = std::min(remainingMinDistance, candidate.raw_distance);
+                    }
+                }
+                const double threshold = distanceFactorThreshold(minDistance, factor, distanceType);
+                return std::isfinite(minDistance) &&
+                       (!std::isfinite(remainingMinDistance) || remainingMinDistance > threshold);
+            }
+            if (orderingKind == DynamicMiniProbeOrderingKind::L1CapHeight) {
+                double maxScore = 0.0;
+                double remainingMaxScore = 0.0;
+                for (const auto &candidate : candidates) {
+                    const double score = l1CapScore(distanceType, candidate.metric_distance, queryRadius,
+                                                    candidate.radius);
+                    maxScore = std::max(maxScore, score);
+                    if (!candidate.selected) {
+                        remainingMaxScore = std::max(remainingMaxScore, score);
+                    }
+                }
+                return maxScore > 0.0 && remainingMaxScore < maxScore / factor;
+            }
+            return false;
+        }
+
+        void normalizeCandidateProbabilities(std::vector<DynamicMiniCandidate*> &candidates);
+
+        void normalizeL1CoverageProbabilities(std::vector<DynamicMiniCandidate*> &candidates) {
+            double maxScore = -std::numeric_limits<double>::infinity();
+            for (auto *candidate : candidates) {
+                maxScore = std::max(maxScore, candidate->l1_coverage_score);
+            }
+            if (!std::isfinite(maxScore)) {
+                normalizeCandidateProbabilities(candidates);
+                return;
+            }
+
+            double total = 0.0;
+            for (auto *candidate : candidates) {
+                candidate->probability = std::exp(candidate->l1_coverage_score - maxScore);
+                total += candidate->probability;
+            }
+            if (total <= 0.0) {
+                normalizeCandidateProbabilities(candidates);
+                return;
+            }
+            for (auto *candidate : candidates) {
+                candidate->probability /= total;
+            }
+        }
+
+        void normalizeCandidateProbabilities(std::vector<DynamicMiniCandidate*> &candidates) {
+            double total = 0.0;
+            for (auto *candidate : candidates) {
+                total += candidate->raw_overlap;
+            }
+            if (total <= 0.0) {
+                const double uniform = candidates.empty() ? 0.0 : 1.0 / static_cast<double>(candidates.size());
+                for (auto *candidate : candidates) {
+                    candidate->probability = uniform;
+                }
+                return;
+            }
+            for (auto *candidate : candidates) {
+                candidate->probability = candidate->raw_overlap / total;
+            }
+        }
+
+        void sortRadiusOverlapCandidates(std::vector<DynamicMiniCandidate*> &candidates, double queryRadius, int dim,
+                                         DynamicMiniProbeOrderingKind orderingKind, DistanceType distanceType,
+                                         DynamicMiniProbeStats *stats = nullptr) {
+            for (auto *candidate : candidates) {
+                if (orderingKind == DynamicMiniProbeOrderingKind::CentroidDistance) {
+                    candidate->raw_overlap = -candidate->raw_distance;
+                } else if (orderingKind == DynamicMiniProbeOrderingKind::L1Coverage) {
+                    candidate->log_overlap_volume = hypersphereIntersectionLogVolume(dim, candidate->metric_distance,
+                                                                                     queryRadius, candidate->radius);
+                    candidate->l1_coverage_score =
+                        l1CoverageScoreFromLogVolume(dim, candidate->log_overlap_volume, candidate->radius);
+                    candidate->raw_overlap = candidate->l1_coverage_score;
+                } else if (orderingKind == DynamicMiniProbeOrderingKind::L1CapHeight) {
+                    candidate->l1_cap_height_score =
+                        l1CapScore(distanceType, candidate->metric_distance, queryRadius, candidate->radius, stats);
+                    candidate->raw_overlap = candidate->l1_cap_height_score;
+                } else {
+                    candidate->raw_overlap = oldRadiusOverlapScore(candidate->metric_distance, queryRadius,
+                                                                   candidate->radius);
+                }
+            }
+            if (orderingKind == DynamicMiniProbeOrderingKind::L1Coverage) {
+                normalizeL1CoverageProbabilities(candidates);
+            } else if (orderingKind == DynamicMiniProbeOrderingKind::CentroidDistance) {
+                const double uniform = candidates.empty() ? 0.0 : 1.0 / static_cast<double>(candidates.size());
+                for (auto *candidate : candidates) {
+                    candidate->probability = uniform;
+                }
+                std::sort(candidates.begin(), candidates.end(), [](const auto *lhs, const auto *rhs) {
+                    if (lhs->raw_distance != rhs->raw_distance) {
+                        return lhs->raw_distance < rhs->raw_distance;
+                    }
+                    return lhs->raw_rank < rhs->raw_rank;
+                });
+                return;
+            } else {
+                normalizeCandidateProbabilities(candidates);
+            }
+            std::sort(candidates.begin(), candidates.end(), [](const auto *lhs, const auto *rhs) {
+                if (lhs->probability != rhs->probability) {
+                    return lhs->probability > rhs->probability;
+                }
+                return lhs->raw_rank < rhs->raw_rank;
+            });
+        }
+
+        std::vector<vector_idx_t> collectResultIds(std::priority_queue<NodeDistCloser> results) {
+            std::vector<vector_idx_t> ids;
+            ids.reserve(results.size());
+            while (!results.empty()) {
+                ids.push_back(results.top().id);
+                results.pop();
+            }
+            return ids;
+        }
+
+    }
+
+    void ReclusteringIndex::invalidateMiniRadiusStats() {
+        miniRmsRadius.clear();
+        miniP75Radius.clear();
+        miniP95Radius.clear();
+    }
+
+    void ReclusteringIndex::ensureMiniRadiusStats() {
+        const size_t numMiniCentroids = miniCentroids.size() / dim;
+        if (miniRmsRadius.size() == numMiniCentroids && miniP75Radius.size() == numMiniCentroids &&
+            miniP95Radius.size() == numMiniCentroids) {
+            return;
+        }
+
+        miniRmsRadius.assign(numMiniCentroids, 0.0);
+        miniP75Radius.assign(numMiniCentroids, 0.0);
+        miniP95Radius.assign(numMiniCentroids, 0.0);
+
+#pragma omp parallel for schedule(dynamic)
+        for (size_t miniId = 0; miniId < numMiniCentroids; miniId++) {
+            const size_t clusterSize = miniClusterVectorIds[miniId].size();
+            if (clusterSize == 0 || miniClusters[miniId].empty()) {
+                continue;
+            }
+
+            auto dc = getDistanceComputer(miniClusters[miniId].data(), clusterSize);
+            dc->setQuery(miniCentroids.data() + miniId * dim);
+
+            std::vector<double> distances(clusterSize);
+            double sqSum = 0.0;
+            const float *miniCentroid = miniCentroids.data() + miniId * dim;
+            for (size_t j = 0; j < clusterSize; j++) {
+                double metricDistance = 0.0;
+                if (usesAngularGeometry(config.distanceType)) {
+                    metricDistance = angularDistanceBetween(miniCentroid, miniClusters[miniId].data() + j * dim, dim);
+                } else {
+                    double rawDistance = 0.0;
+                    dc->computeDistance(j, &rawDistance);
+                    metricDistance = metricDistanceForRadius(config.distanceType, rawDistance);
+                }
+                distances[j] = metricDistance;
+                sqSum += metricDistance * metricDistance;
+            }
+
+            std::sort(distances.begin(), distances.end());
+            const size_t p75Index = std::min(clusterSize - 1, static_cast<size_t>(std::ceil(0.75 * clusterSize)) - 1);
+            const size_t p95Index = std::min(clusterSize - 1, static_cast<size_t>(std::ceil(0.95 * clusterSize)) - 1);
+            miniRmsRadius[miniId] = std::sqrt(sqSum / static_cast<double>(clusterSize));
+            miniP75Radius[miniId] = distances[p75Index];
+            miniP95Radius[miniId] = distances[p95Index];
+        }
+    }
+
+    const std::vector<double>& ReclusteringIndex::getMiniRadiusStats(DynamicMiniProbeRadiusKind radiusKind) {
+        ensureMiniRadiusStats();
+        if (radiusKind == DynamicMiniProbeRadiusKind::Rms) {
+            return miniRmsRadius;
+        }
+        if (radiusKind == DynamicMiniProbeRadiusKind::P75) {
+            return miniP75Radius;
+        }
+        return miniP95Radius;
+    }
+
+    void ReclusteringIndex::searchDynamicMiniProbes(const float *query, uint16_t k,
+                                                    std::priority_queue<NodeDistCloser> &results,
+                                                    const DynamicMiniProbeConfig &probeConfig,
+                                                    DynamicMiniProbeStats &dynamicStats,
+                                                    ReclusteringIndexStats &stats) {
+        dynamicStats = DynamicMiniProbeStats();
+        dynamicStats.strategy = probeConfig.strategy;
+        dynamicStats.orderingKind = probeConfig.orderingKind;
+
+        const auto numMegaCentroids = megaCentroids.size() / dim;
+        const auto numMiniCentroids = miniCentroids.size() / dim;
+        if (numMegaCentroids == 0 || numMiniCentroids == 0) {
+            dynamicStats.stop_reason = "empty_index";
+            return;
+        }
+
+        const uint64_t distanceCompBefore = stats.numDistanceCompForSearch;
+        const int nMegaProbes = std::min(probeConfig.nMegaProbes, static_cast<int>(numMegaCentroids));
+        std::vector<vector_idx_t> megaAssign;
+        findKClosestMegaCentroids(query, nMegaProbes, megaAssign, stats);
+
+        auto dc = getDistanceComputer(miniCentroids.data(), numMiniCentroids);
+        dc->setQuery(query);
+
+        std::vector<DynamicMiniCandidate> candidates;
+        candidates.reserve(numMiniCentroids);
+        std::unordered_set<vector_idx_t> seenMiniIds;
+        for (auto megaId : megaAssign) {
+            for (auto miniId : megaMiniCentroidIds[megaId]) {
+                if (miniId >= numMiniCentroids || seenMiniIds.find(miniId) != seenMiniIds.end()) {
+                    continue;
+                }
+                seenMiniIds.insert(miniId);
+                double rawDistance = 0.0;
+                stats.numDistanceCompForSearch++;
+                dc->computeDistance(miniId, &rawDistance);
+                DynamicMiniCandidate candidate;
+                candidate.id = miniId;
+                candidate.raw_distance = rawDistance;
+                if (usesAngularGeometry(config.distanceType)) {
+                    candidate.metric_distance = angularDistanceBetween(
+                        query, miniCentroids.data() + static_cast<size_t>(miniId) * dim, dim);
+                } else {
+                    candidate.metric_distance = metricDistanceForRadius(config.distanceType, rawDistance);
+                }
+                candidates.push_back(candidate);
+            }
+        }
+
+        std::sort(candidates.begin(), candidates.end(), [](const auto &lhs, const auto &rhs) {
+            return lhs.raw_distance < rhs.raw_distance;
+        });
+        for (int i = 0; i < static_cast<int>(candidates.size()); i++) {
+            candidates[i].raw_rank = i;
+        }
+
+        dynamicStats.candidate_l1_count = static_cast<int>(candidates.size());
+        if (candidates.empty()) {
+            dynamicStats.stop_reason = "no_l1_candidates";
+            return;
+        }
+        std::vector<vector_idx_t> selectedMiniIds;
+        const int minMiniProbes = clampMiniProbeCount(probeConfig.minMiniProbes, probeConfig.minMiniProbes,
+                                                      probeConfig.maxMiniProbes, candidates.size());
+        const int maxMiniProbes = clampMiniProbeCount(probeConfig.maxMiniProbes, probeConfig.minMiniProbes,
+                                                      probeConfig.maxMiniProbes, candidates.size());
+
+        if (probeConfig.strategy == DynamicMiniProbeStrategy::DistanceFactor) {
+            const double threshold = distanceFactorThreshold(candidates.front().raw_distance, probeConfig.distanceFactor,
+                                                            config.distanceType);
+            int withinFactor = 0;
+            for (const auto &candidate : candidates) {
+                if (candidate.raw_distance <= threshold) {
+                    withinFactor++;
+                }
+            }
+            const int selectedCount = clampMiniProbeCount(withinFactor, minMiniProbes, maxMiniProbes, candidates.size());
+            selectedMiniIds.reserve(selectedCount);
+            for (int i = 0; i < selectedCount; i++) {
+                candidates[i].selected = true;
+                selectedMiniIds.push_back(candidates[i].id);
+            }
+            findKClosestVectors(query, k, selectedMiniIds, results, stats);
+            dynamicStats.q_radius = currentQueryRadius(results, k, config.distanceType);
+            dynamicStats.stop_reason = "distance_factor_clamp";
+        } else {
+            const auto &radii = getMiniRadiusStats(probeConfig.radiusKind);
+            for (auto &candidate : candidates) {
+                candidate.radius = radii[candidate.id];
+            }
+
+            selectedMiniIds.reserve(maxMiniProbes);
+            std::priority_queue<NodeDistCloser> stopHeapResults;
+            auto stopHeapStates = makeStopHeapStates(k, probeConfig);
+            const int stopHeapK = maxStopHeapK(stopHeapStates, k);
+            bool thresholdRuleHasStopped = false;
+            bool thresholdRuleReached = false;
+            const int seedCount = std::min(minMiniProbes, maxMiniProbes);
+            for (int i = 0; i < seedCount; i++) {
+                candidates[i].selected = true;
+                selectedMiniIds.push_back(candidates[i].id);
+            }
+
+            double previousQr = currentQueryRadius(results, k, config.distanceType);
+            for (auto &state : stopHeapStates) {
+                setPreviousStopHeapState(state, stopHeapResults, config.distanceType);
+            }
+            findKClosestVectorsForTwoHeaps(query, k, stopHeapK, selectedMiniIds, results, stopHeapResults, stats);
+            double currentQr = currentQueryRadius(results, k, config.distanceType);
+            const auto seedDistanceBoundary = centroidDistanceBoundary(candidates, config.distanceType);
+            const bool seedThresholdRuleReached = thresholdRuleSatisfied(candidates, currentQr,
+                                                                         probeConfig.orderingKind,
+                                                                         probeConfig.thresholdFactor,
+                                                                         config.distanceType);
+            thresholdRuleReached = thresholdRuleReached || seedThresholdRuleReached;
+            const bool seedThresholdRuleStop = !thresholdRuleHasStopped && seedThresholdRuleReached;
+
+            for (auto &state : stopHeapStates) {
+                updateCurrentStopHeapState(state, stopHeapResults, config.distanceType, thresholdRuleReached);
+                DynamicMiniProbeBatchLog seedLog;
+                seedLog.batch_index = 0;
+                seedLog.stop_heap_multiplier = state.multiplier;
+                seedLog.selected_l1_count = static_cast<int>(selectedMiniIds.size());
+                seedLog.q_radius_before = previousQr;
+                seedLog.q_radius_after = currentQr;
+                seedLog.q_radius_relative_delta = relativeDelta(previousQr, currentQr);
+                seedLog.stop_heap_radius_before = state.previousRadius;
+                seedLog.stop_heap_radius_after = state.currentRadius;
+                seedLog.stop_heap_radius_relative_delta = relativeDelta(state.previousRadius, state.currentRadius);
+                seedLog.best_raw_centroid_distance = seedDistanceBoundary.bestRawDistance;
+                seedLog.remaining_min_raw_centroid_distance = seedDistanceBoundary.remainingMinRawDistance;
+                seedLog.centroid_distance_factor_boundary = seedDistanceBoundary.factorBoundary;
+                seedLog.stop_heap_worst_id_before = state.previousWorstId;
+                seedLog.stop_heap_worst_id_after = state.currentWorstId;
+                seedLog.threshold_rule_stop = seedThresholdRuleStop;
+                seedLog.heap_rule_stop = !state.heapRuleHasStopped &&
+                                         state.heapStableBatches >= probeConfig.stableQrBatches;
+                seedLog.combined_rule_stop = !state.combinedRuleHasStopped && thresholdRuleReached &&
+                                             state.combinedStableBatches >= probeConfig.stableQrBatches;
+                state.heapRuleHasStopped = state.heapRuleHasStopped || seedLog.heap_rule_stop;
+                state.combinedRuleHasStopped = state.combinedRuleHasStopped || seedLog.combined_rule_stop;
+                seedLog.result_ids = collectResultIds(results);
+                dynamicStats.batch_logs.push_back(seedLog);
+            }
+            thresholdRuleHasStopped = thresholdRuleHasStopped || seedThresholdRuleStop;
+
+            int stableBatches = 0;
+            int batchIndex = 1;
+            while (static_cast<int>(selectedMiniIds.size()) < maxMiniProbes) {
+                std::vector<DynamicMiniCandidate*> remaining;
+                remaining.reserve(candidates.size() - selectedMiniIds.size());
+                for (auto &candidate : candidates) {
+                    if (!candidate.selected) {
+                        remaining.push_back(&candidate);
+                    }
+                }
+                if (remaining.empty()) {
+                    dynamicStats.stop_reason = "all_candidates_selected";
+                    break;
+                }
+
+                sortRadiusOverlapCandidates(remaining, currentQr, dim, probeConfig.orderingKind,
+                                            config.distanceType, &dynamicStats);
+                const int remainingBudget = maxMiniProbes - static_cast<int>(selectedMiniIds.size());
+                const int currentBatchSize = probeConfig.strategy == DynamicMiniProbeStrategy::PercentGrowth
+                                                 ? percentGrowthBatchSize(remaining, remainingBudget, probeConfig)
+                                                 : std::min({std::max(1, probeConfig.batchSize),
+                                                             remainingBudget,
+                                                             static_cast<int>(remaining.size())});
+                if (currentBatchSize <= 0) {
+                    dynamicStats.stop_reason = "empty_batch";
+                    break;
+                }
+                std::vector<vector_idx_t> batchMiniIds;
+                batchMiniIds.reserve(currentBatchSize);
+                double batchProbabilityMass = 0.0;
+                for (int i = 0; i < currentBatchSize; i++) {
+                    auto *candidate = remaining[i];
+                    candidate->selected = true;
+                    selectedMiniIds.push_back(candidate->id);
+                    batchMiniIds.push_back(candidate->id);
+                    batchProbabilityMass += candidate->probability;
+                }
+
+                previousQr = currentQr;
+                for (auto &state : stopHeapStates) {
+                    setPreviousStopHeapState(state, stopHeapResults, config.distanceType);
+                }
+                findKClosestVectorsForTwoHeaps(query, k, stopHeapK, batchMiniIds, results, stopHeapResults, stats);
+                currentQr = currentQueryRadius(results, k, config.distanceType);
+                dynamicStats.cumulative_probability_mass += batchProbabilityMass;
+                const auto distanceBoundary = centroidDistanceBoundary(candidates, config.distanceType);
+                const bool thresholdRuleNowReached = thresholdRuleSatisfied(candidates, currentQr,
+                                                                            probeConfig.orderingKind,
+                                                                            probeConfig.thresholdFactor,
+                                                                            config.distanceType);
+                thresholdRuleReached = thresholdRuleReached || thresholdRuleNowReached;
+                const bool thresholdRuleStop = !thresholdRuleHasStopped && thresholdRuleNowReached;
+                const int currentBatchIndex = batchIndex++;
+                bool actualBatchStopped = false;
+                if (!probeConfig.disableStopping &&
+                    probeConfig.strategy != DynamicMiniProbeStrategy::PercentGrowth) {
+                    if (relativeDelta(previousQr, currentQr) <= probeConfig.qrChangeEps) {
+                        stableBatches++;
+                    } else {
+                        stableBatches = 0;
+                    }
+                    if (dynamicStats.cumulative_probability_mass >= probeConfig.targetProbabilityMass) {
+                        actualBatchStopped = true;
+                        dynamicStats.stop_reason = "target_probability_mass";
+                    } else if (stableBatches >= probeConfig.stableQrBatches &&
+                               batchProbabilityMass <= probeConfig.minBatchProbabilityMass) {
+                        actualBatchStopped = true;
+                        dynamicStats.stop_reason = "stable_q_radius";
+                    }
+                }
+
+                for (auto &state : stopHeapStates) {
+                    updateCurrentStopHeapState(state, stopHeapResults, config.distanceType, thresholdRuleReached);
+                    DynamicMiniProbeBatchLog batchLog;
+                    batchLog.batch_index = currentBatchIndex;
+                    batchLog.stop_heap_multiplier = state.multiplier;
+                    batchLog.selected_l1_count = static_cast<int>(selectedMiniIds.size());
+                    batchLog.q_radius_before = previousQr;
+                    batchLog.q_radius_after = currentQr;
+                    batchLog.q_radius_relative_delta = relativeDelta(previousQr, currentQr);
+                    batchLog.batch_probability_mass = batchProbabilityMass;
+                    batchLog.cumulative_probability_mass = dynamicStats.cumulative_probability_mass;
+                    batchLog.stop_heap_radius_before = state.previousRadius;
+                    batchLog.stop_heap_radius_after = state.currentRadius;
+                    batchLog.stop_heap_radius_relative_delta = relativeDelta(state.previousRadius, state.currentRadius);
+                    batchLog.best_raw_centroid_distance = distanceBoundary.bestRawDistance;
+                    batchLog.remaining_min_raw_centroid_distance = distanceBoundary.remainingMinRawDistance;
+                    batchLog.centroid_distance_factor_boundary = distanceBoundary.factorBoundary;
+                    batchLog.stop_heap_worst_id_before = state.previousWorstId;
+                    batchLog.stop_heap_worst_id_after = state.currentWorstId;
+                    batchLog.threshold_rule_stop = thresholdRuleStop;
+                    batchLog.heap_rule_stop = !state.heapRuleHasStopped &&
+                                              state.heapStableBatches >= probeConfig.stableQrBatches;
+                    batchLog.combined_rule_stop = !state.combinedRuleHasStopped && thresholdRuleReached &&
+                                                  state.combinedStableBatches >= probeConfig.stableQrBatches;
+                    if (!probeConfig.disableStopping &&
+                        probeConfig.strategy == DynamicMiniProbeStrategy::PercentGrowth &&
+                        batchLog.heap_rule_stop) {
+                        actualBatchStopped = true;
+                        dynamicStats.stop_reason = "heap_worst_id_stable";
+                    }
+                    state.heapRuleHasStopped = state.heapRuleHasStopped || batchLog.heap_rule_stop;
+                    state.combinedRuleHasStopped = state.combinedRuleHasStopped || batchLog.combined_rule_stop;
+                    batchLog.result_ids = collectResultIds(results);
+
+                    batchLog.stopped = actualBatchStopped;
+                    dynamicStats.batch_logs.push_back(batchLog);
+                }
+                thresholdRuleHasStopped = thresholdRuleHasStopped || thresholdRuleStop;
+                if (actualBatchStopped) {
+                    break;
+                }
+            }
+            if (dynamicStats.stop_reason.empty()) {
+                dynamicStats.stop_reason = "max_mini_probes";
+            }
+            dynamicStats.q_radius = currentQr;
+        }
+
+        dynamicStats.selected_l1_count = static_cast<int>(selectedMiniIds.size());
+        dynamicStats.distance_computations = stats.numDistanceCompForSearch - distanceCompBefore;
+    }
+
     void ReclusteringIndex::search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
                                    int nMegaProbes, int nMicroProbes, ReclusteringIndexStats &stats) {
         auto numMegaCentroids = megaCentroids.size() / dim;
@@ -4312,6 +5149,37 @@ namespace orangedb {
                     results.emplace(ids[j], dist);
                     if (results.size() > k) {
                         results.pop();
+                    }
+                }
+            }
+        }
+    }
+
+    void ReclusteringIndex::findKClosestVectorsForTwoHeaps(const float *query, int k, int heapK,
+                                                           const std::vector<vector_idx_t> &miniCentroids,
+                                                           std::priority_queue<NodeDistCloser> &results,
+                                                           std::priority_queue<NodeDistCloser> &heapResults,
+                                                           ReclusteringIndexStats &stats) {
+        for (auto miniId : miniCentroids) {
+            auto cluster = miniClusters[miniId];
+            auto ids = miniClusterVectorIds[miniId];
+            auto clusterSize = ids.size();
+            auto clusterDc = getDistanceComputer(cluster.data(), clusterSize);
+            clusterDc->setQuery(query);
+            for (int j = 0; j < clusterSize; j++) {
+                double dist;
+                clusterDc->computeDistance(j, &dist);
+                stats.numDistanceCompForSearch++;
+                if (results.size() <= static_cast<size_t>(k) || dist < results.top().dist) {
+                    results.emplace(ids[j], dist);
+                    if (results.size() > static_cast<size_t>(k)) {
+                        results.pop();
+                    }
+                }
+                if (heapResults.size() <= static_cast<size_t>(heapK) || dist < heapResults.top().dist) {
+                    heapResults.emplace(ids[j], dist);
+                    if (heapResults.size() > static_cast<size_t>(heapK)) {
+                        heapResults.pop();
                     }
                 }
             }

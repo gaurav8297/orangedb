@@ -16,6 +16,7 @@
 #include <limits>
 #include <memory>
 #include <random>      // mt19937, uniform_int_distribution
+#include <unordered_map>
 #include <unordered_set>
 #include <simsimd/simsimd.h>
 #include "include/partitioned_index.h"
@@ -3480,6 +3481,225 @@ AdaptiveMiniProbeStats get_recall_with_adaptive_mini_probes(ReclusteringIndex &i
     return adaptiveStats;
 }
 
+struct DynamicProbeRecallSummary {
+    double avgRecallPercent = 0.0;
+    double stdRecallPercent = 0.0;
+    double minRecallPercent = 0.0;
+    double maxRecallPercent = 0.0;
+    double p5RecallPercent = 0.0;
+    double p50RecallPercent = 0.0;
+    double p95RecallPercent = 0.0;
+    double avgSelectedL1 = 0.0;
+    double avgCandidateL1 = 0.0;
+    double avgDistanceComputation = 0.0;
+    double avgQRadius = 0.0;
+    uint64_t angularCapDisjointCount = 0;
+    uint64_t angularCapFullL1Count = 0;
+    uint64_t angularCapQueryInsideL1Count = 0;
+    uint64_t angularCapPartialCount = 0;
+};
+
+std::string dynamicProbeStrategyName(DynamicMiniProbeStrategy strategy) {
+    if (strategy == DynamicMiniProbeStrategy::PercentGrowth) {
+        return "percent_growth";
+    }
+    if (strategy == DynamicMiniProbeStrategy::RadiusOverlap) {
+        return "radius_overlap";
+    }
+    return "distance_factor";
+}
+
+DynamicMiniProbeStrategy parseDynamicProbeStrategy(const std::string &value) {
+    if (value == "radius_overlap" || value == "radiusOverlap" || value == "overlap") {
+        return DynamicMiniProbeStrategy::RadiusOverlap;
+    }
+    if (value == "percent_growth" || value == "percentGrowth" || value == "growth") {
+        return DynamicMiniProbeStrategy::PercentGrowth;
+    }
+    return DynamicMiniProbeStrategy::DistanceFactor;
+}
+
+DynamicMiniProbeRadiusKind parseDynamicProbeRadiusKind(const std::string &value) {
+    if (value == "rms" || value == "RMS") {
+        return DynamicMiniProbeRadiusKind::Rms;
+    }
+    if (value == "p75" || value == "P75") {
+        return DynamicMiniProbeRadiusKind::P75;
+    }
+    return DynamicMiniProbeRadiusKind::P95;
+}
+
+std::string dynamicProbeOrderingName(DynamicMiniProbeOrderingKind orderingKind) {
+    if (orderingKind == DynamicMiniProbeOrderingKind::CentroidDistance) {
+        return "centroid_distance";
+    }
+    if (orderingKind == DynamicMiniProbeOrderingKind::L1Coverage) {
+        return "l1_coverage_score";
+    }
+    if (orderingKind == DynamicMiniProbeOrderingKind::L1CapHeight) {
+        return "l1_cap_height_score";
+    }
+    return "radius_margin";
+}
+
+DynamicMiniProbeOrderingKind parseDynamicProbeOrderingKind(const std::string &value) {
+    if (value == "distance" || value == "centroid_distance" || value == "dist") {
+        return DynamicMiniProbeOrderingKind::CentroidDistance;
+    }
+    if (value == "l1_coverage" || value == "l1_coverage_score" || value == "coverage") {
+        return DynamicMiniProbeOrderingKind::L1Coverage;
+    }
+    if (value == "l1_cap_height" || value == "l1_cap_height_score" || value == "cap_height") {
+        return DynamicMiniProbeOrderingKind::L1CapHeight;
+    }
+    return DynamicMiniProbeOrderingKind::RadiusNormalizedHeuristic;
+}
+
+double percentileValue(std::vector<double> values, double percentile) {
+    if (values.empty()) {
+        return 0.0;
+    }
+    std::sort(values.begin(), values.end());
+    const double rank = percentile * static_cast<double>(values.size() - 1);
+    const size_t lo = static_cast<size_t>(std::floor(rank));
+    const size_t hi = static_cast<size_t>(std::ceil(rank));
+    if (lo == hi) {
+        return values[lo];
+    }
+    const double weight = rank - static_cast<double>(lo);
+    return values[lo] * (1.0 - weight) + values[hi] * weight;
+}
+
+int countRecallHits(std::priority_queue<NodeDistCloser> results, const vector_idx_t *gt, int k) {
+    int hits = 0;
+    while (!results.empty()) {
+        auto result = results.top();
+        results.pop();
+        if (std::find(gt, gt + k, result.id) != gt + k) {
+            hits++;
+        }
+    }
+    return hits;
+}
+
+int countRecallHits(const std::vector<vector_idx_t> &results, const vector_idx_t *gt, int k) {
+    int hits = 0;
+    for (const auto resultId : results) {
+        if (std::find(gt, gt + k, resultId) != gt + k) {
+            hits++;
+        }
+    }
+    return hits;
+}
+
+DynamicProbeRecallSummary get_recall_with_dynamic_mini_probes(
+    ReclusteringIndex &index, float *queryVecs, size_t queryDimension, size_t queryNumVectors, int k,
+    vector_idx_t *gtVecs, const DynamicMiniProbeConfig &probeConfig, int finalIter,
+    const std::string &phase, int completedL2Reclusters, int64_t l2Id, int logQueryCount, int logQueryId = -1) {
+    ReclusteringIndexStats stats;
+    std::vector<double> recalls;
+    recalls.reserve(queryNumVectors);
+
+    double totalRecall = 0.0;
+    double totalSelectedL1 = 0.0;
+    double totalCandidateL1 = 0.0;
+    double totalDistanceComputations = 0.0;
+    double totalQRadius = 0.0;
+    uint64_t totalAngularCapDisjoint = 0;
+    uint64_t totalAngularCapFullL1 = 0;
+    uint64_t totalAngularCapQueryInsideL1 = 0;
+    uint64_t totalAngularCapPartial = 0;
+    const std::string strategyName = dynamicProbeStrategyName(probeConfig.strategy);
+    const std::string orderingName = dynamicProbeOrderingName(probeConfig.orderingKind);
+
+    size_t countedQueries = 0;
+
+    for (size_t queryId = 0; queryId < queryNumVectors; queryId++) {
+        std::priority_queue<NodeDistCloser> results;
+        DynamicMiniProbeStats dynamicStats;
+        index.searchDynamicMiniProbes(queryVecs + queryId * queryDimension, k, results, probeConfig,
+                                      dynamicStats, stats);
+        const int hits = countRecallHits(results, gtVecs + queryId * k, k);
+        const double recallPercent = 100.0 * static_cast<double>(hits) / static_cast<double>(k);
+        recalls.push_back(recallPercent);
+
+        totalRecall += recallPercent;
+        totalSelectedL1 += dynamicStats.selected_l1_count;
+        totalCandidateL1 += dynamicStats.candidate_l1_count;
+        totalDistanceComputations += static_cast<double>(dynamicStats.distance_computations);
+        totalAngularCapDisjoint += dynamicStats.angular_cap_disjoint_count;
+        totalAngularCapFullL1 += dynamicStats.angular_cap_full_l1_count;
+        totalAngularCapQueryInsideL1 += dynamicStats.angular_cap_query_inside_l1_count;
+        totalAngularCapPartial += dynamicStats.angular_cap_partial_count;
+        if (std::isfinite(dynamicStats.q_radius)) {
+            totalQRadius += dynamicStats.q_radius;
+        }
+        countedQueries++;
+
+        const bool shouldLogQuery = logQueryId >= 0
+                                        ? static_cast<int>(queryId) == logQueryId
+                                        : static_cast<int>(queryId) < logQueryCount;
+        if (shouldLogQuery) {
+            for (const auto &batchLog : dynamicStats.batch_logs) {
+                const int batchHits = countRecallHits(batchLog.result_ids, gtVecs + queryId * k, k);
+                const double batchRecall = 100.0 * static_cast<double>(batchHits) / static_cast<double>(k);
+                printf("DYNAMIC_BATCH_QR final_iter=%d phase=%s completed_l2_reclusters=%d l2_id=%lld "
+                       "strategy=%s ordering=%s stop_heap_multiplier=%.3f query=%zu batch=%d selected_l1=%d hits=%d k=%d recall=%.2f "
+                       "q_radius_before=%.6f "
+                       "q_radius_after=%.6f q_radius_relative_delta=%.6f batch_probability_mass=%.6f "
+                       "cumulative_probability_mass=%.6f stop_heap_radius_before=%.6f "
+                       "stop_heap_radius_after=%.6f stop_heap_radius_relative_delta=%.6f "
+                       "best_raw_centroid_distance=%.9f remaining_min_raw_centroid_distance=%.9f "
+                       "centroid_distance_factor_boundary=%.9f "
+                       "stop_heap_worst_id_before=%llu stop_heap_worst_id_after=%llu "
+                       "threshold_rule_stop=%d heap_rule_stop=%d combined_rule_stop=%d stopped=%d\n",
+                       finalIter, phase.c_str(), completedL2Reclusters, static_cast<long long>(l2Id),
+                       strategyName.c_str(), orderingName.c_str(), batchLog.stop_heap_multiplier, queryId, batchLog.batch_index,
+                       batchLog.selected_l1_count, batchHits, k, batchRecall,
+                       batchLog.q_radius_before, batchLog.q_radius_after, batchLog.q_radius_relative_delta,
+                       batchLog.batch_probability_mass, batchLog.cumulative_probability_mass,
+                       batchLog.stop_heap_radius_before, batchLog.stop_heap_radius_after,
+                       batchLog.stop_heap_radius_relative_delta,
+                       batchLog.best_raw_centroid_distance, batchLog.remaining_min_raw_centroid_distance,
+                       batchLog.centroid_distance_factor_boundary,
+                       static_cast<unsigned long long>(batchLog.stop_heap_worst_id_before),
+                       static_cast<unsigned long long>(batchLog.stop_heap_worst_id_after),
+                       batchLog.threshold_rule_stop ? 1 : 0, batchLog.heap_rule_stop ? 1 : 0,
+                       batchLog.combined_rule_stop ? 1 : 0,
+                       batchLog.stopped ? 1 : 0);
+            }
+        }
+    }
+
+    DynamicProbeRecallSummary summary;
+    if (countedQueries == 0) {
+        return summary;
+    }
+
+    summary.avgRecallPercent = totalRecall / static_cast<double>(countedQueries);
+    summary.avgSelectedL1 = totalSelectedL1 / static_cast<double>(countedQueries);
+    summary.avgCandidateL1 = totalCandidateL1 / static_cast<double>(countedQueries);
+    summary.avgDistanceComputation = totalDistanceComputations / static_cast<double>(countedQueries);
+    summary.avgQRadius = totalQRadius / static_cast<double>(countedQueries);
+    summary.angularCapDisjointCount = totalAngularCapDisjoint;
+    summary.angularCapFullL1Count = totalAngularCapFullL1;
+    summary.angularCapQueryInsideL1Count = totalAngularCapQueryInsideL1;
+    summary.angularCapPartialCount = totalAngularCapPartial;
+    summary.minRecallPercent = *std::min_element(recalls.begin(), recalls.end());
+    summary.maxRecallPercent = *std::max_element(recalls.begin(), recalls.end());
+    summary.p5RecallPercent = percentileValue(recalls, 0.05);
+    summary.p50RecallPercent = percentileValue(recalls, 0.50);
+    summary.p95RecallPercent = percentileValue(recalls, 0.95);
+
+    double variance = 0.0;
+    for (double recall : recalls) {
+        const double delta = recall - summary.avgRecallPercent;
+        variance += delta * delta;
+    }
+    summary.stdRecallPercent = std::sqrt(variance / static_cast<double>(countedQueries));
+    return summary;
+}
+
 double get_recall_with_bad_clusters(ReclusteringIndex &index, float *queryVecs, size_t queryDimension,
                                     size_t queryNumVectors, int k,
                                     vector_idx_t *gtVecs, int nMegaProbes, int nMiniProbes,
@@ -4281,6 +4501,9 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int reclusterOnScore = getIntOption("-reclusterOnScore", 0);
     auto nMegaProbes = getIntListOption("-nMegaProbes", "20");
     auto nMiniProbes = getIntListOption("-nMiniProbes", "250");
+    auto measureMiniProbes = input.getCmdOption("-measureMiniProbes").empty()
+                                 ? nMiniProbes
+                                 : parseCommaSeparatedIntegers(input.getCmdOption("-measureMiniProbes"));
     const int fixedNMegaProbe = getIntOption("-fixedNMegaProbe", nMegaProbes.empty() ? 20 : nMegaProbes[0]);
     const int nMinMiniProbes = getIntOption("-nMinMiniProbes",
                                             nMiniProbes.empty() ? 5 : *std::min_element(nMiniProbes.begin(), nMiniProbes.end()));
@@ -4294,10 +4517,87 @@ void benchmark_fast_reclustering(InputParser &input) {
     const int incrementalInsertPercent = getIntOption("-incrementalInsertPercent", 10);
     const int reclusterCycles = getIntOption("-reclusterCycles", iterations);
     const int finalReclusterCycles = getIntOption("-finalReclusterCycles", iterations);
+    const bool disableScheduledRecluster = getBoolOption("-disableScheduledRecluster", false);
     // const bool fast = getBoolOption("-fast", false);
     const int numQueries = getIntOption("-numQueries", 10);
     const int readFromDisk = getIntOption("-readFromDisk", 0);
     const std::string storagePath = getStringOption("-storagePath", "orangedb_recluster.bin");
+    const bool measureRecallFluctuation = getBoolOption("-measureRecallFluctuation", false);
+    const bool dynamicRecallOnly = getBoolOption("-dynamicRecallOnly", false);
+    const bool disableFinalFlush = getBoolOption("-disableFinalFlush", false);
+    const int recallWarmupIterations = getIntOption("-recallWarmupIterations", 3);
+    auto parseDoubleList = [](const std::string &value) {
+        std::vector<double> values;
+        size_t start = 0;
+        while (start < value.size()) {
+            size_t comma = value.find(',', start);
+            std::string token = value.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+            if (!token.empty()) {
+                values.push_back(std::stod(token));
+            }
+            if (comma == std::string::npos) {
+                break;
+            }
+            start = comma + 1;
+        }
+        return values;
+    };
+    const bool benchmarkDynamicMiniProbes = getBoolOption("-benchmarkDynamicMiniProbes", false);
+    const auto dynamicStrategyNames = parseCommaSeparated(
+        getStringOption("-dynamicMiniProbeStrategies", "distance_factor,radius_overlap"));
+    std::vector<DynamicMiniProbeStrategy> dynamicMiniProbeStrategies;
+    for (const auto &strategyName : dynamicStrategyNames) {
+        if (strategyName == "both") {
+            dynamicMiniProbeStrategies.push_back(DynamicMiniProbeStrategy::DistanceFactor);
+            dynamicMiniProbeStrategies.push_back(DynamicMiniProbeStrategy::RadiusOverlap);
+        } else if (strategyName == "all") {
+            dynamicMiniProbeStrategies.push_back(DynamicMiniProbeStrategy::DistanceFactor);
+            dynamicMiniProbeStrategies.push_back(DynamicMiniProbeStrategy::RadiusOverlap);
+            dynamicMiniProbeStrategies.push_back(DynamicMiniProbeStrategy::PercentGrowth);
+        } else {
+            dynamicMiniProbeStrategies.push_back(parseDynamicProbeStrategy(strategyName));
+        }
+    }
+    if (dynamicMiniProbeStrategies.empty()) {
+        dynamicMiniProbeStrategies.push_back(DynamicMiniProbeStrategy::DistanceFactor);
+        dynamicMiniProbeStrategies.push_back(DynamicMiniProbeStrategy::RadiusOverlap);
+    }
+    const auto dynamicDistanceFactors = input.getCmdOption("-dynamicDistanceFactors").empty()
+                                            ? std::vector<double>{1.9}
+                                            : parseDoubleList(input.getCmdOption("-dynamicDistanceFactors"));
+    const double dynamicThresholdFactor = getFloatOption("-dynamicThresholdFactor", 2.0f);
+    const auto dynamicOrderingNames = parseCommaSeparated(getStringOption("-dynamicRadiusOrderings", "old"));
+    std::vector<DynamicMiniProbeOrderingKind> dynamicRadiusOrderings;
+    for (const auto &orderingName : dynamicOrderingNames) {
+        if (orderingName == "all") {
+            dynamicRadiusOrderings.push_back(DynamicMiniProbeOrderingKind::RadiusNormalizedHeuristic);
+            dynamicRadiusOrderings.push_back(DynamicMiniProbeOrderingKind::CentroidDistance);
+            dynamicRadiusOrderings.push_back(DynamicMiniProbeOrderingKind::L1Coverage);
+            dynamicRadiusOrderings.push_back(DynamicMiniProbeOrderingKind::L1CapHeight);
+        } else {
+            dynamicRadiusOrderings.push_back(parseDynamicProbeOrderingKind(orderingName));
+        }
+    }
+    if (dynamicRadiusOrderings.empty()) {
+        dynamicRadiusOrderings.push_back(DynamicMiniProbeOrderingKind::RadiusNormalizedHeuristic);
+    }
+    const int dynamicMinMiniProbes = getIntOption("-dynamicMinMiniProbes", nMinMiniProbes);
+    const int dynamicMaxMiniProbes = getIntOption("-dynamicMaxMiniProbes", nMaxMiniProbes);
+    const int dynamicNMegaProbes = getIntOption("-dynamicNMegaProbes", fixedNMegaProbe);
+    const int dynamicBatchSize = getIntOption("-dynamicBatchSize", 50);
+    const int dynamicGrowthBatchStep = getIntOption("-dynamicGrowthBatchStep", 10);
+    const int dynamicLogQueryCount = getIntOption("-dynamicLogQueryCount", 1);
+    const int dynamicLogQueryId = getIntOption("-dynamicLogQueryId", -1);
+    const bool dynamicDisableStopping = getBoolOption("-dynamicDisableStopping", true);
+    const double dynamicTargetProbabilityMass = getFloatOption("-dynamicTargetProbabilityMass", 0.95f);
+    const double dynamicMinBatchProbabilityMass = getFloatOption("-dynamicMinBatchProbabilityMass", 0.01f);
+    const int dynamicStableQrBatches = getIntOption("-dynamicStableQrBatches", 2);
+    const double dynamicQrChangeEps = getFloatOption("-dynamicQrChangeEps", 0.01f);
+    const double dynamicStopHeapMultiplier = getFloatOption("-dynamicStopHeapMultiplier", 2.0f);
+    const auto dynamicStopHeapMultipliers = input.getCmdOption("-dynamicStopHeapMultipliers").empty()
+                                                ? std::vector<double>{dynamicStopHeapMultiplier}
+                                                : parseDoubleList(input.getCmdOption("-dynamicStopHeapMultipliers"));
+    const auto dynamicRadiusKind = parseDynamicProbeRadiusKind(getStringOption("-dynamicRadiusKind", "p95"));
     const int numThreads = getIntOption("-numThreads", std::max(1, omp_get_max_threads()));
     const bool useIP = getBoolOption("-useIP", true);
     const float quantTrainPercentage = getFloatOption("-quantTrainPercentage", 0.1f);
@@ -4344,13 +4644,16 @@ void benchmark_fast_reclustering(InputParser &input) {
 
     RandomGenerator rng(1234);
     ReclusteringIndex index(queryDimension, config, &rng);
-    if (initialInsertPercent <= 0 || initialInsertPercent >= 100 ||
-        incrementalInsertPercent <= 0 || reclusterCycles < 0 || finalReclusterCycles < 0) {
+    if (!disableScheduledRecluster && (initialInsertPercent <= 0 || initialInsertPercent >= 100 ||
+        incrementalInsertPercent <= 0 || reclusterCycles < 0 || finalReclusterCycles < 0)) {
         fprintf(stderr, "Invalid reclustering schedule config\n");
         exit(1);
     }
     auto getReclusterTargets = [&](size_t totalVectorCount) -> std::vector<size_t> {
         std::vector<size_t> targets;
+        if (disableScheduledRecluster) {
+            return targets;
+        }
         for (int percent = initialInsertPercent; percent < 100; percent += incrementalInsertPercent) {
             size_t target = std::min(totalVectorCount,
                                      (size_t)std::ceil((double)totalVectorCount * percent / 100.0));
@@ -4391,6 +4694,102 @@ void benchmark_fast_reclustering(InputParser &input) {
                 }
             }
             printf("Reclustering Iteration %d completed\n", iter);
+        }
+    };
+
+    auto recordRecallSnapshot = [&](int finalIter, const std::string &phase, int completedL2Reclusters,
+                                    int64_t l2Id) {
+        for (const int miniProbe : measureMiniProbes) {
+        printf("Recording recall snapshot: final_iter=%d phase=%s completed_l2_reclusters=%d l2_id=%lld mini_probe=%d\n",
+               finalIter, phase.c_str(), completedL2Reclusters, static_cast<long long>(l2Id), miniProbe);
+        const auto stats = get_recall_with_adaptive_mini_probes(index, queryVecs, queryDimension, queryNumVectors, k,
+                                                                gtVecs, fixedNMegaProbe, miniProbe,
+                                                                miniProbe, minRecallRange, maxRecallRange,
+                                                                miniProbeStep);
+        printf("RECALL_SNAPSHOT final_iter=%d phase=%s completed_l2_reclusters=%d l2_id=%lld mini_probe=%d "
+               "avg_recall=%.2f avg_l1_probe=%.2f avg_l2_probe=%.2f avg_distance=%.2f "
+               "counted=%zu total_queries=%zu unreachable=%zu\n",
+               finalIter, phase.c_str(), completedL2Reclusters, static_cast<long long>(l2Id), miniProbe,
+               stats.avgRecallPercent, stats.avgMiniProbe, stats.avgMegaProbe,
+               stats.avgDistanceComputation, stats.numCounted, queryNumVectors, stats.numUnreachable);
+        }
+        if (benchmarkDynamicMiniProbes) {
+            for (const auto strategy : dynamicMiniProbeStrategies) {
+                const std::vector<double> factors = strategy == DynamicMiniProbeStrategy::DistanceFactor ||
+                                                    strategy == DynamicMiniProbeStrategy::PercentGrowth
+                                                        ? dynamicDistanceFactors
+                                                        : std::vector<double>{0.0};
+                const std::vector<DynamicMiniProbeOrderingKind> orderings =
+                    strategy == DynamicMiniProbeStrategy::RadiusOverlap ||
+                    strategy == DynamicMiniProbeStrategy::PercentGrowth
+                        ? dynamicRadiusOrderings
+                        : std::vector<DynamicMiniProbeOrderingKind>{DynamicMiniProbeOrderingKind::RadiusNormalizedHeuristic};
+                for (const auto orderingKind : orderings) {
+                for (const double distanceFactor : factors) {
+                    DynamicMiniProbeConfig dynamicConfig;
+                    dynamicConfig.strategy = strategy;
+                    dynamicConfig.radiusKind = dynamicRadiusKind;
+                    dynamicConfig.orderingKind = orderingKind;
+                    dynamicConfig.nMegaProbes = dynamicNMegaProbes;
+                    dynamicConfig.minMiniProbes = dynamicMinMiniProbes;
+                    dynamicConfig.maxMiniProbes = dynamicMaxMiniProbes;
+                    dynamicConfig.distanceFactor = distanceFactor;
+                    dynamicConfig.thresholdFactor = dynamicThresholdFactor;
+                    dynamicConfig.k = k;
+                    dynamicConfig.batchSize = dynamicBatchSize;
+                    dynamicConfig.growthBatchStep = dynamicGrowthBatchStep;
+                    dynamicConfig.targetProbabilityMass = dynamicTargetProbabilityMass;
+                    dynamicConfig.minBatchProbabilityMass = dynamicMinBatchProbabilityMass;
+                    dynamicConfig.stableQrBatches = dynamicStableQrBatches;
+                    dynamicConfig.qrChangeEps = dynamicQrChangeEps;
+                    dynamicConfig.disableStopping = dynamicDisableStopping;
+                    dynamicConfig.stopHeapMultiplier = dynamicStopHeapMultipliers.empty()
+                                                           ? dynamicStopHeapMultiplier
+                                                           : dynamicStopHeapMultipliers.back();
+                    dynamicConfig.stopHeapMultipliers = dynamicStopHeapMultipliers;
+
+                    const auto summary = get_recall_with_dynamic_mini_probes(
+                        index, queryVecs, queryDimension, queryNumVectors, k, gtVecs, dynamicConfig, finalIter,
+                        phase, completedL2Reclusters, l2Id, dynamicLogQueryCount, dynamicLogQueryId);
+                    printf("DYNAMIC_RECALL_SNAPSHOT final_iter=%d phase=%s completed_l2_reclusters=%d "
+                           "l2_id=%lld strategy=%s ordering=%s distance_factor=%.3f n_l2_probe=%d min_l1_probe=%d "
+                           "max_l1_probe=%d avg_recall=%.2f std_recall=%.2f min_recall=%.2f "
+                           "p5_recall=%.2f p50_recall=%.2f p95_recall=%.2f max_recall=%.2f "
+                           "avg_selected_l1=%.2f avg_candidate_l1=%.2f avg_q_radius=%.6f "
+                           "avg_distance=%.2f angular_cap_disjoint=%llu angular_cap_full_l1=%llu "
+                           "angular_cap_query_inside_l1=%llu angular_cap_partial=%llu total_queries=%zu\n",
+                           finalIter, phase.c_str(), completedL2Reclusters, static_cast<long long>(l2Id),
+                           dynamicProbeStrategyName(strategy).c_str(), dynamicProbeOrderingName(orderingKind).c_str(),
+                           distanceFactor, dynamicConfig.nMegaProbes,
+                           dynamicConfig.minMiniProbes, dynamicConfig.maxMiniProbes, summary.avgRecallPercent,
+                           summary.stdRecallPercent, summary.minRecallPercent, summary.p5RecallPercent,
+                           summary.p50RecallPercent, summary.p95RecallPercent, summary.maxRecallPercent,
+                           summary.avgSelectedL1, summary.avgCandidateL1, summary.avgQRadius,
+                           summary.avgDistanceComputation,
+                           static_cast<unsigned long long>(summary.angularCapDisjointCount),
+                           static_cast<unsigned long long>(summary.angularCapFullL1Count),
+                           static_cast<unsigned long long>(summary.angularCapQueryInsideL1Count),
+                           static_cast<unsigned long long>(summary.angularCapPartialCount),
+                           static_cast<unsigned long>(queryNumVectors));
+                }
+                }
+            }
+        }
+    };
+
+    auto reclusterL2sOneByOne = [&](int finalIter) {
+        std::vector<vector_idx_t> l2Ids;
+        index.getMegaClusterIds(l2Ids);
+        if (nMegaRecluster > 0) {
+            l2Ids.resize(std::min(l2Ids.size(), static_cast<size_t>(nMegaRecluster)));
+        }
+        for (size_t i = 0; i < l2Ids.size(); i++) {
+            const auto l2Id = l2Ids[i];
+            printf("Reclustering single L2 %llu (%zu/%zu)\n",
+                   static_cast<unsigned long long>(l2Id), i + 1, l2Ids.size());
+            index.reclusterInternalMegaCentroid(l2Id);
+            recordRecallSnapshot(finalIter, "after_single_l2_recluster", static_cast<int>(i + 1),
+                                 static_cast<int64_t>(l2Id));
         }
     };
 
@@ -4593,6 +4992,11 @@ void benchmark_fast_reclustering(InputParser &input) {
     // }
     // write_debug_data(&index, 0, queryRecalls);
 
+    if (dynamicRecallOnly) {
+        recordRecallSnapshot(0, "recall_only", 0, -1);
+        return;
+    }
+
     if (useMSEToRecluster) {
         // Generate UMAP visualization with cluster assignments (before early return)
         if (baseVecs != nullptr && baseNumVectors > 0) {
@@ -4616,9 +5020,18 @@ void benchmark_fast_reclustering(InputParser &input) {
     // auto track_query_id = 0;
     // index.flush_to_disk(storagePath);
     // index.storeMSEScoreForMegaClusters();
+    const int measuredIteration = std::min(std::max(recallWarmupIterations, 0),
+                                           std::max(finalReclusterCycles - 1, 0));
     for (int iter = 0; iter < finalReclusterCycles; iter++) {
         printf("Started Iteration: %d\n", iter);
+        const bool measureThisIteration = measureRecallFluctuation && iter >= measuredIteration;
         // index.updateOverlapHistory();
+        if (measureThisIteration) {
+            recordRecallSnapshot(iter, "before_iteration", 0, -1);
+            reclusterL2sOneByOne(iter);
+            recordRecallSnapshot(iter, "after_iteration", 0, -1);
+            continue;
+        }
         index.reclusterAllMegaCentroids(nMegaRecluster);
         // index.storeMSEScoreForMegaClusters();
         // index.computeOverlapScores();
@@ -4723,7 +5136,7 @@ void benchmark_fast_reclustering(InputParser &input) {
     // index.storeMSEScoreForMegaClusters();
     // index.computeOverlapScores();
     // index.printStats();
-    if (finalReclusterCycles > 0) {
+    if (finalReclusterCycles > 0 && !disableFinalFlush) {
         // index.storeScoreForMegaClusters();
         // index.printStats();
         printf("Flushing to disk\n");

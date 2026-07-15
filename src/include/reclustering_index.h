@@ -2,9 +2,11 @@
 
 #include <unistd.h>
 #include <vector>
+#include <string>
 #include <algorithm>
 #include <numeric>
 #include <cmath>
+#include <limits>
 #include <clustering.h>
 #include <hnsw.h>
 #include <faiss/Clustering.h>
@@ -22,6 +24,86 @@ namespace orangedb {
         double gap_std = 0.0;
         double gap_p90 = 0.0;
         double gap_p99 = 0.0;
+    };
+
+    enum class DynamicMiniProbeStrategy {
+        DistanceFactor = 0,
+        RadiusOverlap = 1,
+        PercentGrowth = 2,
+    };
+
+    enum class DynamicMiniProbeRadiusKind {
+        Rms = 0,
+        P95 = 1,
+        P75 = 2,
+    };
+
+    enum class DynamicMiniProbeOrderingKind {
+        RadiusNormalizedHeuristic = 0,
+        CentroidDistance = 1,
+        L1Coverage = 2,
+        L1CapHeight = 3,
+    };
+
+    struct DynamicMiniProbeConfig {
+        DynamicMiniProbeStrategy strategy = DynamicMiniProbeStrategy::DistanceFactor;
+        DynamicMiniProbeRadiusKind radiusKind = DynamicMiniProbeRadiusKind::P95;
+        DynamicMiniProbeOrderingKind orderingKind = DynamicMiniProbeOrderingKind::RadiusNormalizedHeuristic;
+        int nMegaProbes = 20;
+        int minMiniProbes = 250;
+        int maxMiniProbes = 2000;
+        double distanceFactor = 1.9;
+        double thresholdFactor = 2.0;
+        int k = 100;
+        int batchSize = 50;
+        int growthBatchStep = 10;
+        double targetProbabilityMass = 0.95;
+        double minBatchProbabilityMass = 0.01;
+        int stableQrBatches = 2;
+        double qrChangeEps = 0.01;
+        bool disableStopping = true;
+        double stopHeapMultiplier = 2.0;
+        std::vector<double> stopHeapMultipliers;
+    };
+
+    struct DynamicMiniProbeBatchLog {
+        int batch_index = 0;
+        double stop_heap_multiplier = 1.0;
+        int selected_l1_count = 0;
+        double q_radius_before = 0.0;
+        double q_radius_after = 0.0;
+        double q_radius_relative_delta = 0.0;
+        double batch_probability_mass = 0.0;
+        double cumulative_probability_mass = 0.0;
+        double stop_heap_radius_before = 0.0;
+        double stop_heap_radius_after = 0.0;
+        double stop_heap_radius_relative_delta = 0.0;
+        double best_raw_centroid_distance = 0.0;
+        double remaining_min_raw_centroid_distance = 0.0;
+        double centroid_distance_factor_boundary = std::numeric_limits<double>::infinity();
+        vector_idx_t stop_heap_worst_id_before = INVALID_VECTOR_ID;
+        vector_idx_t stop_heap_worst_id_after = INVALID_VECTOR_ID;
+        bool threshold_rule_stop = false;
+        bool heap_rule_stop = false;
+        bool combined_rule_stop = false;
+        bool stopped = false;
+        std::vector<vector_idx_t> result_ids;
+    };
+
+    struct DynamicMiniProbeStats {
+        DynamicMiniProbeStrategy strategy = DynamicMiniProbeStrategy::DistanceFactor;
+        DynamicMiniProbeOrderingKind orderingKind = DynamicMiniProbeOrderingKind::RadiusNormalizedHeuristic;
+        int candidate_l1_count = 0;
+        int selected_l1_count = 0;
+        double q_radius = 0.0;
+        double cumulative_probability_mass = 0.0;
+        uint64_t distance_computations = 0;
+        uint64_t angular_cap_disjoint_count = 0;
+        uint64_t angular_cap_full_l1_count = 0;
+        uint64_t angular_cap_query_inside_l1_count = 0;
+        uint64_t angular_cap_partial_count = 0;
+        std::string stop_reason;
+        std::vector<DynamicMiniProbeBatchLog> batch_logs;
     };
 
     struct ReclusteringIndexStats {
@@ -268,6 +350,12 @@ namespace orangedb {
         void search(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
                     int nMegaProbes, int nMiniProbes, ReclusteringIndexStats &stats);
 
+        void searchDynamicMiniProbes(const float *query, uint16_t k,
+                                     std::priority_queue<NodeDistCloser> &results,
+                                     const DynamicMiniProbeConfig &probeConfig,
+                                     DynamicMiniProbeStats &dynamicStats,
+                                     ReclusteringIndexStats &stats);
+
         void searchWithBadClusters(const float *query, uint16_t k, std::priority_queue<NodeDistCloser> &results,
                     int nMegaProbes, int nMiniProbes, int nMiniProbesForBadClusters, ReclusteringIndexStats &stats, bool searchEachBadCluster = false);
 
@@ -461,6 +549,18 @@ namespace orangedb {
 
         void findKClosestVectors(const float *query, int k, std::vector<vector_idx_t> miniCentroids,
                                  std::priority_queue<NodeDistCloser> &results, ReclusteringIndexStats &stats);
+
+        void findKClosestVectorsForTwoHeaps(const float *query, int k, int heapK,
+                                            const std::vector<vector_idx_t> &miniCentroids,
+                                            std::priority_queue<NodeDistCloser> &results,
+                                            std::priority_queue<NodeDistCloser> &heapResults,
+                                            ReclusteringIndexStats &stats);
+
+        void invalidateMiniRadiusStats();
+
+        void ensureMiniRadiusStats();
+
+        const std::vector<double>& getMiniRadiusStats(DynamicMiniProbeRadiusKind radiusKind);
 
         double calcScoreForMegaCluster(int megaClusterId);
 
@@ -662,6 +762,9 @@ namespace orangedb {
         std::vector<double> wrongAssignmentBoundaryAvgRelativeGap;
         std::vector<std::vector<vector_idx_t>> miniClusterVectorIds;
         std::vector<uint8_t> vectorMovementCounts;
+        std::vector<double> miniRmsRadius;
+        std::vector<double> miniP75Radius;
+        std::vector<double> miniP95Radius;
 
         // Minicluster subcells
         std::vector<SubCells> miniClusterSubCells;

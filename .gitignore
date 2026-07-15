@@ -49,3 +49,8 @@ cmake-build-default*
 data/scores*
 data/plots*
 *.png
+cmake-build-debug-clang/*
+release/*
+*.out
+*.svg
+.cursor/*

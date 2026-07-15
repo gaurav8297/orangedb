@@ -916,4 +916,148 @@ inline static void normalize_vectors_haswell(const float *vector, int dim, float
             normalize_vector(vector + i * dim, dim, norm_vector + i * dim);
         }
     }
+
+    inline static double logUnitBallVolume(int dim) {
+        CHECK_ARGUMENT(dim > 0, "dimension must be positive");
+        const double pi = std::acos(-1.0);
+        return (static_cast<double>(dim) / 2.0) * std::log(pi) -
+               std::lgamma(static_cast<double>(dim) / 2.0 + 1.0);
+    }
+
+    inline static double hypersphereLogVolume(int dim, double radius) {
+        CHECK_ARGUMENT(radius >= 0.0, "radius must be non-negative");
+        if (radius == 0.0) {
+            return -std::numeric_limits<double>::infinity();
+        }
+        return logUnitBallVolume(dim) + static_cast<double>(dim) * std::log(radius);
+    }
+
+    inline static double incompleteBetaContinuedFraction(double a, double b, double x) {
+        constexpr int maxIterations = 200;
+        constexpr double eps = 3e-14;
+        constexpr double fpmin = std::numeric_limits<double>::min() / eps;
+
+        double qab = a + b;
+        double qap = a + 1.0;
+        double qam = a - 1.0;
+        double c = 1.0;
+        double d = 1.0 - qab * x / qap;
+        if (std::abs(d) < fpmin) {
+            d = fpmin;
+        }
+        d = 1.0 / d;
+        double h = d;
+
+        for (int m = 1; m <= maxIterations; m++) {
+            int m2 = 2 * m;
+            double aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+            d = 1.0 + aa * d;
+            if (std::abs(d) < fpmin) {
+                d = fpmin;
+            }
+            c = 1.0 + aa / c;
+            if (std::abs(c) < fpmin) {
+                c = fpmin;
+            }
+            d = 1.0 / d;
+            h *= d * c;
+
+            aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+            d = 1.0 + aa * d;
+            if (std::abs(d) < fpmin) {
+                d = fpmin;
+            }
+            c = 1.0 + aa / c;
+            if (std::abs(c) < fpmin) {
+                c = fpmin;
+            }
+            d = 1.0 / d;
+            double del = d * c;
+            h *= del;
+            if (std::abs(del - 1.0) <= eps) {
+                break;
+            }
+        }
+
+        return h;
+    }
+
+    inline static double regularizedIncompleteBeta(double x, double a, double b) {
+        CHECK_ARGUMENT(a > 0.0 && b > 0.0, "beta parameters must be positive");
+        if (x <= 0.0) {
+            return 0.0;
+        }
+        if (x >= 1.0) {
+            return 1.0;
+        }
+
+        double bt = std::exp(std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) +
+                             a * std::log(x) + b * std::log1p(-x));
+        if (x < (a + 1.0) / (a + b + 2.0)) {
+            return bt * incompleteBetaContinuedFraction(a, b, x) / a;
+        }
+        return 1.0 - bt * incompleteBetaContinuedFraction(b, a, 1.0 - x) / b;
+    }
+
+    inline static double logAddExp(double a, double b) {
+        if (!std::isfinite(a)) {
+            return b;
+        }
+        if (!std::isfinite(b)) {
+            return a;
+        }
+        const double maxVal = std::max(a, b);
+        return maxVal + std::log(std::exp(a - maxVal) + std::exp(b - maxVal));
+    }
+
+    inline static double logSubtractExp(double a, double b) {
+        if (!std::isfinite(b)) {
+            return a;
+        }
+        if (b >= a) {
+            return -std::numeric_limits<double>::infinity();
+        }
+        return a + std::log1p(-std::exp(b - a));
+    }
+
+    inline static double hypersphereCapLogVolume(int dim, double radius, double height) {
+        CHECK_ARGUMENT(dim > 0, "dimension must be positive");
+        CHECK_ARGUMENT(radius >= 0.0, "radius must be non-negative");
+        if (radius == 0.0 || height <= 0.0) {
+            return -std::numeric_limits<double>::infinity();
+        }
+        const double fullLogVolume = hypersphereLogVolume(dim, radius);
+        if (height >= 2.0 * radius) {
+            return fullLogVolume;
+        }
+        if (height > radius) {
+            return logSubtractExp(fullLogVolume, hypersphereCapLogVolume(dim, radius, 2.0 * radius - height));
+        }
+
+        const double z = std::max(0.0, std::min(1.0, (2.0 * radius * height - height * height) / (radius * radius)));
+        const double a = (static_cast<double>(dim) + 1.0) / 2.0;
+        const double beta = regularizedIncompleteBeta(z, a, 0.5);
+        if (beta <= 0.0) {
+            return -std::numeric_limits<double>::infinity();
+        }
+        return std::log(0.5) + fullLogVolume + std::log(beta);
+    }
+
+    inline static double hypersphereIntersectionLogVolume(int dim, double centerDistance, double r1, double r2) {
+        CHECK_ARGUMENT(dim > 0, "dimension must be positive");
+        CHECK_ARGUMENT(centerDistance >= 0.0, "center distance must be non-negative");
+        CHECK_ARGUMENT(r1 >= 0.0 && r2 >= 0.0, "radii must be non-negative");
+        if (r1 == 0.0 || r2 == 0.0 || centerDistance >= r1 + r2) {
+            return -std::numeric_limits<double>::infinity();
+        }
+        if (centerDistance <= std::abs(r1 - r2)) {
+            return hypersphereLogVolume(dim, std::min(r1, r2));
+        }
+
+        const double x = (centerDistance * centerDistance + r1 * r1 - r2 * r2) / (2.0 * centerDistance);
+        const double h1 = r1 - x;
+        const double h2 = r2 - (centerDistance - x);
+        return logAddExp(hypersphereCapLogVolume(dim, r1, h1), hypersphereCapLogVolume(dim, r2, h2));
+    }
+
 } // namespace orange

@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REMOTE="${REMOTE:-centos@10.205.0.137}"
+REMOTE_DIR="${REMOTE_DIR:-~/orangedb}"
+SSH_OPTS="${SSH_OPTS:-}"
+RSYNC_OPTS="${RSYNC_OPTS:-}"
+
+sync_only=0
+ssh_only=0
+dry_run=0
+delete=1
+remote_cmd=""
+
+usage() {
+  cat <<'EOF'
+Usage: scripts/vm_sync_and_ssh [options] [remote command]
+
+Sync this repo to a remote directory, then open SSH there.
+
+Options:
+  --remote HOST      SSH target. Default: centos@10.205.0.137
+  --remote-dir DIR   Remote repo directory. Default: ~/orangedb
+  --sync-only        Sync and exit.
+  --ssh-only         Skip sync and just SSH into the remote repo.
+  -n, --dry-run      Show what rsync would transfer.
+  --no-delete        Do not delete removed local files from remote.
+  -h, --help         Show this help.
+
+Environment overrides:
+  REMOTE=centos@10.205.0.137
+  REMOTE_DIR=~/orangedb
+  SSH_OPTS="-i ~/.ssh/key"
+  RSYNC_OPTS="--progress"
+
+Examples:
+  scripts/vm_sync_and_ssh
+  scripts/vm_sync_and_ssh --remote centos@10.205.0.137 --remote-dir ~/orangedb
+  scripts/vm_sync_and_ssh --sync-only
+  scripts/vm_sync_and_ssh "make build"
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --remote)
+      [[ $# -ge 2 ]] || { echo "--remote requires a value" >&2; exit 2; }
+      REMOTE="$2"
+      shift 2
+      ;;
+    --remote=*)
+      REMOTE="${1#*=}"
+      shift
+      ;;
+    --remote-dir)
+      [[ $# -ge 2 ]] || { echo "--remote-dir requires a value" >&2; exit 2; }
+      REMOTE_DIR="$2"
+      shift 2
+      ;;
+    --remote-dir=*)
+      REMOTE_DIR="${1#*=}"
+      shift
+      ;;
+    --sync-only)
+      sync_only=1
+      shift
+      ;;
+    --ssh-only)
+      ssh_only=1
+      shift
+      ;;
+    -n|--dry-run)
+      dry_run=1
+      shift
+      ;;
+    --no-delete)
+      delete=0
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      remote_cmd="${*:-}"
+      break
+      ;;
+    *)
+      remote_cmd="$*"
+      break
+      ;;
+  esac
+done
+
+if [[ $sync_only -eq 1 && $ssh_only -eq 1 ]]; then
+  echo "--sync-only and --ssh-only cannot be used together" >&2
+  exit 2
+fi
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$repo_root"
+
+ssh_args=()
+rsync_extra_args=()
+
+if [[ -n "$SSH_OPTS" ]]; then
+  # shellcheck disable=SC2206
+  ssh_args=($SSH_OPTS)
+fi
+
+if [[ -n "$RSYNC_OPTS" ]]; then
+  # shellcheck disable=SC2206
+  rsync_extra_args=($RSYNC_OPTS)
+fi
+
+rsync_args=(
+  -az
+  --human-readable
+  --itemize-changes
+  --exclude=.git/
+  --exclude=.idea/
+  --exclude=.vscode/
+  --exclude=.vs/
+  --exclude=.cache/
+  --exclude=.ccls-cache/
+  --exclude=build/
+  --exclude=cmake-build-*/
+  --exclude=compile_commands.json
+  --exclude=test_temp/
+  --exclude='test/unittest_temp_*'
+  --exclude='__pycache__/'
+  --exclude='*.pyc'
+  --exclude='*.pyo'
+  --exclude='*.bin'
+  --exclude='*.csv'
+  --exclude='*.png'
+  --exclude=data/gist*/
+  --exclude=data/openai*/
+  --exclude=data/arxiv*/
+  --exclude=data/random_768*/
+  --exclude=data/laion_small*/
+  --exclude=data/scores*/
+  --exclude=data/plots*/
+)
+
+if [[ $delete -eq 1 ]]; then
+  rsync_args+=(--delete)
+fi
+
+if [[ $dry_run -eq 1 ]]; then
+  rsync_args+=(--dry-run)
+fi
+
+sync_repo() {
+  echo "[vm] Ensuring ${REMOTE}:${REMOTE_DIR} exists"
+  ssh "${ssh_args[@]}" "$REMOTE" "mkdir -p ${REMOTE_DIR}"
+
+  echo "[vm] Syncing ${repo_root}/ -> ${REMOTE}:${REMOTE_DIR}/"
+  rsync "${rsync_args[@]}" "${rsync_extra_args[@]}" -e "ssh ${SSH_OPTS}" ./ "${REMOTE}:${REMOTE_DIR}/"
+}
+
+open_remote_shell() {
+  if [[ -n "$remote_cmd" ]]; then
+    ssh "${ssh_args[@]}" -t "$REMOTE" "cd ${REMOTE_DIR} && ${remote_cmd}"
+  else
+    ssh "${ssh_args[@]}" -t "$REMOTE" "cd ${REMOTE_DIR} && exec \"\$SHELL\" -l"
+  fi
+}
+
+if [[ $ssh_only -eq 0 ]]; then
+  sync_repo
+fi
+
+if [[ $dry_run -eq 1 || $sync_only -eq 1 ]]; then
+  exit 0
+fi
+
+open_remote_shell
